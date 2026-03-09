@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views;
 using NAudio.Wave;
@@ -1495,11 +1496,11 @@ public sealed partial class MainWindow : Window, IDisposable
         });
     }
 
-    private void AudioSessionManager_TranscriptReady(object? sender, string text)
+    private void AudioSessionManager_TranscriptReady(object? sender, TranscriptResult result)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            FinalizeTranscript(text, "Transcript ready.");
+            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText);
         });
     }
 
