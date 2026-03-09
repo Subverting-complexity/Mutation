@@ -12,6 +12,12 @@ using Windows.Storage;
 
 namespace Mutation.Ui.Core;
 
+/// <summary>
+/// Carries the raw transcript and optional pre-formatted text so that
+/// downstream handlers can avoid re-applying rules to LLM output.
+/// </summary>
+internal record TranscriptResult(string RawText, string? FormattedText = null);
+
 internal class AudioSessionManager : IDisposable
 {
     private readonly SpeechToTextManager _speechManager;
@@ -47,7 +53,7 @@ internal class AudioSessionManager : IDisposable
     public event EventHandler? PlaybackStopped;
     public event EventHandler? StateChanged;
     
-    public event EventHandler<string>? TranscriptReady;
+    public event EventHandler<TranscriptResult>? TranscriptReady;
     public event EventHandler<string>? ErrorOccurred;
     public event EventHandler<string>? StatusMessage;
 
@@ -233,10 +239,9 @@ internal class AudioSessionManager : IDisposable
             StateChanged?.Invoke(this, EventArgs.Empty);
 
             string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, CancellationToken.None);
-            // Retry usually doesn't apply LLM formatting in the original code unless explicitly requested?
-            // Original code: FinalizeTranscript(text, "Transcript refreshed from the selected session.");
-            // It seems it just returns the raw text.
-            TranscriptReady?.Invoke(this, text);
+            // Retry doesn't apply LLM formatting — pass raw text only so
+            // FinalizeTranscript applies rules-based formatting as usual.
+            TranscriptReady?.Invoke(this, new TranscriptResult(text));
             StatusMessage?.Invoke(this, "Transcript refreshed from the selected session.");
         }
         catch (OperationCanceledException)
@@ -271,7 +276,7 @@ internal class AudioSessionManager : IDisposable
             RefreshSessions(session);
             
             string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, session, prompt, CancellationToken.None);
-            TranscriptReady?.Invoke(this, text);
+            TranscriptReady?.Invoke(this, new TranscriptResult(text));
             StatusMessage?.Invoke(this, $"Transcript generated from {session.FileName}.");
         }
         catch (OperationCanceledException)
@@ -292,7 +297,7 @@ internal class AudioSessionManager : IDisposable
     {
         // Always run rules-based formatting first
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
-        string finalFormattedText = rulesFormattedText;
+        string? llmFormattedText = null;
 
         if (_currentRecordingUsesLlmFormatting)
         {
@@ -301,16 +306,18 @@ internal class AudioSessionManager : IDisposable
                 StatusMessage?.Invoke(this, "Formatting with LLM...");
                 string modelName = _settings.LlmSettings?.SelectedLlmModel ?? LlmSettings.DefaultModel;
                 // Pass the rules-formatted text to the LLM
-                finalFormattedText = await _transcriptFormatter.FormatWithLlmAsync(rulesFormattedText, llmPrompt, modelName);
+                llmFormattedText = await _transcriptFormatter.FormatWithLlmAsync(rulesFormattedText, llmPrompt, modelName);
             }
             catch (Exception ex)
             {
                 StatusMessage?.Invoke(this, $"LLM formatting failed: {ex.Message}. Using rules-formatted transcript.");
-                // finalFormattedText remains rulesFormattedText
+                // llmFormattedText remains null — FinalizeTranscript will fall back to rules-only
             }
         }
 
-        TranscriptReady?.Invoke(this, finalFormattedText);
+        // Pass raw text and the final formatted text separately so that
+        // FinalizeTranscript does not re-apply rules to LLM output.
+        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmFormattedText ?? rulesFormattedText));
         StatusMessage?.Invoke(this, "Transcript ready and copied.");
     }
 
