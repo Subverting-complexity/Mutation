@@ -1,6 +1,5 @@
-﻿using CognitiveSupport;
+using CognitiveSupport;
 using CognitiveSupport.Extensions;
-using OpenAI.Chat;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -41,10 +40,10 @@ public class TranscriptFormatter
 		if (string.IsNullOrWhiteSpace(transcript))
 			return transcript;
 
-		var messages = new List<ChatMessage>
+		var messages = new List<LlmChatMessage>
 		  {
-				new SystemChatMessage($"{systemPrompt}"),
-				new UserChatMessage($"Reformat the following transcript: {transcript}")
+				new LlmChatMessage(LlmChatRole.System, systemPrompt),
+				new LlmChatMessage(LlmChatRole.User, $"Reformat the following transcript: {transcript}")
 		  };
 
 		string formattedText = await _llmService.CreateChatCompletion(messages, modelName);

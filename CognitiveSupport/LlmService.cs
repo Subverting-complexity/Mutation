@@ -1,4 +1,4 @@
-﻿using OpenAI.Chat;
+using OpenAI.Chat;
 using System.ClientModel;
 
 namespace CognitiveSupport;
@@ -24,7 +24,7 @@ public class LlmService : ILlmService
 	}
 
 	public async Task<string> CreateChatCompletion(
-		IList<ChatMessage> messages,
+		IList<LlmChatMessage> messages,
 		string llmModelName,
 		decimal temperature = 0.7m)
 	{
@@ -33,12 +33,14 @@ public class LlmService : ILlmService
 
 		var client = _chatClients[llmModelName];
 
+		var openAiMessages = messages.Select(ToOpenAiMessage).ToList();
+
 		ChatCompletionOptions options = new()
 		{
 			Temperature = (float)temperature
 		};
 
-		ClientResult<ChatCompletion> result = await client.CompleteChatAsync(messages, options);
+		ClientResult<ChatCompletion> result = await client.CompleteChatAsync(openAiMessages, options);
 
 		if (result.Value.Content.Count > 0)
 		{
@@ -46,4 +48,13 @@ public class LlmService : ILlmService
 		}
 		return string.Empty;
 	}
+
+	private static ChatMessage ToOpenAiMessage(LlmChatMessage msg)
+		=> msg.Role switch
+		{
+			LlmChatRole.System => new SystemChatMessage(msg.Content),
+			LlmChatRole.User => new UserChatMessage(msg.Content),
+			LlmChatRole.Assistant => new AssistantChatMessage(msg.Content),
+			_ => throw new ArgumentOutOfRangeException(nameof(msg.Role), msg.Role, "Unsupported chat role")
+		};
 }
