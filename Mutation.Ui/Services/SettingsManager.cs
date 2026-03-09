@@ -364,6 +364,11 @@ internal class SettingsManager : ISettingsManager
 			llmSettings.ApiKey = PlaceholderValue;
 			somethingWasMissing = true;
 		}
+		if (string.IsNullOrWhiteSpace(llmSettings.AnthropicApiKey))
+		{
+			llmSettings.AnthropicApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
 
 		/* ResourceName removed
 		if (string.IsNullOrWhiteSpace(llmSettings.ResourceName))
@@ -430,7 +435,8 @@ End of summary.
 			llmSettings.Models = new List<string>
 			{
 				LlmSettings.DefaultModel,
-				LlmSettings.DefaultSecondaryModel
+				LlmSettings.DefaultSecondaryModel,
+				LlmSettings.DefaultAnthropicModel
 			};
 			somethingWasMissing = true;
 		}

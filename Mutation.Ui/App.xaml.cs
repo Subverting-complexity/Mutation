@@ -12,6 +12,7 @@ using System.ClientModel;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -108,10 +109,29 @@ public partial class App : Application
 									  sp.GetRequiredService<ClipboardManager>()));
 			builder.Services.AddSingleton<HotkeyManager>(sp =>
 					  new HotkeyManager(sp.GetRequiredService<MainWindow>(), sp.GetRequiredService<Settings>()));
-			builder.Services.AddSingleton<ILlmService>(
-					  new LlmService(
-							 settings.LlmSettings?.ApiKey ?? string.Empty,
-							 settings.LlmSettings?.Models ?? new List<string>()));
+			builder.Services.AddSingleton<ILlmService>(sp =>
+			{
+				var llmSettings = settings.LlmSettings;
+				string openAiKey = llmSettings?.ApiKey ?? string.Empty;
+				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
+				var allModels = llmSettings?.Models ?? new List<string>();
+
+				var openAiModels = allModels.Where(m => !CompositeLlmService.IsAnthropicModel(m)).ToList();
+
+				LlmService? openAiService = null;
+				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != "<placeholder>")
+				{
+					openAiService = new LlmService(openAiKey, openAiModels);
+				}
+
+				AnthropicLlmService? anthropicService = null;
+				if (!string.IsNullOrEmpty(anthropicKey) && anthropicKey != "<placeholder>")
+				{
+					anthropicService = new AnthropicLlmService(anthropicKey, new HttpClient());
+				}
+
+				return new CompositeLlmService(openAiService, anthropicService);
+			});
 			builder.Services.AddSingleton<TranscriptFormatter>();
                         builder.Services.AddSingleton<ITextToSpeechService, TextToSpeechService>();
 			builder.Services.AddHttpClient(OpenAiHttpClientName);
