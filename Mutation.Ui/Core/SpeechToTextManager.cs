@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Mutation.Ui;
 
-internal class SpeechToTextManager : IDisposable
+public class SpeechToTextManager : IDisposable
 {
 	private const string SessionFilePrefix = "session_";
 	private const string SessionTimestampFormat = "yyyy-MM-dd_HH-mm-ss";

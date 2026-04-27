@@ -16,9 +16,9 @@ namespace Mutation.Ui.Core;
 /// Carries the raw transcript and optional pre-formatted text so that
 /// downstream handlers can avoid re-applying rules to LLM output.
 /// </summary>
-internal record TranscriptResult(string RawText, string? FormattedText = null);
+public record TranscriptResult(string RawText, string? FormattedText = null);
 
-internal class AudioSessionManager : IDisposable
+public class AudioSessionManager : IDisposable
 {
     private readonly SpeechToTextManager _speechManager;
     private readonly AudioDeviceManager _audioDeviceManager;

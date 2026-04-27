@@ -108,7 +108,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 	private readonly List<(string From, string To)> _hotkeyRouterPersistedSnapshot = new();
 
-	internal MainWindow(
+	public MainWindow(
 		ClipboardManager clipboard,
 		UiStateManager uiStateManager,
 		AudioDeviceManager audioDeviceManager,
