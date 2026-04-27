@@ -160,6 +160,7 @@ public class LlmSettings
 	public string? FormatTranscriptPrompt { get; set; }
 	public string? FormatWithLlmHotKey { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
+	public int TimeoutSeconds { get; set; } = 60;
 
 
 	public LlmSettings()

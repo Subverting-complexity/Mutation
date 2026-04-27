@@ -13,12 +13,14 @@ public class AnthropicLlmService : ILlmService
 
 	private readonly string _apiKey;
 	private readonly HttpClient _httpClient;
+	private readonly int _timeoutSeconds;
 
-	public AnthropicLlmService(string apiKey, HttpClient httpClient)
+	public AnthropicLlmService(string apiKey, HttpClient httpClient, int timeoutSeconds = 60)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 	}
 
 	public async Task<string> CreateChatCompletion(
@@ -64,9 +66,10 @@ public class AnthropicLlmService : ILlmService
 		httpRequest.Headers.Add("anthropic-version", AnthropicVersion);
 		httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-		using var httpResponse = await _httpClient.SendAsync(httpRequest);
+		using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_timeoutSeconds));
+		using var httpResponse = await _httpClient.SendAsync(httpRequest, timeoutCts.Token);
 
-		string responseBody = await httpResponse.Content.ReadAsStringAsync();
+		string responseBody = await httpResponse.Content.ReadAsStringAsync(timeoutCts.Token);
 
 		if (!httpResponse.IsSuccessStatusCode)
 		{

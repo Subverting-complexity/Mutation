@@ -6,16 +6,19 @@ namespace CognitiveSupport;
 public class LlmService : ILlmService
 {
 	private readonly Dictionary<string, ChatClient> _chatClients;
+	private readonly int _timeoutSeconds;
 
 	public LlmService(
 		string apiKey,
-		List<string> models)
+		List<string> models,
+		int timeoutSeconds = 60)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 		if (models is null || !models.Any())
 			throw new ArgumentNullException(nameof(models));
 
 		_chatClients = new Dictionary<string, ChatClient>();
+		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 
 		foreach (var model in models)
 		{
@@ -40,7 +43,8 @@ public class LlmService : ILlmService
 			Temperature = (float)temperature
 		};
 
-		ClientResult<ChatCompletion> result = await client.CompleteChatAsync(openAiMessages, options);
+		using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_timeoutSeconds));
+		ClientResult<ChatCompletion> result = await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token);
 
 		if (result.Value.Content.Count > 0)
 		{

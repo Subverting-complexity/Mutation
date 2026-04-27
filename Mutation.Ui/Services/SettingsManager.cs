@@ -675,14 +675,34 @@ End of summary.
 
 		if (saveRequired)
 		{
-			File.WriteAllText(SettingsFileFullPath, jObj.ToString(Formatting.Indented), Encoding.UTF8);
+			AtomicWriteAllText(SettingsFileFullPath, jObj.ToString(Formatting.Indented));
 		}
 	}
 
 	public void SaveSettingsToFile(Settings settings)
 	{
 		string json = JsonConvert.SerializeObject(settings, Formatting.Indented, _jsonSerializerSettings);
-		File.WriteAllText(SettingsFilePath, json, Encoding.UTF8);
+		AtomicWriteAllText(SettingsFilePath, json);
+	}
+
+	private static void AtomicWriteAllText(string targetPath, string contents)
+	{
+		string fullPath = Path.GetFullPath(targetPath);
+		string directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
+		string tempPath = fullPath + ".tmp";
+		string backupPath = fullPath + ".bak";
+
+		File.WriteAllText(tempPath, contents, new UTF8Encoding(false));
+
+		if (File.Exists(fullPath))
+		{
+			// Atomic on NTFS: original is moved to .bak, temp becomes the new file.
+			File.Replace(tempPath, fullPath, backupPath, ignoreMetadataErrors: true);
+		}
+		else
+		{
+			File.Move(tempPath, fullPath);
+		}
 	}
 
     public Settings LoadAndEnsureSettings()
