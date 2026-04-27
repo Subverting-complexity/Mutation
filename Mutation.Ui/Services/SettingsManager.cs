@@ -340,16 +340,25 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
-		var duplicateNames = speechToTextSettings.Services
+		var duplicateGroups = speechToTextSettings.Services
 			 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
 			 .Where(g => g.Count() > 1)
-			 .Select(g => g.Key)
 			 .ToArray();
-		if (duplicateNames.Any())
+		if (duplicateGroups.Length > 0)
 		{
-			throw new InvalidOperationException(
-						$"Duplicate service names found in SpeechToTextSettings.Services: {string.Join(", ", duplicateNames)}. " +
-						"Please ensure each speech-to-text service has a unique name to avoid conflicts.");
+			foreach (var group in duplicateGroups)
+			{
+				int suffix = 2;
+				foreach (var dup in group.Skip(1))
+				{
+					string baseName = string.IsNullOrWhiteSpace(dup.Name) ? "Service" : dup.Name!;
+					string newName;
+					do { newName = $"{baseName} ({suffix++})"; }
+					while (speechToTextSettings.Services.Any(s => string.Equals(s.Name, newName, StringComparison.OrdinalIgnoreCase)));
+					dup.Name = newName;
+				}
+			}
+			somethingWasMissing = true;
 		}
 
 
@@ -437,7 +446,9 @@ End of summary.
 				LlmSettings.DefaultModel,
 				LlmSettings.DefaultSecondaryModel,
 				LlmSettings.DefaultAnthropicModel
-			};
+			}
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
 			somethingWasMissing = true;
 		}
 

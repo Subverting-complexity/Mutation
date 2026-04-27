@@ -108,7 +108,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 	private readonly List<(string From, string To)> _hotkeyRouterPersistedSnapshot = new();
 
-	public MainWindow(
+	internal MainWindow(
 		ClipboardManager clipboard,
 		UiStateManager uiStateManager,
 		AudioDeviceManager audioDeviceManager,
@@ -118,7 +118,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		TranscriptFormatter transcriptFormatter,
 
 		ISettingsManager settingsManager,
-		Settings settings)
+		Settings settings,
+		Mutation.Ui.Core.AudioSessionManager audioSessionManager)
 	{
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
@@ -129,9 +130,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		_textToSpeech = textToSpeech;
 		_transcriptFormatter = transcriptFormatter;
 		_settings = settings;
-		
-        var speechManager = new SpeechToTextManager(settings);
-        _audioSessionManager = new Mutation.Ui.Core.AudioSessionManager(speechManager, _audioDeviceManager, _transcriptFormatter, _settings);
+
+        _audioSessionManager = audioSessionManager;
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;

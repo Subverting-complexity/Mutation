@@ -177,7 +177,7 @@ public class SpeechToTextServiceSettings
 public class LlmSettings
 {
 	public const string DefaultModel = "gpt-4.1";
-	public const string DefaultSecondaryModel = "gpt-5.1";
+	public const string DefaultSecondaryModel = "gpt-4.1";
 	public const string DefaultAnthropicModel = "claude-sonnet-4-6";
 
 	public string? ApiKey { get; set; }

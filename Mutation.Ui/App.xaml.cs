@@ -106,6 +106,88 @@ public partial class App : Application
 		return sb.ToString();
 	}
 
+	private static Settings? TryRecoverSettings(string filePath, SettingsManager manager, Exception originalException)
+	{
+		string errorMessage = originalException.Message;
+		const string title = "Mutation: settings file could not be loaded";
+
+		for (int attempt = 0; attempt < 3; attempt++)
+		{
+			string body =
+				$"Mutation could not load its settings file:\n{filePath}\n\n" +
+				$"Error: {errorMessage}\n\n" +
+				"Choose an action:\n" +
+				"  • Yes — open the file in your default editor (fix it, then click OK to retry)\n" +
+				"  • No — restore from the .bak backup (if present)\n" +
+				"  • Cancel — quit Mutation";
+
+			var choice = System.Windows.Forms.MessageBox.Show(
+				body, title,
+				System.Windows.Forms.MessageBoxButtons.YesNoCancel,
+				System.Windows.Forms.MessageBoxIcon.Error);
+
+			if (choice == System.Windows.Forms.DialogResult.Cancel)
+				return null;
+
+			if (choice == System.Windows.Forms.DialogResult.Yes)
+			{
+				try
+				{
+					System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(filePath) { UseShellExecute = true });
+				}
+				catch (Exception openEx)
+				{
+					System.Windows.Forms.MessageBox.Show(
+						$"Could not open the file in the default editor:\n{openEx.Message}",
+						title,
+						System.Windows.Forms.MessageBoxButtons.OK,
+						System.Windows.Forms.MessageBoxIcon.Warning);
+				}
+				System.Windows.Forms.MessageBox.Show(
+					"Click OK after you've saved your changes to retry loading the settings.",
+					title,
+					System.Windows.Forms.MessageBoxButtons.OK,
+					System.Windows.Forms.MessageBoxIcon.Information);
+			}
+			else // No → restore .bak
+			{
+				string backup = filePath + ".bak";
+				if (!File.Exists(backup))
+				{
+					System.Windows.Forms.MessageBox.Show(
+						$"No backup was found at:\n{backup}",
+						title,
+						System.Windows.Forms.MessageBoxButtons.OK,
+						System.Windows.Forms.MessageBoxIcon.Warning);
+					continue;
+				}
+				try
+				{
+					File.Copy(backup, filePath, overwrite: true);
+				}
+				catch (Exception copyEx)
+				{
+					System.Windows.Forms.MessageBox.Show(
+						$"Could not restore the backup:\n{copyEx.Message}",
+						title,
+						System.Windows.Forms.MessageBoxButtons.OK,
+						System.Windows.Forms.MessageBoxIcon.Error);
+					continue;
+				}
+			}
+
+			try
+			{
+				return manager.LoadAndEnsureSettings();
+			}
+			catch (Exception retryEx) when (retryEx is Newtonsoft.Json.JsonException or InvalidOperationException or IOException)
+			{
+				errorMessage = retryEx.Message;
+			}
+		}
+		return null;
+	}
+
 	private static string RedactSecrets(string message)
 	{
 		if (string.IsNullOrEmpty(message)) return string.Empty;
@@ -127,7 +209,18 @@ public partial class App : Application
 			string mutationDir = exeDir;
 			string filePath = Path.Combine(mutationDir, "Mutation.json");
 			var settingsManager = new SettingsManager(filePath);
-			var settings = settingsManager.LoadAndEnsureSettings();
+			Settings settings;
+			try
+			{
+				settings = settingsManager.LoadAndEnsureSettings();
+			}
+			catch (Exception loadEx) when (loadEx is Newtonsoft.Json.JsonException or InvalidOperationException or IOException)
+			{
+				var recovered = TryRecoverSettings(filePath, settingsManager, loadEx);
+				if (recovered is null)
+					throw;
+				settings = recovered;
+			}
 			BeepPlayer.Initialize(settings);
 
 			builder.Services.AddSingleton<ISettingsManager>(settingsManager);
@@ -174,6 +267,8 @@ public partial class App : Application
 				return new CompositeLlmService(openAiService, anthropicService);
 			});
 			builder.Services.AddSingleton<TranscriptFormatter>();
+			builder.Services.AddSingleton<SpeechToTextManager>();
+			builder.Services.AddSingleton<Mutation.Ui.Core.AudioSessionManager>();
                         builder.Services.AddSingleton<ITextToSpeechService, TextToSpeechService>();
 			builder.Services.AddHttpClient(OpenAiHttpClientName);
 			builder.Services.AddHttpClient(AnthropicHttpClientName);

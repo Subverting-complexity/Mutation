@@ -41,6 +41,7 @@ public class OcrManager
     private Window? _window;
     private RegionSelectionWindow? _activeOverlay;
     private RegionSelectionWindow? _cachedOverlay;
+    private int _captureInFlight; // 0 = idle, 1 = busy. Guards against re-entrant screenshot starts.
 
     public static IReadOnlyList<string> SupportedFileExtensions => SupportedFileExtensionReadOnly;
 
@@ -60,41 +61,55 @@ public class OcrManager
 
     public async Task TakeScreenshotToClipboardAsync()
     {
-        if (_activeOverlay is not null)
+        if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
-            try { _activeOverlay.BringToFront(); } catch { }
+            try { _activeOverlay?.BringToFront(); } catch { }
             return;
         }
-        var bitmap = await CaptureScreenshotAsync();
-        if (bitmap != null)
+        try
         {
-            await _clipboard.SetImageAsync(bitmap);
-            _ = Task.Run(() => PlayBeep(BeepType.Success));
+            var bitmap = await CaptureScreenshotAsync();
+            if (bitmap != null)
+            {
+                await _clipboard.SetImageAsync(bitmap);
+                await PlayBeepSafeAsync(BeepType.Success);
+            }
+            else
+            {
+                await PlayBeepSafeAsync(BeepType.Failure);
+            }
         }
-        else
+        finally
         {
-            _ = Task.Run(() => PlayBeep(BeepType.Failure));
+            Interlocked.Exchange(ref _captureInFlight, 0);
         }
     }
 
     public async Task<OcrResult> TakeScreenshotAndExtractTextAsync(OcrReadingOrder order)
     {
-        if (_activeOverlay is not null)
+        if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
-            try { _activeOverlay.BringToFront(); } catch { }
+            try { _activeOverlay?.BringToFront(); } catch { }
             return new(false, "Screenshot already in progress");
         }
-        var bitmap = await CaptureScreenshotAsync();
-        if (bitmap == null)
+        try
         {
-            _ = Task.Run(() => PlayBeep(BeepType.Failure));
-            return new(false, "Screenshot cancelled.");
-        }
+            var bitmap = await CaptureScreenshotAsync();
+            if (bitmap == null)
+            {
+                await PlayBeepSafeAsync(BeepType.Failure);
+                return new(false, "Screenshot cancelled.");
+            }
 
-        await _clipboard.SetImageAsync(bitmap);
-        var result = await ExtractTextViaOcrAsync(order, bitmap);
-        _ = Task.Run(() => PlayBeep(result.Success ? BeepType.Success : BeepType.Failure));
-        return result;
+            await _clipboard.SetImageAsync(bitmap);
+            var result = await ExtractTextViaOcrAsync(order, bitmap);
+            await PlayBeepSafeAsync(result.Success ? BeepType.Success : BeepType.Failure);
+            return result;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _captureInFlight, 0);
+        }
     }
 
     public async Task<OcrResult> ExtractTextFromClipboardImageAsync(OcrReadingOrder order)
@@ -102,12 +117,12 @@ public class OcrManager
         var bitmap = await _clipboard.TryGetImageAsync();
         if (bitmap == null)
         {
-            PlayBeep(BeepType.Failure);
+            PlayBeepSafe(BeepType.Failure);
             return new(false, "No image on clipboard.");
         }
 
         var result = await ExtractTextViaOcrAsync(order, bitmap);
-        _ = Task.Run(() => PlayBeep(result.Success ? BeepType.Success : BeepType.Failure));
+        await PlayBeepSafeAsync(result.Success ? BeepType.Success : BeepType.Failure);
         return result;
     }
 
@@ -123,13 +138,13 @@ public class OcrManager
 
         if (paths.Count == 0)
         {
-            PlayBeep(BeepType.Failure);
+            PlayBeepSafe(BeepType.Failure);
             return new(false, string.Empty, 0, 0, Array.Empty<string>());
         }
 
         if (!IsOcrConfigured(out string configurationError))
         {
-            PlayBeep(BeepType.Failure);
+            PlayBeepSafe(BeepType.Failure);
             return new(false, string.Empty, paths.Count, 0, new[] { configurationError });
         }
 
@@ -137,7 +152,7 @@ public class OcrManager
         int totalSegments = batches.Sum(batch => batch.Items.Count);
         if (totalSegments == 0)
         {
-            PlayBeep(BeepType.Failure);
+            PlayBeepSafe(BeepType.Failure);
             return new(false, string.Empty, paths.Count, 0, Array.Empty<string>());
         }
 
@@ -229,7 +244,7 @@ public class OcrManager
             await SetClipboardTextAsync(resultText);
 
         bool success = successCount > 0 && failures.Count == 0;
-        _ = Task.Run(() => PlayBeep(success ? BeepType.Success : BeepType.Failure));
+        await PlayBeepSafeAsync(success ? BeepType.Success : BeepType.Failure);
 
         return new(success, resultText, paths.Count, successCount, failures.AsReadOnly());
     }
@@ -510,6 +525,14 @@ public class OcrManager
         BeepPlayer.Play(type);
     }
 
+    private void PlayBeepSafe(BeepType type)
+    {
+        try { PlayBeep(type); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"PlayBeep({type}) failed: {ex.Message}"); }
+    }
+
+    private Task PlayBeepSafeAsync(BeepType type) => Task.Run(() => PlayBeepSafe(type));
+
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int nIndex);
 
@@ -573,23 +596,31 @@ public class OcrManager
             gdiBmp.UnlockBits(data);
         }
 
-        var overlay = _cachedOverlay ?? new RegionSelectionWindow();
-        await overlay.InitializeAsync(bmp);
-        overlay.UpdateBitmap(bmp);
-        _activeOverlay = overlay;
         try
         {
-            // Activate and show overlay (inside SelectRegionAsync), then play start beep asynchronously to avoid UI delay
-            var selectTask = overlay.SelectRegionAsync();
-            _ = Task.Run(() => PlayBeep(BeepType.Start));
-            Rect? selectionRect = await selectTask;
-            if (selectionRect == null || selectionRect.Value.Width < 1 || selectionRect.Value.Height < 1)
-                return null;
-            return await CropBitmapAsync(bmp, selectionRect.Value);
+            var overlay = _cachedOverlay ?? new RegionSelectionWindow();
+            await overlay.InitializeAsync(bmp);
+            overlay.UpdateBitmap(bmp);
+            _activeOverlay = overlay;
+            try
+            {
+                // Activate and show overlay (inside SelectRegionAsync), then play start beep asynchronously to avoid UI delay
+                var selectTask = overlay.SelectRegionAsync();
+                var beepTask = PlayBeepSafeAsync(BeepType.Start);
+                Rect? selectionRect = await selectTask;
+                await beepTask;
+                if (selectionRect == null || selectionRect.Value.Width < 1 || selectionRect.Value.Height < 1)
+                    return null;
+                return await CropBitmapAsync(bmp, selectionRect.Value);
+            }
+            finally
+            {
+                _activeOverlay = null;
+            }
         }
         finally
         {
-            _activeOverlay = null;
+            bmp.Dispose();
         }
     }
 

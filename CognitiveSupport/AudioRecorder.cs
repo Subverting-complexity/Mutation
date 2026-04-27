@@ -27,29 +27,61 @@ public class AudioRecorder : IDisposable
 	{
 		lock (_writeLock)
 		{
-			_waveIn = new WaveInEvent
+			WaveInEvent? waveIn = null;
+			Stream? fileStream = null;
+			OpusEncoder? encoder = null;
+			OpusOggWriteStream? oggStream = null;
+			try
 			{
-				DeviceNumber = captureDeviceIndex,
-				WaveFormat = new WaveFormat(SampleRate, 16, Channels),
-				BufferMilliseconds = 100 // Request larger buffers from NAudio to reduce overhead
-			};
+				waveIn = new WaveInEvent
+				{
+					DeviceNumber = captureDeviceIndex,
+					WaveFormat = new WaveFormat(SampleRate, 16, Channels),
+					BufferMilliseconds = 100 // Request larger buffers from NAudio to reduce overhead
+				};
 
-			_fileStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
-			
-			_encoder = new OpusEncoder(SampleRate, Channels, OpusApplication.OPUS_APPLICATION_VOIP)
+				fileStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
+
+				encoder = new OpusEncoder(SampleRate, Channels, OpusApplication.OPUS_APPLICATION_VOIP)
+				{
+					Bitrate = 24000,
+					UseVBR = true,
+					UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
+				};
+
+				oggStream = new OpusOggWriteStream(encoder, fileStream, new OpusTags());
+
+				waveIn.DataAvailable += OnDataAvailable;
+				waveIn.RecordingStopped += OnRecordingStopped;
+
+				// Commit to fields BEFORE StartRecording so OnDataAvailable can find _oggStream.
+				_waveIn = waveIn;
+				_fileStream = fileStream;
+				_encoder = encoder;
+				_oggStream = oggStream;
+
+				try
+				{
+					_waveIn.StartRecording();
+				}
+				catch
+				{
+					// Roll back field commits so subsequent calls / Dispose see clean state.
+					_waveIn = null;
+					_fileStream = null;
+					_encoder = null;
+					_oggStream = null;
+					throw;
+				}
+			}
+			catch
 			{
-				Bitrate = 24000,
-				UseVBR = true,
-				UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
-			};
-
-			var tags = new OpusTags();
-			_oggStream = new OpusOggWriteStream(_encoder, _fileStream, tags);
-
-			_waveIn.DataAvailable += OnDataAvailable;
-			_waveIn.RecordingStopped += OnRecordingStopped;
-
-			_waveIn.StartRecording();
+				// Clean up anything allocated but not committed (or rolled back above).
+				try { if (waveIn is not null && _waveIn is null) waveIn.Dispose(); } catch { }
+				try { if (fileStream is not null && _fileStream is null) fileStream.Dispose(); } catch { }
+				// OpusEncoder / OpusOggWriteStream don't implement IDisposable in Concentus.
+				throw;
+			}
 		}
 	}
 
