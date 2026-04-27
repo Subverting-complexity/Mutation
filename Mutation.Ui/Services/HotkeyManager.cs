@@ -627,26 +627,50 @@ public class HotkeyManager : IDisposable
 
 	private static readonly string LogFile = Path.Combine(Path.GetTempPath(), "Mutation.Hotkey.log");
 	private const long MaxLogFileSize = 100 * 1024; // 100 KB max log size
+
+	// Off-UI-thread logging: WndProc-bound callers enqueue here without blocking;
+	// a single background consumer drains the channel and performs file I/O.
+	private static readonly System.Threading.Channels.Channel<string> s_logChannel =
+		System.Threading.Channels.Channel.CreateUnbounded<string>(
+			new System.Threading.Channels.UnboundedChannelOptions
+			{
+				SingleReader = true,
+				SingleWriter = false,
+				AllowSynchronousContinuations = false,
+			});
+
+	private static readonly Task s_logConsumer = Task.Run(LogConsumerLoopAsync);
+
+	private static async Task LogConsumerLoopAsync()
+	{
+		await foreach (var line in s_logChannel.Reader.ReadAllAsync().ConfigureAwait(false))
+		{
+			try
+			{
+				if (File.Exists(LogFile))
+				{
+					var fileInfo = new FileInfo(LogFile);
+					if (fileInfo.Length > MaxLogFileSize)
+					{
+						string backupPath = LogFile + ".old";
+						if (File.Exists(backupPath))
+							File.Delete(backupPath);
+						File.Move(LogFile, backupPath);
+					}
+				}
+				File.AppendAllText(LogFile, line);
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"HotkeyManager.Log writer failed: {ex.Message}");
+			}
+		}
+	}
+
 	private static void Log(string message)
 	{
-		try
-		{
-			// Rotate log file if it exceeds max size
-			if (File.Exists(LogFile))
-			{
-				var fileInfo = new FileInfo(LogFile);
-				if (fileInfo.Length > MaxLogFileSize)
-				{
-					string backupPath = LogFile + ".old";
-					if (File.Exists(backupPath))
-						File.Delete(backupPath);
-					File.Move(LogFile, backupPath);
-				}
-			}
-			var line = $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}";
-			File.AppendAllText(LogFile, line);
-		}
-		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"HotkeyManager.Log failed: {ex.Message}"); }
+		var line = $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}";
+		s_logChannel.Writer.TryWrite(line);
 	}
 
 	private static string NormalizeHotkey(Hotkey hk)

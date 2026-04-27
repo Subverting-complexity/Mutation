@@ -164,7 +164,7 @@ internal class AudioSessionManager : IDisposable
         await PlaySelectedSessionAsync();
     }
 
-    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, string llmPrompt = "")
+    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, string llmPrompt = "", CancellationToken cancellationToken = default)
     {
         try
         {
@@ -198,7 +198,7 @@ internal class AudioSessionManager : IDisposable
 
                 try
                 {
-                    string text = await _speechManager.StopRecordingAndTranscribeAsync(activeService, prompt, CancellationToken.None);
+                    string text = await _speechManager.StopRecordingAndTranscribeAsync(activeService, prompt, cancellationToken);
                     await ProcessTranscriptAsync(text, llmPrompt);
                 }
                 catch (OperationCanceledException)
@@ -218,7 +218,7 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public async Task RetryTranscriptionAsync(ISpeechToTextService activeService, string prompt)
+    public async Task RetryTranscriptionAsync(ISpeechToTextService activeService, string prompt, CancellationToken cancellationToken = default)
     {
         if (IsRecording || IsTranscribing)
         {
@@ -238,7 +238,7 @@ internal class AudioSessionManager : IDisposable
             StatusMessage?.Invoke(this, "Transcribing your recording...");
             StateChanged?.Invoke(this, EventArgs.Empty);
 
-            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, CancellationToken.None);
+            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, cancellationToken);
             // Retry doesn't apply LLM formatting — pass raw text only so
             // FinalizeTranscript applies rules-based formatting as usual.
             TranscriptReady?.Invoke(this, new TranscriptResult(text));
@@ -258,7 +258,7 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public async Task ImportAudioAsync(StorageFile file, ISpeechToTextService activeService, string prompt)
+    public async Task ImportAudioAsync(StorageFile file, ISpeechToTextService activeService, string prompt, CancellationToken cancellationToken = default)
     {
         if (IsRecording || IsTranscribing)
         {
@@ -272,10 +272,10 @@ internal class AudioSessionManager : IDisposable
             StatusMessage?.Invoke(this, $"Transcribing {file.Name}...");
             StateChanged?.Invoke(this, EventArgs.Empty);
 
-            var session = await _speechManager.ImportUploadedAudioAsync(file.Path, CancellationToken.None);
+            var session = await _speechManager.ImportUploadedAudioAsync(file.Path, cancellationToken);
             RefreshSessions(session);
-            
-            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, session, prompt, CancellationToken.None);
+
+            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, session, prompt, cancellationToken);
             TranscriptReady?.Invoke(this, new TranscriptResult(text));
             StatusMessage?.Invoke(this, $"Transcript generated from {session.FileName}.");
         }

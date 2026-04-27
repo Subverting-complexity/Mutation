@@ -161,17 +161,16 @@ internal class SpeechToTextManager : IDisposable
 		await _state.AudioRecorderLock.WaitAsync(token).ConfigureAwait(false);
 		try
 		{
-			_state.StartTranscription();
+			var transcribeToken = _state.StartTranscription(token);
 			try
 			{
 				_audioRecorder?.StopRecording();
 				_audioRecorder?.Dispose();
 				_audioRecorder = null;
 
-				if (_state.TranscriptionCancellationTokenSource?.IsCancellationRequested == true)
-					_state.TranscriptionCancellationTokenSource.Token.ThrowIfCancellationRequested();
+				transcribeToken.ThrowIfCancellationRequested();
 
-				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, _state.TranscriptionCancellationTokenSource!.Token).ConfigureAwait(false);
+				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, transcribeToken).ConfigureAwait(false);
 			}
 			finally
 			{
@@ -206,11 +205,11 @@ internal class SpeechToTextManager : IDisposable
 				throw new FileNotFoundException("Selected session file is missing.", session.FilePath);
 
 			string text = string.Empty;
-			_state.StartTranscription();
+			var transcribeToken = _state.StartTranscription(token);
 			try
 			{
 				int timeout = _settings.SpeechToTextSettings?.FileTranscriptionTimeoutSeconds ?? 300;
-				text = await service.ConvertAudioToText(prompt, session.FilePath, _state.TranscriptionCancellationTokenSource!.Token, timeout).ConfigureAwait(false);
+				text = await service.ConvertAudioToText(prompt, session.FilePath, transcribeToken, timeout).ConfigureAwait(false);
 			}
 			finally
 			{

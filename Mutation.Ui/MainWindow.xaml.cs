@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private ISpeechToTextService? _activeSpeechService;
 	private CancellationTokenSource _formatDebounceCts = new();
 	private CancellationTokenSource _promptDebounceCts = new();
+	private readonly CancellationTokenSource _shutdownCts = new();
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
@@ -664,6 +665,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		// Prevent auto actions during shutdown
 		_suppressAutoActions = true;
+		// Signal shutdown to any in-flight transcription HTTP requests so they
+		// observe cancellation rather than running until their server timeout.
+		try { _shutdownCts.Cancel(); } catch (ObjectDisposedException) { }
 		try
 		{
             await _audioSessionManager.EnsureStoppedAsync();
@@ -1142,7 +1146,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 ShowStatus("Speech to Text", "Select a speech-to-text service to retry.", InfoBarSeverity.Warning);
                 return;
             }
-            await _audioSessionManager.RetryTranscriptionAsync(_activeSpeechService, GetActivePrompt());
+            await _audioSessionManager.RetryTranscriptionAsync(_activeSpeechService, GetActivePrompt(), _shutdownCts.Token);
         }
 
         private async void BtnUploadSpeechAudio_Click(object? sender, RoutedEventArgs? e)
@@ -1179,7 +1183,7 @@ public sealed partial class MainWindow : Window, IDisposable
             if (file is null)
                 return;
 
-            await _audioSessionManager.ImportAudioAsync(file, _activeSpeechService, GetActivePrompt());
+            await _audioSessionManager.ImportAudioAsync(file, _activeSpeechService, GetActivePrompt(), _shutdownCts.Token);
         }
 
 	private async void BtnOcrClipboardLrtb_Click(object sender, RoutedEventArgs e)
@@ -1222,7 +1226,7 @@ public sealed partial class MainWindow : Window, IDisposable
             }
             
             string llmPromptContent = GetAutoRunPromptContent();
-            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), llmPromptContent);
+            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), llmPromptContent, _shutdownCts.Token);
 		}
 		catch (Exception ex)
 		{
@@ -1989,7 +1993,7 @@ public sealed partial class MainWindow : Window, IDisposable
         LstPrompts.ItemsSource = _settings.LlmSettings.Prompts;
         
         // Refresh Hotkeys
-        _hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, ExecutePrompt);
+        _hotkeyManager?.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, ExecutePrompt);
     }
 
 	public void Dispose()
@@ -1998,6 +2002,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_waveformCapture?.Dispose();
 		_formatDebounceCts?.Dispose();
 		_promptDebounceCts?.Dispose();
+		_shutdownCts.Dispose();
 		_statusDismissTimer?.Stop();
 		_waveformTimer?.Stop();
 	}

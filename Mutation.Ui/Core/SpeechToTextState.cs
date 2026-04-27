@@ -1,4 +1,4 @@
-﻿using CognitiveSupport;
+using CognitiveSupport;
 using System;
 using System.Threading;
 
@@ -8,11 +8,16 @@ internal class SpeechToTextState : IDisposable
 {
 	internal SemaphoreSlim AudioRecorderLock { get; } = new SemaphoreSlim(1, 1);
 
+	private readonly object _ctsLock = new();
+	private CancellationTokenSource? _cts;
+
 	private Func<AudioRecorder> GetAudioRecorder;
 	internal bool RecordingAudio => GetAudioRecorder() != null;
 
-	internal CancellationTokenSource? TranscriptionCancellationTokenSource { get; set; }
-	internal bool TranscribingAudio => TranscriptionCancellationTokenSource != null;
+	internal bool TranscribingAudio
+	{
+		get { lock (_ctsLock) return _cts is not null; }
+	}
 
 	public SpeechToTextState(
 		Func<AudioRecorder> getAudioRecorder)
@@ -20,21 +25,36 @@ internal class SpeechToTextState : IDisposable
 		GetAudioRecorder = getAudioRecorder ?? throw new ArgumentNullException(nameof(getAudioRecorder));
 	}
 
-	internal void StartTranscription()
+	// Returns a token tied to BOTH the new internal CTS and `external`.
+	// Caller MUST use the returned token rather than re-reading state to avoid
+	// a race with StopTranscription on a different thread.
+	internal CancellationToken StartTranscription(CancellationToken external = default)
 	{
-		this.TranscriptionCancellationTokenSource = new();
+		lock (_ctsLock)
+		{
+			_cts?.Dispose();
+			_cts = CancellationTokenSource.CreateLinkedTokenSource(external);
+			return _cts.Token;
+		}
 	}
 
 	internal void StopTranscription()
 	{
-		if (this.TranscriptionCancellationTokenSource is not null)
-			this.TranscriptionCancellationTokenSource.Cancel();
-		this.TranscriptionCancellationTokenSource = null;
+		CancellationTokenSource? toDispose;
+		lock (_ctsLock)
+		{
+			toDispose = _cts;
+			_cts = null;
+		}
+		if (toDispose is null)
+			return;
+		try { toDispose.Cancel(); } catch (ObjectDisposedException) { }
+		toDispose.Dispose();
 	}
 
 	public void Dispose()
 	{
+		StopTranscription();
 		AudioRecorderLock.Dispose();
-		TranscriptionCancellationTokenSource?.Dispose();
 	}
 }
