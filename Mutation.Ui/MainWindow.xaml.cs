@@ -7,9 +7,6 @@ using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views;
-using NAudio.Wave;
-using ScottPlot;
-using ScottPlot.Plottables;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -42,20 +39,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly Settings _settings;
 	private HotkeyManager? _hotkeyManager;
-
-	private WaveInEvent? _waveformCapture;
-	private DispatcherQueueTimer? _waveformTimer;
-	// ScottPlot v5 renamed SignalPlot (v4) to Signal. Adjusting type accordingly.
-	private Signal? _waveformSignal;
-	private double[] _waveformBuffer = Array.Empty<double>();
-	private double[] _waveformRenderBuffer = Array.Empty<double>();
-	private int _waveformBufferIndex;
-	private bool _waveformBufferFilled;
-	private readonly object _waveformBufferLock = new();
-	private double _waveformPeak;
-	private double _waveformRms;
-	private double _waveformPulse; // smoothed peak for visual pulse
-	private bool VisualizationEnabled => _settings.AudioSettings?.EnableMicrophoneVisualization != false;
+	private MicrophoneVisualizationController? _microphoneVisualization;
+	private PromptLibraryController? _promptLibrary;
 
 	// Suppress auto-format/clipboard/beep when we change text programmatically or during record/transcribe
 	private bool _suppressAutoActions = false;
@@ -67,7 +52,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
-	private bool _hotkeyRouterInitialized;
+	private HotkeyRouterController? _hotkeyRouter;
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
@@ -90,12 +75,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	private const string PlayGlyph = "\uE768";
 	private const string MagicGlyph = "\uE890";
 
-	private const int WaveformSampleRate = 16_000;
-	private const int WaveformWindowMilliseconds = 40;
-	private const int WaveformWindowSampleCount = WaveformSampleRate * WaveformWindowMilliseconds / 1_000;
-	private const double WaveformFrameIntervalMilliseconds = 1_000.0 / 30.0;
-	private const int WaveformBufferMilliseconds = 15;
-
 	private const string DoNotInsertExplanation = "Keep the transcript inside Mutation without sending it anywhere.";
 	private const string SendKeysExplanation = "Types the transcript into the active app as if you entered it yourself.";
 	private const string PasteExplanation = "Copies the transcript and pastes it into the active application.";
@@ -106,7 +85,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	private static extern IntPtr GetForegroundWindow();
 
 	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
-	private readonly List<(string From, string To)> _hotkeyRouterPersistedSnapshot = new();
 
 	public MainWindow(
 		ClipboardManager clipboard,
@@ -141,7 +119,18 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
 
         InitializeComponent();
-        InitializeMicrophoneVisualization();
+        _microphoneVisualization = new MicrophoneVisualizationController(
+            DispatcherQueue,
+            _audioDeviceManager,
+            _settings,
+            _settingsManager,
+            MicWaveformPlot,
+            MicWaveformOffLabel,
+            MicLevelMeter,
+            RmsLevelBar,
+            MicPulseOverlay,
+            ShowStatus);
+        _microphoneVisualization.Initialize();
 
         _audioSessionManager.RefreshSessions();
                 UpdatePlaybackButtonVisuals("Play selected session", PlayGlyph);
@@ -166,7 +155,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		CmbMicrophone.DisplayMemberPath = nameof(CoreAudio.MMDevice.DeviceFriendlyName);
 
 		RestorePersistedMicrophoneSelection(micList);
-		StartMicrophoneVisualizationCapture();
+		_microphoneVisualization.StartCapture();
 
 		CmbSpeechService.ItemsSource = _speechServices;
 		CmbSpeechService.DisplayMemberPath = nameof(ISpeechToTextService.ServiceName);
@@ -190,11 +179,13 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 		}
 
-            // Populate Prompt Grid
-            if (_settings.LlmSettings != null)
-            {
-                LstPrompts.ItemsSource = _settings.LlmSettings.Prompts;
-            }
+            _promptLibrary = new PromptLibraryController(
+                _settings,
+                _settingsManager,
+                _transcriptFormatter,
+                LstPrompts,
+                ExecutePrompt);
+            _promptLibrary.Initialize();
 
 		var tooltipManager = new TooltipManager(_settings);
 		tooltipManager.SetupTooltips(TxtRawTranscript, TxtFormatTranscript);
@@ -219,7 +210,13 @@ public sealed partial class MainWindow : Window, IDisposable
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
 		InitializeHotkeyVisuals();
-		InitializeHotkeyRouter();
+		_hotkeyRouter = new HotkeyRouterController(
+			HotkeyRouterEntries,
+			_settings,
+			_settingsManager,
+			DispatcherQueue,
+			HotkeyRouterList);
+		_hotkeyRouter.Initialize();
 
 		this.Closed += MainWindow_Closed;
 	}
@@ -261,12 +258,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
 	{
 		_hotkeyManager = hotkeyManager;
-		RefreshHotkeyRouterRegistrations();
-
-        if (_settings.LlmSettings?.Prompts != null)
-        {
-           _hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, ExecutePrompt);
-        }
+		_hotkeyRouter?.AttachHotkeyManager(hotkeyManager);
+		_promptLibrary?.AttachHotkeyManager(hotkeyManager);
 	}
 
 	private void RestorePersistedSpeechServiceSelection()
@@ -335,332 +328,6 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnFormatLlm, null, null, "Send transcript through the configured language model");
 	}
 
-	private void InitializeHotkeyRouter()
-	{
-		_hotkeyRouterInitialized = false;
-
-		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
-
-		foreach (var entry in HotkeyRouterEntries)
-			DetachHotkeyRouterEntry(entry);
-		HotkeyRouterEntries.Clear();
-		foreach (var map in _settings.HotKeyRouterSettings.Mappings)
-		{
-			var entry = new HotkeyRouterEntry(map);
-			AttachHotkeyRouterEntry(entry);
-			HotkeyRouterEntries.Add(entry);
-		}
-
-		var initialPairs = HotkeyRouterEntries
-				  .Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)
-				  .Select(e => (From: e.NormalizedFromHotkey!, To: e.NormalizedToHotkey!))
-				  .ToList();
-		UpdateHotkeyRouterSnapshot(initialPairs);
-
-		RecalculateHotkeyRouterDuplicates();
-		// Defer registration & persistence until HotkeyManager is attached to avoid
-		// any chance of wiping persisted mappings during initial construction.
-		_hotkeyRouterInitialized = true;
-	}
-
-	private void InitializeMicrophoneVisualization()
-	{
-		if (MicWaveformPlot is null)
-			return;
-
-		_waveformBuffer = new double[WaveformWindowSampleCount];
-		_waveformRenderBuffer = new double[WaveformWindowSampleCount];
-		_waveformBufferIndex = 0;
-		_waveformBufferFilled = false;
-
-		var plot = MicWaveformPlot.Plot;
-		plot.Clear();
-		_waveformSignal = plot.Add.Signal(_waveformRenderBuffer);
-		plot.Axes.SetLimitsX(0, Math.Max(1, WaveformWindowSampleCount - 1));
-		plot.Axes.SetLimitsY(-1, 1);
-		plot.HideGrid();
-		MicWaveformPlot.Refresh();
-		if (_settings.AudioSettings != null)
-		{
-			if (!VisualizationEnabled)
-			{
-				MicWaveformPlot.Visibility = Visibility.Collapsed;
-				if (MicWaveformOffLabel != null) MicWaveformOffLabel.Visibility = Visibility.Visible;
-			}
-		}
-
-		_waveformTimer = DispatcherQueue.CreateTimer();
-		_waveformTimer.Interval = TimeSpan.FromMilliseconds(WaveformFrameIntervalMilliseconds);
-		_waveformTimer.Tick += WaveformTimer_Tick;
-		_waveformTimer.Start();
-	}
-
-	private void WaveformTimer_Tick(DispatcherQueueTimer sender, object args)
-	{
-		if (!VisualizationEnabled)
-		{
-			if (MicWaveformPlot.Visibility != Visibility.Collapsed)
-				MicWaveformPlot.Visibility = Visibility.Collapsed;
-			if (MicWaveformOffLabel != null)
-				MicWaveformOffLabel.Visibility = Visibility.Visible;
-			if (RmsLevelBar != null)
-				RmsLevelBar.Height = 0;
-			return;
-		}
-
-		if (MicWaveformPlot.Visibility != Visibility.Visible)
-			MicWaveformPlot.Visibility = Visibility.Visible;
-		if (MicWaveformOffLabel != null && MicWaveformOffLabel.Visibility == Visibility.Visible)
-			MicWaveformOffLabel.Visibility = Visibility.Collapsed;
-
-		int validSamples = PopulateWaveformRenderBuffer();
-
-                double peak = 0;
-                double sumSquares = 0;
-                if (validSamples > 0)
-                {
-                        int samplesToProcess = Math.Min(validSamples, _waveformRenderBuffer.Length);
-                        int startIndex = _waveformRenderBuffer.Length - samplesToProcess;
-                        for (int i = startIndex; i < _waveformRenderBuffer.Length; i++)
-                        {
-                                double value = _waveformRenderBuffer[i];
-                                double abs = Math.Abs(value);
-                                if (abs > peak)
-                                        peak = abs;
-                                sumSquares += value * value;
-                        }
-                        _waveformRms = Math.Sqrt(sumSquares / Math.Max(1, samplesToProcess));
-                }
-		else
-		{
-			_waveformRms = 0;
-		}
-
-		_waveformPeak = peak;
-
-		if (_waveformSignal != null)
-			MicWaveformPlot.Refresh();
-
-		UpdateMicLevelMeter(peak, _waveformRms);
-
-		_waveformPulse = Math.Max(_waveformPulse * 0.85, Math.Min(1.0, peak));
-		if (MicPulseOverlay != null)
-			MicPulseOverlay.Opacity = _waveformPulse * 0.35;
-	}
-
-	private int PopulateWaveformRenderBuffer()
-	{
-		if (_waveformRenderBuffer.Length == 0 || _waveformBuffer.Length == 0)
-		{
-			return 0;
-		}
-
-		lock (_waveformBufferLock)
-		{
-			if (!_waveformBufferFilled && _waveformBufferIndex == 0)
-			{
-				Array.Clear(_waveformRenderBuffer, 0, _waveformRenderBuffer.Length);
-				return 0;
-			}
-
-                        if (_waveformBufferFilled)
-                        {
-                                int bufferLen = _waveformRenderBuffer.Length;
-                                int index = _waveformBufferIndex;
-                                if (index > bufferLen)
-                                        index = bufferLen;
-                                int tailLength = bufferLen - index;
-                                if (tailLength > 0)
-                                        Array.Copy(_waveformBuffer, index, _waveformRenderBuffer, 0, tailLength);
-                                if (index > 0)
-                                        Array.Copy(_waveformBuffer, 0, _waveformRenderBuffer, tailLength, index);
-                                return bufferLen;
-                        }
-
-			int validCount = _waveformBufferIndex;
-			int leadingZeros = _waveformRenderBuffer.Length - validCount;
-			if (leadingZeros > 0)
-				Array.Clear(_waveformRenderBuffer, 0, leadingZeros);
-			Array.Copy(_waveformBuffer, 0, _waveformRenderBuffer, Math.Max(0, leadingZeros), validCount);
-			return validCount;
-		}
-	}
-
-	private void UpdateMicLevelMeter(double peak, double rms)
-	{
-		if (RmsLevelBar is null || MicWaveformPlot is null)
-			return;
-
-		double waveformHeight = MicWaveformPlot.ActualHeight;
-		if (double.IsNaN(waveformHeight) || waveformHeight <= 0)
-			waveformHeight = MicWaveformPlot.Height;
-
-		if (MicLevelMeter is not null && waveformHeight > 0)
-			MicLevelMeter.Height = waveformHeight;
-
-                double levelValue = rms;
-		levelValue = Math.Min(1.0, Math.Max(0, levelValue));
-
-		RmsLevelBar.Height = waveformHeight * levelValue;
-	}
-
-	private void StartMicrophoneVisualizationCapture()
-	{
-		if (_waveformRenderBuffer.Length == 0)
-			return;
-
-		StopMicrophoneVisualizationCapture();
-
-		lock (_waveformBufferLock)
-		{
-			if (_waveformBuffer.Length > 0)
-				Array.Clear(_waveformBuffer, 0, _waveformBuffer.Length);
-			if (_waveformRenderBuffer.Length > 0)
-				Array.Clear(_waveformRenderBuffer, 0, _waveformRenderBuffer.Length);
-			_waveformBufferIndex = 0;
-			_waveformBufferFilled = false;
-		}
-
-		int deviceIndex = _audioDeviceManager.MicrophoneDeviceIndex;
-		if (deviceIndex < 0)
-		{
-			// Provide a visible hint if selection failed to map to an NAudio device index.
-			DispatcherQueue.TryEnqueue(() =>
-					  ShowStatus("Microphone", "Unable to start waveform monitor (device not resolved)", InfoBarSeverity.Warning));
-			return;
-		}
-
-		try
-		{
-			_waveformCapture = new WaveInEvent
-			{
-				DeviceNumber = deviceIndex,
-				WaveFormat = new WaveFormat(WaveformSampleRate, 16, 1),
-				BufferMilliseconds = WaveformBufferMilliseconds
-			};
-			_waveformCapture.DataAvailable += OnWaveformDataAvailable;
-			_waveformCapture.StartRecording();
-		}
-		catch (Exception ex)
-		{
-			_waveformCapture?.Dispose();
-			_waveformCapture = null;
-			DispatcherQueue.TryEnqueue(() =>
-					  ShowStatus("Microphone", $"Unable to monitor audio: {ex.Message}", InfoBarSeverity.Error));
-		}
-	}
-
-	private void RestartMicrophoneVisualizationCapture()
-	{
-		StopMicrophoneVisualizationCapture();
-		StartMicrophoneVisualizationCapture();
-	}
-
-	private void StopMicrophoneVisualizationCapture()
-	{
-		if (_waveformCapture is null)
-			return;
-
-		try
-		{
-			_waveformCapture.DataAvailable -= OnWaveformDataAvailable;
-			_waveformCapture.StopRecording();
-		}
-		catch
-		{
-			// Ignore failures that occur while shutting down capture.
-		}
-
-		_waveformCapture.Dispose();
-		_waveformCapture = null;
-	}
-
-	private void DisposeMicrophoneVisualization()
-	{
-		StopMicrophoneVisualizationCapture();
-
-		if (_waveformTimer is not null)
-		{
-			_waveformTimer.Tick -= WaveformTimer_Tick;
-			_waveformTimer.Stop();
-			_waveformTimer = null;
-		}
-
-		_waveformSignal = null;
-		_waveformBuffer = Array.Empty<double>();
-		_waveformRenderBuffer = Array.Empty<double>();
-		_waveformBufferIndex = 0;
-		_waveformBufferFilled = false;
-	}
-
-	private void OnWaveformDataAvailable(object? sender, WaveInEventArgs e)
-	{
-		if (_waveformBuffer.Length == 0 || e.BytesRecorded <= 0)
-			return;
-
-		int sampleCount = e.BytesRecorded / 2;
-		if (sampleCount <= 0)
-			return;
-
-		lock (_waveformBufferLock)
-		{
-			for (int i = 0; i < sampleCount; i++)
-			{
-				short sample = BitConverter.ToInt16(e.Buffer, i * 2);
-				double value = sample / 32768d;
-				_waveformBuffer[_waveformBufferIndex++] = value;
-				if (_waveformBufferIndex >= _waveformBuffer.Length)
-				{
-					_waveformBufferIndex = 0;
-					_waveformBufferFilled = true;
-				}
-			}
-		}
-	}
-
-	private void RefreshHotkeyRouterRegistrations()
-	{
-		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
-
-		RecalculateHotkeyRouterDuplicates();
-		var normalizedPairs = SyncHotkeyRouterSettings();
-
-		if (_hotkeyManager is null)
-		{
-			foreach (var entry in HotkeyRouterEntries)
-				entry.SetBindingResult(HotkeyBindingState.Inactive, null);
-
-			if (ShouldPersistHotkeyRouterMappings(normalizedPairs))
-			{
-				_settingsManager.SaveSettingsToFile(_settings);
-				UpdateHotkeyRouterSnapshot(normalizedPairs);
-			}
-			return;
-		}
-
-		var mappings = _settings.HotKeyRouterSettings.Mappings;
-		var results = _hotkeyManager.RefreshRouterHotkeys(mappings);
-		var resultLookup = results.ToDictionary(r => r.Map);
-
-		foreach (var entry in HotkeyRouterEntries)
-		{
-			if (resultLookup.TryGetValue(entry.Map, out var result))
-			{
-				entry.SetBindingResult(result.Success ? HotkeyBindingState.Bound : HotkeyBindingState.Failed, result.ErrorMessage);
-			}
-			else
-			{
-				entry.SetBindingResult(HotkeyBindingState.Inactive, null);
-			}
-		}
-
-		if (ShouldPersistHotkeyRouterMappings(normalizedPairs))
-		{
-			_settingsManager.SaveSettingsToFile(_settings);
-			UpdateHotkeyRouterSnapshot(normalizedPairs);
-		}
-	}
-
 	private async void MainWindow_Closed(object sender, WindowEventArgs args)
 	{
 		// Prevent auto actions during shutdown
@@ -686,14 +353,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		// _settings.LlmSettings!.FormatTranscriptPrompt = TxtFormatPrompt.Text;
 
-		var normalizedPairs = SyncHotkeyRouterSettings();
+		var normalizedPairs = _hotkeyRouter?.SyncSettings() ?? new List<(string From, string To)>();
 		_settingsManager.SaveSettingsToFile(_settings);
-		UpdateHotkeyRouterSnapshot(normalizedPairs);
+		_hotkeyRouter?.UpdateSnapshot(normalizedPairs);
         
         _audioSessionManager.Dispose();
         
 		BeepPlayer.DisposePlayers();
-		DisposeMicrophoneVisualization();
 		Dispose();
 	}
 
@@ -703,216 +369,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		ShowStatus("Clipboard", "Text copied to the clipboard.", InfoBarSeverity.Success);
 	}
 
-	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e)
-	{
-		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
+	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
+		_hotkeyRouter?.AddNewMapping();
 
-		var map = new HotKeyRouterSettings.HotKeyRouterMap(string.Empty, string.Empty);
+	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
+		_hotkeyRouter?.DeleteMapping(sender);
 
-		var entry = new HotkeyRouterEntry(map);
-		AttachHotkeyRouterEntry(entry);
-		HotkeyRouterEntries.Add(entry);
+	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
+		_hotkeyRouter?.CommitFromLostFocus(sender);
 
-		RefreshHotkeyRouterRegistrations();
-
-		// Defer focusing until the ListView generates the container
-		TryFocusHotkeyRouterFromTextBox(entry);
-	}
-
-	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e)
-	{
-		if (((FrameworkElement)sender).Tag is not HotkeyRouterEntry entry)
-			return;
-
-		if (_settings.HotKeyRouterSettings is not null)
-			_settings.HotKeyRouterSettings.Mappings.Remove(entry.Map);
-
-		DetachHotkeyRouterEntry(entry);
-		HotkeyRouterEntries.Remove(entry);
-		RefreshHotkeyRouterRegistrations();
-	}
-
-	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e)
-	{
-		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
-		{
-			entry.CommitFromHotkey();
-			RefreshHotkeyRouterRegistrations();
-		}
-	}
-
-	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e)
-	{
-		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
-		{
-			entry.CommitToHotkey();
-			RefreshHotkeyRouterRegistrations();
-		}
-	}
-
-	private void HotkeyRouterEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-	{
-		if (sender is not HotkeyRouterEntry)
-			return;
-
-		if (e.PropertyName == nameof(HotkeyRouterEntry.FromHotkey) || e.PropertyName == nameof(HotkeyRouterEntry.IsFromValid))
-			RecalculateHotkeyRouterDuplicates();
-	}
-
-	private void AttachHotkeyRouterEntry(HotkeyRouterEntry entry)
-	{
-		entry.PropertyChanged += HotkeyRouterEntry_PropertyChanged;
-	}
-
-	private void TryFocusHotkeyRouterFromTextBox(HotkeyRouterEntry entry)
-	{
-		// Run async attempts on dispatcher without blocking UI thread
-		DispatcherQueue.TryEnqueue(async () =>
-		{
-			for (int i = 0; i < 8; i++)
-			{
-				var container = HotkeyRouterList.ContainerFromItem(entry) as ListViewItem;
-				if (container?.ContentTemplateRoot is FrameworkElement root)
-				{
-					// First TextBox inside the template corresponds to the 'From' hotkey
-					var fromTextBox = FindDescendant<TextBox>(root);
-					if (fromTextBox != null)
-					{
-						fromTextBox.Focus(FocusState.Programmatic);
-						// Select existing text (if any) to allow immediate typing
-						fromTextBox.SelectAll();
-						return;
-					}
-				}
-				await Task.Delay(40);
-			}
-		});
-	}
-
-	private static T? FindDescendant<T>(DependencyObject root) where T : class
-	{
-		int count = VisualTreeHelper.GetChildrenCount(root);
-		for (int i = 0; i < count; i++)
-		{
-			var child = VisualTreeHelper.GetChild(root, i);
-			if (child is T typed)
-				return typed;
-			var result = FindDescendant<T>(child);
-			if (result != null)
-				return result;
-		}
-		return null;
-	}
-
-	private void DetachHotkeyRouterEntry(HotkeyRouterEntry entry)
-	{
-		entry.PropertyChanged -= HotkeyRouterEntry_PropertyChanged;
-	}
-
-	private void RecalculateHotkeyRouterDuplicates()
-	{
-		var duplicates = HotkeyRouterEntries
-				  .Where(e => e.IsFromValid && e.NormalizedFromHotkey is not null)
-				  .GroupBy(e => e.NormalizedFromHotkey!, StringComparer.OrdinalIgnoreCase)
-				  .Where(g => g.Count() > 1)
-				  .SelectMany(g => g);
-
-		var duplicateSet = new HashSet<HotkeyRouterEntry>(duplicates);
-
-		foreach (var entry in HotkeyRouterEntries)
-			entry.SetDuplicate(duplicateSet.Contains(entry));
-	}
-
-	private List<(string From, string To)> SyncHotkeyRouterSettings()
-	{
-		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
-
-		foreach (var entry in HotkeyRouterEntries)
-		{
-			entry.CommitFromHotkey();
-			entry.CommitToHotkey();
-		}
-
-		var validEntries = HotkeyRouterEntries
-				  .Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)
-				  .ToList();
-
-		// If no entries are currently valid but existing settings contain mappings, preserve them.
-		// This avoids wiping user settings due to a transient validation state during startup.
-		if (validEntries.Count == 0 && _settings.HotKeyRouterSettings.Mappings.Count > 0)
-		{
-			return _settings.HotKeyRouterSettings.Mappings
-					  .Where(m => !string.IsNullOrWhiteSpace(m.FromHotKey) && !string.IsNullOrWhiteSpace(m.ToHotKey))
-					  .Select(m => (From: m.FromHotKey!, To: m.ToHotKey!))
-					  .ToList();
-		}
-
-		var normalizedPairs = validEntries
-				  .Select(e => (From: e.NormalizedFromHotkey!, To: e.NormalizedToHotkey!))
-				  .ToList();
-
-		var existing = _settings.HotKeyRouterSettings.Mappings;
-
-		bool changed = existing.Count != normalizedPairs.Count;
-		if (!changed)
-		{
-			for (int i = 0; i < existing.Count; i++)
-			{
-				var existingFrom = existing[i].FromHotKey ?? string.Empty;
-				var existingTo = existing[i].ToHotKey ?? string.Empty;
-
-				if (!string.Equals(existingFrom, normalizedPairs[i].From, StringComparison.Ordinal) ||
-					 !string.Equals(existingTo, normalizedPairs[i].To, StringComparison.Ordinal))
-				{
-					changed = true;
-					break;
-				}
-			}
-		}
-
-		if (changed)
-		{
-			var updatedMaps = normalizedPairs
-					  .Select(pair => new HotKeyRouterSettings.HotKeyRouterMap(pair.From, pair.To))
-					  .ToList();
-
-			_settings.HotKeyRouterSettings.Mappings = updatedMaps;
-
-			for (int i = 0; i < validEntries.Count; i++)
-				validEntries[i].ReplaceBackingMap(updatedMaps[i]);
-		}
-
-		return normalizedPairs;
-	}
-
-	private bool ShouldPersistHotkeyRouterMappings(List<(string From, string To)> normalizedPairs)
-	{
-		if (!_hotkeyRouterInitialized)
-			return false;
-
-		if (_hotkeyRouterPersistedSnapshot.Count != normalizedPairs.Count)
-			return true;
-
-		for (int i = 0; i < normalizedPairs.Count; i++)
-		{
-			var previous = _hotkeyRouterPersistedSnapshot[i];
-			var current = normalizedPairs[i];
-
-			if (!string.Equals(previous.From, current.From, StringComparison.Ordinal) ||
-				 !string.Equals(previous.To, current.To, StringComparison.Ordinal))
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private void UpdateHotkeyRouterSnapshot(IEnumerable<(string From, string To)> normalizedPairs)
-	{
-		_hotkeyRouterPersistedSnapshot.Clear();
-		_hotkeyRouterPersistedSnapshot.AddRange(normalizedPairs);
-	}
+	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e) =>
+		_hotkeyRouter?.CommitToLostFocus(sender);
 
 	public void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
 	{
@@ -1225,7 +692,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				return;
             }
             
-            string llmPromptContent = GetAutoRunPromptContent();
+            string llmPromptContent = _promptLibrary?.GetAutoRunPromptContent() ?? string.Empty;
             await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), llmPromptContent, _shutdownCts.Token);
 		}
 		catch (Exception ex)
@@ -1664,32 +1131,17 @@ public sealed partial class MainWindow : Window, IDisposable
 				_settings.AudioSettings.ActiveCaptureDeviceFullName = GetDeviceFriendlyName(device);
 				_settingsManager.SaveSettingsToFile(_settings);
 			}
-			RestartMicrophoneVisualizationCapture();
+			_microphoneVisualization?.RestartCapture();
 		}
 		else
 		{
-			StopMicrophoneVisualizationCapture();
+			_microphoneVisualization?.StopCapture();
 		}
 	}
 
 	private void MicWaveArea_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
 	{
-		if (_settings.AudioSettings == null)
-			return;
-		bool newState = !_settings.AudioSettings.EnableMicrophoneVisualization;
-		_settings.AudioSettings.EnableMicrophoneVisualization = newState;
-		_settingsManager.SaveSettingsToFile(_settings);
-		if (newState)
-		{
-			InitializeMicrophoneVisualization();
-			StartMicrophoneVisualizationCapture();
-		}
-		else
-		{
-			DisposeMicrophoneVisualization();
-			if (MicWaveformOffLabel != null)
-				MicWaveformOffLabel.Visibility = Visibility.Visible;
-		}
+		_microphoneVisualization?.Toggle();
 	}
 
 	private string GetActivePrompt()
@@ -1897,113 +1349,34 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 	}
 
-    private string GetAutoRunPromptContent()
-    {
-        // Return content of the prompt marked as AutoRun, or empty if none (or fallback to first?)
-        // Spec says: "Only 1 prompt... can have Auto-Run". 
-        var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun);
-        return prompt?.Content ?? string.Empty;
-    }
-
-    private void BtnAddPrompt_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new PromptEditorWindow(null, _transcriptFormatter);
-        // dialog.XamlRoot = this.Content.XamlRoot; 
-        // Window doesn't have XamlRoot property itself like ContentDialog?
-        // Wait, PromptEditorWindow is a Window. It doesn't need XamlRoot. it opens as a separate window.
-        // But for modal behavior over generic window? WinUI 3 Window is weird about modality.
-        // Let's assume non-modal or use .Activate().
-        // To make it modal to *this* window requires P/Invoke SetParent usually.
-        // For simplicity, I'll just show it. Ideally use ContentDialog for modal within app window, but I created a Window.
-        // Re-reading implementation plan: "PromptEditorWindow.xaml - A new Window/Dialog".
-        // If I use Window:
-        dialog.Activate();
-        
-        // Wait for it to close? We can't await a Window easily without events.
-        dialog.Closed += (s, args) => 
-        {
-             if (dialog.IsSaved && dialog.Prompt != null && !string.IsNullOrWhiteSpace(dialog.Prompt.Name))
-             {
-                 // Add new prompt
-                 dialog.Prompt.Id = (_settings.LlmSettings.Prompts.Max(p => (int?)p.Id) ?? 0) + 1;
-                 
-                 // Handle AutoRun exclusivity
-                 if (dialog.Prompt.AutoRun)
-                     foreach(var p in _settings.LlmSettings.Prompts) p.AutoRun = false;
-                     
-                 _settings.LlmSettings.Prompts.Add(dialog.Prompt);
-                 SaveAndRefreshPrompts();
-             }
-        };
-    }
+    private void BtnAddPrompt_Click(object sender, RoutedEventArgs e) =>
+        _promptLibrary?.OpenAddDialog();
 
     private void BtnEditPrompt_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is LlmSettings.LlmPrompt prompt)
-        {
-             var dialog = new PromptEditorWindow(prompt, _transcriptFormatter);
-             dialog.Activate();
-             dialog.Closed += (s, args) =>
-             {
-                 if (dialog.IsSaved)
-                 {
-                     // Handle AutoRun exclusivity if this one is now AutoRun
-                     if (prompt.AutoRun)
-                     {
-                         foreach(var p in _settings.LlmSettings.Prompts)
-                         {
-                             if (p != prompt) p.AutoRun = false;
-                         }
-                     }
-                     
-                     SaveAndRefreshPrompts();
-                 }
-                 // If not saved (Cancel/Close), do nothing. The object references might have been modified 
-                 // if the dialog logic wasn't careful (it is careful to only modify on save now? 
-                 // actually I modified PromptEditorWindow to modify property on Save, but wait...
-                 // PromptEditorWindow takes a reference. If I type in the text box, does it update the reference?
-                 // No, PromptEditorWindow updates the object in BtnSave_Click. 
-                 // So we are safe.
-             };
-        }
+            _promptLibrary?.OpenEditDialog(prompt);
     }
 
     private void BtnDeletePrompt_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is LlmSettings.LlmPrompt prompt)
-        {
-             _settings.LlmSettings.Prompts.Remove(prompt);
-             SaveAndRefreshPrompts();
-        }
+            _promptLibrary?.DeletePrompt(prompt);
     }
 
     private void BtnRunPrompt_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is LlmSettings.LlmPrompt prompt)
-        {
-             ExecutePrompt(prompt);
-        }
-    }
-
-    private void SaveAndRefreshPrompts()
-    {
-        _settingsManager.SaveSettingsToFile(_settings);
-        // Refresh List
-        LstPrompts.ItemsSource = null;
-        LstPrompts.ItemsSource = _settings.LlmSettings.Prompts;
-        
-        // Refresh Hotkeys
-        _hotkeyManager?.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, ExecutePrompt);
+            ExecutePrompt(prompt);
     }
 
 	public void Dispose()
 	{
 		_audioSessionManager?.Dispose();
-		_waveformCapture?.Dispose();
+		_microphoneVisualization?.Dispose();
 		_formatDebounceCts?.Dispose();
 		_promptDebounceCts?.Dispose();
 		_shutdownCts.Dispose();
 		_statusDismissTimer?.Stop();
-		_waveformTimer?.Stop();
 	}
 }
