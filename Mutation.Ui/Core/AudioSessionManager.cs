@@ -103,42 +103,6 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public void NavigateSessions(int direction)
-    {
-        if (IsRecording || IsTranscribing)
-            return;
-
-        RefreshSessions(preferredSelection: SelectedSession);
-
-        if (SessionHistory.Count == 0)
-            return;
-
-        int currentIndex = SelectedSession != null ? SessionHistory.IndexOf(SelectedSession) : -1;
-        if (currentIndex < 0)
-            currentIndex = 0;
-
-        int targetIndex = direction < 0 ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= SessionHistory.Count)
-            return;
-
-        var targetSession = SessionHistory[targetIndex];
-
-        StopPlayback();
-        SelectedSession = targetSession;
-        
-        // Auto-play when navigating? The original code did:
-        // await StartPlaybackAsync(targetSession);
-        // We will expose a method to play and let the UI decide or handle it here.
-        // The original code called StartPlaybackAsync inside NavigateSessionsAsync.
-        // So we should probably trigger playback or let the caller do it.
-        // For now, let's just change selection and let the caller call PlaySelectedSessionAsync if desired.
-        // Wait, the original code was: await StartPlaybackAsync(targetSession);
-        // So I should probably do that too, but this method is void.
-        // I'll make it async or fire an event.
-        // Better: The caller (UI) calls Navigate, then Play.
-        // Or I can make NavigateSessionsAsync.
-    }
-
     public async Task NavigateSessionsAsync(int direction)
     {
         if (IsRecording || IsTranscribing)

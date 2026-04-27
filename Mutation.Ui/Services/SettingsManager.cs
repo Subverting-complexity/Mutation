@@ -48,7 +48,11 @@ internal class SettingsManager : ISettingsManager
 
 		bool somethingWasMissing = false;
 
-                settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
+                if (string.IsNullOrWhiteSpace(settings.UserInstructions))
+                {
+                        settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
+                        somethingWasMissing = true;
+                }
 
                 if (settings.MainWindowUiSettings is null)
                 {
@@ -324,11 +328,6 @@ internal class SettingsManager : ISettingsManager
 			}
 		}
 
-		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextHotKey))
-		{
-			speechToTextSettings.SpeechToTextHotKey = "SHIFT+ALT+U";
-			somethingWasMissing = true;
-		}
 		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmFormattingHotKey))
 		{
 			speechToTextSettings.SpeechToTextWithLlmFormattingHotKey = "SHIFT+ALT+I";
