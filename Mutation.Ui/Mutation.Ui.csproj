@@ -77,6 +77,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Mutation.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<None Update="..\Mutation\CustomAudio\End.wav">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

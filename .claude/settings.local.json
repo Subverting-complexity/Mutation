@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command '[System.Reflection.Assembly]::LoadFrom\\('\\\\''./Mutation.Tests/bin/Debug/net10.0-windows10.0.19041.0/Azure.AI.Vision.ImageAnalysis.dll'\\\\''\\).GetTypes\\(\\) | Where-Object { $_.Name -match '\\\\''ModelFactory|ReadResult|ReadBlock|DetectedTextLine|ImageAnalysisResult'\\\\'' } | Select-Object -ExpandProperty FullName')"
+    ]
+  }
+}
