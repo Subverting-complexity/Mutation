@@ -87,16 +87,21 @@ public class HotkeyTests
 	}
 
 	[Fact]
-	public void Parse_BareDigit_FallsThroughToEnumIntegerParse()
+	public void Parse_BareDigit_MapsToNumberKey()
 	{
-		// Pins down current behavior: Enum.TryParse parses "5" as the integer
-		// value 5, which is VirtualKey.XButton1, NOT VirtualKey.Number5. The
-		// "Number5" path is only reached when the bare-digit Enum.TryParse fails
-		// — which it doesn't, because numeric strings are always treated as int
-		// values by Enum.TryParse. Users typing "Ctrl+5" should write
-		// "Ctrl+Number5" instead.
+		// Numeric tokens prefer the "NumberN" alias so that "Ctrl+5" binds to
+		// VirtualKey.Number5 rather than VirtualKey.XButton1 (the int-5 enum member).
 		var hk = Hotkey.Parse("Ctrl+5");
-		Assert.Equal(VirtualKey.XButton1, hk.Key);
+		Assert.Equal(VirtualKey.Number5, hk.Key);
+	}
+
+	[Theory]
+	[InlineData("0", VirtualKey.Number0)]
+	[InlineData("9", VirtualKey.Number9)]
+	public void Parse_AllBareDigits_MapToNumberKeys(string digit, VirtualKey expected)
+	{
+		var hk = Hotkey.Parse("Ctrl+" + digit);
+		Assert.Equal(expected, hk.Key);
 	}
 
 	[Fact]
@@ -174,6 +179,7 @@ public class HotkeyTests
 	[InlineData("Control+C")]
 	[InlineData("Shift+Control+A")]
 	[InlineData("Control+Alt+Delete")]
+	[InlineData("Control+5")]
 	public void RoundTrip_ParseToStringParseAgain_Equivalent(string canonical)
 	{
 		var first = Hotkey.Parse(canonical);

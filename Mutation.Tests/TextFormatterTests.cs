@@ -110,11 +110,13 @@ public class TextFormatterTests
 	}
 
 	[Theory]
-	// `.` and `,` are in the regex's "linker" character class `[ ,.]?`, so doubled
-	// occurrences across a space collapse cleanly.
 	[InlineData("Hello.. world", "Hello. world")]
 	[InlineData("Hello,, world", "Hello, world")]
-	// Other punctuation only collapses when the doubles are adjacent (no separator between them).
+	[InlineData("Hello?? world", "Hello? world")]
+	[InlineData("Hello!! world", "Hello! world")]
+	[InlineData("Hello;; world", "Hello; world")]
+	[InlineData("Hello:: world", "Hello: world")]
+	// Adjacent doubles (no whitespace between them) also collapse.
 	[InlineData("Hello??world", "Hello? world")]
 	[InlineData("Hello!!world", "Hello! world")]
 	[InlineData("Hello;;world", "Hello; world")]
@@ -125,17 +127,15 @@ public class TextFormatterTests
 	}
 
 	[Fact]
-	public void CleanupPunctuation_TrailingPeriod_NormalizedWithSpace()
+	public void CleanupPunctuation_TrailingPeriod_NoSpuriousTrailingSpace()
 	{
-		// Current behavior: a single trailing period is replaced by ". " (with trailing space).
-		Assert.Equal("Hello, world. ", "Hello, world.".CleanupPunctuation());
+		// Final punctuation at end-of-line should NOT have a trailing space appended.
+		Assert.Equal("Hello, world.", "Hello, world.".CleanupPunctuation());
 	}
 
 	[Fact]
 	public void CleanupPunctuation_SinglePunctuationBetweenWords_Unchanged()
 	{
-		// "Hello, world" has no doubled punctuation — the regex normalizes the
-		// existing comma+space to a comma+space (no visible change).
 		Assert.Equal("Hello, world", "Hello, world".CleanupPunctuation());
 	}
 

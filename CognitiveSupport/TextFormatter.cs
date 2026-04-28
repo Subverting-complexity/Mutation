@@ -48,13 +48,23 @@ namespace CognitiveSupport
 
 			foreach (var dup in deduplications)
 			{
-				// this will replace the pattern with a single instance of the char in "dup".
-				// Eg. If the dup char is ".", then ".." and ". ." wil be replaced with a single ".", but only if it is after a word, and before a word or end of line.
-				string pattern = @$"(?<=\w)[.,]?[{dup}][ ,.]?[{dup}]?(?=\w|$)";
+				// Replace a doubled-punctuation cluster (optionally separated by space, ".", ",",
+				// or another copy of the dup char) with a single instance of `dup`. The cluster
+				// must follow a word char and be followed by a word char, whitespace, or end-of-line.
+				// A trailing space is appended only when the next char is a word char — otherwise
+				// (whitespace or end-of-line) we leave the existing context untouched so the
+				// final period in "Hello, world." stays "Hello, world." rather than "Hello, world. ".
+				string pattern = @$"(?<=\w)[.,]?[{dup}][ ,.{dup}]?[{dup}]?(?=\w|\s|$)";
 
 				foreach (int key in lines.Keys)
 				{
-					lines[key]  = Regex.Replace(lines[key], pattern, $"{dup} ");
+					string line = lines[key];
+					lines[key] = Regex.Replace(line, pattern, match =>
+					{
+						int after = match.Index + match.Length;
+						bool nextIsWord = after < line.Length && char.IsLetterOrDigit(line[after]);
+						return nextIsWord ? $"{dup} " : $"{dup}";
+					});
 				}
 			}
 
