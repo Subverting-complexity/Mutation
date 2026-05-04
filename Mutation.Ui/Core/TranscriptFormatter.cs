@@ -43,7 +43,7 @@ public class TranscriptFormatter
 		var messages = new List<LlmChatMessage>
 		  {
 				new LlmChatMessage(LlmChatRole.System, systemPrompt),
-				new LlmChatMessage(LlmChatRole.User, $"Reformat the following transcript: {transcript}")
+				new LlmChatMessage(LlmChatRole.User, transcript)
 		  };
 
 		string formattedText = await _llmService.CreateChatCompletion(messages, modelName);

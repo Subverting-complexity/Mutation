@@ -155,8 +155,7 @@ public class TranscriptFormatterTests
 		Assert.Equal(LlmChatRole.System, stub.LastMessages[0].Role);
 		Assert.Equal("you are a formatter", stub.LastMessages[0].Content);
 		Assert.Equal(LlmChatRole.User, stub.LastMessages[1].Role);
-		Assert.Contains("Reformat the following transcript:", stub.LastMessages[1].Content);
-		Assert.Contains("hello world", stub.LastMessages[1].Content);
+		Assert.Equal("hello world", stub.LastMessages[1].Content);
 		Assert.Equal("gpt-4", stub.LastModel);
 	}
 
