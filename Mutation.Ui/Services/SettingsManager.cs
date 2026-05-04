@@ -48,7 +48,11 @@ internal class SettingsManager : ISettingsManager
 
 		bool somethingWasMissing = false;
 
-                settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
+                if (string.IsNullOrWhiteSpace(settings.UserInstructions))
+                {
+                        settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
+                        somethingWasMissing = true;
+                }
 
                 if (settings.MainWindowUiSettings is null)
                 {
@@ -324,11 +328,6 @@ internal class SettingsManager : ISettingsManager
 			}
 		}
 
-		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextHotKey))
-		{
-			speechToTextSettings.SpeechToTextHotKey = "SHIFT+ALT+U";
-			somethingWasMissing = true;
-		}
 		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmFormattingHotKey))
 		{
 			speechToTextSettings.SpeechToTextWithLlmFormattingHotKey = "SHIFT+ALT+I";
@@ -340,16 +339,25 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
-		var duplicateNames = speechToTextSettings.Services
+		var duplicateGroups = speechToTextSettings.Services
 			 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
 			 .Where(g => g.Count() > 1)
-			 .Select(g => g.Key)
 			 .ToArray();
-		if (duplicateNames.Any())
+		if (duplicateGroups.Length > 0)
 		{
-			throw new InvalidOperationException(
-						$"Duplicate service names found in SpeechToTextSettings.Services: {string.Join(", ", duplicateNames)}. " +
-						"Please ensure each speech-to-text service has a unique name to avoid conflicts.");
+			foreach (var group in duplicateGroups)
+			{
+				int suffix = 2;
+				foreach (var dup in group.Skip(1))
+				{
+					string baseName = string.IsNullOrWhiteSpace(dup.Name) ? "Service" : dup.Name!;
+					string newName;
+					do { newName = $"{baseName} ({suffix++})"; }
+					while (speechToTextSettings.Services.Any(s => string.Equals(s.Name, newName, StringComparison.OrdinalIgnoreCase)));
+					dup.Name = newName;
+				}
+			}
+			somethingWasMissing = true;
 		}
 
 
@@ -437,7 +445,9 @@ End of summary.
 				LlmSettings.DefaultModel,
 				LlmSettings.DefaultSecondaryModel,
 				LlmSettings.DefaultAnthropicModel
-			};
+			}
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
 			somethingWasMissing = true;
 		}
 
@@ -675,14 +685,34 @@ End of summary.
 
 		if (saveRequired)
 		{
-			File.WriteAllText(SettingsFileFullPath, jObj.ToString(Formatting.Indented), Encoding.UTF8);
+			AtomicWriteAllText(SettingsFileFullPath, jObj.ToString(Formatting.Indented));
 		}
 	}
 
 	public void SaveSettingsToFile(Settings settings)
 	{
 		string json = JsonConvert.SerializeObject(settings, Formatting.Indented, _jsonSerializerSettings);
-		File.WriteAllText(SettingsFilePath, json, Encoding.UTF8);
+		AtomicWriteAllText(SettingsFilePath, json);
+	}
+
+	private static void AtomicWriteAllText(string targetPath, string contents)
+	{
+		string fullPath = Path.GetFullPath(targetPath);
+		string directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
+		string tempPath = fullPath + ".tmp";
+		string backupPath = fullPath + ".bak";
+
+		File.WriteAllText(tempPath, contents, new UTF8Encoding(false));
+
+		if (File.Exists(fullPath))
+		{
+			// Atomic on NTFS: original is moved to .bak, temp becomes the new file.
+			File.Replace(tempPath, fullPath, backupPath, ignoreMetadataErrors: true);
+		}
+		else
+		{
+			File.Move(tempPath, fullPath);
+		}
 	}
 
     public Settings LoadAndEnsureSettings()

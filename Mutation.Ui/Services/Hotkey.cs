@@ -66,7 +66,16 @@ public class Hotkey
 				case "START":
 					hk.Win = true; break;
                                 default:
-                                        if (Enum.TryParse<VirtualKey>(token, true, out var vk))
+                                        // Try the "NumberN" alias first for purely-numeric tokens.
+                                        // Otherwise Enum.TryParse would parse "5" as the integer value 5
+                                        // and silently bind to VirtualKey.XButton1 (the int-5 enum member).
+                                        bool isAllDigits = token.Length > 0;
+                                        for (int i = 0; i < token.Length && isAllDigits; i++)
+                                                isAllDigits = char.IsDigit(token[i]);
+
+                                        if (isAllDigits && Enum.TryParse<VirtualKey>("Number" + token, true, out var vk))
+                                                hk.Key = vk;
+                                        else if (Enum.TryParse<VirtualKey>(token, true, out vk))
                                                 hk.Key = vk;
                                         else if (Enum.TryParse<VirtualKey>("Number" + token, true, out vk))
                                                 hk.Key = vk;

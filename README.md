@@ -169,7 +169,7 @@ All hotkeys are global and fully customisable. Below is a comprehensive example 
 
   "LlmSettings": {
     "ApiKey": "<your OpenAI key>",
-    "Models": ["gpt-4.1", "gpt-5.1"],
+    "Models": ["gpt-4.1", "claude-sonnet-4-6"],
     "FormatWithLlmHotKey": "Ctrl+Shift+F",
     "FormatTranscriptPrompt": "Clean up this transcript for readability.",
     "TranscriptFormatRules": [

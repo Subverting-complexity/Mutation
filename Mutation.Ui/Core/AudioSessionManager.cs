@@ -16,9 +16,9 @@ namespace Mutation.Ui.Core;
 /// Carries the raw transcript and optional pre-formatted text so that
 /// downstream handlers can avoid re-applying rules to LLM output.
 /// </summary>
-internal record TranscriptResult(string RawText, string? FormattedText = null);
+public record TranscriptResult(string RawText, string? FormattedText = null);
 
-internal class AudioSessionManager : IDisposable
+public class AudioSessionManager : IDisposable
 {
     private readonly SpeechToTextManager _speechManager;
     private readonly AudioDeviceManager _audioDeviceManager;
@@ -103,42 +103,6 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public void NavigateSessions(int direction)
-    {
-        if (IsRecording || IsTranscribing)
-            return;
-
-        RefreshSessions(preferredSelection: SelectedSession);
-
-        if (SessionHistory.Count == 0)
-            return;
-
-        int currentIndex = SelectedSession != null ? SessionHistory.IndexOf(SelectedSession) : -1;
-        if (currentIndex < 0)
-            currentIndex = 0;
-
-        int targetIndex = direction < 0 ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= SessionHistory.Count)
-            return;
-
-        var targetSession = SessionHistory[targetIndex];
-
-        StopPlayback();
-        SelectedSession = targetSession;
-        
-        // Auto-play when navigating? The original code did:
-        // await StartPlaybackAsync(targetSession);
-        // We will expose a method to play and let the UI decide or handle it here.
-        // The original code called StartPlaybackAsync inside NavigateSessionsAsync.
-        // So we should probably trigger playback or let the caller do it.
-        // For now, let's just change selection and let the caller call PlaySelectedSessionAsync if desired.
-        // Wait, the original code was: await StartPlaybackAsync(targetSession);
-        // So I should probably do that too, but this method is void.
-        // I'll make it async or fire an event.
-        // Better: The caller (UI) calls Navigate, then Play.
-        // Or I can make NavigateSessionsAsync.
-    }
-
     public async Task NavigateSessionsAsync(int direction)
     {
         if (IsRecording || IsTranscribing)
@@ -164,7 +128,7 @@ internal class AudioSessionManager : IDisposable
         await PlaySelectedSessionAsync();
     }
 
-    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, string llmPrompt = "")
+    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, string llmPrompt = "", CancellationToken cancellationToken = default)
     {
         try
         {
@@ -198,7 +162,7 @@ internal class AudioSessionManager : IDisposable
 
                 try
                 {
-                    string text = await _speechManager.StopRecordingAndTranscribeAsync(activeService, prompt, CancellationToken.None);
+                    string text = await _speechManager.StopRecordingAndTranscribeAsync(activeService, prompt, cancellationToken);
                     await ProcessTranscriptAsync(text, llmPrompt);
                 }
                 catch (OperationCanceledException)
@@ -218,7 +182,7 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public async Task RetryTranscriptionAsync(ISpeechToTextService activeService, string prompt)
+    public async Task RetryTranscriptionAsync(ISpeechToTextService activeService, string prompt, CancellationToken cancellationToken = default)
     {
         if (IsRecording || IsTranscribing)
         {
@@ -238,7 +202,7 @@ internal class AudioSessionManager : IDisposable
             StatusMessage?.Invoke(this, "Transcribing your recording...");
             StateChanged?.Invoke(this, EventArgs.Empty);
 
-            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, CancellationToken.None);
+            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, cancellationToken);
             // Retry doesn't apply LLM formatting — pass raw text only so
             // FinalizeTranscript applies rules-based formatting as usual.
             TranscriptReady?.Invoke(this, new TranscriptResult(text));
@@ -258,7 +222,7 @@ internal class AudioSessionManager : IDisposable
         }
     }
 
-    public async Task ImportAudioAsync(StorageFile file, ISpeechToTextService activeService, string prompt)
+    public async Task ImportAudioAsync(StorageFile file, ISpeechToTextService activeService, string prompt, CancellationToken cancellationToken = default)
     {
         if (IsRecording || IsTranscribing)
         {
@@ -272,10 +236,10 @@ internal class AudioSessionManager : IDisposable
             StatusMessage?.Invoke(this, $"Transcribing {file.Name}...");
             StateChanged?.Invoke(this, EventArgs.Empty);
 
-            var session = await _speechManager.ImportUploadedAudioAsync(file.Path, CancellationToken.None);
+            var session = await _speechManager.ImportUploadedAudioAsync(file.Path, cancellationToken);
             RefreshSessions(session);
-            
-            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, session, prompt, CancellationToken.None);
+
+            string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, session, prompt, cancellationToken);
             TranscriptReady?.Invoke(this, new TranscriptResult(text));
             StatusMessage?.Invoke(this, $"Transcript generated from {session.FileName}.");
         }

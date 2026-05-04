@@ -14,6 +14,8 @@ public class AudioPlayer : IDisposable
     private OpusDecoder? _decoder;
     private MemoryStream? _pcmStream;
     private RawSourceWaveStream? _waveStream;
+    private WaveStream? _readerStream;
+    private WaveStream? _conversionStream;
     private readonly object _playLock = new();
     private bool _disposed;
 
@@ -113,6 +115,7 @@ public class AudioPlayer : IDisposable
             ".mp3" => new Mp3FileReader(filePath),
             _ => new AudioFileReader(filePath) // Generic reader for other formats
         };
+        _readerStream = reader;
 
         _waveOut = new WaveOutEvent();
         _waveOut.PlaybackStopped += OnPlaybackStopped;
@@ -121,6 +124,7 @@ public class AudioPlayer : IDisposable
         if (reader.WaveFormat.Encoding != WaveFormatEncoding.Pcm)
         {
             var pcmStream = WaveFormatConversionStream.CreatePcmStream(reader);
+            _conversionStream = pcmStream;
             _waveOut.Init(pcmStream);
         }
         else
@@ -159,6 +163,12 @@ public class AudioPlayer : IDisposable
 
                 _waveStream?.Dispose();
                 _waveStream = null;
+
+                _conversionStream?.Dispose();
+                _conversionStream = null;
+
+                _readerStream?.Dispose();
+                _readerStream = null;
 
                 _pcmStream?.Dispose();
                 _pcmStream = null;

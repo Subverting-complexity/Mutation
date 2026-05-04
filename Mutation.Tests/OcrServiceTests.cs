@@ -344,4 +344,189 @@ public class OcrServiceTests
 			}
 		}
 	}
+
+	// ---------------------------------------------------------------------
+	// GetPerRequestTimeout / CreatePerRequestCancellationTokenSource
+	// ---------------------------------------------------------------------
+
+	[Theory]
+	[InlineData(-5, 1)]   // floor at 1 second (Math.Max(1, …))
+	[InlineData(0, 1)]
+	[InlineData(1, 1)]
+	[InlineData(30, 30)]
+	[InlineData(60, 60)]
+	[InlineData(120, 60)] // ceiling at MaxTimeoutSeconds (60)
+	[InlineData(3600, 60)]
+	public void GetPerRequestTimeout_ClampsToValidRange(int configuredSeconds, int expectedSeconds)
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", configuredSeconds);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("GetPerRequestTimeout", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+		var timeout = (TimeSpan)method!.Invoke(service, null)!;
+
+		Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), timeout);
+	}
+
+	[Fact]
+	public void Constructor_FloorsTimeoutAtOneSecond()
+	{
+		// _timeoutSeconds is clamped via Math.Max(1, Math.Min(timeoutSeconds, 60)).
+		var service = new OcrService("dummy-key", "https://example.com/", -100);
+
+		FieldInfo? field = typeof(OcrService).GetField("_timeoutSeconds", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(field);
+		Assert.Equal(1, (int)field!.GetValue(service)!);
+	}
+
+	[Fact]
+	public void Constructor_CeilsTimeoutAtMaximum()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 9999);
+
+		FieldInfo? field = typeof(OcrService).GetField("_timeoutSeconds", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(field);
+		Assert.Equal(60, (int)field!.GetValue(service)!);
+	}
+
+	[Fact]
+	public void Constructor_NullSubscriptionKey_Throws()
+	{
+		Assert.Throws<ArgumentNullException>(() => new OcrService(null, "https://example.com/", 10));
+	}
+
+	[Fact]
+	public void Constructor_NullEndpoint_Throws()
+	{
+		Assert.Throws<ArgumentNullException>(() => new OcrService("key", null, 10));
+	}
+
+	[Fact]
+	public void CreatePerRequestCancellationTokenSource_LinkedAndScheduledToCancel()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 1);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestCancellationTokenSource", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		using var overall = new CancellationTokenSource();
+		using var cts = (CancellationTokenSource)method!.Invoke(service, new object[] { overall.Token })!;
+
+		Assert.False(cts.IsCancellationRequested);
+
+		overall.Cancel();
+		Assert.True(cts.Token.IsCancellationRequested);
+	}
+
+	// ---------------------------------------------------------------------
+	// EnsureMinimumImageSize
+	// ---------------------------------------------------------------------
+
+	[Fact]
+	public void EnsureMinimumImageSize_ImageAlreadyMeetsMinimum_ReturnsSameStream()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 10);
+		using var stream = CreatePngStream(width: 100, height: 100);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("EnsureMinimumImageSize", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		var resultStream = (Stream)method!.Invoke(service, new object[] { stream })!;
+
+		Assert.Same(stream, resultStream);
+		Assert.Equal(0, resultStream.Position);
+	}
+
+	[Fact]
+	public void EnsureMinimumImageSize_TooSmallWidth_PadsToMinimum()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 10);
+		using var stream = CreatePngStream(width: 10, height: 80);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("EnsureMinimumImageSize", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		var resultStream = (Stream)method!.Invoke(service, new object[] { stream })!;
+
+		// A new MemoryStream is returned with the padded image.
+		Assert.NotSame(stream, resultStream);
+		using var paddedImage = System.Drawing.Image.FromStream(resultStream);
+		Assert.True(paddedImage.Width >= 50);
+		Assert.True(paddedImage.Height >= 80);
+	}
+
+	[Fact]
+	public void EnsureMinimumImageSize_TooSmallHeight_PadsToMinimum()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 10);
+		using var stream = CreatePngStream(width: 80, height: 10);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("EnsureMinimumImageSize", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		var resultStream = (Stream)method!.Invoke(service, new object[] { stream })!;
+
+		Assert.NotSame(stream, resultStream);
+		using var paddedImage = System.Drawing.Image.FromStream(resultStream);
+		Assert.True(paddedImage.Width >= 80);
+		Assert.True(paddedImage.Height >= 50);
+	}
+
+	[Fact]
+	public void EnsureMinimumImageSize_InvalidImageData_ReturnsOriginalStream()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 10);
+		using var stream = new MemoryStream(new byte[] { 0x01, 0x02, 0x03 });
+
+		MethodInfo? method = typeof(OcrService).GetMethod("EnsureMinimumImageSize", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		var resultStream = (Stream)method!.Invoke(service, new object[] { stream })!;
+
+		Assert.Same(stream, resultStream);
+		Assert.Equal(0, resultStream.Position);
+	}
+
+	[Fact]
+	public void EnsureMinimumImageSize_NonSeekableStream_ReturnsAsIs()
+	{
+		var service = new OcrService("dummy-key", "https://example.com/", 10);
+		using var inner = CreatePngStream(width: 10, height: 10);
+		using var nonSeekable = new NonSeekableStreamWrapper(inner);
+
+		MethodInfo? method = typeof(OcrService).GetMethod("EnsureMinimumImageSize", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+
+		var resultStream = (Stream)method!.Invoke(service, new object[] { nonSeekable })!;
+
+		Assert.Same(nonSeekable, resultStream);
+	}
+
+	private static MemoryStream CreatePngStream(int width, int height)
+	{
+		using var bitmap = new System.Drawing.Bitmap(width, height);
+		using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+			graphics.Clear(System.Drawing.Color.White);
+
+		var ms = new MemoryStream();
+		bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+		ms.Seek(0, SeekOrigin.Begin);
+		return ms;
+	}
+
+	private sealed class NonSeekableStreamWrapper : Stream
+	{
+		private readonly Stream _inner;
+		public NonSeekableStreamWrapper(Stream inner) { _inner = inner; }
+		public override bool CanRead => _inner.CanRead;
+		public override bool CanSeek => false;
+		public override bool CanWrite => false;
+		public override long Length => throw new NotSupportedException();
+		public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+		public override void Flush() => _inner.Flush();
+		public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+		public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+		public override void SetLength(long value) => throw new NotSupportedException();
+		public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+	}
 }
