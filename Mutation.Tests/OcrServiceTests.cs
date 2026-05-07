@@ -27,11 +27,11 @@ public class OcrServiceTests
 		Assert.NotNull(waitAsync);
 
 		Task first = (Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!;
-		await first.ConfigureAwait(false);
+		await first;
 
 		var stopwatch = Stopwatch.StartNew();
 		Task second = (Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!;
-		await second.ConfigureAwait(false);
+		await second;
 		stopwatch.Stop();
 
                 Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(85));
@@ -47,11 +47,11 @@ public class OcrServiceTests
 		MethodInfo? waitAsync = limiterType!.GetMethod("WaitAsync", BindingFlags.Public | BindingFlags.Instance);
 		Assert.NotNull(waitAsync);
 
-		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 
 		var stopwatch = Stopwatch.StartNew();
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 		stopwatch.Stop();
 
 		Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(100));
@@ -67,15 +67,15 @@ public class OcrServiceTests
 		MethodInfo? waitAsync = limiterType!.GetMethod("WaitAsync", BindingFlags.Public | BindingFlags.Instance);
 		Assert.NotNull(waitAsync);
 
-		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
 
 		using var cts = new CancellationTokenSource();
 		cts.CancelAfter(TimeSpan.FromMilliseconds(50));
 
 		await Assert.ThrowsAsync<TaskCanceledException>(async () =>
 		{
-			await ((Task)waitAsync.Invoke(limiter, new object[] { cts.Token })!).ConfigureAwait(false);
-		}).ConfigureAwait(false);
+			await ((Task)waitAsync.Invoke(limiter, new object[] { cts.Token })!);
+		});
 	}
 
 	[Fact]
@@ -88,13 +88,13 @@ public class OcrServiceTests
 		MethodInfo? waitAsync = limiterType!.GetMethod("WaitAsync", BindingFlags.Public | BindingFlags.Instance);
 		Assert.NotNull(waitAsync);
 
-		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 
-		await Task.Delay(TimeSpan.FromMilliseconds(120)).ConfigureAwait(false);
+		await Task.Delay(TimeSpan.FromMilliseconds(120));
 
 		var stopwatch = Stopwatch.StartNew();
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 		stopwatch.Stop();
 
 		Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(40));
@@ -115,8 +115,8 @@ public class OcrServiceTests
 		MethodInfo? waitAsync = limiterType.GetMethod("WaitAsync", BindingFlags.Public | BindingFlags.Instance);
 		Assert.NotNull(waitAsync);
 
-		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 
 		OcrService.OcrRequestWindowState populated = OcrService.GetSharedRequestWindowState();
 		Assert.Equal(2, populated.RequestsInWindow);
@@ -148,7 +148,7 @@ public class OcrServiceTests
 
 		for (int i = 0; i < 3; i++)
 		{
-			await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+			await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
 		}
 
 		OcrService.OcrRequestWindowState state = OcrService.GetSharedRequestWindowState();
@@ -187,7 +187,7 @@ public class OcrServiceTests
 			var stopwatch = Stopwatch.StartNew();
 			for (int i = 0; i < 6; i++)
 			{
-				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 				OcrService.OcrRequestWindowState snapshot = OcrService.GetSharedRequestWindowState();
 				Assert.InRange(snapshot.RequestsInWindow, 1, 3);
 				Assert.True(snapshot.TotalRequestsGranted >= i + 1);
@@ -228,13 +228,13 @@ public class OcrServiceTests
 
 			for (int i = 0; i < 3; i++)
 			{
-				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 			}
 
 			OcrService.OcrRequestWindowState saturated = OcrService.GetSharedRequestWindowState();
 			Assert.Equal(3, saturated.RequestsInWindow);
 
-			await Task.Delay(TimeSpan.FromMilliseconds(120)).ConfigureAwait(false);
+			await Task.Delay(TimeSpan.FromMilliseconds(120));
 
 			OcrService.OcrRequestWindowState afterWait = OcrService.GetSharedRequestWindowState();
 			Assert.Equal(0, afterWait.RequestsInWindow);
@@ -242,7 +242,7 @@ public class OcrServiceTests
 			var stopwatch = Stopwatch.StartNew();
 			for (int i = 0; i < 3; i++)
 			{
-				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 			}
 			stopwatch.Stop();
 
@@ -282,7 +282,7 @@ public class OcrServiceTests
 			var stopwatch = Stopwatch.StartNew();
 			for (int i = 0; i < 10; i++)
 			{
-				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!).ConfigureAwait(false);
+				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 				OcrService.OcrRequestWindowState snapshot = OcrService.GetSharedRequestWindowState();
 				Assert.InRange(snapshot.RequestsInWindow, 1, 4);
 				Assert.True(snapshot.TotalRequestsGranted >= i + 1);

@@ -28,7 +28,7 @@ public class AudioDeviceManager
 
         public int MicrophoneDeviceIndex => _microphoneDeviceIndex;
 
-        public bool IsMuted => _microphone != null && _microphone.AudioEndpointVolume.Mute;
+        public bool IsMuted => _microphone is { AudioEndpointVolume: { } volume } && volume.Mute;
 
         public void RefreshCaptureDevices()
         {
@@ -72,7 +72,7 @@ public class AudioDeviceManager
                 // the friendly name before comparison, preventing any matches and leaving the device
                 // index at -1 (so no waveform capture would occur). Use more flexible matching.
 		int deviceCount = WaveIn.DeviceCount;
-                string friendly = _microphone.FriendlyName;
+                string friendly = _microphone.DeviceFriendlyName;
                 int bestMatchIndex = -1;
                 for (int i = 0; i < deviceCount; i++)
                 {

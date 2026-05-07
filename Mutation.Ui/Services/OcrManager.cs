@@ -552,7 +552,6 @@ public class OcrManager
 
             var bounds = new Rectangle(left, top, width, height);
 
-            FormWindowState? prevState = null;
             IntPtr? hwnd = null;
             try
             {

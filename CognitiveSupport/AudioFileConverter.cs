@@ -57,12 +57,14 @@ public static class AudioFileConverter
 		resampler.ResamplerQuality = 60; // Reasonable quality
 
 		using var outStream = new FileStream(outputOggPath, FileMode.Create, FileAccess.Write, FileShare.None);
+#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusEncoder type, not IOpusEncoder from OpusCodecFactory.
 		var encoder = new OpusEncoder(48000, 1, OpusApplication.OPUS_APPLICATION_VOIP)
 		{
 			Bitrate = 24000,
 			UseVBR = true,
 			UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
 		};
+#pragma warning restore CS0618
 		var tags = new OpusTags();
 		var oggStream = new OpusOggWriteStream(encoder, outStream, tags);
 

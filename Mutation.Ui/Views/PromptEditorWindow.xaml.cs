@@ -17,7 +17,7 @@ public sealed partial class PromptEditorWindow : Window
     public bool IsSaved { get; private set; }
     private readonly TranscriptFormatter _formatter;
 
-    public PromptEditorWindow(LlmSettings.LlmPrompt prompt, TranscriptFormatter formatter, IReadOnlyList<string> availableModels)
+    public PromptEditorWindow(LlmSettings.LlmPrompt? prompt, TranscriptFormatter formatter, IReadOnlyList<string> availableModels)
     {
         this.InitializeComponent();
         _formatter = formatter;
@@ -112,11 +112,6 @@ public sealed partial class PromptEditorWindow : Window
 
     private void BtnCancel_Click(object sender, RoutedEventArgs e)
     {
-         // If we don't save, we don't update potential output or we indicate failure?
-         // For a new prompt, we can return null? 
-         // But `Prompt` is a property.
-         // Let's add a `Confirmed` property.
-         Prompt = null; 
          this.Close();
     }
 

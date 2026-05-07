@@ -66,7 +66,9 @@ public class AudioPlayer : IDisposable
     {
         // Read and decode the entire OGG file to PCM
         using var fileStream = File.OpenRead(filePath);
+#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusDecoder type, not IOpusDecoder from OpusCodecFactory.
         var oggReader = new OpusOggReadStream(_decoder = new OpusDecoder(SampleRate, Channels), fileStream);
+#pragma warning restore CS0618
 
         // Collect all decoded samples
         var allSamples = new List<short>();

@@ -73,7 +73,7 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 			return await TranscribeViaDeepgram(keyterms, audioBytes, linkedCts).ConfigureAwait(false);
 		}, context, overallCancellationToken).ConfigureAwait(false);
 	
-		return response.Results.Channels?.FirstOrDefault()?.Alternatives?.FirstOrDefault().Transcript
+		return response?.Results?.Channels?.FirstOrDefault()?.Alternatives?.FirstOrDefault()?.Transcript
 			?? "(no transcript available)";
 
 
@@ -96,7 +96,7 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 			  FillerWords = false,
 			  Measurements = true,
 			  SmartFormat = true,
-		  }, cancellationTokenSource = cancellationTokenSource);
+		  }, cancellationTokenSource);
 		return response;
 	}
 

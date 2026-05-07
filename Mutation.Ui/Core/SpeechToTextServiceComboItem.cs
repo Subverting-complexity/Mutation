@@ -4,8 +4,8 @@ namespace Mutation.Ui;
 
 internal class SpeechToTextServiceComboItem
 {
-        public SpeechToTextServiceSettings SpeechToTextServiceSettings { get; set; }
-        public ISpeechToTextService SpeechToTextService { get; set; }
+	public required SpeechToTextServiceSettings SpeechToTextServiceSettings { get; set; }
+	public required ISpeechToTextService SpeechToTextService { get; set; }
         public string Display =>
                 $"{SpeechToTextServiceSettings.Name}";
 

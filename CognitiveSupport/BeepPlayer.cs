@@ -39,12 +39,12 @@ public static class BeepPlayer
 			var custom = settings.AudioSettings?.CustomBeepSettings;
 			if (custom?.UseCustomBeeps == true)
 			{
-				_playerStart = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepStartFile), fp => issues.Add($"Could not load start beep file: {fp}"));
-				_playerSuccess = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepSuccessFile), fp => issues.Add($"Could not load success beep file: {fp}"));
-				_playerFailure = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepFailureFile), fp => issues.Add($"Could not load failure beep file: {fp}"));
-				_playerEnd = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepEndFile), fp => issues.Add($"Could not load end beep file: {fp}"));
-				_playerMute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepMuteFile), fp => issues.Add($"Could not load mute beep file: {fp}"));
-				_playerUnmute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepUnmuteFile), fp => issues.Add($"Could not load unmute beep file: {fp}"));
+				_playerStart = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepStartFile ?? string.Empty), fp => issues.Add($"Could not load start beep file: {fp}"));
+				_playerSuccess = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepSuccessFile ?? string.Empty), fp => issues.Add($"Could not load success beep file: {fp}"));
+				_playerFailure = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepFailureFile ?? string.Empty), fp => issues.Add($"Could not load failure beep file: {fp}"));
+				_playerEnd = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepEndFile ?? string.Empty), fp => issues.Add($"Could not load end beep file: {fp}"));
+				_playerMute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepMuteFile ?? string.Empty), fp => issues.Add($"Could not load mute beep file: {fp}"));
+				_playerUnmute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepUnmuteFile ?? string.Empty), fp => issues.Add($"Could not load unmute beep file: {fp}"));
 			}
 			LastInitializationIssues = issues;
 		}
