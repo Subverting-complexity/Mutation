@@ -353,7 +353,7 @@ public class HotkeyManager : IDisposable
 		return CallWindowProc(_prevWndProc, hWnd, msg, wParam, lParam);
 	}
 
-	public static void SendHotkeyAfterDelay(string hotkey, int delayMs)
+	public static void SendHotkeyAfterDelay(string? hotkey, int delayMs)
 	{
 		if (string.IsNullOrWhiteSpace(hotkey))
 			return;

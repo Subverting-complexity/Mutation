@@ -175,7 +175,7 @@ internal class SettingsManager : ISettingsManager
 			string[] allowedExtensions = new[] { ".wav" };
 			var beepIssues = new List<string>();
 
-			string successPath = audioSettings.CustomBeepSettings?.BeepSuccessFile ?? string.Empty;
+			string successPath = audioSettings.CustomBeepSettings.BeepSuccessFile ?? string.Empty;
 			string resolvedSuccessPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(successPath);
 			if (string.IsNullOrWhiteSpace(successPath) ||
 				!allowedExtensions.Contains(Path.GetExtension(successPath)?.ToLower()) ||
@@ -189,7 +189,7 @@ internal class SettingsManager : ISettingsManager
 					beepIssues.Add($"Could not load success beep file: {successPath}");
 			}
 
-			string failurePath = audioSettings.CustomBeepSettings?.BeepFailureFile ?? string.Empty;
+			string failurePath = audioSettings.CustomBeepSettings.BeepFailureFile ?? string.Empty;
 			string resolvedFailurePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(failurePath);
 			if (string.IsNullOrWhiteSpace(failurePath) ||
 				!allowedExtensions.Contains(Path.GetExtension(failurePath)?.ToLower()) ||
@@ -203,7 +203,7 @@ internal class SettingsManager : ISettingsManager
 					beepIssues.Add($"Could not load failure beep file: {failurePath}");
 			}
 
-			string startPath = audioSettings.CustomBeepSettings?.BeepStartFile ?? string.Empty;
+			string startPath = audioSettings.CustomBeepSettings.BeepStartFile ?? string.Empty;
 			string resolvedStartPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(startPath);
 			if (string.IsNullOrWhiteSpace(startPath) ||
 				!allowedExtensions.Contains(Path.GetExtension(startPath)?.ToLower()) ||
@@ -217,7 +217,7 @@ internal class SettingsManager : ISettingsManager
 					beepIssues.Add($"Could not load start beep file: {startPath}");
 			}
 
-			string endPath = audioSettings.CustomBeepSettings?.BeepEndFile ?? string.Empty;
+			string endPath = audioSettings.CustomBeepSettings.BeepEndFile ?? string.Empty;
 			string resolvedEndPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(endPath);
 			if (string.IsNullOrWhiteSpace(endPath) ||
 				!allowedExtensions.Contains(Path.GetExtension(endPath)?.ToLower()) ||
@@ -231,7 +231,7 @@ internal class SettingsManager : ISettingsManager
 					beepIssues.Add($"Could not load end beep file: {endPath}");
 			}
 
-			string mutePath = audioSettings.CustomBeepSettings?.BeepMuteFile ?? string.Empty;
+			string mutePath = audioSettings.CustomBeepSettings.BeepMuteFile ?? string.Empty;
 			string resolvedMutePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(mutePath);
 			if (string.IsNullOrWhiteSpace(mutePath) ||
 				!allowedExtensions.Contains(Path.GetExtension(mutePath)?.ToLower()) ||
@@ -245,7 +245,7 @@ internal class SettingsManager : ISettingsManager
 					beepIssues.Add($"Could not load mute beep file: {mutePath}");
 			}
 
-			string unmutePath = audioSettings.CustomBeepSettings?.BeepUnmuteFile ?? string.Empty;
+			string unmutePath = audioSettings.CustomBeepSettings.BeepUnmuteFile ?? string.Empty;
 			string resolvedUnmutePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(unmutePath);
 			if (string.IsNullOrWhiteSpace(unmutePath) ||
 				!allowedExtensions.Contains(Path.GetExtension(unmutePath)?.ToLower()) ||
@@ -394,8 +394,8 @@ internal class SettingsManager : ISettingsManager
 
 		if (!llmSettings.Prompts.Any())
 		{
-             string legacyPrompt = llmSettings.FormatTranscriptPrompt;
-             string legacyHotkey = llmSettings.FormatWithLlmHotKey;
+             string? legacyPrompt = llmSettings.FormatTranscriptPrompt;
+             string? legacyHotkey = llmSettings.FormatWithLlmHotKey;
              
              if (string.IsNullOrWhiteSpace(legacyPrompt))
              {
@@ -433,22 +433,30 @@ End of summary.
                 Name = "Default",
                 Content = legacyPrompt,
                 Hotkey = legacyHotkey,
-                AutoRun = false
+                AutoRun = false,
+                ModelName = LlmSettings.DefaultModel
              });
 			 somethingWasMissing = true;
 		}
 
 		if (llmSettings.Models == null || !llmSettings.Models.Any())
 		{
-			llmSettings.Models = new List<string>
+			llmSettings.Models = new List<LlmModelConfig>
 			{
-				LlmSettings.DefaultModel,
-				LlmSettings.DefaultSecondaryModel,
-				LlmSettings.DefaultAnthropicModel
-			}
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToList();
+				new LlmModelConfig(LlmSettings.DefaultModel, LlmProvider.OpenAI, customTemperature: null),
+				new LlmModelConfig(LlmSettings.DefaultSecondaryModel, LlmProvider.OpenAI, customTemperature: 0.7m),
+				new LlmModelConfig(LlmSettings.DefaultAnthropicModel, LlmProvider.Anthropic, customTemperature: 0.7m),
+			};
 			somethingWasMissing = true;
+		}
+
+		foreach (var prompt in llmSettings.Prompts)
+		{
+			if (string.IsNullOrWhiteSpace(prompt.ModelName))
+			{
+				prompt.ModelName = LlmSettings.DefaultModel;
+				somethingWasMissing = true;
+			}
 		}
 
 		if (llmSettings.TranscriptFormatRules == null || !llmSettings.TranscriptFormatRules.Any())
@@ -619,7 +627,7 @@ End of summary.
 
 		if (speechSettings is not null)
 		{
-			if (speechSettings["Services"] == null || speechSettings["Services"].Type != JTokenType.Array)
+			if (speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
 			{
 				string providerName = speechSettings.Value<string>("Service") ?? string.Empty;
 
@@ -680,6 +688,30 @@ End of summary.
 				visionSettings["SendHotkeyAfterOcrOperation"] = visionSettings["SendKotKeyAfterOcrOperation"];
 				visionSettings.Remove("SendKotKeyAfterOcrOperation");
 				saveRequired = true;
+			}
+		}
+
+		if (jObj["LlmSettings"] is JObject llmSettingsJObj)
+		{
+			if (llmSettingsJObj.Remove("SelectedLlmModel"))
+			{
+				saveRequired = true;
+			}
+
+			if (llmSettingsJObj["Prompts"] is JArray promptsArray)
+			{
+				foreach (var promptToken in promptsArray)
+				{
+					if (promptToken is JObject promptObj)
+					{
+						JToken? modelToken = promptObj["ModelName"];
+						if (modelToken == null || modelToken.Type == JTokenType.Null || string.IsNullOrWhiteSpace(modelToken.ToString()))
+						{
+							promptObj["ModelName"] = LlmSettings.DefaultModel;
+							saveRequired = true;
+						}
+					}
+				}
 			}
 		}
 

@@ -246,9 +246,10 @@ public partial class App : Application
 				string openAiKey = llmSettings?.ApiKey ?? string.Empty;
 				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
 				int timeoutSeconds = llmSettings?.TimeoutSeconds > 0 ? llmSettings.TimeoutSeconds : 60;
-				var allModels = llmSettings?.Models ?? new List<string>();
+				var allModels = llmSettings?.Models ?? new List<LlmModelConfig>();
 
-				var openAiModels = allModels.Where(m => !CompositeLlmService.IsAnthropicModel(m)).ToList();
+				var openAiModels = allModels.Where(m => m.Provider == LlmProvider.OpenAI).ToList();
+				var anthropicModels = allModels.Where(m => m.Provider == LlmProvider.Anthropic).ToList();
 
 				LlmService? openAiService = null;
 				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != "<placeholder>")
@@ -257,14 +258,18 @@ public partial class App : Application
 				}
 
 				AnthropicLlmService? anthropicService = null;
-				if (!string.IsNullOrEmpty(anthropicKey) && anthropicKey != "<placeholder>")
+				if (anthropicModels.Any() && !string.IsNullOrEmpty(anthropicKey) && anthropicKey != "<placeholder>")
 				{
 					var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 					var anthropicHttpClient = httpClientFactory.CreateClient(AnthropicHttpClientName);
-					anthropicService = new AnthropicLlmService(anthropicKey, anthropicHttpClient, timeoutSeconds);
+					anthropicService = new AnthropicLlmService(anthropicKey, anthropicModels, anthropicHttpClient, timeoutSeconds);
 				}
 
-				return new CompositeLlmService(openAiService, anthropicService);
+				var modelProviders = allModels
+					.GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+					.ToDictionary(g => g.Key, g => g.First().Provider, StringComparer.OrdinalIgnoreCase);
+
+				return new CompositeLlmService(openAiService, anthropicService, modelProviders);
 			});
 			builder.Services.AddSingleton<TranscriptFormatter>();
 			builder.Services.AddSingleton<SpeechToTextManager>();

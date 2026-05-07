@@ -20,7 +20,7 @@ public class TranscriptFormatter
 	public string ApplyRules(string transcript, bool manualPunctuation)
 	{
 		if (transcript is null)
-			return transcript;
+			return transcript!;
 
 		string text = transcript;
 		if (manualPunctuation)

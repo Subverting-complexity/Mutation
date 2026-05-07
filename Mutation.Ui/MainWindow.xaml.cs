@@ -165,20 +165,6 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		// TxtFormatPrompt.Text = _settings.LlmSettings?.FormatTranscriptPrompt ?? string.Empty;
 
-		if (_settings.LlmSettings != null)
-		{
-			CmbLlmModel.ItemsSource = _settings.LlmSettings.Models;
-			if (!string.IsNullOrEmpty(_settings.LlmSettings.SelectedLlmModel) && _settings.LlmSettings.Models.Contains(_settings.LlmSettings.SelectedLlmModel))
-			{
-				CmbLlmModel.SelectedItem = _settings.LlmSettings.SelectedLlmModel;
-			}
-			else if (_settings.LlmSettings.Models.Any())
-			{
-				CmbLlmModel.SelectedIndex = 0;
-				_settings.LlmSettings.SelectedLlmModel = _settings.LlmSettings.Models[0];
-			}
-		}
-
             _promptLibrary = new PromptLibraryController(
                 _settings,
                 _settingsManager,
@@ -692,8 +678,8 @@ public sealed partial class MainWindow : Window, IDisposable
 				return;
             }
             
-            string llmPromptContent = _promptLibrary?.GetAutoRunPromptContent() ?? string.Empty;
-            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), llmPromptContent, _shutdownCts.Token);
+            LlmSettings.LlmPrompt? autoRunPrompt = _promptLibrary?.GetAutoRunPrompt();
+            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
 		}
 		catch (Exception ex)
 		{
@@ -781,7 +767,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				return;
 			}
 
-			string modelName = _settings.LlmSettings?.SelectedLlmModel ?? LlmSettings.DefaultModel;
+			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
 			string formatted = await _transcriptFormatter.FormatWithLlmAsync(raw, prompt.Content, modelName);
             
 			TxtFormatTranscript.Text = formatted;
@@ -1215,16 +1201,6 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 		}
 	}
-
-	private void CmbLlmModel_SelectionChanged(object sender, SelectionChangedEventArgs e)
-	{
-		if (_settings.LlmSettings != null && CmbLlmModel.SelectedItem is string selectedModel)
-		{
-			_settings.LlmSettings.SelectedLlmModel = selectedModel;
-			_settingsManager.SaveSettingsToFile(_settings);
-		}
-	}
-
 
 	private void UpdateThirdPartyExplanation(DictationInsertOption option)
 	{

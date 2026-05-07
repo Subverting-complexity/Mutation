@@ -13,21 +13,33 @@ public class AnthropicLlmService : ILlmService
 
 	private readonly string _apiKey;
 	private readonly HttpClient _httpClient;
+	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
 
-	public AnthropicLlmService(string apiKey, HttpClient httpClient, int timeoutSeconds = 60)
+	public AnthropicLlmService(
+		string apiKey,
+		IEnumerable<LlmModelConfig> models,
+		HttpClient httpClient,
+		int timeoutSeconds = 60)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
+		if (models is null) throw new ArgumentNullException(nameof(models));
+
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
+		_modelConfigs = models.ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
 	}
 
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
-		string llmModelName,
-		decimal temperature = 0.7m)
+		string llmModelName)
 	{
+		if (!_modelConfigs.TryGetValue(llmModelName, out var config))
+			throw new ArgumentException(
+				$"{llmModelName} is not one of the configured Anthropic models. Available: {string.Join(",", _modelConfigs.Keys)}",
+				nameof(llmModelName));
+
 		// Extract system message (Anthropic uses a top-level "system" parameter)
 		string? systemMessage = messages
 			.Where(m => m.Role == LlmChatRole.System)
@@ -50,7 +62,7 @@ public class AnthropicLlmService : ILlmService
 		{
 			Model = llmModelName,
 			MaxTokens = DefaultMaxTokens,
-			Temperature = (double)temperature,
+			Temperature = config.CustomTemperature.HasValue ? (double?)config.CustomTemperature.Value : null,
 			System = systemMessage,
 			Messages = conversationMessages
 		};
@@ -108,7 +120,7 @@ public class AnthropicLlmService : ILlmService
 	{
 		[JsonPropertyName("model")] public string Model { get; set; } = "";
 		[JsonPropertyName("max_tokens")] public int MaxTokens { get; set; }
-		[JsonPropertyName("temperature")] public double Temperature { get; set; }
+		[JsonPropertyName("temperature")] public double? Temperature { get; set; }
 		[JsonPropertyName("system")] public string? System { get; set; }
 		[JsonPropertyName("messages")] public AnthropicMessage[] Messages { get; set; } = [];
 	}

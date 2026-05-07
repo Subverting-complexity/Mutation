@@ -42,12 +42,14 @@ public class AudioRecorder : IDisposable
 
 				fileStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
 
+#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusEncoder type, not IOpusEncoder from OpusCodecFactory.
 				encoder = new OpusEncoder(SampleRate, Channels, OpusApplication.OPUS_APPLICATION_VOIP)
 				{
 					Bitrate = 24000,
 					UseVBR = true,
 					UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
 				};
+#pragma warning restore CS0618
 
 				oggStream = new OpusOggWriteStream(encoder, fileStream, new OpusTags());
 

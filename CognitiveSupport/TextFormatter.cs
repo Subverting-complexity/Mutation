@@ -11,7 +11,7 @@ public static class TextFormatter
 		this string text,
 		List<LlmSettings.TranscriptFormatRule> rules)
 	{
-		if (text is null) return text;
+		if (text is null) return text!;
 		if (rules is null) throw new ArgumentNullException(nameof(rules));
 
 		text = text.FixNewLines();
@@ -29,7 +29,7 @@ public static class TextFormatter
 	public static string CleanupPunctuation(
 		this string text)
 	{
-		if (text is null) return text;
+		if (text is null) return text!;
 
 		string[] deduplications = new[]
 		{
@@ -89,7 +89,7 @@ public static class TextFormatter
 		string line)
 	{
 		if (line is null)
-			return line;
+			return line!;
 
 		string output = line.Trim();
 
@@ -109,12 +109,16 @@ public static class TextFormatter
 		string text,
 		TranscriptFormatRule rule)
 	{
-		if (text is null) return text;
+		if (text is null) return text!;
 		if (rule is null) throw new ArgumentNullException(nameof(rule));
+		if (rule.Find is null) return text;
 
 		RegexOptions regexOptions = RegexOptions.None;
 		if (!rule.CaseSensitive)
 			regexOptions = RegexOptions.IgnoreCase;
+
+		string find = rule.Find;
+		string replaceWith = rule.ReplaceWith ?? string.Empty;
 
 		switch (rule.MatchType)
 		{
@@ -123,14 +127,14 @@ public static class TextFormatter
 				if (rule.CaseSensitive)
 					comparison = StringComparison.InvariantCulture;
 
-				text = text.Replace(rule.Find, rule.ReplaceWith, comparison);
+				text = text.Replace(find, replaceWith, comparison);
 				break;
 			case MatchTypeEnum.RegEx:
-				text = Regex.Replace(text, rule.Find, rule.ReplaceWith, regexOptions);
+				text = Regex.Replace(text, find, replaceWith, regexOptions);
 				break;
 			case MatchTypeEnum.Smart:
-				string pattern = $@"(\b|^)([.,]?)([ ]*{rule.Find}[.,]?[ ]*)(\b|$)";
-				string replacement = $"$1$2{rule.ReplaceWith}$4";
+				string pattern = $@"(\b|^)([.,]?)([ ]*{find}[.,]?[ ]*)(\b|$)";
+				string replacement = $"$1$2{replaceWith}$4";
 				text = Regex.Replace(text, pattern, replacement, regexOptions);
 
 				break;
@@ -145,7 +149,7 @@ public static class TextFormatter
 		this string text,
 		params string[] substringsToRemove)
 	{
-		if (text is null) return text;
+		if (text is null) return text!;
 		if (substringsToRemove is null || !substringsToRemove.Any())
 			throw new ArgumentNullException(nameof(substringsToRemove));
 

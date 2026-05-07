@@ -2,6 +2,8 @@ using CognitiveSupport;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Windowing;
 using WinRT.Interop;
@@ -15,23 +17,23 @@ public sealed partial class PromptEditorWindow : Window
     public bool IsSaved { get; private set; }
     private readonly TranscriptFormatter _formatter;
 
-    public PromptEditorWindow(LlmSettings.LlmPrompt prompt, TranscriptFormatter formatter)
+    public PromptEditorWindow(LlmSettings.LlmPrompt? prompt, TranscriptFormatter formatter, IReadOnlyList<string> availableModels)
     {
         this.InitializeComponent();
         _formatter = formatter;
-        
+
         // Set window size
         IntPtr hWnd = WindowNative.GetWindowHandle(this);
         WindowId windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
         AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
-        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 500));
-        
+        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 540));
+
         // Center the window
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
         if (displayArea != null)
         {
             var centeredX = (displayArea.WorkArea.Width - 600) / 2;
-            var centeredY = (displayArea.WorkArea.Height - 500) / 2;
+            var centeredY = (displayArea.WorkArea.Height - 540) / 2;
             appWindow.Move(new Windows.Graphics.PointInt32(displayArea.WorkArea.X + centeredX, displayArea.WorkArea.Y + centeredY));
         }
 
@@ -42,23 +44,37 @@ public sealed partial class PromptEditorWindow : Window
             // presenter.IsModal = true; // CRASH FIX: IsModal requires an owner to be set via P/Invoke, which we aren't doing accurately enough. checking IsAlwaysOnTop is sufficient.
         }
 
+        var modelList = (availableModels ?? Array.Empty<string>()).ToList();
+        if (!modelList.Contains(LlmSettings.DefaultModel))
+        {
+            modelList.Insert(0, LlmSettings.DefaultModel);
+        }
+        CmbModel.ItemsSource = modelList;
+
         if (prompt == null)
         {
-            Prompt = new LlmSettings.LlmPrompt();
-            Prompt = new LlmSettings.LlmPrompt();
+            Prompt = new LlmSettings.LlmPrompt { ModelName = LlmSettings.DefaultModel };
             Title = "Add New Prompt";
+            CmbModel.SelectedItem = LlmSettings.DefaultModel;
         }
         else
         {
             Prompt = prompt;
-            Prompt = prompt;
             Title = "Edit Prompt";
-            
+
             // Populate fields
             TxtName.Text = Prompt.Name;
             TxtHotkey.Text = Prompt.Hotkey;
             TxtContent.Text = Prompt.Content;
             ChkAutoRun.IsChecked = Prompt.AutoRun;
+
+            string desiredModel = !string.IsNullOrWhiteSpace(Prompt.ModelName) ? Prompt.ModelName : LlmSettings.DefaultModel;
+            if (!modelList.Contains(desiredModel))
+            {
+                modelList.Insert(0, desiredModel);
+                CmbModel.ItemsSource = modelList;
+            }
+            CmbModel.SelectedItem = desiredModel;
         }
     }
 
@@ -76,6 +92,7 @@ public sealed partial class PromptEditorWindow : Window
         Prompt.Hotkey = TxtHotkey.Text; // Basic text for now, could implement validation later
         Prompt.Content = TxtContent.Text;
         Prompt.AutoRun = ChkAutoRun.IsChecked ?? false;
+        Prompt.ModelName = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
 
         IsSaved = true;
 
@@ -95,11 +112,6 @@ public sealed partial class PromptEditorWindow : Window
 
     private void BtnCancel_Click(object sender, RoutedEventArgs e)
     {
-         // If we don't save, we don't update potential output or we indicate failure?
-         // For a new prompt, we can return null? 
-         // But `Prompt` is a property.
-         // Let's add a `Confirmed` property.
-         Prompt = null; 
          this.Close();
     }
 
@@ -115,7 +127,8 @@ public sealed partial class PromptEditorWindow : Window
                 {
                     // Use the CURRENT text in the content box, not the saved one
                     string currentContent = TxtContent.Text;
-                    string result = await _formatter.FormatWithLlmAsync(text, currentContent, LlmSettings.DefaultModel); // Using default model for test
+                    string testModel = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
+                    string result = await _formatter.FormatWithLlmAsync(text, currentContent, testModel);
                     
                     // Show result in a dialog or just a message box?
                     // WinUI 3 MessageDialog or ContentDialog requires XamlRoot.
