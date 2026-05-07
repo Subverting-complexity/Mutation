@@ -440,14 +440,12 @@ End of summary.
 
 		if (llmSettings.Models == null || !llmSettings.Models.Any())
 		{
-			llmSettings.Models = new List<string>
+			llmSettings.Models = new List<LlmModelConfig>
 			{
-				LlmSettings.DefaultModel,
-				LlmSettings.DefaultSecondaryModel,
-				LlmSettings.DefaultAnthropicModel
-			}
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToList();
+				new LlmModelConfig(LlmSettings.DefaultModel, LlmProvider.OpenAI, customTemperature: null),
+				new LlmModelConfig(LlmSettings.DefaultSecondaryModel, LlmProvider.OpenAI, customTemperature: 0.7m),
+				new LlmModelConfig(LlmSettings.DefaultAnthropicModel, LlmProvider.Anthropic, customTemperature: 0.7m),
+			};
 			somethingWasMissing = true;
 		}
 

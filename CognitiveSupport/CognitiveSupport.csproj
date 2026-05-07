@@ -6,6 +6,9 @@
 		<Platforms>AnyCPU;x64</Platforms>
 	</PropertyGroup>
 	<ItemGroup>
+		<InternalsVisibleTo Include="Mutation.Tests" />
+	</ItemGroup>
+	<ItemGroup>
 		<PackageReference Include="Azure.AI.Vision.ImageAnalysis" Version="1.0.0" />
 		<PackageReference Include="Concentus" Version="2.2.2" />
 		<PackageReference Include="Concentus.Oggfile" Version="1.0.6" />

@@ -184,7 +184,7 @@ public class TranscriptFormatterTests
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
 
-		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName, decimal temperature = 0.7M)
+		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName)
 		{
 			CallCount++;
 			LastMessages = messages;

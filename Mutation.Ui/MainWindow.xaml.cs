@@ -167,15 +167,16 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		if (_settings.LlmSettings != null)
 		{
-			CmbLlmModel.ItemsSource = _settings.LlmSettings.Models;
-			if (!string.IsNullOrEmpty(_settings.LlmSettings.SelectedLlmModel) && _settings.LlmSettings.Models.Contains(_settings.LlmSettings.SelectedLlmModel))
+			var modelNames = _settings.LlmSettings.Models.Select(m => m.Name).ToList();
+			CmbLlmModel.ItemsSource = modelNames;
+			if (!string.IsNullOrEmpty(_settings.LlmSettings.SelectedLlmModel) && modelNames.Contains(_settings.LlmSettings.SelectedLlmModel))
 			{
 				CmbLlmModel.SelectedItem = _settings.LlmSettings.SelectedLlmModel;
 			}
-			else if (_settings.LlmSettings.Models.Any())
+			else if (modelNames.Any())
 			{
 				CmbLlmModel.SelectedIndex = 0;
-				_settings.LlmSettings.SelectedLlmModel = _settings.LlmSettings.Models[0];
+				_settings.LlmSettings.SelectedLlmModel = modelNames[0];
 			}
 		}
 

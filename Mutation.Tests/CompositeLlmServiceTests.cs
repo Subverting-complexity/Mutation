@@ -4,27 +4,16 @@ namespace Mutation.Tests;
 
 public class CompositeLlmServiceTests
 {
-	[Theory]
-	[InlineData("claude-sonnet-4-6", true)]
-	[InlineData("claude-3-opus", true)]
-	[InlineData("Claude-Sonnet", true)]
-	[InlineData("CLAUDE", true)]
-	[InlineData("gpt-4", false)]
-	[InlineData("gpt-4.1", false)]
-	[InlineData("o1-mini", false)]
-	[InlineData("", false)]
-	[InlineData("anthropic-claude", false)]
-	public void IsAnthropicModel_RecognizesPrefix(string model, bool expected)
-	{
-		Assert.Equal(expected, CompositeLlmService.IsAnthropicModel(model));
-	}
+	private static IReadOnlyDictionary<string, LlmProvider> Providers(params (string name, LlmProvider provider)[] entries)
+		=> entries.ToDictionary(e => e.name, e => e.provider, StringComparer.OrdinalIgnoreCase);
 
 	[Fact]
 	public async Task CreateChatCompletion_AnthropicModel_RoutesToAnthropicService()
 	{
 		var openAi = new StubLlmService("from-openai");
 		var anthropic = new StubLlmService("from-anthropic");
-		var composite = new CompositeLlmService(openAi, anthropic);
+		var providers = Providers(("claude-sonnet-4-6", LlmProvider.Anthropic));
+		var composite = new CompositeLlmService(openAi, anthropic, providers);
 
 		var messages = new List<LlmChatMessage>
 		{
@@ -44,7 +33,8 @@ public class CompositeLlmServiceTests
 	{
 		var openAi = new StubLlmService("from-openai");
 		var anthropic = new StubLlmService("from-anthropic");
-		var composite = new CompositeLlmService(openAi, anthropic);
+		var providers = Providers(("gpt-4.1", LlmProvider.OpenAI));
+		var composite = new CompositeLlmService(openAi, anthropic, providers);
 
 		var messages = new List<LlmChatMessage>
 		{
@@ -60,9 +50,48 @@ public class CompositeLlmServiceTests
 	}
 
 	[Fact]
+	public async Task CreateChatCompletion_RoutesByExplicitProvider_NotByNamePrefix()
+	{
+		// A model named "claude-via-openai-proxy" routed explicitly to OpenAI.
+		var openAi = new StubLlmService("from-openai");
+		var anthropic = new StubLlmService("from-anthropic");
+		var providers = Providers(("claude-via-openai-proxy", LlmProvider.OpenAI));
+		var composite = new CompositeLlmService(openAi, anthropic, providers);
+
+		string result = await composite.CreateChatCompletion(
+			new List<LlmChatMessage> { new(LlmChatRole.User, "hi") },
+			"claude-via-openai-proxy");
+
+		Assert.Equal("from-openai", result);
+		Assert.Equal(1, openAi.CallCount);
+		Assert.Equal(0, anthropic.CallCount);
+	}
+
+	[Fact]
+	public async Task CreateChatCompletion_UnknownModel_Throws()
+	{
+		var composite = new CompositeLlmService(
+			openAiService: new StubLlmService("openai"),
+			anthropicService: new StubLlmService("anthropic"),
+			Providers());
+
+		var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+			composite.CreateChatCompletion(
+				new List<LlmChatMessage> { new(LlmChatRole.User, "hi") },
+				"some-unknown-model"));
+
+		Assert.Contains("not configured", ex.Message, StringComparison.OrdinalIgnoreCase);
+		Assert.Contains("some-unknown-model", ex.Message);
+	}
+
+	[Fact]
 	public async Task CreateChatCompletion_AnthropicModelButServiceNull_ThrowsWithHelpfulMessage()
 	{
-		var composite = new CompositeLlmService(openAiService: new StubLlmService("openai"), anthropicService: null);
+		var providers = Providers(("claude-sonnet-4-6", LlmProvider.Anthropic));
+		var composite = new CompositeLlmService(
+			openAiService: new StubLlmService("openai"),
+			anthropicService: null,
+			providers);
 
 		var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
 			composite.CreateChatCompletion(
@@ -76,7 +105,11 @@ public class CompositeLlmServiceTests
 	[Fact]
 	public async Task CreateChatCompletion_OpenAiModelButServiceNull_ThrowsWithHelpfulMessage()
 	{
-		var composite = new CompositeLlmService(openAiService: null, anthropicService: new StubLlmService("anthropic"));
+		var providers = Providers(("gpt-4", LlmProvider.OpenAI));
+		var composite = new CompositeLlmService(
+			openAiService: null,
+			anthropicService: new StubLlmService("anthropic"),
+			providers);
 
 		var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
 			composite.CreateChatCompletion(
@@ -85,20 +118,6 @@ public class CompositeLlmServiceTests
 
 		Assert.Contains("OpenAI", ex.Message, StringComparison.OrdinalIgnoreCase);
 		Assert.Contains("ApiKey", ex.Message);
-	}
-
-	[Fact]
-	public async Task CreateChatCompletion_PassesTemperatureThrough()
-	{
-		var anthropic = new StubLlmService("ok");
-		var composite = new CompositeLlmService(openAiService: null, anthropicService: anthropic);
-
-		await composite.CreateChatCompletion(
-			new List<LlmChatMessage> { new(LlmChatRole.User, "hi") },
-			"claude-sonnet-4-6",
-			temperature: 0.2m);
-
-		Assert.Equal(0.2m, anthropic.LastTemperature);
 	}
 
 	private sealed class StubLlmService : ILlmService
@@ -113,14 +132,12 @@ public class CompositeLlmServiceTests
 		public int CallCount { get; private set; }
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
-		public decimal LastTemperature { get; private set; }
 
-		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName, decimal temperature = 0.7M)
+		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName)
 		{
 			CallCount++;
 			LastMessages = messages;
 			LastModel = llmModelName;
-			LastTemperature = temperature;
 			return Task.FromResult(_response);
 		}
 	}

@@ -176,13 +176,13 @@ public class SpeechToTextServiceSettings
 
 public class LlmSettings
 {
-	public const string DefaultModel = "gpt-4.1";
+	public const string DefaultModel = "chat-latest";
 	public const string DefaultSecondaryModel = "gpt-4.1";
 	public const string DefaultAnthropicModel = "claude-sonnet-4-6";
 
 	public string? ApiKey { get; set; }
 	public string? AnthropicApiKey { get; set; }
-	public List<string> Models { get; set; }
+	public List<LlmModelConfig> Models { get; set; }
 	public string? SelectedLlmModel { get; set; }
 	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; }
 	public string? FormatTranscriptPrompt { get; set; }
@@ -193,12 +193,12 @@ public class LlmSettings
 
 	public LlmSettings()
 	{
-		Models = new List<string>();
+		Models = new List<LlmModelConfig>();
 		TranscriptFormatRules = new List<TranscriptFormatRule>();
 		Prompts = new List<LlmPrompt>();
 	}
 
-	public LlmSettings(string? apiKey, List<string> models, List<TranscriptFormatRule> transcriptFormatRules, string? formatTranscriptPrompt)
+	public LlmSettings(string? apiKey, List<LlmModelConfig> models, List<TranscriptFormatRule> transcriptFormatRules, string? formatTranscriptPrompt)
 	{
 		ApiKey = apiKey;
 		Models = models;
