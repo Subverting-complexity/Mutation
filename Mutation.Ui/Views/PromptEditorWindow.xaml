@@ -26,12 +26,20 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBox x:Name="TxtName" Header="Name" PlaceholderText="e.g. Summarize" Grid.Column="0" />
             <TextBox x:Name="TxtHotkey" Header="Hotkey" PlaceholderText="e.g. CTRL+ALT+S" Grid.Column="1" />
-            
-            <CheckBox x:Name="ChkAutoRun" Content="Run automatically after transcription" Grid.Row="1" Grid.ColumnSpan="2" />
+
+            <ComboBox x:Name="CmbModel"
+                      Header="Model"
+                      PlaceholderText="Select a model"
+                      HorizontalAlignment="Stretch"
+                      Grid.Row="1"
+                      Grid.Column="0" />
+
+            <CheckBox x:Name="ChkAutoRun" Content="Run automatically after transcription" Grid.Row="2" Grid.ColumnSpan="2" />
         </Grid>
 
         <TextBox x:Name="TxtContent" 

@@ -128,7 +128,7 @@ public class AudioSessionManager : IDisposable
         await PlaySelectedSessionAsync();
     }
 
-    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, string llmPrompt = "", CancellationToken cancellationToken = default)
+    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, LlmSettings.LlmPrompt? llmPrompt = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -145,7 +145,7 @@ public class AudioSessionManager : IDisposable
             {
                 _currentRecordingUsesLlmFormatting = useLlmFormatting;
                 StopPlayback();
-                
+
                 StatusMessage?.Invoke(this, "Listening for audio...");
                 StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
 
@@ -257,20 +257,20 @@ public class AudioSessionManager : IDisposable
         }
     }
 
-    private async Task ProcessTranscriptAsync(string text, string llmPrompt)
+    private async Task ProcessTranscriptAsync(string text, LlmSettings.LlmPrompt? llmPrompt)
     {
         // Always run rules-based formatting first
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
         string? llmFormattedText = null;
 
-        if (_currentRecordingUsesLlmFormatting)
+        if (_currentRecordingUsesLlmFormatting && llmPrompt != null)
         {
             try
             {
                 StatusMessage?.Invoke(this, "Formatting with LLM...");
-                string modelName = _settings.LlmSettings?.SelectedLlmModel ?? LlmSettings.DefaultModel;
+                string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
                 // Pass the rules-formatted text to the LLM
-                llmFormattedText = await _transcriptFormatter.FormatWithLlmAsync(rulesFormattedText, llmPrompt, modelName);
+                llmFormattedText = await _transcriptFormatter.FormatWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName);
             }
             catch (Exception ex)
             {

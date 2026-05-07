@@ -183,7 +183,6 @@ public class LlmSettings
 	public string? ApiKey { get; set; }
 	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
-	public string? SelectedLlmModel { get; set; }
 	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; }
 	public string? FormatTranscriptPrompt { get; set; }
 	public string? FormatWithLlmHotKey { get; set; }
@@ -214,6 +213,7 @@ public class LlmSettings
 		public string Content { get; set; } = "";
 		public string? Hotkey { get; set; }
 		public bool AutoRun { get; set; }
+		public string? ModelName { get; set; }
 
 		public LlmPrompt() { }
 	}

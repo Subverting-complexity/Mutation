@@ -433,7 +433,8 @@ End of summary.
                 Name = "Default",
                 Content = legacyPrompt,
                 Hotkey = legacyHotkey,
-                AutoRun = false
+                AutoRun = false,
+                ModelName = LlmSettings.DefaultModel
              });
 			 somethingWasMissing = true;
 		}
@@ -447,6 +448,15 @@ End of summary.
 				new LlmModelConfig(LlmSettings.DefaultAnthropicModel, LlmProvider.Anthropic, customTemperature: 0.7m),
 			};
 			somethingWasMissing = true;
+		}
+
+		foreach (var prompt in llmSettings.Prompts)
+		{
+			if (string.IsNullOrWhiteSpace(prompt.ModelName))
+			{
+				prompt.ModelName = LlmSettings.DefaultModel;
+				somethingWasMissing = true;
+			}
 		}
 
 		if (llmSettings.TranscriptFormatRules == null || !llmSettings.TranscriptFormatRules.Any())
@@ -678,6 +688,30 @@ End of summary.
 				visionSettings["SendHotkeyAfterOcrOperation"] = visionSettings["SendKotKeyAfterOcrOperation"];
 				visionSettings.Remove("SendKotKeyAfterOcrOperation");
 				saveRequired = true;
+			}
+		}
+
+		if (jObj["LlmSettings"] is JObject llmSettingsJObj)
+		{
+			if (llmSettingsJObj.Remove("SelectedLlmModel"))
+			{
+				saveRequired = true;
+			}
+
+			if (llmSettingsJObj["Prompts"] is JArray promptsArray)
+			{
+				foreach (var promptToken in promptsArray)
+				{
+					if (promptToken is JObject promptObj)
+					{
+						JToken? modelToken = promptObj["ModelName"];
+						if (modelToken == null || modelToken.Type == JTokenType.Null || string.IsNullOrWhiteSpace(modelToken.ToString()))
+						{
+							promptObj["ModelName"] = LlmSettings.DefaultModel;
+							saveRequired = true;
+						}
+					}
+				}
 			}
 		}
 

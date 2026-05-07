@@ -2,6 +2,7 @@ using CognitiveSupport;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Views;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Mutation.Ui.Services;
@@ -43,10 +44,9 @@ internal sealed class PromptLibraryController
 			_hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, _executePrompt);
 	}
 
-	public string GetAutoRunPromptContent()
+	public LlmSettings.LlmPrompt? GetAutoRunPrompt()
 	{
-		var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun);
-		return prompt?.Content ?? string.Empty;
+		return _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun);
 	}
 
 	public void OpenAddDialog()
@@ -54,7 +54,7 @@ internal sealed class PromptLibraryController
 		if (_settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(null, _transcriptFormatter);
+		var dialog = new PromptEditorWindow(null, _transcriptFormatter, GetAvailableModelNames());
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -76,7 +76,7 @@ internal sealed class PromptLibraryController
 		if (prompt == null || _settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(prompt, _transcriptFormatter);
+		var dialog = new PromptEditorWindow(prompt, _transcriptFormatter, GetAvailableModelNames());
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -102,6 +102,11 @@ internal sealed class PromptLibraryController
 
 		_settings.LlmSettings.Prompts.Remove(prompt);
 		SaveAndRefresh();
+	}
+
+	private IReadOnlyList<string> GetAvailableModelNames()
+	{
+		return _settings.LlmSettings?.Models?.Select(m => m.Name).ToList() ?? new List<string>();
 	}
 
 	private void SaveAndRefresh()
