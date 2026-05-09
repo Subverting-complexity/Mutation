@@ -630,9 +630,13 @@ End of summary.
 		JObject? speechSettings = jObj["SpeechToTextSettings"] as JObject;
 		if (speechSettings is null && jObj["SpeetchToTextSettings"] is JObject legacySpeechSettings)
 		{
-			speechSettings = legacySpeechSettings;
 			jObj["SpeechToTextSettings"] = legacySpeechSettings;
 			jObj.Remove("SpeetchToTextSettings");
+			// Re-fetch from jObj — Newtonsoft.Json deep-clones a JToken with an existing
+			// parent on assignment, so the local `legacySpeechSettings` reference points at
+			// a detached object. Subsequent in-block STT migrations would silently no-op
+			// without this re-fetch.
+			speechSettings = jObj["SpeechToTextSettings"] as JObject;
 			saveRequired = true;
 		}
 
@@ -646,6 +650,17 @@ End of summary.
 					speechSettings["SpeechToTextWithLlmProcessingHotKey"] = legacyFormattingHotkey;
 				}
 				speechSettings.Remove("SpeechToTextWithLlmFormattingHotKey");
+				saveRequired = true;
+			}
+
+			// Run the Active...Speetch... typo fix BEFORE the Service->Services collapse.
+			// The collapse populates ActiveSpeechToTextService from the loose Service field,
+			// which would otherwise shadow this typo-fix's null guard and leave the legacy
+			// key in the JSON forever. (Caught by the full-legacy chain test.)
+			if (speechSettings["ActiveSpeechToTextService"] == null && speechSettings["ActiveSpeetchToTextService"] != null)
+			{
+				speechSettings["ActiveSpeechToTextService"] = speechSettings["ActiveSpeetchToTextService"];
+				speechSettings.Remove("ActiveSpeetchToTextService");
 				saveRequired = true;
 			}
 
@@ -671,15 +686,13 @@ End of summary.
 				speechSettings.Remove("ModelId");
 				speechSettings.Remove("SpeechToTextPrompt");
 
-				speechSettings["ActiveSpeechToTextService"] = providerName;
+				// Only seed ActiveSpeechToTextService if the typo-fix above didn't already
+				// populate it from a legacy ActiveSpeetchToTextService.
+				if (speechSettings["ActiveSpeechToTextService"] == null)
+				{
+					speechSettings["ActiveSpeechToTextService"] = providerName;
+				}
 				speechSettings["Services"] = createdServicesArray;
-				saveRequired = true;
-			}
-
-			if (speechSettings["ActiveSpeechToTextService"] == null && speechSettings["ActiveSpeetchToTextService"] != null)
-			{
-				speechSettings["ActiveSpeechToTextService"] = speechSettings["ActiveSpeetchToTextService"];
-				speechSettings.Remove("ActiveSpeetchToTextService");
 				saveRequired = true;
 			}
 
