@@ -710,7 +710,6 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			string? wasSpeaking = _textToSpeech.CurrentText;
 			_textToSpeech.Stop();
-			BeepPlayer.Play(BeepType.Failure);
 
 			bool clipboardChanged = kind == ClipboardKind.Text
 				&& trimmed.Length > 0
@@ -719,7 +718,6 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (clipboardChanged)
 			{
 				_textToSpeech.Speak(trimmed, tts.Rate, tts.VoiceName);
-				BeepPlayer.Play(BeepType.Success);
 				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
 			}
 			else
@@ -729,24 +727,23 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		string? message = kind switch
+		if (kind == ClipboardKind.Text && trimmed.Length > 0)
 		{
-			ClipboardKind.Text when trimmed.Length > 0 => trimmed,
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.VoiceName);
+			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+			return;
+		}
+
+		string message = kind switch
+		{
 			ClipboardKind.Image => "The clipboard contains an image, not text. Use OCR to extract text first.",
 			ClipboardKind.Unsupported => "The clipboard does not contain readable text.",
 			_ => "No text on the clipboard.",
 		};
 
 		_textToSpeech.Speak(message, tts.Rate, tts.VoiceName);
-		BeepPlayer.Play(BeepType.Success);
-
-		string statusMessage = kind == ClipboardKind.Text && trimmed.Length > 0
-			? "Speaking…"
-			: message;
-		var severity = kind == ClipboardKind.Text && trimmed.Length > 0
-			? InfoBarSeverity.Informational
-			: InfoBarSeverity.Warning;
-		ShowStatus("Text to Speech", statusMessage, severity);
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
 	}
 
 	private void InitializeTextToSpeechControls()
@@ -787,6 +784,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		_settings.TextToSpeechSettings.VoiceName = voiceName;
 		_settingsManager.SaveSettingsToFile(_settings);
+
+		string sampleSubject = voiceName ?? "system default voice";
+		_textToSpeech.Speak(
+			$"Currently selected {sampleSubject}.",
+			_settings.TextToSpeechSettings.Rate,
+			voiceName);
 	}
 
 	private void SldTtsRate_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
