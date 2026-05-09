@@ -10,6 +10,8 @@ public class Settings
 	public LlmSettings? LlmSettings { get; set; }
 	public TextToSpeechSettings? TextToSpeechSettings { get; set; }
 
+	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; } = new List<TranscriptFormatRule>();
+
 	public MainWindowUiSettings MainWindowUiSettings { get; set; } = new MainWindowUiSettings();
 
 	public HotKeyRouterSettings HotKeyRouterSettings { get; set; } = new HotKeyRouterSettings();
@@ -138,7 +140,7 @@ public class SpeechToTextSettings
 {
         public string? TempDirectory { get; set; }
         public string? SpeechToTextHotKey { get; set; }
-        public string? SpeechToTextWithLlmFormattingHotKey { get; set; }
+        public string? SpeechToTextWithLlmProcessingHotKey { get; set; }
 
         // If this is not null, this hotkey will be sent to the system after a transcription operation completes.
         public string? SendHotkeyAfterTranscriptionOperation { get; set; }
@@ -169,7 +171,6 @@ public class LlmSettings
 	public string? OpenAiApiKey { get; set; }
 	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
-	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; }
 	public string? FormatWithLlmHotKey { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
 	public int TimeoutSeconds { get; set; } = 60;
@@ -178,7 +179,6 @@ public class LlmSettings
 	public LlmSettings()
 	{
 		Models = new List<LlmModelConfig>();
-		TranscriptFormatRules = new List<TranscriptFormatRule>();
 		Prompts = new List<LlmPrompt>();
 	}
 
@@ -193,32 +193,32 @@ public class LlmSettings
 
 		public LlmPrompt() { }
 	}
+}
 
-	public class TranscriptFormatRule
+public class TranscriptFormatRule
+{
+	public string? Find { get; set; }
+	public string? ReplaceWith { get; set; }
+	public bool CaseSensitive { get; set; }
+	public MatchTypeEnum MatchType { get; set; }
+
+	public TranscriptFormatRule()
 	{
-		public string? Find { get; set; }
-		public string? ReplaceWith { get; set; }
-		public bool CaseSensitive { get; set; }
-		public MatchTypeEnum MatchType { get; set; }
+	}
 
-		public TranscriptFormatRule()
-		{
-		}
+	public TranscriptFormatRule(string? find, string? replaceWith, bool caseSensitive, MatchTypeEnum matchType)
+	{
+		Find = find;
+		ReplaceWith = replaceWith;
+		CaseSensitive = caseSensitive;
+		MatchType = matchType;
+	}
 
-		public TranscriptFormatRule(string? find, string? replaceWith, bool caseSensitive, MatchTypeEnum matchType)
-		{
-			Find = find;
-			ReplaceWith = replaceWith;
-			CaseSensitive = caseSensitive;
-			MatchType = matchType;
-		}
-
-		public enum MatchTypeEnum
-		{
-			Plain = 1,
-			RegEx = 2,
-			Smart = 3,
-		}
+	public enum MatchTypeEnum
+	{
+		Plain = 1,
+		RegEx = 2,
+		Smart = 3,
 	}
 }
 

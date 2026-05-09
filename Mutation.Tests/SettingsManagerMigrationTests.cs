@@ -265,6 +265,71 @@ public class SettingsManagerMigrationTests : IDisposable
 	}
 
 	[Fact]
+	public void UpgradeSettings_RenamesSpeechToTextWithLlmFormattingHotKey()
+	{
+		string json = """
+			{
+				"SpeechToTextSettings": {
+					"SpeechToTextWithLlmFormattingHotKey": "SHIFT+ALT+I"
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var stt = (JObject)result["SpeechToTextSettings"]!;
+
+		Assert.Null(stt["SpeechToTextWithLlmFormattingHotKey"]);
+		Assert.Equal("SHIFT+ALT+I", stt["SpeechToTextWithLlmProcessingHotKey"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_MovesTranscriptFormatRulesToRoot()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"TranscriptFormatRules": [
+						{ "Find": "newline", "ReplaceWith": "\n", "CaseSensitive": false, "MatchType": "Smart" }
+					],
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+
+		Assert.Null(result["LlmSettings"]?["TranscriptFormatRules"]);
+		var rules = (JArray)result["TranscriptFormatRules"]!;
+		Assert.Single(rules);
+		Assert.Equal("newline", rules[0]?["Find"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_DoesNotOverwriteExistingRootTranscriptFormatRules()
+	{
+		string json = """
+			{
+				"TranscriptFormatRules": [
+					{ "Find": "keep", "ReplaceWith": "me", "CaseSensitive": false, "MatchType": "Plain" }
+				],
+				"LlmSettings": {
+					"TranscriptFormatRules": [
+						{ "Find": "drop", "ReplaceWith": "this", "CaseSensitive": false, "MatchType": "Plain" }
+					],
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+
+		Assert.Null(result["LlmSettings"]?["TranscriptFormatRules"]);
+		var rules = (JArray)result["TranscriptFormatRules"]!;
+		Assert.Single(rules);
+		Assert.Equal("keep", rules[0]?["Find"]?.ToString());
+	}
+
+	[Fact]
 	public void UpgradeSettings_DoesNotRenameOtherApiKeyFields()
 	{
 		string json = """

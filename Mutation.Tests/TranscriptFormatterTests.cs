@@ -1,16 +1,16 @@
 using CognitiveSupport;
 using Mutation.Ui;
-using static CognitiveSupport.LlmSettings;
-using static CognitiveSupport.LlmSettings.TranscriptFormatRule;
+using static CognitiveSupport.TranscriptFormatRule;
 
 namespace Mutation.Tests;
 
 public class TranscriptFormatterTests
 {
-	private static Settings BuildSettings(LlmSettings? llmSettings = null)
+	private static Settings BuildSettings(LlmSettings? llmSettings = null, List<TranscriptFormatRule>? rules = null)
 		=> new()
 		{
 			LlmSettings = llmSettings,
+			TranscriptFormatRules = rules ?? new List<TranscriptFormatRule>(),
 		};
 
 	private static TranscriptFormatRule Rule(string find, string replace, MatchTypeEnum matchType, bool caseSensitive = false)
@@ -88,9 +88,8 @@ public class TranscriptFormatterTests
 	[Fact]
 	public void ApplyRules_AppliesRulesFromSettings()
 	{
-		var llm = new LlmSettings();
-		llm.TranscriptFormatRules.Add(Rule("foo", "bar", MatchTypeEnum.Plain));
-		var formatter = new TranscriptFormatter(BuildSettings(llm), new StubLlmService("ignored"));
+		var rules = new List<TranscriptFormatRule> { Rule("foo", "bar", MatchTypeEnum.Plain) };
+		var formatter = new TranscriptFormatter(BuildSettings(rules: rules), new StubLlmService("ignored"));
 
 		string result = formatter.ApplyRules("foo baz", manualPunctuation: false);
 		Assert.Equal("bar baz", result);
@@ -99,10 +98,12 @@ public class TranscriptFormatterTests
 	[Fact]
 	public void ApplyRules_AppliesRulesInOrder()
 	{
-		var llm = new LlmSettings();
-		llm.TranscriptFormatRules.Add(Rule("a", "b", MatchTypeEnum.Plain));
-		llm.TranscriptFormatRules.Add(Rule("b", "c", MatchTypeEnum.Plain));
-		var formatter = new TranscriptFormatter(BuildSettings(llm), new StubLlmService("ignored"));
+		var rules = new List<TranscriptFormatRule>
+		{
+			Rule("a", "b", MatchTypeEnum.Plain),
+			Rule("b", "c", MatchTypeEnum.Plain),
+		};
+		var formatter = new TranscriptFormatter(BuildSettings(rules: rules), new StubLlmService("ignored"));
 
 		Assert.Equal("c", formatter.ApplyRules("a", manualPunctuation: false));
 	}

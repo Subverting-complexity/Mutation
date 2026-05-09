@@ -1,7 +1,6 @@
 ﻿using CognitiveSupport.Extensions;
 using System.Text.RegularExpressions;
-using static CognitiveSupport.LlmSettings;
-using static CognitiveSupport.LlmSettings.TranscriptFormatRule;
+using static CognitiveSupport.TranscriptFormatRule;
 
 namespace CognitiveSupport;
 
@@ -9,7 +8,7 @@ public static class TextFormatter
 {
 	public static string FormatWithRules(
 		this string text,
-		List<LlmSettings.TranscriptFormatRule> rules)
+		List<TranscriptFormatRule> rules)
 	{
 		if (text is null) return text!;
 		if (rules is null) throw new ArgumentNullException(nameof(rules));

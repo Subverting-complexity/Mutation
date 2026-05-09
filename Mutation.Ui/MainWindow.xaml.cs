@@ -324,8 +324,8 @@ public sealed partial class MainWindow : Window, IDisposable
 			TryRegister(hk, stt.SpeechToTextHotKey!, () =>
 				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(false)));
 
-		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextWithLlmFormattingHotKey))
-			TryRegister(hk, stt.SpeechToTextWithLlmFormattingHotKey!, () =>
+		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextWithLlmProcessingHotKey))
+			TryRegister(hk, stt.SpeechToTextWithLlmProcessingHotKey!, () =>
 				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(true)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakClipboard))
@@ -1129,7 +1129,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BtnSpeechToTextWithFormatIcon.Glyph = MagicGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
 			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Record and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmFormattingHotKey, "Record and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Record and Format");
 		}
 		else if (label == "Stop")
 		{
@@ -1142,7 +1142,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BtnSpeechToTextWithFormatIcon.Glyph = StopGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
 			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Stop and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmFormattingHotKey, "Stop and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Stop and Format");
 		}
 		else
 		{

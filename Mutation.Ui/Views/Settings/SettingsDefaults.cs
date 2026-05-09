@@ -33,7 +33,7 @@ internal static class SettingsDefaults
 	public static class Speech
 	{
 		public const string SpeechToTextHotKey = "SHIFT+ALT+U";
-		public const string SpeechToTextWithLlmFormattingHotKey = "SHIFT+ALT+I";
+		public const string SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 		public const string TempDirectory = @"C:\Temp\Mutation";
 		public const int FileTranscriptionTimeoutSeconds = 300;
 		public const int ServiceTimeoutSeconds = 10;

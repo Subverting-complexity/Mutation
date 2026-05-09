@@ -23,7 +23,7 @@ public class TooltipManager
 
         ToolTipService.SetToolTip(speechBox, speechPromptTip);
 
-        var rules = _settings.LlmSettings?.TranscriptFormatRules?.Select(r =>
+        var rules = _settings.TranscriptFormatRules?.Select(r =>
         {
             string replace = r.ReplaceWith?.Replace("\r", " ").Replace("\n", " <nl> ") ?? string.Empty;
             return $"{r.Find} = {replace} (Match: {r.MatchType}, Case Sensitive: {r.CaseSensitive})";

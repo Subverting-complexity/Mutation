@@ -322,9 +322,9 @@ internal class SettingsManager : ISettingsManager
 			}
 		}
 
-		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmFormattingHotKey))
+		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmProcessingHotKey))
 		{
-			speechToTextSettings.SpeechToTextWithLlmFormattingHotKey = "SHIFT+ALT+I";
+			speechToTextSettings.SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 			somethingWasMissing = true;
 		}
 		if (string.IsNullOrWhiteSpace(speechToTextSettings.TempDirectory))
@@ -446,121 +446,121 @@ End of summary.
 			}
 		}
 
-		if (llmSettings.TranscriptFormatRules == null || !llmSettings.TranscriptFormatRules.Any())
+		if (settings.TranscriptFormatRules == null || !settings.TranscriptFormatRules.Any())
 		{
-			llmSettings.TranscriptFormatRules = new List<LlmSettings.TranscriptFormatRule>
+			settings.TranscriptFormatRules = new List<TranscriptFormatRule>
 			{
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new line",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "newline",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next line",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new paragraph",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new paragraphs",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next paragraph",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new bullet",
 					ReplaceWith= $"{Environment.NewLine}- ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next bullet",
 					ReplaceWith= $"{Environment.NewLine}- ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new colon",
 					ReplaceWith= $": ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "semicolon",
 					ReplaceWith= $"; ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "full stop",
 					ReplaceWith= $". ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "comma",
 					ReplaceWith= $", ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "exclamation mark",
 					ReplaceWith= $"! ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "question mark",
 					ReplaceWith= $"? ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "ellipsis",
 					ReplaceWith= $"... ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "dot dot dot",
 					ReplaceWith= $"... ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
 
 
@@ -638,6 +638,17 @@ End of summary.
 
 		if (speechSettings is not null)
 		{
+			// Rename SpeechToTextWithLlmFormattingHotKey -> SpeechToTextWithLlmProcessingHotKey.
+			if (speechSettings["SpeechToTextWithLlmFormattingHotKey"] is JToken legacyFormattingHotkey)
+			{
+				if (speechSettings["SpeechToTextWithLlmProcessingHotKey"] is null)
+				{
+					speechSettings["SpeechToTextWithLlmProcessingHotKey"] = legacyFormattingHotkey;
+				}
+				speechSettings.Remove("SpeechToTextWithLlmFormattingHotKey");
+				saveRequired = true;
+			}
+
 			if (speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
 			{
 				string providerName = speechSettings.Value<string>("Service") ?? string.Empty;
@@ -717,6 +728,17 @@ End of summary.
 					llmSettingsJObj["OpenAiApiKey"] = legacyOpenAiKey;
 				}
 				llmSettingsJObj.Remove("ApiKey");
+				saveRequired = true;
+			}
+
+			// Move LlmSettings.TranscriptFormatRules -> root TranscriptFormatRules (rules aren't LLM-specific).
+			if (llmSettingsJObj["TranscriptFormatRules"] is JToken legacyRules)
+			{
+				if (jObj["TranscriptFormatRules"] is null)
+				{
+					jObj["TranscriptFormatRules"] = legacyRules;
+				}
+				llmSettingsJObj.Remove("TranscriptFormatRules");
 				saveRequired = true;
 			}
 

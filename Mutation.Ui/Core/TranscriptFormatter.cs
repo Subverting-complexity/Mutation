@@ -29,7 +29,7 @@ public class TranscriptFormatter
 			text = text.Replace("  ", " ");
 		}
 
-		var rules = _settings.LlmSettings?.TranscriptFormatRules ?? new List<LlmSettings.TranscriptFormatRule>();
+		var rules = _settings.TranscriptFormatRules ?? new List<TranscriptFormatRule>();
 		text = text.FormatWithRules(rules);
 		text = text.CleanupPunctuation();
 		return text;

@@ -65,7 +65,7 @@ internal static class SettingsWorkingCopy
 			var dst = live.SpeechToTextSettings;
 			dst.TempDirectory = src.TempDirectory;
 			dst.SpeechToTextHotKey = src.SpeechToTextHotKey;
-			dst.SpeechToTextWithLlmFormattingHotKey = src.SpeechToTextWithLlmFormattingHotKey;
+			dst.SpeechToTextWithLlmProcessingHotKey = src.SpeechToTextWithLlmProcessingHotKey;
 			dst.SendHotkeyAfterTranscriptionOperation = src.SendHotkeyAfterTranscriptionOperation;
 			dst.Services = src.Services;
 			dst.ActiveSpeechToTextService = src.ActiveSpeechToTextService;
@@ -80,11 +80,12 @@ internal static class SettingsWorkingCopy
 			dst.OpenAiApiKey = src.OpenAiApiKey;
 			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
-			dst.TranscriptFormatRules = src.TranscriptFormatRules;
 			dst.FormatWithLlmHotKey = src.FormatWithLlmHotKey;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;
 		}
+
+		live.TranscriptFormatRules = workingCopy.TranscriptFormatRules ?? new List<TranscriptFormatRule>();
 
 		live.TextToSpeechSettings ??= new TextToSpeechSettings();
 		if (workingCopy.TextToSpeechSettings is not null)

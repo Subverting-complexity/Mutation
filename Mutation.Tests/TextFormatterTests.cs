@@ -1,6 +1,5 @@
 using CognitiveSupport;
-using static CognitiveSupport.LlmSettings;
-using static CognitiveSupport.LlmSettings.TranscriptFormatRule;
+using static CognitiveSupport.TranscriptFormatRule;
 
 namespace Mutation.Tests;
 

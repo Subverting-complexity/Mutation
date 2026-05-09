@@ -67,7 +67,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		var s = ApplyDefaults();
 		var stt = s.SpeechToTextSettings!;
 		Assert.Equal(SettingsDefaults.Speech.SpeechToTextHotKey, stt.SpeechToTextHotKey);
-		Assert.Equal(SettingsDefaults.Speech.SpeechToTextWithLlmFormattingHotKey, stt.SpeechToTextWithLlmFormattingHotKey);
+		Assert.Equal(SettingsDefaults.Speech.SpeechToTextWithLlmProcessingHotKey, stt.SpeechToTextWithLlmProcessingHotKey);
 		Assert.Equal(SettingsDefaults.Speech.TempDirectory, stt.TempDirectory);
 		Assert.Equal(SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds, stt.FileTranscriptionTimeoutSeconds);
 
