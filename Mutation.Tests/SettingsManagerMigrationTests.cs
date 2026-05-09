@@ -266,6 +266,56 @@ public class SettingsManagerMigrationTests : IDisposable
 	}
 
 	[Fact]
+	public void UpgradeSettings_ConvertsLegacyStringModelsToLlmModelConfig()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"Models": ["gpt-4.1", "claude-sonnet-4-6", "chat-latest"]
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var models = (JArray)result["LlmSettings"]!["Models"]!;
+
+		Assert.Equal(3, models.Count);
+		Assert.All(models, m => Assert.Equal(JTokenType.Object, m.Type));
+
+		Assert.Equal("gpt-4.1", models[0]?["Name"]?.ToString());
+		Assert.Equal("OpenAI", models[0]?["Provider"]?.ToString());
+		Assert.Equal(JTokenType.Null, models[0]?["CustomTemperature"]?.Type);
+
+		Assert.Equal("claude-sonnet-4-6", models[1]?["Name"]?.ToString());
+		Assert.Equal("Anthropic", models[1]?["Provider"]?.ToString());
+
+		Assert.Equal("chat-latest", models[2]?["Name"]?.ToString());
+		Assert.Equal("OpenAI", models[2]?["Provider"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_LeavesAlreadyMigratedModelsUntouched()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"Models": [
+						{ "Name": "gpt-4.1", "Provider": "OpenAI", "CustomTemperature": 0.7 }
+					]
+				}
+			}
+			""";
+		File.WriteAllText(_tempPath, json);
+		var beforeMtime = File.GetLastWriteTimeUtc(_tempPath);
+
+		var manager = new SettingsManager(_tempPath);
+		manager.UpgradeSettings();
+
+		var afterMtime = File.GetLastWriteTimeUtc(_tempPath);
+		Assert.Equal(beforeMtime, afterMtime);
+	}
+
+	[Fact]
 	public void UpgradeSettings_RenamesFormatWithLlmHotKey()
 	{
 		string json = """
@@ -401,6 +451,7 @@ public class SettingsManagerMigrationTests : IDisposable
 				"LlmSettings": {
 					"SelectedLlmModel": "gpt-4.1",
 					"ApiKey": "openai-key",
+					"Models": ["gpt-4.1", "claude-sonnet-4-6"],
 					"FormatWithLlmHotKey": "ALT+SHIFT+P",
 					"FormatTranscriptPrompt": "Clean this up.",
 					"TranscriptFormatRules": [
@@ -460,6 +511,14 @@ public class SettingsManagerMigrationTests : IDisposable
 		Assert.Equal("openai-key", llm["OpenAiApiKey"]?.ToString());
 		Assert.Null(llm["FormatWithLlmHotKey"]);
 		Assert.Equal("ALT+SHIFT+P", llm["ProcessWithLlmHotKey"]?.ToString());
+
+		// Models: List<string> -> List<LlmModelConfig>, provider inferred from name.
+		var models = (JArray)llm["Models"]!;
+		Assert.Equal(2, models.Count);
+		Assert.Equal("gpt-4.1", models[0]?["Name"]?.ToString());
+		Assert.Equal("OpenAI", models[0]?["Provider"]?.ToString());
+		Assert.Equal("claude-sonnet-4-6", models[1]?["Name"]?.ToString());
+		Assert.Equal("Anthropic", models[1]?["Provider"]?.ToString());
 
 		// TranscriptFormatRules moved out of LlmSettings to root.
 		Assert.Null(llm["TranscriptFormatRules"]);

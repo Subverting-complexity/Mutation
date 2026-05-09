@@ -733,6 +733,38 @@ End of summary.
 				saveRequired = true;
 			}
 
+			// Convert legacy Models from List<string> to List<LlmModelConfig>. The schema
+			// changed when LlmModelConfig was introduced (May 2026). Without this, an old
+			// config's `"Models": ["gpt-4.1", ...]` throws JsonSerializationException on
+			// deserialize, falling through to recovery that wipes the user's LLM config.
+			// Provider is inferred from the model name (claude* -> Anthropic, else OpenAI).
+			if (llmSettingsJObj["Models"] is JArray modelsArray && modelsArray.Any(m => m.Type == JTokenType.String))
+			{
+				var converted = new JArray();
+				foreach (var entry in modelsArray)
+				{
+					if (entry.Type == JTokenType.String)
+					{
+						string name = entry.ToString();
+						string provider = name.StartsWith("claude", StringComparison.OrdinalIgnoreCase)
+							? "Anthropic"
+							: "OpenAI";
+						converted.Add(new JObject
+						{
+							["Name"] = name,
+							["Provider"] = provider,
+							["CustomTemperature"] = null,
+						});
+					}
+					else
+					{
+						converted.Add(entry);
+					}
+				}
+				llmSettingsJObj["Models"] = converted;
+				saveRequired = true;
+			}
+
 			// Rename LlmSettings.ApiKey -> OpenAiApiKey (only this class; Azure/STT ApiKey untouched).
 			if (llmSettingsJObj["ApiKey"] is JToken legacyOpenAiKey)
 			{
