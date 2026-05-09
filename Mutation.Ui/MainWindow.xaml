@@ -730,44 +730,42 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Clipboard & Voice -->
+                    <!-- Voice & Speech -->
                     <Border x:Name="ClipboardCard" Style="{StaticResource CardStyle}" Grid.Row="5" Grid.Column="1">
                         <StackPanel Spacing="18">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="Clipboard &amp; Voice" Style="{StaticResource SectionHeaderTextStyle}" />
-                                <TextBlock Text="Manage clipboard content and play it aloud when needed." Style="{StaticResource CaptionTextStyle}" />
+                                <TextBlock Text="Voice &amp; Speech" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <TextBlock Text="Speak the current clipboard contents and tune the voice." Style="{StaticResource CaptionTextStyle}" />
                             </StackPanel>
 
                             <StackPanel Spacing="12">
-                                <TextBox
-                                    x:Name="TxtClipboard"
-                                    PlaceholderText="Clipboard text"
-                                    AcceptsReturn="True"
-                                    TextWrapping="Wrap"
-                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                    ScrollViewer.VerticalScrollMode="Auto"
-                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                    ScrollViewer.HorizontalScrollMode="Auto"
-                                    AutomationProperties.Name="Clipboard text"
-                                    ToolTipService.ToolTip="Text that will be copied or spoken" />
+                                <ComboBox
+                                    x:Name="CmbTtsVoice"
+                                    Header="Voice"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="CmbTtsVoice_SelectionChanged"
+                                    AutomationProperties.Name="Text to speech voice"
+                                    ToolTipService.ToolTip="Choose a voice for clipboard speech" />
+
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Rate" />
+                                    <Slider
+                                        x:Name="SldTtsRate"
+                                        Minimum="-10"
+                                        Maximum="10"
+                                        StepFrequency="1"
+                                        TickFrequency="2"
+                                        TickPlacement="Outside"
+                                        SnapsTo="StepValues"
+                                        ValueChanged="SldTtsRate_ValueChanged"
+                                        AutomationProperties.Name="Text to speech rate"
+                                        ToolTipService.ToolTip="Adjust the speed of clipboard speech" />
+                                </StackPanel>
 
                                 <StackPanel x:Name="ClipboardActionsPanel" Orientation="Horizontal" Spacing="12">
                                     <Button
-                                        x:Name="BtnCopyText"
-                                        Style="{StaticResource AccentButtonStyle}"
-                                        Click="CopyText_Click"
-                                        AccessKey="P"
-                                        AutomationProperties.Name="Copy clipboard text"
-                                        ToolTipService.ToolTip="Copy the clipboard text to the system clipboard">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                            <FontIcon Glyph="&#xE8C8;" FontFamily="Segoe Fluent Icons" />
-                                            <TextBlock Text="Copy text" />
-                                        </StackPanel>
-                                    </Button>
-
-                                    <Button
                                         x:Name="BtnTextToSpeech"
-                                        Style="{StaticResource OutlinedButtonStyle}"
+                                        Style="{StaticResource AccentButtonStyle}"
                                         Click="BtnTextToSpeech_Click"
                                         AccessKey="T"
                                         AutomationProperties.Name="Speak clipboard text"

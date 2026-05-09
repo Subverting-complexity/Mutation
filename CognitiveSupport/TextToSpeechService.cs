@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Speech.Synthesis;
 
 namespace CognitiveSupport
@@ -8,6 +9,19 @@ namespace CognitiveSupport
 		private SpeechSynthesizer? _synth;
 		private string? _currentText;
 		private bool _disposed;
+
+		public IReadOnlyList<string> GetVoiceNames()
+		{
+			lock (_gate)
+			{
+				if (_disposed) return Array.Empty<string>();
+				EnsureSynth();
+				return _synth!.GetInstalledVoices()
+					.Where(v => v.Enabled)
+					.Select(v => v.VoiceInfo.Name)
+					.ToList();
+			}
+		}
 
 		public bool IsSpeaking
 		{

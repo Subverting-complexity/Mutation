@@ -6,8 +6,37 @@ using Windows.Storage.Streams;
 
 namespace Mutation.Ui.Services;
 
+public enum ClipboardKind
+{
+	Empty,
+	Text,
+	Image,
+	Unsupported,
+}
+
 public class ClipboardManager
 {
+	public async Task<(ClipboardKind Kind, string Text)> InspectAsync()
+	{
+		var content = Clipboard.GetContent();
+
+		if (content.Contains(StandardDataFormats.Text))
+		{
+			string text = await content.GetTextAsync();
+			if (!string.IsNullOrWhiteSpace(text))
+				return (ClipboardKind.Text, text);
+		}
+
+		if (content.Contains(StandardDataFormats.Bitmap))
+			return (ClipboardKind.Image, string.Empty);
+
+		var formats = content.AvailableFormats;
+		if (formats == null || formats.Count == 0)
+			return (ClipboardKind.Empty, string.Empty);
+
+		return (ClipboardKind.Unsupported, string.Empty);
+	}
+
 	public async Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
 	{
 		while (attempts-- > 0)

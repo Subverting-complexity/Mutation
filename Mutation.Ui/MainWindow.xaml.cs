@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
@@ -53,6 +54,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
 	private HotkeyRouterController? _hotkeyRouter;
+	private bool _ttsControlsReady;
+	private const string DefaultVoiceLabel = "(System default)";
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
@@ -195,6 +198,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_audioDeviceManager.Microphone != null)
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
+		InitializeTextToSpeechControls();
 		InitializeHotkeyVisuals();
 		_hotkeyRouter = new HotkeyRouterController(
 			HotkeyRouterEntries,
@@ -238,7 +242,6 @@ public sealed partial class MainWindow : Window, IDisposable
 		// yield return TxtFormatPrompt;
 		yield return TxtFormatTranscript;
 		yield return TxtOcr;
-		yield return TxtClipboard;
 	}
 
 	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
@@ -347,12 +350,6 @@ public sealed partial class MainWindow : Window, IDisposable
         
 		BeepPlayer.DisposePlayers();
 		Dispose();
-	}
-
-	private void CopyText_Click(object sender, RoutedEventArgs e)
-	{
-		_clipboard.SetText(TxtClipboard.Text);
-		ShowStatus("Clipboard", "Text copied to the clipboard.", InfoBarSeverity.Success);
 	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
@@ -706,7 +703,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	public async void BtnTextToSpeech_Click(object? sender, RoutedEventArgs? e)
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		string clipboard = (await _clipboard.GetTextAsync())?.Trim() ?? string.Empty;
+		var (kind, clipboardText) = await _clipboard.InspectAsync();
+		string trimmed = (clipboardText ?? string.Empty).Trim();
 
 		if (_textToSpeech.IsSpeaking)
 		{
@@ -714,12 +712,13 @@ public sealed partial class MainWindow : Window, IDisposable
 			_textToSpeech.Stop();
 			BeepPlayer.Play(BeepType.Failure);
 
-			bool clipboardChanged = !string.IsNullOrEmpty(clipboard)
-				&& !string.Equals(clipboard, wasSpeaking, StringComparison.Ordinal);
+			bool clipboardChanged = kind == ClipboardKind.Text
+				&& trimmed.Length > 0
+				&& !string.Equals(trimmed, wasSpeaking, StringComparison.Ordinal);
 
 			if (clipboardChanged)
 			{
-				_textToSpeech.Speak(clipboard, tts.Rate, tts.VoiceName);
+				_textToSpeech.Speak(trimmed, tts.Rate, tts.VoiceName);
 				BeepPlayer.Play(BeepType.Success);
 				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
 			}
@@ -730,15 +729,76 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		if (string.IsNullOrEmpty(clipboard))
+		string? message = kind switch
 		{
-			ShowStatus("Text to Speech", "Clipboard is empty.", InfoBarSeverity.Warning);
-			return;
-		}
+			ClipboardKind.Text when trimmed.Length > 0 => trimmed,
+			ClipboardKind.Image => "The clipboard contains an image, not text. Use OCR to extract text first.",
+			ClipboardKind.Unsupported => "The clipboard does not contain readable text.",
+			_ => "No text on the clipboard.",
+		};
 
-		_textToSpeech.Speak(clipboard, tts.Rate, tts.VoiceName);
+		_textToSpeech.Speak(message, tts.Rate, tts.VoiceName);
 		BeepPlayer.Play(BeepType.Success);
-		ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+
+		string statusMessage = kind == ClipboardKind.Text && trimmed.Length > 0
+			? "Speaking…"
+			: message;
+		var severity = kind == ClipboardKind.Text && trimmed.Length > 0
+			? InfoBarSeverity.Informational
+			: InfoBarSeverity.Warning;
+		ShowStatus("Text to Speech", statusMessage, severity);
+	}
+
+	private void InitializeTextToSpeechControls()
+	{
+		var settings = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		var voiceItems = new List<string> { DefaultVoiceLabel };
+		try { voiceItems.AddRange(_textToSpeech.GetVoiceNames()); }
+		catch { /* leave default-only list if voice enumeration fails */ }
+
+		CmbTtsVoice.ItemsSource = voiceItems;
+		string? configuredVoice = settings.VoiceName;
+		string selectedVoice = !string.IsNullOrWhiteSpace(configuredVoice) && voiceItems.Contains(configuredVoice)
+			? configuredVoice!
+			: DefaultVoiceLabel;
+		CmbTtsVoice.SelectedItem = selectedVoice;
+
+		int rate = settings.Rate;
+		if (rate < -10) rate = -10;
+		else if (rate > 10) rate = 10;
+		SldTtsRate.Value = rate;
+
+		_ttsControlsReady = true;
+	}
+
+	private void CmbTtsVoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		string? selected = CmbTtsVoice.SelectedItem as string;
+		string? voiceName = string.IsNullOrEmpty(selected) || selected == DefaultVoiceLabel
+			? null
+			: selected;
+
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (string.Equals(_settings.TextToSpeechSettings.VoiceName, voiceName, StringComparison.Ordinal))
+			return;
+
+		_settings.TextToSpeechSettings.VoiceName = voiceName;
+		_settingsManager.SaveSettingsToFile(_settings);
+	}
+
+	private void SldTtsRate_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		int rate = (int)Math.Round(e.NewValue);
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (_settings.TextToSpeechSettings.Rate == rate) return;
+
+		_settings.TextToSpeechSettings.Rate = rate;
+		_settingsManager.SaveSettingsToFile(_settings);
 	}
 
 	public void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)
