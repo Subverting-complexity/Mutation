@@ -22,6 +22,10 @@ public sealed partial class HotkeyEditor : UserControl
 		nameof(AllowEmpty), typeof(bool), typeof(HotkeyEditor),
 		new PropertyMetadata(false));
 
+	public static readonly DependencyProperty AllowSendKeysSyntaxProperty = DependencyProperty.Register(
+		nameof(AllowSendKeysSyntax), typeof(bool), typeof(HotkeyEditor),
+		new PropertyMetadata(false));
+
 	private bool _isRecording;
 	private bool _suppressTextChanged;
 
@@ -47,6 +51,12 @@ public sealed partial class HotkeyEditor : UserControl
 	{
 		get => (bool)GetValue(AllowEmptyProperty);
 		set => SetValue(AllowEmptyProperty, value);
+	}
+
+	public bool AllowSendKeysSyntax
+	{
+		get => (bool)GetValue(AllowSendKeysSyntaxProperty);
+		set => SetValue(AllowSendKeysSyntaxProperty, value);
 	}
 
 	public Visibility HeaderVisibility =>
@@ -178,33 +188,36 @@ public sealed partial class HotkeyEditor : UserControl
 			return;
 		}
 
-		try
+		string? error = HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax);
+		if (error is null)
 		{
-			_ = Mutation.Ui.Services.Hotkey.Parse(trimmed);
 			ValidationText.Visibility = Visibility.Collapsed;
 			ValidationText.Text = string.Empty;
 		}
-		catch (Exception ex)
+		else
 		{
 			ValidationText.Visibility = Visibility.Visible;
-			ValidationText.Text = ex.Message;
+			ValidationText.Text = error;
 		}
 	}
 
 	private void Commit()
 	{
-		string normalized = Normalize(HotkeyTextBox.Text);
-		if (!string.Equals(normalized, HotkeyTextBox.Text, StringComparison.Ordinal))
+		string committed = AllowSendKeysSyntax
+			? (HotkeyTextBox.Text ?? string.Empty).Trim()
+			: Normalize(HotkeyTextBox.Text);
+
+		if (!string.Equals(committed, HotkeyTextBox.Text, StringComparison.Ordinal))
 		{
 			_suppressTextChanged = true;
-			try { HotkeyTextBox.Text = normalized; }
+			try { HotkeyTextBox.Text = committed; }
 			finally { _suppressTextChanged = false; }
 		}
 
-		if (!string.Equals(Hotkey, normalized, StringComparison.Ordinal))
-			Hotkey = normalized;
+		if (!string.Equals(Hotkey, committed, StringComparison.Ordinal))
+			Hotkey = committed;
 
-		HotkeyCommitted?.Invoke(this, normalized);
+		HotkeyCommitted?.Invoke(this, committed);
 	}
 
 	private static string Normalize(string? value)

@@ -57,6 +57,7 @@
 
 		<controls:HotkeyEditor x:Name="HkSendAfterTranscription"
 							   Header="Send hotkey after transcription (optional)"
-							   AllowEmpty="True" />
+							   AllowEmpty="True"
+							   AllowSendKeysSyntax="True" />
 	</StackPanel>
 </UserControl>

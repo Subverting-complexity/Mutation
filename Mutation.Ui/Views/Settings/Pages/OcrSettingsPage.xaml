@@ -63,7 +63,7 @@
 		<ToggleSwitch x:Name="ToggleUseFreeTier" Header="Use free tier" Toggled="ToggleUseFreeTier_Toggled" />
 		<ToggleSwitch x:Name="ToggleInvert" Header="Invert screenshot before OCR" Toggled="ToggleInvert_Toggled" />
 
-		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" AllowEmpty="True" />
+		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" AllowEmpty="True" AllowSendKeysSyntax="True" />
 
 		<TextBlock Text="OCR action hotkeys appear in the Hotkeys tab."
 				   Style="{StaticResource CaptionTextBlockStyle}"
