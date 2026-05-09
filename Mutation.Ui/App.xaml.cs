@@ -613,6 +613,11 @@ public partial class App : Application
 					System.Windows.Forms.MessageBoxIcon.Error
 				);
 			}
+
+			// A failed startup leaves the app half-initialized with no
+			// Window.Closed handler attached, so the process would otherwise
+			// linger after the user dismisses the Startup Error dialog.
+			await ShutdownAsync();
 		}
 	}
 
@@ -640,9 +645,12 @@ public partial class App : Application
 		}
 		finally
 		{
-			// Request application shutdown; if background threads keep process alive,
-			// Exit() will terminate the message loop.
+			// End the WinUI message loop, then guarantee process termination.
+			// Application.Exit() alone is not enough: NAudio callbacks, COM
+			// device-enumerator listeners, SAPI synthesizer threads, and the
+			// HotkeyManager's WndProc subclass can keep the process alive.
 			try { Exit(); } catch { }
+			Environment.Exit(0);
 		}
 	}
 
