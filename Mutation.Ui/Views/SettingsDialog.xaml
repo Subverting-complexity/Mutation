@@ -23,21 +23,31 @@
 		</DataTemplate>
 	</ContentDialog.Resources>
 
-	<Grid RowSpacing="24" ColumnSpacing="24">
+	<Grid RowSpacing="12" ColumnSpacing="16">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
 		</Grid.RowDefinitions>
 		<Grid.ColumnDefinitions>
-			<ColumnDefinition Width="260" />
+			<ColumnDefinition Width="280" />
 			<ColumnDefinition Width="*" />
 		</Grid.ColumnDefinitions>
 
-	<StackPanel Grid.Row="0" Grid.ColumnSpan="2" Spacing="4">
-			<TextBlock
-				Text="Settings"
-				Style="{StaticResource TitleTextBlockStyle}" />
-		</StackPanel>
+		<TextBox x:Name="SearchBox"
+				 Grid.Row="0" Grid.Column="0"
+				 PlaceholderText="Search settings..."
+				 TextChanged="SearchBox_TextChanged">
+			<TextBox.Resources>
+				<Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}" />
+			</TextBox.Resources>
+		</TextBox>
+
+		<TextBlock x:Name="ActiveCategoryHeader"
+				   Grid.Row="0" Grid.Column="1"
+				   Text="Settings"
+				   Style="{StaticResource SubtitleTextBlockStyle}"
+				   VerticalAlignment="Center" />
 
 		<Border
 			Grid.Row="1"
@@ -49,7 +59,7 @@
 			CornerRadius="12">
 			<ListView
 				x:Name="CategoryList"
-				ItemsSource="{x:Bind Categories}"
+				ItemsSource="{x:Bind FilteredCategories}"
 				ItemTemplate="{StaticResource SettingsCategoryTemplate}"
 				SelectionMode="Single"
 				SelectionChanged="CategoryList_SelectionChanged"
@@ -69,29 +79,31 @@
 		<Border
 			Grid.Row="1"
 			Grid.Column="1"
-			Padding="24"
+			Padding="0"
 			Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
 			BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
 			BorderThickness="1"
 			CornerRadius="12">
-			<StackPanel x:Name="CategoryDetails" Spacing="12">
-				<TextBlock
-					x:Name="CategoryTitle"
-					Text="Select a category"
-					Style="{StaticResource SubtitleTextBlockStyle}" />
-				<TextBlock
-					x:Name="CategorySummary"
-					Text="Choose a settings category from the list to preview its configuration area."
-					TextWrapping="Wrap"
-					Style="{StaticResource BodyTextBlockStyle}"
-					Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-				<TextBlock
-					x:Name="PlaceholderText"
-					Text="Detailed controls for this category will appear here in a future update."
-					TextWrapping="Wrap"
-					Style="{StaticResource CaptionTextBlockStyle}"
-					Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-			</StackPanel>
+			<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
+				<ContentControl x:Name="PageHost"
+								HorizontalContentAlignment="Stretch"
+								VerticalContentAlignment="Top" />
+			</ScrollViewer>
 		</Border>
+
+		<StackPanel Grid.Row="2" Grid.ColumnSpan="2"
+					Orientation="Horizontal"
+					Spacing="12"
+					HorizontalAlignment="Right"
+					VerticalAlignment="Center">
+			<ToggleSwitch x:Name="AdvancedToggle"
+						  OffContent="Advanced"
+						  OnContent="Advanced"
+						  Toggled="AdvancedToggle_Toggled" />
+			<Button x:Name="OpenJsonButton"
+					Content="Open Mutation.json"
+					Visibility="Collapsed"
+					Click="OpenJsonButton_Click" />
+		</StackPanel>
 	</Grid>
 </ContentDialog>

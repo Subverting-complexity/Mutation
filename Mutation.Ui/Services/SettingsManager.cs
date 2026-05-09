@@ -18,7 +18,7 @@ internal class SettingsManager : ISettingsManager
 		Converters = new List<JsonConverter> { new StringEnumConverter() }
 	};
 
-	private string SettingsFilePath { get; set; }
+	public string SettingsFilePath { get; }
 	private string SettingsFileFullPath => Path.GetFullPath(SettingsFilePath);
 
 	public SettingsManager(
@@ -41,7 +41,7 @@ internal class SettingsManager : ISettingsManager
 		return false;
 	}
 
-	private bool EnsureSettings(Settings settings, bool isNewFile)
+	internal bool EnsureSettings(Settings settings, bool isNewFile)
 	{
 		const string PlaceholderValue = "<placeholder>";
 		const string PlaceholderUrl = "https://placeholder.com";

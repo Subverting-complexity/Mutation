@@ -235,6 +235,8 @@ public class HotkeyRouterControllerTests
 		public int SaveCount { get; private set; }
 		public Settings? LastSaved { get; private set; }
 
+		public string SettingsFilePath => "fake.json";
+
 		public void SaveSettingsToFile(Settings settings)
 		{
 			SaveCount++;

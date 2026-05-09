@@ -340,6 +340,16 @@ public class HotkeyManager : IDisposable
                 _registeredHotkeys.Clear();
         }
 
+        // Clears ALL registrations (core + router + prompt) and the failure lists so the
+        // caller can re-register everything from a (possibly mutated) Settings instance.
+        public void ClearAllForRebind()
+        {
+                UnregisterAll();
+                FailedRegistrations.Clear();
+                _coreFailedRegistrations.Clear();
+                _routerFailedRegistrations.Clear();
+        }
+
 	private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
 	{
 		if (msg == WM_HOTKEY)

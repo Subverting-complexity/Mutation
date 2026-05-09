@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.InterfaceSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="16">
+		<TextBlock Text="Interface" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Max text-box visible lines" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock Text="Caps the height of the transcript / OCR text boxes on the main window."
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<NumberBox x:Name="NbMaxLines"
+						   Minimum="1"
+						   Maximum="100"
+						   SpinButtonPlacementMode="Inline"
+						   SmallChange="1"
+						   LargeChange="5"
+						   Width="200"
+						   ValueChanged="NbMaxLines_ValueChanged" />
+				<Button x:Name="BtnResetMaxLines" Click="BtnResetMaxLines_Click">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Dictation insert preference" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock Text="How transcripts are sent into the active application."
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ComboBox x:Name="CmbDictationInsert"
+						  Width="220"
+						  SelectionChanged="CmbDictationInsert_SelectionChanged">
+					<x:String>Paste</x:String>
+					<x:String>Type</x:String>
+					<x:String>DoNotInsert</x:String>
+				</ComboBox>
+				<Button x:Name="BtnResetDictation" Click="BtnResetDictation_Click">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Window position &amp; size" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtWindowSummary"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+			<Button x:Name="BtnResetWindow"
+					Content="Reset window position"
+					HorizontalAlignment="Left"
+					Click="BtnResetWindow_Click" />
+		</StackPanel>
+	</StackPanel>
+</UserControl>

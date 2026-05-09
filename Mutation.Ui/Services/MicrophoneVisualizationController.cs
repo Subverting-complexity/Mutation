@@ -172,7 +172,16 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		bool newState = !_settings.AudioSettings.EnableMicrophoneVisualization;
 		_settings.AudioSettings.EnableMicrophoneVisualization = newState;
 		_settingsManager.SaveSettingsToFile(_settings);
-		if (newState)
+		ApplyEnabledStateFromSettings();
+	}
+
+	// Applies the EnableMicrophoneVisualization flag from _settings without writing it back.
+	// Used by the Settings dialog post-save pipeline so a toggle change in the dialog takes
+	// effect immediately without re-toggling.
+	public void ApplyEnabledStateFromSettings()
+	{
+		bool enabled = _settings.AudioSettings?.EnableMicrophoneVisualization ?? true;
+		if (enabled)
 		{
 			Initialize();
 			StartCapture();

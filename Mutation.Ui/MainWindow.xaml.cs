@@ -254,6 +254,107 @@ public sealed partial class MainWindow : Window, IDisposable
 		_promptLibrary?.AttachHotkeyManager(hotkeyManager);
 	}
 
+	internal void RegisterCoreHotkeys(HotkeyManager hk)
+	{
+		var ocr = _settings.AzureComputerVisionSettings;
+		var stt = _settings.SpeechToTextSettings;
+		var tts = _settings.TextToSpeechSettings;
+		var aud = _settings.AudioSettings;
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotHotKey))
+			TryRegister(hk, ocr.ScreenshotHotKey!, async () =>
+			{
+				try { await _ocrManager.TakeScreenshotToClipboardAsync(); }
+				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotOcrHotKey))
+			TryRegister(hk, ocr.ScreenshotOcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotLeftToRightTopToBottomOcrHotKey))
+			TryRegister(hk, ocr.ScreenshotLeftToRightTopToBottomOcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR (LRTB) Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.OcrHotKey))
+			TryRegister(hk, ocr.OcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.OcrLeftToRightTopToBottomHotKey))
+			TryRegister(hk, ocr.OcrLeftToRightTopToBottomHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard (LRTB) Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(aud?.MicrophoneToggleMuteHotKey))
+			TryRegister(hk, aud.MicrophoneToggleMuteHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnToggleMic_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextHotKey))
+			TryRegister(hk, stt.SpeechToTextHotKey!, () =>
+				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(false)));
+
+		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextWithLlmFormattingHotKey))
+			TryRegister(hk, stt.SpeechToTextWithLlmFormattingHotKey!, () =>
+				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(true)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.TextToSpeechHotKey))
+			TryRegister(hk, tts.TextToSpeechHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnTextToSpeech_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakSelectionHotKey))
+			TryRegister(hk, tts.SpeakSelectionHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => SpeakActiveSelectionAsync()));
+
+		if (!string.IsNullOrWhiteSpace(tts?.RestartFromBeginningHotKey))
+			TryRegister(hk, tts.RestartFromBeginningHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnRestartTts_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceBackwardHotKey))
+			TryRegister(hk, tts.SkipSentenceBackwardHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceBack_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceForwardHotKey))
+			TryRegister(hk, tts.SkipSentenceForwardHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceForward_Click(null!, null!)));
+	}
+
+	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
+	{
+		try { hk.RegisterHotkey(Hotkey.Parse(hotkey), callback); }
+		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Hotkey '{hotkey}' parse/register failed: {ex.Message}"); }
+	}
+
 	private void RestorePersistedSpeechServiceSelection()
 	{
 		string? savedServiceName = _settings.SpeechToTextSettings?.ActiveSpeechToTextService;
@@ -1517,15 +1618,45 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		var settingsDialog = new SettingsDialog(_settings)
+		var settingsDialog = new SettingsDialog(
+			_settings,
+			_settingsManager,
+			_settingsManager.SettingsFilePath,
+			ApplyLiveSettings)
 		{
 			XamlRoot = rootElement.XamlRoot,
 			RequestedTheme = rootElement.ActualTheme
 		};
 
-		if (await ShowDialogAsync(settingsDialog) == ContentDialogResult.Primary)
+		await ShowDialogAsync(settingsDialog);
+	}
+
+	internal void ApplyLiveSettings()
+	{
+		try
 		{
-			_settingsManager.SaveSettingsToFile(_settings);
+			_microphoneVisualization?.ApplyEnabledStateFromSettings();
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (mic viz) failed: {ex.Message}");
+		}
+
+		try
+		{
+			if (_hotkeyManager is not null)
+			{
+				_hotkeyManager.ClearAllForRebind();
+				RegisterCoreHotkeys(_hotkeyManager);
+				_hotkeyManager.RegisterRouterHotkeys();
+				_hotkeyManager.RegisterPromptHotkeys(
+					_settings.LlmSettings?.Prompts ?? Enumerable.Empty<LlmSettings.LlmPrompt>(),
+					ExecutePrompt);
+			}
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (hotkeys) failed: {ex.Message}");
 		}
 	}
 

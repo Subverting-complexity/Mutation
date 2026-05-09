@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Controls.HotkeyEditor"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Orientation="Vertical" Spacing="4">
+		<TextBlock x:Name="HeaderText"
+				   Text="{x:Bind Header, Mode=OneWay}"
+				   Visibility="{x:Bind HeaderVisibility, Mode=OneWay}"
+				   Style="{StaticResource BodyStrongTextBlockStyle}" />
+		<Grid ColumnSpacing="8">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+			</Grid.ColumnDefinitions>
+
+			<TextBox x:Name="HotkeyTextBox"
+					 Grid.Column="0"
+					 PlaceholderText="e.g. CTRL+ALT+J"
+					 KeyDown="HotkeyTextBox_KeyDown"
+					 TextChanged="HotkeyTextBox_TextChanged"
+					 LostFocus="HotkeyTextBox_LostFocus"
+					 IsSpellCheckEnabled="False"
+					 IsTextPredictionEnabled="False" />
+
+			<Button x:Name="RecordButton"
+					Grid.Column="1"
+					Click="RecordButton_Click"
+					ToolTipService.ToolTip="Click and press the desired key combination">
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<FontIcon x:Name="RecordIcon"
+							  Glyph="&#xE7C8;"
+							  FontFamily="Segoe Fluent Icons"
+							  FontSize="14" />
+					<TextBlock x:Name="RecordLabel" Text="Record" />
+				</StackPanel>
+			</Button>
+
+			<Button x:Name="ClearButton"
+					Grid.Column="2"
+					Click="ClearButton_Click"
+					ToolTipService.ToolTip="Clear">
+				<FontIcon Glyph="&#xE894;" FontFamily="Segoe Fluent Icons" FontSize="14" />
+			</Button>
+		</Grid>
+		<TextBlock x:Name="ValidationText"
+				   Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+				   Visibility="Collapsed"
+				   Style="{StaticResource CaptionTextBlockStyle}"
+				   TextWrapping="Wrap" />
+	</StackPanel>
+</UserControl>

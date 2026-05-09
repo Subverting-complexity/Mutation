@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.HotkeysSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="12">
+		<TextBlock Text="Hotkeys" Style="{StaticResource SubtitleTextBlockStyle}" />
+		<TextBlock Text="All keyboard shortcuts in one place. Duplicates are highlighted."
+				   TextWrapping="Wrap"
+				   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+		<StackPanel x:Name="HotkeyList" Spacing="8" />
+
+		<StackPanel Spacing="6">
+			<TextBlock Text="Per-prompt hotkeys" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtPromptHotkeys"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+		</StackPanel>
+
+		<StackPanel Spacing="6">
+			<TextBlock Text="Hotkey router mappings" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtRouterMappings"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+		</StackPanel>
+	</StackPanel>
+</UserControl>

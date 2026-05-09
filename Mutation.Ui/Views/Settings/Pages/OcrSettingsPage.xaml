@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.OcrSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="14">
+		<TextBlock Text="Screen capture &amp; OCR" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<controls:SecretBox x:Name="TxtApiKey" Header="Azure Computer Vision API key" />
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Endpoint" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBox x:Name="TxtEndpoint" PlaceholderText="https://..." TextChanged="TxtEndpoint_TextChanged" />
+		</StackPanel>
+
+		<StackPanel Orientation="Horizontal" Spacing="16">
+			<StackPanel>
+				<TextBlock Text="Timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbTimeoutSeconds" Minimum="1" Maximum="600" SmallChange="1" LargeChange="5" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbTimeoutSeconds_ValueChanged" />
+					<Button Click="BtnResetTimeout_Click" ToolTipService.ToolTip="Reset to default">
+						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
+			<StackPanel>
+				<TextBlock Text="Free-tier page limit" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbFreeTierPageLimit" Minimum="1" Maximum="20" SmallChange="1" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbFreeTierPageLimit_ValueChanged" />
+					<Button Click="BtnResetFreeTier_Click" ToolTipService.ToolTip="Reset to default">
+						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Orientation="Horizontal" Spacing="16">
+			<StackPanel>
+				<TextBlock Text="Max parallel documents" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbMaxParallelDocuments" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelDocuments_ValueChanged" />
+					<Button Click="BtnResetMaxDocs_Click" ToolTipService.ToolTip="Reset to default">
+						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
+			<StackPanel>
+				<TextBlock Text="Max parallel requests" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbMaxParallelRequests" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelRequests_ValueChanged" />
+					<Button Click="BtnResetMaxReqs_Click" ToolTipService.ToolTip="Reset to default">
+						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
+		</StackPanel>
+
+		<ToggleSwitch x:Name="ToggleUseFreeTier" Header="Use free tier" Toggled="ToggleUseFreeTier_Toggled" />
+		<ToggleSwitch x:Name="ToggleInvert" Header="Invert screenshot before OCR" Toggled="ToggleInvert_Toggled" />
+
+		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" AllowEmpty="True" />
+
+		<TextBlock Text="OCR action hotkeys appear in the Hotkeys tab."
+				   Style="{StaticResource CaptionTextBlockStyle}"
+				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+	</StackPanel>
+</UserControl>
