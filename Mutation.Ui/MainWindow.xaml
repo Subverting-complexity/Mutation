@@ -777,26 +777,65 @@
                                         ToolTipService.ToolTip="Adjust speech volume independent of system volume" />
                                 </StackPanel>
 
-                                <StackPanel x:Name="ClipboardActionsPanel" Orientation="Horizontal" Spacing="12">
-                                    <Button
-                                        x:Name="BtnTextToSpeech"
-                                        Style="{StaticResource AccentButtonStyle}"
-                                        Click="BtnTextToSpeech_Click"
-                                        AccessKey="T"
-                                        AutomationProperties.Name="Speak clipboard text"
-                                        ToolTipService.ToolTip="Play the clipboard text using text-to-speech">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                            <FontIcon Glyph="&#xE76E;" FontFamily="Segoe Fluent Icons" />
-                                            <StackPanel Spacing="2">
+                                <StackPanel x:Name="ClipboardActionsPanel" Orientation="Vertical" Spacing="8">
+                                    <StackPanel x:Name="ClipboardPrimaryActions" Orientation="Horizontal" Spacing="12">
+                                        <Button
+                                            x:Name="BtnTextToSpeech"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Click="BtnTextToSpeech_Click"
+                                            AccessKey="T"
+                                            AutomationProperties.Name="Speak clipboard text"
+                                            ToolTipService.ToolTip="Play the clipboard text using text-to-speech">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE76E;" FontFamily="Segoe Fluent Icons" />
                                                 <TextBlock Text="Speak clipboard" />
-                                                <TextBlock
-                                                    x:Name="BtnTextToSpeechHotkey"
-                                                    Text="Hotkey: CTRL+SHIFT+Q"
-                                                    Style="{StaticResource CaptionTextStyle}"
-                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             </StackPanel>
-                                        </StackPanel>
-                                    </Button>
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSpeakSelection"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSpeakSelection_Click"
+                                            AutomationProperties.Name="Speak active selection"
+                                            ToolTipService.ToolTip="Copy the current selection from the active app and read it aloud">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE8A1;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Speak selection" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="ClipboardSecondaryActions" Orientation="Horizontal" Spacing="12">
+                                        <Button
+                                            x:Name="BtnRestartTts"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnRestartTts_Click"
+                                            AutomationProperties.Name="Restart speaking from beginning"
+                                            ToolTipService.ToolTip="Speak the clipboard from the beginning, ignoring saved position">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE149;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Restart" />
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSkipSentenceBack"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSkipSentenceBack_Click"
+                                            AutomationProperties.Name="Skip sentence backward"
+                                            ToolTipService.ToolTip="Jump to the previous sentence">
+                                            <FontIcon Glyph="&#xE892;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSkipSentenceForward"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSkipSentenceForward_Click"
+                                            AutomationProperties.Name="Skip sentence forward"
+                                            ToolTipService.ToolTip="Jump to the next sentence">
+                                            <FontIcon Glyph="&#xE893;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
@@ -931,7 +970,8 @@
                                 <Setter Target="HotkeyRouterCard.(Grid.Row)" Value="7" />
                                 <Setter Target="HotkeyRouterCard.(Grid.ColumnSpan)" Value="2" />
                                 <Setter Target="FormattingActionsPanel.Orientation" Value="Vertical" />
-                                <Setter Target="ClipboardActionsPanel.Orientation" Value="Vertical" />
+                                <Setter Target="ClipboardPrimaryActions.Orientation" Value="Vertical" />
+                                <Setter Target="ClipboardSecondaryActions.Orientation" Value="Vertical" />
                             </VisualState.Setters>
                         </VisualState>
                         <VisualState x:Name="Wide">
@@ -960,7 +1000,8 @@
                                 <Setter Target="HotkeyRouterCard.(Grid.ColumnSpan)" Value="2" />
                                 <Setter Target="HotkeyRouterCard.(Grid.Row)" Value="5" />
                                 <Setter Target="FormattingActionsPanel.Orientation" Value="Horizontal" />
-                                <Setter Target="ClipboardActionsPanel.Orientation" Value="Horizontal" />
+                                <Setter Target="ClipboardPrimaryActions.Orientation" Value="Horizontal" />
+                                <Setter Target="ClipboardSecondaryActions.Orientation" Value="Horizontal" />
                             </VisualState.Setters>
                         </VisualState>
                     </VisualStateGroup>

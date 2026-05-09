@@ -589,7 +589,27 @@ End of summary.
 		var textToSpeechSettings = settings.TextToSpeechSettings;
 		if (string.IsNullOrWhiteSpace(textToSpeechSettings.TextToSpeechHotKey))
 		{
-			textToSpeechSettings.TextToSpeechHotKey = "CTRL+SHIFT+Q";
+			textToSpeechSettings.TextToSpeechHotKey = "CTRL+SHIFT+ALT+Q";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakSelectionHotKey))
+		{
+			textToSpeechSettings.SpeakSelectionHotKey = "CTRL+SHIFT+Q";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.RestartFromBeginningHotKey))
+		{
+			textToSpeechSettings.RestartFromBeginningHotKey = "CTRL+SHIFT+B";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SkipSentenceBackwardHotKey))
+		{
+			textToSpeechSettings.SkipSentenceBackwardHotKey = "CTRL+SHIFT+J";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SkipSentenceForwardHotKey))
+		{
+			textToSpeechSettings.SkipSentenceForwardHotKey = "CTRL+SHIFT+K";
 			somethingWasMissing = true;
 		}
 

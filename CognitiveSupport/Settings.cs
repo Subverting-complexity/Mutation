@@ -249,8 +249,13 @@ public class LlmSettings
 public class TextToSpeechSettings
 {
 	public string? TextToSpeechHotKey { get; set; }
+	public string? SpeakSelectionHotKey { get; set; }
+	public string? RestartFromBeginningHotKey { get; set; }
+	public string? SkipSentenceBackwardHotKey { get; set; }
+	public string? SkipSentenceForwardHotKey { get; set; }
 	public int Rate { get; set; } = 8;
 	public int Volume { get; set; } = 100;
+	public bool EnableSpeechPreprocessing { get; set; } = true;
 	public string? VoiceName { get; set; }
 
 	public TextToSpeechSettings()

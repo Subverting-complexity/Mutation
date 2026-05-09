@@ -313,7 +313,11 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnOcrClipboardLrtb, BtnOcrClipboardLrtbHotkey, _settings.AzureComputerVisionSettings?.OcrLeftToRightTopToBottomHotKey, "Run OCR on an image stored in the clipboard using left-to-right reading order");
 		ConfigureButtonHotkey(BtnScreenshotOcr, BtnScreenshotOcrHotkey, _settings.AzureComputerVisionSettings?.ScreenshotOcrHotKey, "Capture a screenshot and extract text automatically");
 		ConfigureButtonHotkey(BtnScreenshotOcrLrtb, BtnScreenshotOcrLrtbHotkey, _settings.AzureComputerVisionSettings?.ScreenshotLeftToRightTopToBottomOcrHotKey, "Capture a screenshot and extract text using left-to-right reading order");
-		ConfigureButtonHotkey(BtnTextToSpeech, BtnTextToSpeechHotkey, _settings.TextToSpeechSettings?.TextToSpeechHotKey, "Play the clipboard text using text-to-speech");
+		ConfigureButtonHotkey(BtnTextToSpeech, null, _settings.TextToSpeechSettings?.TextToSpeechHotKey, "Play the clipboard text using text-to-speech");
+		ConfigureButtonHotkey(BtnRestartTts, null, _settings.TextToSpeechSettings?.RestartFromBeginningHotKey, "Speak the clipboard from the beginning, ignoring saved position");
+		ConfigureButtonHotkey(BtnSkipSentenceBack, null, _settings.TextToSpeechSettings?.SkipSentenceBackwardHotKey, "Jump to the previous sentence");
+		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");
+		ConfigureButtonHotkey(BtnSpeakSelection, null, _settings.TextToSpeechSettings?.SpeakSelectionHotKey, "Copy the current selection from the active app and read it aloud");
 		ConfigureButtonHotkey(BtnFormatLlm, null, null, "Send transcript through the configured language model");
 	}
 
@@ -717,7 +721,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			if (clipboardChanged)
 			{
-				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName);
+				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+					resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
 				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
 			}
 			else
@@ -729,11 +734,62 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		if (kind == ClipboardKind.Text && trimmed.Length > 0)
 		{
-			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName);
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing);
 			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 			return;
 		}
 
+		AnnounceUnreadableClipboard(kind, tts);
+	}
+
+	public async void BtnRestartTts_Click(object? sender, RoutedEventArgs? e)
+	{
+		await ReadClipboardFreshAsync();
+	}
+
+	public void BtnSkipSentenceBack_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName);
+	}
+
+	public void BtnSkipSentenceForward_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName);
+	}
+
+	public async void SpeakActiveSelectionAsync()
+	{
+		try { System.Windows.Forms.SendKeys.SendWait("^c"); }
+		catch { /* sending may fail if focus is on a non-input control */ }
+
+		await Task.Delay(200);
+		BtnTextToSpeech_Click(null, null);
+	}
+
+	public void BtnSpeakSelection_Click(object? sender, RoutedEventArgs? e) => SpeakActiveSelectionAsync();
+
+	private async Task ReadClipboardFreshAsync()
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		var (kind, clipboardText) = await _clipboard.InspectAsync();
+		string trimmed = (clipboardText ?? string.Empty).Trim();
+
+		if (kind == ClipboardKind.Text && trimmed.Length > 0)
+		{
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+				resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
+			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+			return;
+		}
+
+		AnnounceUnreadableClipboard(kind, tts);
+	}
+
+	private void AnnounceUnreadableClipboard(ClipboardKind kind, TextToSpeechSettings tts)
+	{
 		string message = kind switch
 		{
 			ClipboardKind.Image => "The clipboard contains an image, not text. Use OCR to extract text first.",
@@ -741,7 +797,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			_ => "No text on the clipboard.",
 		};
 
-		_textToSpeech.Speak(message, tts.Rate, tts.Volume, tts.VoiceName);
+		_textToSpeech.SpeakAnnouncement(message, tts.Rate, tts.Volume, tts.VoiceName);
 		BeepPlayer.Play(BeepType.Failure);
 		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
 	}
@@ -791,7 +847,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_settingsManager.SaveSettingsToFile(_settings);
 
 		string sampleSubject = voiceName ?? "system default voice";
-		_textToSpeech.Speak(
+		_textToSpeech.SpeakAnnouncement(
 			$"Currently selected {sampleSubject}.",
 			_settings.TextToSpeechSettings.Rate,
 			_settings.TextToSpeechSettings.Volume,
@@ -1118,11 +1174,27 @@ public sealed partial class MainWindow : Window, IDisposable
         });
     }
 
+	private readonly Dictionary<Button, string> _buttonBaseNames = new();
+
 	private void ConfigureButtonHotkey(Button button, TextBlock? hotkeyTextBlock, string? hotkey, string baseTooltip)
 	{
+		if (!_buttonBaseNames.TryGetValue(button, out var baseName))
+		{
+			baseName = AutomationProperties.GetName(button);
+			if (string.IsNullOrWhiteSpace(baseName))
+				baseName = baseTooltip;
+			_buttonBaseNames[button] = baseName;
+		}
+
+		string composedName = string.IsNullOrWhiteSpace(hotkey)
+			? baseName
+			: $"{baseName}, {hotkey}";
+		AutomationProperties.SetName(button, composedName);
+
 		string tooltip = ComposeTooltip(baseTooltip, hotkey);
 		ToolTipService.SetToolTip(button, tooltip);
 		AutomationProperties.SetHelpText(button, tooltip);
+		AutomationProperties.SetAcceleratorKey(button, string.IsNullOrWhiteSpace(hotkey) ? string.Empty : hotkey);
 		UpdateHotkeyText(hotkeyTextBlock, hotkey);
 	}
 

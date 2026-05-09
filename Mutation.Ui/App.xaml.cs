@@ -480,6 +480,50 @@ public partial class App : Application
 						  });
 			}
 
+			if (!string.IsNullOrWhiteSpace(settingsSvc.TextToSpeechSettings?.SpeakSelectionHotKey))
+			{
+				hkManager.RegisterHotkey(
+						  Hotkey.Parse(settingsSvc.TextToSpeechSettings.SpeakSelectionHotKey!),
+						  () =>
+						  {
+							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).SpeakActiveSelectionAsync()); }
+							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Speak Selection Error", ex)); }
+						  });
+			}
+
+			if (!string.IsNullOrWhiteSpace(settingsSvc.TextToSpeechSettings?.RestartFromBeginningHotKey))
+			{
+				hkManager.RegisterHotkey(
+						  Hotkey.Parse(settingsSvc.TextToSpeechSettings.RestartFromBeginningHotKey!),
+						  () =>
+						  {
+							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).BtnRestartTts_Click(null!, null!)); }
+							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Restart Text to Speech Error", ex)); }
+						  });
+			}
+
+			if (!string.IsNullOrWhiteSpace(settingsSvc.TextToSpeechSettings?.SkipSentenceBackwardHotKey))
+			{
+				hkManager.RegisterHotkey(
+						  Hotkey.Parse(settingsSvc.TextToSpeechSettings.SkipSentenceBackwardHotKey!),
+						  () =>
+						  {
+							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).BtnSkipSentenceBack_Click(null!, null!)); }
+							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Skip Sentence Error", ex)); }
+						  });
+			}
+
+			if (!string.IsNullOrWhiteSpace(settingsSvc.TextToSpeechSettings?.SkipSentenceForwardHotKey))
+			{
+				hkManager.RegisterHotkey(
+						  Hotkey.Parse(settingsSvc.TextToSpeechSettings.SkipSentenceForwardHotKey!),
+						  () =>
+						  {
+							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).BtnSkipSentenceForward_Click(null!, null!)); }
+							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Skip Sentence Error", ex)); }
+						  });
+			}
+
                         _ = hkManager.RegisterRouterHotkeys();
 
 			if (hkManager.FailedRegistrations.Count > 0)
