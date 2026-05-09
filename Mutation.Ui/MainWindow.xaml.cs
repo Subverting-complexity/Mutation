@@ -87,6 +87,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	[DllImport("user32.dll")]
 	private static extern IntPtr GetForegroundWindow();
 
+	[DllImport("user32.dll")]
+	private static extern uint GetClipboardSequenceNumber();
+
 	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 
 	public MainWindow(
@@ -762,11 +765,46 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public async void SpeakActiveSelectionAsync()
 	{
-		try { System.Windows.Forms.SendKeys.SendWait("^c"); }
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		var ownHwnd = WindowNative.GetWindowHandle(this);
+		if (ownHwnd != IntPtr.Zero && GetForegroundWindow() == ownHwnd)
+		{
+			AnnounceSelectionUnavailable(
+				"Read selection only works when another application is active with text selected.",
+				tts);
+			return;
+		}
+
+		uint before = GetClipboardSequenceNumber();
+		try { await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+C")); }
 		catch { /* sending may fail if focus is on a non-input control */ }
 
-		await Task.Delay(200);
+		const int timeoutMs = 2000;
+		const int pollMs = 30;
+		int elapsed = 0;
+		while (GetClipboardSequenceNumber() == before && elapsed < timeoutMs)
+		{
+			await Task.Delay(pollMs);
+			elapsed += pollMs;
+		}
+
+		if (GetClipboardSequenceNumber() == before)
+		{
+			AnnounceSelectionUnavailable(
+				"No text was selected, or the active application did not copy anything.",
+				tts);
+			return;
+		}
+
 		BtnTextToSpeech_Click(null, null);
+	}
+
+	private void AnnounceSelectionUnavailable(string message, TextToSpeechSettings tts)
+	{
+		_textToSpeech.SpeakAnnouncement(message, tts.Rate, tts.Volume, tts.VoiceName);
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
 	}
 
 	public void BtnSpeakSelection_Click(object? sender, RoutedEventArgs? e) => SpeakActiveSelectionAsync();
