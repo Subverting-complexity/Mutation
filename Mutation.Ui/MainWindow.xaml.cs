@@ -705,9 +705,40 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public async void BtnTextToSpeech_Click(object? sender, RoutedEventArgs? e)
 	{
-		string text = await _clipboard.GetTextAsync();
-		_textToSpeech.SpeakText(text);
-		ShowStatus("Text to Speech", "Speaking clipboard text.", InfoBarSeverity.Informational);
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		string clipboard = (await _clipboard.GetTextAsync())?.Trim() ?? string.Empty;
+
+		if (_textToSpeech.IsSpeaking)
+		{
+			string? wasSpeaking = _textToSpeech.CurrentText;
+			_textToSpeech.Stop();
+			BeepPlayer.Play(BeepType.Failure);
+
+			bool clipboardChanged = !string.IsNullOrEmpty(clipboard)
+				&& !string.Equals(clipboard, wasSpeaking, StringComparison.Ordinal);
+
+			if (clipboardChanged)
+			{
+				_textToSpeech.Speak(clipboard, tts.Rate, tts.VoiceName);
+				BeepPlayer.Play(BeepType.Success);
+				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
+			}
+			else
+			{
+				ShowStatus("Text to Speech", "Stopped.", InfoBarSeverity.Informational);
+			}
+			return;
+		}
+
+		if (string.IsNullOrEmpty(clipboard))
+		{
+			ShowStatus("Text to Speech", "Clipboard is empty.", InfoBarSeverity.Warning);
+			return;
+		}
+
+		_textToSpeech.Speak(clipboard, tts.Rate, tts.VoiceName);
+		BeepPlayer.Play(BeepType.Success);
+		ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 	}
 
 	public void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)

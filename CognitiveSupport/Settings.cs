@@ -249,6 +249,8 @@ public class LlmSettings
 public class TextToSpeechSettings
 {
 	public string? TextToSpeechHotKey { get; set; }
+	public int Rate { get; set; } = 8;
+	public string? VoiceName { get; set; }
 
 	public TextToSpeechSettings()
 	{
