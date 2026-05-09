@@ -8,8 +8,6 @@ internal static class SettingsDefaults
 	public const string PlaceholderValue = "<placeholder>";
 	public const string PlaceholderUrl = "https://placeholder.com";
 
-	public const string UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
-
 	public static class Audio
 	{
 		public const string MicrophoneToggleMuteHotKey = "ALT+Q";
@@ -47,7 +45,7 @@ internal static class SettingsDefaults
 
 	public static class Tts
 	{
-		public const string TextToSpeechHotKey = "CTRL+SHIFT+ALT+Q";
+		public const string SpeakClipboard = "CTRL+SHIFT+ALT+Q";
 		public const string SpeakSelectionHotKey = "CTRL+SHIFT+Q";
 		public const string RestartFromBeginningHotKey = "CTRL+SHIFT+B";
 		public const string SkipSentenceBackwardHotKey = "CTRL+SHIFT+J";

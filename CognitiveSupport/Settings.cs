@@ -4,8 +4,6 @@ namespace CognitiveSupport;
 
 public class Settings
 {
-	public string? UserInstructions { get; set; }
-
 	public AudioSettings? AudioSettings { get; set; }
 	public AzureComputerVisionSettings? AzureComputerVisionSettings { get; set; }
         public SpeechToTextSettings? SpeechToTextSettings { get; set; }
@@ -19,18 +17,6 @@ public class Settings
 	public Settings()
 	{
 	}
-
-        public Settings(string? userInstructions, AudioSettings? audioSettings, AzureComputerVisionSettings? azureComputerVisionSettings, SpeechToTextSettings? speechToTextSettings, LlmSettings? llmSettings, TextToSpeechSettings? textToSpeechSettings, MainWindowUiSettings mainWindowUiSettings, HotKeyRouterSettings hotKeyRouterSettings)
-        {
-                UserInstructions = userInstructions;
-                AudioSettings = audioSettings;
-                AzureComputerVisionSettings = azureComputerVisionSettings;
-                SpeechToTextSettings = speechToTextSettings;
-                LlmSettings = llmSettings;
-                TextToSpeechSettings = textToSpeechSettings;
-                MainWindowUiSettings = mainWindowUiSettings;
-                HotKeyRouterSettings = hotKeyRouterSettings;
-        }
 }
 
 public class AudioSettings
@@ -180,7 +166,7 @@ public class LlmSettings
 	public const string DefaultSecondaryModel = "gpt-4.1";
 	public const string DefaultAnthropicModel = "claude-sonnet-4-6";
 
-	public string? ApiKey { get; set; }
+	public string? OpenAiApiKey { get; set; }
 	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
 	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; }
@@ -197,9 +183,9 @@ public class LlmSettings
 		Prompts = new List<LlmPrompt>();
 	}
 
-	public LlmSettings(string? apiKey, List<LlmModelConfig> models, List<TranscriptFormatRule> transcriptFormatRules, string? formatTranscriptPrompt)
+	public LlmSettings(string? openAiApiKey, List<LlmModelConfig> models, List<TranscriptFormatRule> transcriptFormatRules, string? formatTranscriptPrompt)
 	{
-		ApiKey = apiKey;
+		OpenAiApiKey = openAiApiKey;
 		Models = models;
 		TranscriptFormatRules = transcriptFormatRules;
 		FormatTranscriptPrompt = formatTranscriptPrompt;
@@ -248,7 +234,7 @@ public class LlmSettings
 
 public class TextToSpeechSettings
 {
-	public string? TextToSpeechHotKey { get; set; }
+	public string? SpeakClipboard { get; set; }
 	public string? SpeakSelectionHotKey { get; set; }
 	public string? RestartFromBeginningHotKey { get; set; }
 	public string? SkipSentenceBackwardHotKey { get; set; }
@@ -262,9 +248,9 @@ public class TextToSpeechSettings
 	{
 	}
 
-	public TextToSpeechSettings(string? textToSpeechHotKey)
+	public TextToSpeechSettings(string? speakClipboard)
 	{
-		TextToSpeechHotKey = textToSpeechHotKey;
+		SpeakClipboard = speakClipboard;
 	}
 }
 

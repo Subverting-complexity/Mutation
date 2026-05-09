@@ -244,7 +244,7 @@ public partial class App : Application
 			builder.Services.AddSingleton<ILlmService>(sp =>
 			{
 				var llmSettings = settings.LlmSettings;
-				string openAiKey = llmSettings?.ApiKey ?? string.Empty;
+				string openAiKey = llmSettings?.OpenAiApiKey ?? string.Empty;
 				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
 				int timeoutSeconds = llmSettings?.TimeoutSeconds > 0 ? llmSettings.TimeoutSeconds : 60;
 				var allModels = llmSettings?.Models ?? new List<LlmModelConfig>();

@@ -86,7 +86,7 @@ public class SettingsDefaultsParityTests : IDisposable
 	{
 		var s = ApplyDefaults();
 		var tts = s.TextToSpeechSettings!;
-		Assert.Equal(SettingsDefaults.Tts.TextToSpeechHotKey, tts.TextToSpeechHotKey);
+		Assert.Equal(SettingsDefaults.Tts.SpeakClipboard, tts.SpeakClipboard);
 		Assert.Equal(SettingsDefaults.Tts.SpeakSelectionHotKey, tts.SpeakSelectionHotKey);
 		Assert.Equal(SettingsDefaults.Tts.RestartFromBeginningHotKey, tts.RestartFromBeginningHotKey);
 		Assert.Equal(SettingsDefaults.Tts.SkipSentenceBackwardHotKey, tts.SkipSentenceBackwardHotKey);
@@ -105,10 +105,4 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.MainWindowUi.DictationInsertPreference, ui.DictationInsertPreference);
 	}
 
-	[Fact]
-	public void UserInstructions_Default_Match()
-	{
-		var s = ApplyDefaults();
-		Assert.Equal(SettingsDefaults.UserInstructions, s.UserInstructions);
-	}
 }

@@ -11,8 +11,10 @@
 	PrimaryButtonText="Save"
 	SecondaryButtonText="Cancel"
 	DefaultButton="Primary"
-	Width="1200"
-	Height="800">
+	Width="1400"
+	Height="800"
+	HorizontalAlignment="Center"
+	VerticalAlignment="Center">
 
 	<ContentDialog.Resources>
 		<DataTemplate x:Key="SettingsCategoryTemplate" x:DataType="local:SettingsCategoryItem">

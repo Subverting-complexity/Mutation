@@ -27,8 +27,6 @@ internal static class SettingsWorkingCopy
 	// same object. Sub-object references are also preserved where possible.
 	public static void CommitInto(Settings live, Settings workingCopy)
 	{
-		live.UserInstructions = workingCopy.UserInstructions;
-
 		live.AudioSettings ??= new AudioSettings();
 		if (workingCopy.AudioSettings is not null)
 		{
@@ -79,7 +77,7 @@ internal static class SettingsWorkingCopy
 		{
 			var src = workingCopy.LlmSettings;
 			var dst = live.LlmSettings;
-			dst.ApiKey = src.ApiKey;
+			dst.OpenAiApiKey = src.OpenAiApiKey;
 			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
 			dst.TranscriptFormatRules = src.TranscriptFormatRules;
@@ -94,7 +92,7 @@ internal static class SettingsWorkingCopy
 		{
 			var src = workingCopy.TextToSpeechSettings;
 			var dst = live.TextToSpeechSettings;
-			dst.TextToSpeechHotKey = src.TextToSpeechHotKey;
+			dst.SpeakClipboard = src.SpeakClipboard;
 			dst.SpeakSelectionHotKey = src.SpeakSelectionHotKey;
 			dst.RestartFromBeginningHotKey = src.RestartFromBeginningHotKey;
 			dst.SkipSentenceBackwardHotKey = src.SkipSentenceBackwardHotKey;

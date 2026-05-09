@@ -18,7 +18,7 @@ public sealed partial class LlmSettingsPage : UserControl
 		TxtOpenAiKey.RegisterPropertyChangedCallback(Controls.SecretBox.SecretProperty, (_, _) =>
 		{
 			if (_suppressEvents) return;
-			(_settings.LlmSettings ??= new LlmSettings()).ApiKey = TxtOpenAiKey.Secret;
+			(_settings.LlmSettings ??= new LlmSettings()).OpenAiApiKey = TxtOpenAiKey.Secret;
 		});
 
 		TxtAnthropicKey.RegisterPropertyChangedCallback(Controls.SecretBox.SecretProperty, (_, _) =>
@@ -34,7 +34,7 @@ public sealed partial class LlmSettingsPage : UserControl
 		try
 		{
 			var llm = _settings.LlmSettings ??= new LlmSettings();
-			TxtOpenAiKey.Secret = llm.ApiKey ?? string.Empty;
+			TxtOpenAiKey.Secret = llm.OpenAiApiKey ?? string.Empty;
 			TxtAnthropicKey.Secret = llm.AnthropicApiKey ?? string.Empty;
 			NbTimeout.Value = llm.TimeoutSeconds > 0 ? llm.TimeoutSeconds : SettingsDefaults.Llm.TimeoutSeconds;
 

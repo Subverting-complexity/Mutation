@@ -328,8 +328,8 @@ public sealed partial class MainWindow : Window, IDisposable
 			TryRegister(hk, stt.SpeechToTextWithLlmFormattingHotKey!, () =>
 				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(true)));
 
-		if (!string.IsNullOrWhiteSpace(tts?.TextToSpeechHotKey))
-			TryRegister(hk, tts.TextToSpeechHotKey!, () =>
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakClipboard))
+			TryRegister(hk, tts.SpeakClipboard!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnTextToSpeech_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakSelectionHotKey))
@@ -417,7 +417,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnOcrClipboardLrtb, BtnOcrClipboardLrtbHotkey, _settings.AzureComputerVisionSettings?.OcrLeftToRightTopToBottomHotKey, "Run OCR on an image stored in the clipboard using left-to-right reading order");
 		ConfigureButtonHotkey(BtnScreenshotOcr, BtnScreenshotOcrHotkey, _settings.AzureComputerVisionSettings?.ScreenshotOcrHotKey, "Capture a screenshot and extract text automatically");
 		ConfigureButtonHotkey(BtnScreenshotOcrLrtb, BtnScreenshotOcrLrtbHotkey, _settings.AzureComputerVisionSettings?.ScreenshotLeftToRightTopToBottomOcrHotKey, "Capture a screenshot and extract text using left-to-right reading order");
-		ConfigureButtonHotkey(BtnTextToSpeech, null, _settings.TextToSpeechSettings?.TextToSpeechHotKey, "Play the clipboard text using text-to-speech");
+		ConfigureButtonHotkey(BtnTextToSpeech, null, _settings.TextToSpeechSettings?.SpeakClipboard, "Play the clipboard text using text-to-speech");
 		ConfigureButtonHotkey(BtnRestartTts, null, _settings.TextToSpeechSettings?.RestartFromBeginningHotKey, "Speak the clipboard from the beginning, ignoring saved position");
 		ConfigureButtonHotkey(BtnSkipSentenceBack, null, _settings.TextToSpeechSettings?.SkipSentenceBackwardHotKey, "Jump to the previous sentence");
 		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");

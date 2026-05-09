@@ -48,12 +48,6 @@ internal class SettingsManager : ISettingsManager
 
 		bool somethingWasMissing = false;
 
-                if (string.IsNullOrWhiteSpace(settings.UserInstructions))
-                {
-                        settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
-                        somethingWasMissing = true;
-                }
-
                 if (settings.MainWindowUiSettings is null)
                 {
                         settings.MainWindowUiSettings = new MainWindowUiSettings();
@@ -367,9 +361,9 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 		var llmSettings = settings.LlmSettings;
-		if (string.IsNullOrWhiteSpace(llmSettings.ApiKey))
+		if (string.IsNullOrWhiteSpace(llmSettings.OpenAiApiKey))
 		{
-			llmSettings.ApiKey = PlaceholderValue;
+			llmSettings.OpenAiApiKey = PlaceholderValue;
 			somethingWasMissing = true;
 		}
 		if (string.IsNullOrWhiteSpace(llmSettings.AnthropicApiKey))
@@ -587,9 +581,9 @@ End of summary.
 			somethingWasMissing = true;
 		}
 		var textToSpeechSettings = settings.TextToSpeechSettings;
-		if (string.IsNullOrWhiteSpace(textToSpeechSettings.TextToSpeechHotKey))
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakClipboard))
 		{
-			textToSpeechSettings.TextToSpeechHotKey = "CTRL+SHIFT+ALT+Q";
+			textToSpeechSettings.SpeakClipboard = "CTRL+SHIFT+ALT+Q";
 			somethingWasMissing = true;
 		}
 		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakSelectionHotKey))
@@ -635,6 +629,10 @@ End of summary.
 
 		JObject jObj = JObject.Parse(json);
 		bool saveRequired = false;
+
+		// Drop legacy UserInstructions (removed setting).
+		if (jObj.Remove("UserInstructions"))
+			saveRequired = true;
 
 		JObject? speechSettings = jObj["SpeechToTextSettings"] as JObject;
 		if (speechSettings is null && jObj["SpeetchToTextSettings"] is JObject legacySpeechSettings)
@@ -718,6 +716,17 @@ End of summary.
 				saveRequired = true;
 			}
 
+			// Rename LlmSettings.ApiKey -> OpenAiApiKey (only this class; Azure/STT ApiKey untouched).
+			if (llmSettingsJObj["ApiKey"] is JToken legacyOpenAiKey)
+			{
+				if (llmSettingsJObj["OpenAiApiKey"] is null)
+				{
+					llmSettingsJObj["OpenAiApiKey"] = legacyOpenAiKey;
+				}
+				llmSettingsJObj.Remove("ApiKey");
+				saveRequired = true;
+			}
+
 			if (llmSettingsJObj["Prompts"] is JArray promptsArray)
 			{
 				foreach (var promptToken in promptsArray)
@@ -733,6 +742,18 @@ End of summary.
 					}
 				}
 			}
+		}
+
+		// Rename TextToSpeechSettings.TextToSpeechHotKey -> SpeakClipboard.
+		if (jObj["TextToSpeechSettings"] is JObject ttsSettingsJObj
+			&& ttsSettingsJObj["TextToSpeechHotKey"] is JToken legacyTtsHotkey)
+		{
+			if (ttsSettingsJObj["SpeakClipboard"] is null)
+			{
+				ttsSettingsJObj["SpeakClipboard"] = legacyTtsHotkey;
+			}
+			ttsSettingsJObj.Remove("TextToSpeechHotKey");
+			saveRequired = true;
 		}
 
 		if (saveRequired)

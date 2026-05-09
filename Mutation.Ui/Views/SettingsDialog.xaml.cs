@@ -63,8 +63,6 @@ public sealed partial class SettingsDialog : ContentDialog
 	private void PopulateCategories()
 	{
 		_allCategories.Clear();
-		_allCategories.Add(new SettingsCategoryItem("general", "General", "Workspace preferences and instructions.", "",
-			new[] { "general", "user instructions", "instructions", "preferences" }));
 		_allCategories.Add(new SettingsCategoryItem("audio", "Audio", "Microphone capture, mute hotkey, beeps.", "",
 			new[] { "audio", "microphone", "capture", "mute", "beep", "visualization" }));
 		_allCategories.Add(new SettingsCategoryItem("ocr", "Screen capture & OCR", "Screenshot automation, OCR, Azure vision.", "",
@@ -116,7 +114,6 @@ public sealed partial class SettingsDialog : ContentDialog
 
 		_activePage = _selectedCategory.Key switch
 		{
-			"general" => new GeneralSettingsPage(_workingCopy),
 			"audio" => new AudioSettingsPage(_workingCopy),
 			"ocr" => new OcrSettingsPage(_workingCopy),
 			"speech" => new SpeechSettingsPage(_workingCopy),
@@ -202,16 +199,19 @@ public sealed partial class SettingsDialog : ContentDialog
 
 	private void SetDialogSize()
 	{
+		HorizontalAlignment = HorizontalAlignment.Center;
+		VerticalAlignment = VerticalAlignment.Center;
+
 		Loaded += (s, e) =>
 		{
 			if (XamlRoot is null)
 				return;
 
 			var bounds = XamlRoot.Size;
-			var targetWidth = Math.Min(1200, bounds.Width * 0.9);
+			var targetWidth = Math.Min(1400, bounds.Width * 0.9);
 			var targetHeight = Math.Min(800, bounds.Height * 0.9);
 
-			MinWidth = 720;
+			MinWidth = 880;
 			MinHeight = 540;
 			Width = targetWidth;
 			Height = targetHeight;
