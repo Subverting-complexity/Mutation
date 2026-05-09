@@ -16,11 +16,12 @@ namespace Mutation.Ui.Services;
 internal sealed class HotkeyRouterController
 {
 	private readonly Settings _settings;
-	private readonly ISettingsManager _settingsManager;
+	private readonly ISettingsManager? _settingsManager;
 	private readonly DispatcherQueue _dispatcherQueue;
 	private readonly ListView _routerListView;
 	private readonly ObservableCollection<HotkeyRouterEntry> _entries;
 	private readonly List<(string From, string To)> _persistedSnapshot = new();
+	private readonly bool _autoPersist;
 
 	private bool _initialized;
 	private HotkeyManager? _hotkeyManager;
@@ -28,15 +29,19 @@ internal sealed class HotkeyRouterController
 	public HotkeyRouterController(
 		ObservableCollection<HotkeyRouterEntry> entries,
 		Settings settings,
-		ISettingsManager settingsManager,
+		ISettingsManager? settingsManager,
 		DispatcherQueue dispatcherQueue,
-		ListView routerListView)
+		ListView routerListView,
+		bool autoPersist = true)
 	{
 		_entries = entries ?? throw new ArgumentNullException(nameof(entries));
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
-		_settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
 		_dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
 		_routerListView = routerListView ?? throw new ArgumentNullException(nameof(routerListView));
+		_autoPersist = autoPersist;
+		if (autoPersist && settingsManager is null)
+			throw new ArgumentNullException(nameof(settingsManager), "settingsManager is required when autoPersist is true.");
+		_settingsManager = settingsManager;
 	}
 
 	public ObservableCollection<HotkeyRouterEntry> Entries => _entries;
@@ -199,9 +204,9 @@ internal sealed class HotkeyRouterController
 			foreach (var entry in _entries)
 				entry.SetBindingResult(HotkeyBindingState.Inactive, null);
 
-			if (ShouldPersist(normalizedPairs))
+			if (_autoPersist && ShouldPersist(normalizedPairs))
 			{
-				_settingsManager.SaveSettingsToFile(_settings);
+				_settingsManager!.SaveSettingsToFile(_settings);
 				UpdateSnapshot(normalizedPairs);
 			}
 			return;
@@ -219,9 +224,9 @@ internal sealed class HotkeyRouterController
 				entry.SetBindingResult(HotkeyBindingState.Inactive, null);
 		}
 
-		if (ShouldPersist(normalizedPairs))
+		if (_autoPersist && ShouldPersist(normalizedPairs))
 		{
-			_settingsManager.SaveSettingsToFile(_settings);
+			_settingsManager!.SaveSettingsToFile(_settings);
 			UpdateSnapshot(normalizedPairs);
 		}
 	}

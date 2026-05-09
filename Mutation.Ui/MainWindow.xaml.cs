@@ -53,7 +53,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
-	private HotkeyRouterController? _hotkeyRouter;
 	private bool _ttsControlsReady;
 	private const string DefaultVoiceLabel = "(System default)";
 
@@ -89,8 +88,6 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	[DllImport("user32.dll")]
 	private static extern uint GetClipboardSequenceNumber();
-
-	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 
 	public MainWindow(
 		ClipboardManager clipboard,
@@ -203,13 +200,6 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		InitializeTextToSpeechControls();
 		InitializeHotkeyVisuals();
-		_hotkeyRouter = new HotkeyRouterController(
-			HotkeyRouterEntries,
-			_settings,
-			_settingsManager,
-			DispatcherQueue,
-			HotkeyRouterList);
-		_hotkeyRouter.Initialize();
 
 		this.Closed += MainWindow_Closed;
 	}
@@ -250,8 +240,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
 	{
 		_hotkeyManager = hotkeyManager;
-		_hotkeyRouter?.AttachHotkeyManager(hotkeyManager);
 		_promptLibrary?.AttachHotkeyManager(hotkeyManager);
+		_hotkeyManager.RegisterRouterHotkeys();
 	}
 
 	internal void RegisterCoreHotkeys(HotkeyManager hk)
@@ -450,27 +440,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		// _settings.LlmSettings!.FormatTranscriptPrompt = TxtFormatPrompt.Text;
 
-		var normalizedPairs = _hotkeyRouter?.SyncSettings() ?? new List<(string From, string To)>();
 		_settingsManager.SaveSettingsToFile(_settings);
-		_hotkeyRouter?.UpdateSnapshot(normalizedPairs);
-        
+
         _audioSessionManager.Dispose();
-        
+
 		BeepPlayer.DisposePlayers();
 		Dispose();
 	}
-
-	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.AddNewMapping();
-
-	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.DeleteMapping(sender);
-
-	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.CommitFromLostFocus(sender);
-
-	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.CommitToLostFocus(sender);
 
 	public void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
 	{
@@ -1642,13 +1618,14 @@ public sealed partial class MainWindow : Window, IDisposable
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (mic viz) failed: {ex.Message}");
 		}
 
+		IReadOnlyList<HotkeyManager.HotkeyRegistrationResult>? routerResults = null;
 		try
 		{
 			if (_hotkeyManager is not null)
 			{
 				_hotkeyManager.ClearAllForRebind();
 				RegisterCoreHotkeys(_hotkeyManager);
-				_hotkeyManager.RegisterRouterHotkeys();
+				routerResults = _hotkeyManager.RegisterRouterHotkeys();
 				_hotkeyManager.RegisterPromptHotkeys(
 					_settings.LlmSettings?.Prompts ?? Enumerable.Empty<LlmSettings.LlmPrompt>(),
 					ExecutePrompt);
@@ -1657,6 +1634,49 @@ public sealed partial class MainWindow : Window, IDisposable
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (hotkeys) failed: {ex.Message}");
+		}
+
+		if (routerResults is not null)
+		{
+			var failures = routerResults.Where(r => !r.Success).ToList();
+			if (failures.Count > 0)
+				_ = ShowRouterBindingFailuresAsync(failures);
+		}
+	}
+
+	private async Task ShowRouterBindingFailuresAsync(IReadOnlyList<HotkeyManager.HotkeyRegistrationResult> failures)
+	{
+		try
+		{
+			if (Content is not FrameworkElement rootElement)
+				return;
+
+			var lines = failures.Select(f =>
+			{
+				var from = string.IsNullOrWhiteSpace(f.Map?.FromHotKey) ? "(empty)" : f.Map!.FromHotKey;
+				var to = string.IsNullOrWhiteSpace(f.Map?.ToHotKey) ? "(empty)" : f.Map!.ToHotKey;
+				var reason = string.IsNullOrWhiteSpace(f.ErrorMessage) ? "Unknown error." : f.ErrorMessage;
+				return $"• {from} → {to}: {reason}";
+			});
+
+			var dialog = new ContentDialog
+			{
+				Title = "Some hotkey router mappings could not be registered",
+				Content = new TextBlock
+				{
+					Text = string.Join(Environment.NewLine, lines),
+					TextWrapping = TextWrapping.Wrap,
+				},
+				CloseButtonText = "OK",
+				XamlRoot = rootElement.XamlRoot,
+				RequestedTheme = rootElement.ActualTheme,
+			};
+
+			await ShowDialogAsync(dialog);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ShowRouterBindingFailures failed: {ex.Message}");
 		}
 	}
 

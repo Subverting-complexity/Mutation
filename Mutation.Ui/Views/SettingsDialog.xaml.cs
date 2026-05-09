@@ -199,8 +199,8 @@ public sealed partial class SettingsDialog : ContentDialog
 
 	private void SetDialogSize()
 	{
-		HorizontalAlignment = HorizontalAlignment.Center;
-		VerticalAlignment = VerticalAlignment.Center;
+		HorizontalAlignment = HorizontalAlignment.Stretch;
+		VerticalAlignment = VerticalAlignment.Stretch;
 
 		Loaded += (s, e) =>
 		{
@@ -208,15 +208,12 @@ public sealed partial class SettingsDialog : ContentDialog
 				return;
 
 			var bounds = XamlRoot.Size;
-			var targetWidth = Math.Min(1400, bounds.Width * 0.9);
-			var targetHeight = Math.Min(800, bounds.Height * 0.9);
-
-			MinWidth = 880;
-			MinHeight = 540;
-			Width = targetWidth;
-			Height = targetHeight;
-			MaxWidth = targetWidth;
-			MaxHeight = targetHeight;
+			MinWidth = 0;
+			MinHeight = 0;
+			Width = bounds.Width;
+			Height = bounds.Height;
+			MaxWidth = bounds.Width;
+			MaxHeight = bounds.Height;
 		};
 	}
 }

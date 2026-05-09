@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using CognitiveSupport;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Mutation.Ui.Services;
 using Mutation.Ui.Views.SettingsUi.Controls;
 
 namespace Mutation.Ui.Views.SettingsUi.Pages;
@@ -13,6 +16,9 @@ public sealed partial class HotkeysSettingsPage : UserControl
 {
 	private readonly Settings _settings;
 	private readonly List<HotkeyRow> _rows = new();
+	private readonly HotkeyRouterController _routerController;
+
+	public ObservableCollection<Mutation.Ui.HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 
 	public HotkeysSettingsPage(Settings settings)
 	{
@@ -21,6 +27,15 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		BuildRows();
 		RenderSummaries();
 		RecomputeDuplicates();
+
+		_routerController = new HotkeyRouterController(
+			HotkeyRouterEntries,
+			_settings,
+			settingsManager: null,
+			DispatcherQueue.GetForCurrentThread(),
+			HotkeyRouterList,
+			autoPersist: false);
+		_routerController.Initialize();
 	}
 
 	private sealed record HotkeySpec(
@@ -199,10 +214,17 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			? "(no prompts)"
 			: string.Join("    ", prompts.Select(p =>
 				string.IsNullOrWhiteSpace(p.Hotkey) ? $"• {p.Name}: (none)" : $"• {p.Name}: {p.Hotkey}"));
-
-		var maps = _settings.HotKeyRouterSettings?.Mappings ?? new List<HotKeyRouterSettings.HotKeyRouterMap>();
-		TxtRouterMappings.Text = maps.Count == 0
-			? "(no router mappings)"
-			: string.Join("    ", maps.Select(m => $"{m.FromHotKey} → {m.ToHotKey}"));
 	}
+
+	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
+		_routerController.AddNewMapping();
+
+	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
+		_routerController.DeleteMapping(sender);
+
+	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
+		_routerController.CommitFromLostFocus(sender);
+
+	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e) =>
+		_routerController.CommitToLostFocus(sender);
 }
