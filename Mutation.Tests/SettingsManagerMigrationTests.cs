@@ -195,6 +195,76 @@ public class SettingsManagerMigrationTests : IDisposable
 	}
 
 	[Fact]
+	public void UpgradeSettings_SeedsPromptsFromLegacyFormatTranscriptPrompt()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"FormatTranscriptPrompt": "Clean up this transcript.",
+					"FormatWithLlmHotKey": "ALT+SHIFT+P",
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var llm = (JObject)result["LlmSettings"]!;
+
+		Assert.Null(llm["FormatTranscriptPrompt"]);
+		var prompts = (JArray)llm["Prompts"]!;
+		Assert.Single(prompts);
+		Assert.Equal("Default", prompts[0]?["Name"]?.ToString());
+		Assert.Equal("Clean up this transcript.", prompts[0]?["Content"]?.ToString());
+		Assert.Equal("ALT+SHIFT+P", prompts[0]?["Hotkey"]?.ToString());
+		Assert.Equal(LlmSettings.DefaultModel, prompts[0]?["ModelName"]?.ToString());
+		// FormatWithLlmHotKey itself remains — it's still a live setting.
+		Assert.Equal("ALT+SHIFT+P", llm["FormatWithLlmHotKey"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_DropsLegacyFormatTranscriptPrompt_PreservesExistingPrompts()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"FormatTranscriptPrompt": "old text we no longer use",
+					"Prompts": [
+						{ "Id": 7, "Name": "User prompt", "Content": "keep me", "ModelName": "chat-latest" }
+					]
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var llm = (JObject)result["LlmSettings"]!;
+
+		Assert.Null(llm["FormatTranscriptPrompt"]);
+		var prompts = (JArray)llm["Prompts"]!;
+		Assert.Single(prompts);
+		Assert.Equal("User prompt", prompts[0]?["Name"]?.ToString());
+		Assert.Equal("keep me", prompts[0]?["Content"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_DropsEmptyFormatTranscriptPrompt_DoesNotSeedPrompts()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"FormatTranscriptPrompt": "",
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var llm = (JObject)result["LlmSettings"]!;
+
+		Assert.Null(llm["FormatTranscriptPrompt"]);
+		Assert.Empty((JArray)llm["Prompts"]!);
+	}
+
+	[Fact]
 	public void UpgradeSettings_DoesNotRenameOtherApiKeyFields()
 	{
 		string json = """

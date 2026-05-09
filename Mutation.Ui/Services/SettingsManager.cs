@@ -388,12 +388,7 @@ internal class SettingsManager : ISettingsManager
 
 		if (!llmSettings.Prompts.Any())
 		{
-             string? legacyPrompt = llmSettings.FormatTranscriptPrompt;
-             string? legacyHotkey = llmSettings.FormatWithLlmHotKey;
-             
-             if (string.IsNullOrWhiteSpace(legacyPrompt))
-             {
-                 legacyPrompt = @"You are a helpful proofreader and editor. When you are asked to format a transcript, apply the following rules to improve the formatting of the text:
+             string defaultPrompt = @"You are a helpful proofreader and editor. When you are asked to format a transcript, apply the following rules to improve the formatting of the text:
 Replace the words 'new line' (case insensitive) with an actual new line character, and replace the words 'new paragraph' (case insensitive) with 2 new line characters, and replace the words 'new bullet' (case insensitive) with a newline character and a bullet character, eg. '- ', and end the preceding sentence with a full stop '.', and start the new sentence with a capital letter, and do not make any other changes.
 
 Here is an example of a raw transcript and the reformatted text:
@@ -415,17 +410,15 @@ Depending on the results, this might include:
 Collaboration among various healthcare professionals ensures that the information gleaned from the radiology report is utilized to provide the most effective and individualized care tailored to your specific condition and needs.
 End of summary.
 ";
-             }
-             
+
+             string? legacyHotkey = llmSettings.FormatWithLlmHotKey;
              if (string.IsNullOrWhiteSpace(legacyHotkey))
-             {
                  legacyHotkey = "ALT+SHIFT+P";
-             }
-             
+
              llmSettings.Prompts.Add(new LlmSettings.LlmPrompt {
                 Id = 1,
                 Name = "Default",
-                Content = legacyPrompt,
+                Content = defaultPrompt,
                 Hotkey = legacyHotkey,
                 AutoRun = false,
                 ModelName = LlmSettings.DefaultModel
@@ -724,6 +717,34 @@ End of summary.
 					llmSettingsJObj["OpenAiApiKey"] = legacyOpenAiKey;
 				}
 				llmSettingsJObj.Remove("ApiKey");
+				saveRequired = true;
+			}
+
+			// Drop legacy FormatTranscriptPrompt. If non-empty and Prompts is empty, seed Prompts[0] from it.
+			if (llmSettingsJObj["FormatTranscriptPrompt"] is JToken legacyFormatPrompt)
+			{
+				string? legacyPromptText = legacyFormatPrompt.Type == JTokenType.String ? legacyFormatPrompt.ToString() : null;
+				bool noPrompts = llmSettingsJObj["Prompts"] is not JArray existingPrompts || existingPrompts.Count == 0;
+				if (noPrompts && !string.IsNullOrWhiteSpace(legacyPromptText))
+				{
+					string? legacyHotkey = llmSettingsJObj["FormatWithLlmHotKey"]?.ToString();
+					if (string.IsNullOrWhiteSpace(legacyHotkey))
+						legacyHotkey = "ALT+SHIFT+P";
+
+					llmSettingsJObj["Prompts"] = new JArray
+					{
+						new JObject
+						{
+							["Id"] = 1,
+							["Name"] = "Default",
+							["Content"] = legacyPromptText,
+							["Hotkey"] = legacyHotkey,
+							["AutoRun"] = false,
+							["ModelName"] = LlmSettings.DefaultModel,
+						},
+					};
+				}
+				llmSettingsJObj.Remove("FormatTranscriptPrompt");
 				saveRequired = true;
 			}
 

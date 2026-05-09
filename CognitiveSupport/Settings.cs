@@ -170,7 +170,6 @@ public class LlmSettings
 	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
 	public List<TranscriptFormatRule> TranscriptFormatRules { get; set; }
-	public string? FormatTranscriptPrompt { get; set; }
 	public string? FormatWithLlmHotKey { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
 	public int TimeoutSeconds { get; set; } = 60;
@@ -180,15 +179,6 @@ public class LlmSettings
 	{
 		Models = new List<LlmModelConfig>();
 		TranscriptFormatRules = new List<TranscriptFormatRule>();
-		Prompts = new List<LlmPrompt>();
-	}
-
-	public LlmSettings(string? openAiApiKey, List<LlmModelConfig> models, List<TranscriptFormatRule> transcriptFormatRules, string? formatTranscriptPrompt)
-	{
-		OpenAiApiKey = openAiApiKey;
-		Models = models;
-		TranscriptFormatRules = transcriptFormatRules;
-		FormatTranscriptPrompt = formatTranscriptPrompt;
 		Prompts = new List<LlmPrompt>();
 	}
 

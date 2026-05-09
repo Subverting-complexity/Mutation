@@ -81,7 +81,6 @@ internal static class SettingsWorkingCopy
 			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
 			dst.TranscriptFormatRules = src.TranscriptFormatRules;
-			dst.FormatTranscriptPrompt = src.FormatTranscriptPrompt;
 			dst.FormatWithLlmHotKey = src.FormatWithLlmHotKey;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;
