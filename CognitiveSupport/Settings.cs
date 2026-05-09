@@ -250,6 +250,7 @@ public class TextToSpeechSettings
 {
 	public string? TextToSpeechHotKey { get; set; }
 	public int Rate { get; set; } = 8;
+	public int Volume { get; set; } = 100;
 	public string? VoiceName { get; set; }
 
 	public TextToSpeechSettings()

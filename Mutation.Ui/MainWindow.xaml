@@ -762,6 +762,21 @@
                                         ToolTipService.ToolTip="Adjust the speed of clipboard speech" />
                                 </StackPanel>
 
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Volume" />
+                                    <Slider
+                                        x:Name="SldTtsVolume"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        StepFrequency="1"
+                                        TickFrequency="10"
+                                        TickPlacement="Outside"
+                                        SnapsTo="StepValues"
+                                        ValueChanged="SldTtsVolume_ValueChanged"
+                                        AutomationProperties.Name="Text to speech volume"
+                                        ToolTipService.ToolTip="Adjust speech volume independent of system volume" />
+                                </StackPanel>
+
                                 <StackPanel x:Name="ClipboardActionsPanel" Orientation="Horizontal" Spacing="12">
                                     <Button
                                         x:Name="BtnTextToSpeech"

@@ -41,7 +41,7 @@ namespace CognitiveSupport
 			get { lock (_gate) return _currentText; }
 		}
 
-		public void Speak(string text, int rate, string? voiceName)
+		public void Speak(string text, int rate, int volume, string? voiceName)
 		{
 			if (string.IsNullOrEmpty(text)) return;
 
@@ -55,6 +55,10 @@ namespace CognitiveSupport
 				if (rate < -10) rate = -10;
 				else if (rate > 10) rate = 10;
 				_synth.Rate = rate;
+
+				if (volume < 0) volume = 0;
+				else if (volume > 100) volume = 100;
+				_synth.Volume = volume;
 
 				if (!string.IsNullOrWhiteSpace(voiceName))
 				{

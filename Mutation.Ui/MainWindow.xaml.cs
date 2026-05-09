@@ -717,7 +717,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			if (clipboardChanged)
 			{
-				_textToSpeech.Speak(trimmed, tts.Rate, tts.VoiceName);
+				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName);
 				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
 			}
 			else
@@ -729,7 +729,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		if (kind == ClipboardKind.Text && trimmed.Length > 0)
 		{
-			_textToSpeech.Speak(trimmed, tts.Rate, tts.VoiceName);
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName);
 			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 			return;
 		}
@@ -741,7 +741,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			_ => "No text on the clipboard.",
 		};
 
-		_textToSpeech.Speak(message, tts.Rate, tts.VoiceName);
+		_textToSpeech.Speak(message, tts.Rate, tts.Volume, tts.VoiceName);
 		BeepPlayer.Play(BeepType.Failure);
 		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
 	}
@@ -766,6 +766,11 @@ public sealed partial class MainWindow : Window, IDisposable
 		else if (rate > 10) rate = 10;
 		SldTtsRate.Value = rate;
 
+		int volume = settings.Volume;
+		if (volume < 0) volume = 0;
+		else if (volume > 100) volume = 100;
+		SldTtsVolume.Value = volume;
+
 		_ttsControlsReady = true;
 	}
 
@@ -789,6 +794,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_textToSpeech.Speak(
 			$"Currently selected {sampleSubject}.",
 			_settings.TextToSpeechSettings.Rate,
+			_settings.TextToSpeechSettings.Volume,
 			voiceName);
 	}
 
@@ -801,6 +807,18 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_settings.TextToSpeechSettings.Rate == rate) return;
 
 		_settings.TextToSpeechSettings.Rate = rate;
+		_settingsManager.SaveSettingsToFile(_settings);
+	}
+
+	private void SldTtsVolume_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		int volume = (int)Math.Round(e.NewValue);
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (_settings.TextToSpeechSettings.Volume == volume) return;
+
+		_settings.TextToSpeechSettings.Volume = volume;
 		_settingsManager.SaveSettingsToFile(_settings);
 	}
 
