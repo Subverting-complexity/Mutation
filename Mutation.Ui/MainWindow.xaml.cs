@@ -422,7 +422,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnSkipSentenceBack, null, _settings.TextToSpeechSettings?.SkipSentenceBackwardHotKey, "Jump to the previous sentence");
 		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");
 		ConfigureButtonHotkey(BtnSpeakSelection, null, _settings.TextToSpeechSettings?.SpeakSelectionHotKey, "Copy the current selection from the active app and read it aloud");
-		ConfigureButtonHotkey(BtnFormatLlm, null, null, "Send transcript through the configured language model");
+		ConfigureButtonHotkey(BtnProcessLlm, null, null, "Send transcript through the configured language model");
 	}
 
 	private async void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -763,7 +763,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
-	public async Task StartStopSpeechToTextAsync(bool useLlmFormatting = false)
+	public async Task StartStopSpeechToTextAsync(bool useLlmProcessing = false)
 	{
 		try
 		{
@@ -784,7 +784,7 @@ public sealed partial class MainWindow : Window, IDisposable
             }
             
             LlmSettings.LlmPrompt? autoRunPrompt = _promptLibrary?.GetAutoRunPrompt();
-            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
+            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmProcessing, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
 		}
 		catch (Exception ex)
 		{
@@ -1028,18 +1028,18 @@ public sealed partial class MainWindow : Window, IDisposable
 		ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
 	}
 
-	public async void BtnFormatLlm_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnProcessLlm_Click(object? sender, RoutedEventArgs? e)
 	{
 		try
 		{
             // Use the prompt marked as AutoRun, or the first available one, or prompt user?
             // For now, let's use the AutoRun prompt if available.
-            var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun) 
+            var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun)
                          ?? _settings.LlmSettings?.Prompts.FirstOrDefault();
-                         
+
             if (prompt == null)
             {
-                ShowStatus("Formatting", "No prompts configured.", InfoBarSeverity.Warning);
+                ShowStatus("Processing", "No prompts configured.", InfoBarSeverity.Warning);
                 return;
             }
 
@@ -1048,8 +1048,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
-			ShowStatus("Formatting", ex.Message, InfoBarSeverity.Error);
-			await ShowErrorDialog("Format with LLM Error", ex);
+			ShowStatus("Processing", ex.Message, InfoBarSeverity.Error);
+			await ShowErrorDialog("Process with LLM Error", ex);
 		}
 	}
 
@@ -1065,28 +1065,28 @@ public sealed partial class MainWindow : Window, IDisposable
              }
         
 			BeepPlayer.Play(BeepType.Start);
-			TxtFormatTranscript.Text = "Formatting...";
+			TxtFormatTranscript.Text = "Processing...";
 			string raw = await _clipboard.GetTextAsync();
 			if (string.IsNullOrWhiteSpace(raw))
 			{
-				ShowStatus("Formatting", "Clipboard is empty.", InfoBarSeverity.Warning);
+				ShowStatus("Processing", "Clipboard is empty.", InfoBarSeverity.Warning);
 				TxtFormatTranscript.Text = string.Empty;
 				return;
 			}
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
-			string formatted = await _transcriptFormatter.FormatWithLlmAsync(raw, prompt.Content, modelName);
-            
-			TxtFormatTranscript.Text = formatted;
-			_clipboard.SetText(formatted);
-			InsertIntoActiveApplication(formatted);
+			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName);
+
+			TxtFormatTranscript.Text = processed;
+			_clipboard.SetText(processed);
+			InsertIntoActiveApplication(processed);
 			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Formatting", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
+			ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
         }
         catch (Exception ex)
         {
-             ShowStatus("Formatting Failed", ex.Message, InfoBarSeverity.Error);
+             ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }

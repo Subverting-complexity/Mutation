@@ -411,7 +411,7 @@ Collaboration among various healthcare professionals ensures that the informatio
 End of summary.
 ";
 
-             string? legacyHotkey = llmSettings.FormatWithLlmHotKey;
+             string? legacyHotkey = llmSettings.ProcessWithLlmHotKey;
              if (string.IsNullOrWhiteSpace(legacyHotkey))
                  legacyHotkey = "ALT+SHIFT+P";
 
@@ -742,6 +742,17 @@ End of summary.
 				saveRequired = true;
 			}
 
+			// Rename LlmSettings.FormatWithLlmHotKey -> ProcessWithLlmHotKey.
+			if (llmSettingsJObj["FormatWithLlmHotKey"] is JToken legacyProcessHotkey)
+			{
+				if (llmSettingsJObj["ProcessWithLlmHotKey"] is null)
+				{
+					llmSettingsJObj["ProcessWithLlmHotKey"] = legacyProcessHotkey;
+				}
+				llmSettingsJObj.Remove("FormatWithLlmHotKey");
+				saveRequired = true;
+			}
+
 			// Drop legacy FormatTranscriptPrompt. If non-empty and Prompts is empty, seed Prompts[0] from it.
 			if (llmSettingsJObj["FormatTranscriptPrompt"] is JToken legacyFormatPrompt)
 			{
@@ -749,7 +760,7 @@ End of summary.
 				bool noPrompts = llmSettingsJObj["Prompts"] is not JArray existingPrompts || existingPrompts.Count == 0;
 				if (noPrompts && !string.IsNullOrWhiteSpace(legacyPromptText))
 				{
-					string? legacyHotkey = llmSettingsJObj["FormatWithLlmHotKey"]?.ToString();
+					string? legacyHotkey = llmSettingsJObj["ProcessWithLlmHotKey"]?.ToString();
 					if (string.IsNullOrWhiteSpace(legacyHotkey))
 						legacyHotkey = "ALT+SHIFT+P";
 

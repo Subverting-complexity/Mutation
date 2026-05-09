@@ -80,7 +80,7 @@ internal static class SettingsWorkingCopy
 			dst.OpenAiApiKey = src.OpenAiApiKey;
 			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
-			dst.FormatWithLlmHotKey = src.FormatWithLlmHotKey;
+			dst.ProcessWithLlmHotKey = src.ProcessWithLlmHotKey;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;
 		}

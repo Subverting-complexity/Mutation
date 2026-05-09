@@ -128,7 +128,7 @@ public sealed partial class PromptEditorWindow : Window
                     // Use the CURRENT text in the content box, not the saved one
                     string currentContent = TxtContent.Text;
                     string testModel = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
-                    string result = await _formatter.FormatWithLlmAsync(text, currentContent, testModel);
+                    string result = await _formatter.ProcessWithLlmAsync(text, currentContent, testModel);
                     
                     // Show result in a dialog or just a message box?
                     // WinUI 3 MessageDialog or ContentDialog requires XamlRoot.

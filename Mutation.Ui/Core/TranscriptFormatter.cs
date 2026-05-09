@@ -35,7 +35,7 @@ public class TranscriptFormatter
 		return text;
 	}
 
-	public async Task<string> FormatWithLlmAsync(string transcript, string systemPrompt, string modelName)
+	public async Task<string> ProcessWithLlmAsync(string transcript, string systemPrompt, string modelName)
 	{
 		if (string.IsNullOrWhiteSpace(transcript))
 			return transcript;

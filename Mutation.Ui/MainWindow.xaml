@@ -288,7 +288,7 @@
                                         Style="{StaticResource AccentButtonStyle}"
                                         Click="BtnSpeechToTextWithFormat_Click"
                                         AutomationProperties.Name="Record and Format"
-                                        ToolTipService.ToolTip="Start or stop speech capture and format with LLM">
+                                        ToolTipService.ToolTip="Start or stop speech capture and process with LLM">
                                         <FontIcon
                                             x:Name="BtnSpeechToTextWithFormatIcon"
                                             Glyph="&#xE890;"
@@ -376,8 +376,8 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="Format Prompts" Style="{StaticResource SectionHeaderTextStyle}" />
-                                    <TextBlock Text="Configure multiple prompts for LLM formatting." Style="{StaticResource CaptionTextStyle}" />
+                                    <TextBlock Text="LLM Prompts" Style="{StaticResource SectionHeaderTextStyle}" />
+                                    <TextBlock Text="Configure multiple prompts for LLM processing." Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                                 <Button x:Name="BtnAddPrompt" Grid.Column="1" Content="Add Prompt" Click="BtnAddPrompt_Click" />
                             </Grid>
@@ -449,11 +449,11 @@
                                     <FontIcon Glyph="&#xE90F;" FontFamily="Segoe Fluent Icons" />
                                 </Button>
                                 <Button
-                                    x:Name="BtnFormatLlm"
+                                    x:Name="BtnProcessLlm"
                                     Style="{StaticResource OutlinedButtonStyle}"
-                                    Click="BtnFormatLlm_Click"
+                                    Click="BtnProcessLlm_Click"
                                     AccessKey="L"
-                                    AutomationProperties.Name="Format with LLM"
+                                    AutomationProperties.Name="Process with LLM"
                                     ToolTipService.ToolTip="Send transcript through the configured language model">
                                     <FontIcon Glyph="&#xE781;" FontFamily="Segoe Fluent Icons" />
                                 </Button>

@@ -58,7 +58,7 @@ internal static class SettingsDefaults
 	public static class Llm
 	{
 		public const int TimeoutSeconds = 60;
-		public const string FormatPromptHotKey = "ALT+SHIFT+P";
+		public const string ProcessPromptHotKey = "ALT+SHIFT+P";
 	}
 
 	public static class MainWindowUi

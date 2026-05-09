@@ -171,7 +171,7 @@ public class LlmSettings
 	public string? OpenAiApiKey { get; set; }
 	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
-	public string? FormatWithLlmHotKey { get; set; }
+	public string? ProcessWithLlmHotKey { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
 	public int TimeoutSeconds { get; set; } = 60;
 

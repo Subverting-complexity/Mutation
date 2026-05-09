@@ -47,7 +47,7 @@ Press one hotkey to start recording, press it again to stop and send the audio f
 | Hotkey | Description |
 |--------|-------------|
 | `SpeechToTextHotKey` | Start/stop recording for transcription. |
-| `SpeechToTextWithLlmFormattingHotKey` | Start/stop recording with automatic LLM formatting applied. |
+| `SpeechToTextWithLlmProcessingHotKey` | Start/stop recording with automatic LLM processing applied. |
 | `SendHotkeyAfterTranscriptionOperation` | Sends a specified hotkey after transcription completes. |
 
 **Additional Features:**
@@ -63,7 +63,7 @@ Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Defin
 
 | Hotkey | Description |
 |--------|-------------|
-| `FormatWithLlmHotKey` | Apply the auto-run prompt to clipboard text. |
+| `ProcessWithLlmHotKey` | Apply the auto-run prompt to clipboard text. |
 | Per-prompt `Hotkey` | Trigger a specific prompt directly. |
 
 **Prompt Configuration:**
@@ -73,7 +73,7 @@ Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Defin
 - Set `ModelName` on a prompt to override the default model on a per-prompt basis (must match a `Name` from `LlmSettings.Models`)
 
 **Model Configuration:**
-Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). OpenAI keys go in `ApiKey`; Anthropic keys go in `AnthropicApiKey`.
+Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). OpenAI keys go in `OpenAiApiKey`; Anthropic keys go in `AnthropicApiKey`.
 
 ### 5. Transcript Formatting Rules  
 Apply find-and-replace rules to transcripts before or instead of LLM processing:
@@ -82,7 +82,7 @@ Apply find-and-replace rules to transcripts before or instead of LLM processing:
 - **RegEx** – regular expression matching
 - **Smart** – intelligent matching (e.g., whole word boundaries)
 
-Rules run before LLM formatting, enabling pre-processing of transcribed text.
+Rules run before LLM processing, enabling pre-processing of transcribed text.
 
 ### 6. Hotkey Router  
 Remap any global hotkey to another. When a "From" hotkey is pressed, Mutation sends the corresponding "To" hotkey instead. Useful for creating shortcut aliases or working around application conflicts.
@@ -111,7 +111,7 @@ Press a hotkey to speak the current clipboard text aloud through your default au
 
 | Hotkey | Description |
 |--------|-------------|
-| `TextToSpeechHotKey` | Speak the clipboard text aloud. |
+| `SpeakClipboard` | Speak the clipboard text aloud. |
 
 ## Getting Started
 Install the .NET 10 runtime (or newer) and run **Mutation.exe**. On first launch, the app writes *Mutation.json* and opens it in Notepad for you to configure.
@@ -121,8 +121,6 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 
 ```json
 {
-  "UserInstructions": "Free-form notes shown in the main window — e.g. project context for LLM prompts.",
-
   "AudioSettings": {
     "MicrophoneToggleMuteHotKey": "Ctrl+Shift+M",
     "EnableMicrophoneVisualization": true,
@@ -156,7 +154,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 
   "SpeechToTextSettings": {
     "SpeechToTextHotKey": "Ctrl+Shift+T",
-    "SpeechToTextWithLlmFormattingHotKey": "Ctrl+Shift+Y",
+    "SpeechToTextWithLlmProcessingHotKey": "Ctrl+Shift+Y",
     "SendHotkeyAfterTranscriptionOperation": "Ctrl+Alt+V",
     "FileTranscriptionTimeoutSeconds": 300,
     "TempDirectory": null,
@@ -188,17 +186,13 @@ All hotkeys are global and fully customisable. Below is an example covering ever
   },
 
   "LlmSettings": {
-    "ApiKey": "<your OpenAI key>",
+    "OpenAiApiKey": "<your OpenAI key>",
     "AnthropicApiKey": "<your Anthropic key>",
     "Models": [
       { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null },
       { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null }
     ],
-    "FormatWithLlmHotKey": "Ctrl+Shift+F",
-    "FormatTranscriptPrompt": "Clean up this transcript for readability.",
-    "TranscriptFormatRules": [
-      { "Find": "um", "ReplaceWith": "", "CaseSensitive": false, "MatchType": "Smart" }
-    ],
+    "ProcessWithLlmHotKey": "Ctrl+Shift+F",
     "Prompts": [
       {
         "Id": 1,
@@ -211,8 +205,12 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     ]
   },
 
+  "TranscriptFormatRules": [
+    { "Find": "um", "ReplaceWith": "", "CaseSensitive": false, "MatchType": "Smart" }
+  ],
+
   "TextToSpeechSettings": {
-    "TextToSpeechHotKey": "Ctrl+Shift+P"
+    "SpeakClipboard": "Ctrl+Shift+P"
   },
 
   "HotKeyRouterSettings": {
@@ -228,7 +226,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 }
 ```
 
-> **Note on transcript formatting rules:** the `TranscriptFormatRules` array lives inside `LlmSettings` (not a separate top-level section), since rules run in the same pipeline as LLM-based formatting.
+> **Note on transcript formatting rules:** `TranscriptFormatRules` is a top-level setting. Rules run as a pre-processing pass on the transcript before any LLM processing is applied.
 
 ### Provisioning Azure Computer Vision
 

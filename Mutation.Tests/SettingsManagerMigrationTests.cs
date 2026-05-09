@@ -217,8 +217,9 @@ public class SettingsManagerMigrationTests : IDisposable
 		Assert.Equal("Clean up this transcript.", prompts[0]?["Content"]?.ToString());
 		Assert.Equal("ALT+SHIFT+P", prompts[0]?["Hotkey"]?.ToString());
 		Assert.Equal(LlmSettings.DefaultModel, prompts[0]?["ModelName"]?.ToString());
-		// FormatWithLlmHotKey itself remains — it's still a live setting.
-		Assert.Equal("ALT+SHIFT+P", llm["FormatWithLlmHotKey"]?.ToString());
+		// Legacy FormatWithLlmHotKey is renamed to ProcessWithLlmHotKey by the rename migration.
+		Assert.Null(llm["FormatWithLlmHotKey"]);
+		Assert.Equal("ALT+SHIFT+P", llm["ProcessWithLlmHotKey"]?.ToString());
 	}
 
 	[Fact]
@@ -262,6 +263,25 @@ public class SettingsManagerMigrationTests : IDisposable
 
 		Assert.Null(llm["FormatTranscriptPrompt"]);
 		Assert.Empty((JArray)llm["Prompts"]!);
+	}
+
+	[Fact]
+	public void UpgradeSettings_RenamesFormatWithLlmHotKey()
+	{
+		string json = """
+			{
+				"LlmSettings": {
+					"FormatWithLlmHotKey": "ALT+SHIFT+P",
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var llm = (JObject)result["LlmSettings"]!;
+
+		Assert.Null(llm["FormatWithLlmHotKey"]);
+		Assert.Equal("ALT+SHIFT+P", llm["ProcessWithLlmHotKey"]?.ToString());
 	}
 
 	[Fact]
