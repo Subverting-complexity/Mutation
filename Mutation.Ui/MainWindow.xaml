@@ -33,19 +33,22 @@
             </Grid.ColumnDefinitions>
 
             <!-- Hamburger Menu Button (Top Left) -->
-            <Button 
+            <Button
                 x:Name="HamburgerButton"
                 Grid.Column="0"
                 Style="{StaticResource IconButtonStyle}"
                 Margin="16,24,0,12"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
-                ToolTipService.ToolTip="Menu">
+                AccessKey="H"
+                AutomationProperties.Name="Menu"
+                ToolTipService.ToolTip="Menu (Alt, H)">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                        <MenuFlyoutItem 
+                        <MenuFlyoutItem
                             x:Name="SettingsMenuItem"
-                            Text="Settings" 
+                            Text="Settings"
+                            KeyboardAcceleratorTextOverride="Ctrl+,"
                             Click="SettingsMenuItem_Click">
                             <MenuFlyoutItem.Icon>
                                 <FontIcon Glyph="&#xE713;"/>
@@ -288,7 +291,7 @@
                                         Style="{StaticResource AccentButtonStyle}"
                                         Click="BtnSpeechToTextWithFormat_Click"
                                         AutomationProperties.Name="Record and Format"
-                                        ToolTipService.ToolTip="Start or stop speech capture and format with LLM">
+                                        ToolTipService.ToolTip="Start or stop speech capture and process with LLM">
                                         <FontIcon
                                             x:Name="BtnSpeechToTextWithFormatIcon"
                                             Glyph="&#xE890;"
@@ -376,8 +379,8 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="Format Prompts" Style="{StaticResource SectionHeaderTextStyle}" />
-                                    <TextBlock Text="Configure multiple prompts for LLM formatting." Style="{StaticResource CaptionTextStyle}" />
+                                    <TextBlock Text="LLM Prompts" Style="{StaticResource SectionHeaderTextStyle}" />
+                                    <TextBlock Text="Configure multiple prompts for LLM processing." Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                                 <Button x:Name="BtnAddPrompt" Grid.Column="1" Content="Add Prompt" Click="BtnAddPrompt_Click" />
                             </Grid>
@@ -449,11 +452,11 @@
                                     <FontIcon Glyph="&#xE90F;" FontFamily="Segoe Fluent Icons" />
                                 </Button>
                                 <Button
-                                    x:Name="BtnFormatLlm"
+                                    x:Name="BtnProcessLlm"
                                     Style="{StaticResource OutlinedButtonStyle}"
-                                    Click="BtnFormatLlm_Click"
+                                    Click="BtnProcessLlm_Click"
                                     AccessKey="L"
-                                    AutomationProperties.Name="Format with LLM"
+                                    AutomationProperties.Name="Process with LLM"
                                     ToolTipService.ToolTip="Send transcript through the configured language model">
                                     <FontIcon Glyph="&#xE781;" FontFamily="Segoe Fluent Icons" />
                                 </Button>
@@ -730,164 +733,117 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Clipboard & Voice -->
+                    <!-- Voice & Speech -->
                     <Border x:Name="ClipboardCard" Style="{StaticResource CardStyle}" Grid.Row="5" Grid.Column="1">
                         <StackPanel Spacing="18">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="Clipboard &amp; Voice" Style="{StaticResource SectionHeaderTextStyle}" />
-                                <TextBlock Text="Manage clipboard content and play it aloud when needed." Style="{StaticResource CaptionTextStyle}" />
+                                <TextBlock Text="Voice &amp; Speech" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <TextBlock Text="Speak the current clipboard contents and tune the voice." Style="{StaticResource CaptionTextStyle}" />
                             </StackPanel>
 
                             <StackPanel Spacing="12">
-                                <TextBox
-                                    x:Name="TxtClipboard"
-                                    PlaceholderText="Clipboard text"
-                                    AcceptsReturn="True"
-                                    TextWrapping="Wrap"
-                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                    ScrollViewer.VerticalScrollMode="Auto"
-                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                    ScrollViewer.HorizontalScrollMode="Auto"
-                                    AutomationProperties.Name="Clipboard text"
-                                    ToolTipService.ToolTip="Text that will be copied or spoken" />
+                                <ComboBox
+                                    x:Name="CmbTtsVoice"
+                                    Header="Voice"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="CmbTtsVoice_SelectionChanged"
+                                    AutomationProperties.Name="Text to speech voice"
+                                    ToolTipService.ToolTip="Choose a voice for clipboard speech" />
 
-                                <StackPanel x:Name="ClipboardActionsPanel" Orientation="Horizontal" Spacing="12">
-                                    <Button
-                                        x:Name="BtnCopyText"
-                                        Style="{StaticResource AccentButtonStyle}"
-                                        Click="CopyText_Click"
-                                        AccessKey="P"
-                                        AutomationProperties.Name="Copy clipboard text"
-                                        ToolTipService.ToolTip="Copy the clipboard text to the system clipboard">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                            <FontIcon Glyph="&#xE8C8;" FontFamily="Segoe Fluent Icons" />
-                                            <TextBlock Text="Copy text" />
-                                        </StackPanel>
-                                    </Button>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Rate" />
+                                    <Slider
+                                        x:Name="SldTtsRate"
+                                        Minimum="-10"
+                                        Maximum="10"
+                                        StepFrequency="1"
+                                        TickFrequency="2"
+                                        TickPlacement="Outside"
+                                        SnapsTo="StepValues"
+                                        ValueChanged="SldTtsRate_ValueChanged"
+                                        AutomationProperties.Name="Text to speech rate"
+                                        ToolTipService.ToolTip="Adjust the speed of clipboard speech" />
+                                </StackPanel>
 
-                                    <Button
-                                        x:Name="BtnTextToSpeech"
-                                        Style="{StaticResource OutlinedButtonStyle}"
-                                        Click="BtnTextToSpeech_Click"
-                                        AccessKey="T"
-                                        AutomationProperties.Name="Speak clipboard text"
-                                        ToolTipService.ToolTip="Play the clipboard text using text-to-speech">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                            <FontIcon Glyph="&#xE76E;" FontFamily="Segoe Fluent Icons" />
-                                            <StackPanel Spacing="2">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Volume" />
+                                    <Slider
+                                        x:Name="SldTtsVolume"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        StepFrequency="1"
+                                        TickFrequency="10"
+                                        TickPlacement="Outside"
+                                        SnapsTo="StepValues"
+                                        ValueChanged="SldTtsVolume_ValueChanged"
+                                        AutomationProperties.Name="Text to speech volume"
+                                        ToolTipService.ToolTip="Adjust speech volume independent of system volume" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="ClipboardActionsPanel" Orientation="Vertical" Spacing="8">
+                                    <StackPanel x:Name="ClipboardPrimaryActions" Orientation="Horizontal" Spacing="12">
+                                        <Button
+                                            x:Name="BtnTextToSpeech"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Click="BtnTextToSpeech_Click"
+                                            AccessKey="T"
+                                            AutomationProperties.Name="Speak clipboard text"
+                                            ToolTipService.ToolTip="Play the clipboard text using text-to-speech">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE76E;" FontFamily="Segoe Fluent Icons" />
                                                 <TextBlock Text="Speak clipboard" />
-                                                <TextBlock
-                                                    x:Name="BtnTextToSpeechHotkey"
-                                                    Text="Hotkey: CTRL+SHIFT+Q"
-                                                    Style="{StaticResource CaptionTextStyle}"
-                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             </StackPanel>
-                                        </StackPanel>
-                                    </Button>
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSpeakSelection"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSpeakSelection_Click"
+                                            AutomationProperties.Name="Speak active selection"
+                                            ToolTipService.ToolTip="Copy the current selection from the active app and read it aloud">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE8A1;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Speak selection" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="ClipboardSecondaryActions" Orientation="Horizontal" Spacing="12">
+                                        <Button
+                                            x:Name="BtnRestartTts"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnRestartTts_Click"
+                                            AutomationProperties.Name="Restart speaking from beginning"
+                                            ToolTipService.ToolTip="Speak the clipboard from the beginning, ignoring saved position">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE149;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Restart" />
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSkipSentenceBack"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSkipSentenceBack_Click"
+                                            AutomationProperties.Name="Skip sentence backward"
+                                            ToolTipService.ToolTip="Jump to the previous sentence">
+                                            <FontIcon Glyph="&#xE892;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSkipSentenceForward"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSkipSentenceForward_Click"
+                                            AutomationProperties.Name="Skip sentence forward"
+                                            ToolTipService.ToolTip="Jump to the next sentence">
+                                            <FontIcon Glyph="&#xE893;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <!-- Hotkey Router -->
-                    <Border x:Name="HotkeyRouterCard" Style="{StaticResource CardStyle}" Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2">
-                        <StackPanel Spacing="18">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Hotkey Router" Style="{StaticResource SectionHeaderTextStyle}" />
-                                <TextBlock
-                                    Text="Map one shortcut to another so you can trigger complex workflows from a single key press."
-                                    Style="{StaticResource CaptionTextStyle}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="12">
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock />
-                                    <TextBlock Grid.Column="1" Text="From" FontWeight="SemiBold" />
-                                    <TextBlock Grid.Column="2" Text="To" FontWeight="SemiBold" />
-                                    <TextBlock Grid.Column="3" Text="Actions" FontWeight="SemiBold" />
-                                </Grid>
-
-                                <ListView
-                                    x:Name="HotkeyRouterList"
-                                    ItemsSource="{x:Bind HotkeyRouterEntries, Mode=OneWay}"
-                                    SelectionMode="None"
-                                    IsItemClickEnabled="False"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    IsTabStop="False">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="local:HotkeyRouterEntry">
-                                            <Grid ColumnSpacing="12" Padding="0,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="4">
-                                                    <FontIcon
-                                                        Glyph="{x:Bind BindingStatusGlyph, Mode=OneWay}"
-                                                        Foreground="{x:Bind BindingStatusBrush, Mode=OneWay}"
-                                                        ToolTipService.ToolTip="{x:Bind BindingStatusTooltip, Mode=OneWay}" />
-                                                </StackPanel>
-
-                                                <Grid Grid.Column="1">
-                                                    <Border Background="{x:Bind FromBackgroundBrush, Mode=OneWay}" CornerRadius="4">
-                                                        <TextBox
-                                                            Text="{x:Bind FromHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                            PlaceholderText="CTRL+ALT+H"
-                                                            Background="Transparent"
-                                                            HorizontalAlignment="Stretch"
-                                                            ToolTipService.ToolTip="Shortcut to listen for"
-                                                            LostFocus="HotkeyRouterFrom_LostFocus" />
-                                                    </Border>
-                                                    <FontIcon
-                                                        Glyph="&#xE783;"
-                                                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                                        HorizontalAlignment="Right"
-                                                        VerticalAlignment="Center"
-                                                        Margin="0,0,8,0"
-                                                        Visibility="{x:Bind BindingErrorVisibility, Mode=OneWay}"
-                                                        ToolTipService.ToolTip="{x:Bind BindingErrorMessage, Mode=OneWay}" />
-                                                </Grid>
-
-                                                <Border Grid.Column="2" Background="{x:Bind ToBackgroundBrush, Mode=OneWay}" CornerRadius="4">
-                                                    <TextBox
-                                                        Text="{x:Bind ToHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="CTRL+SHIFT+H"
-                                                        Background="Transparent"
-                                                        HorizontalAlignment="Stretch"
-                                                        ToolTipService.ToolTip="Shortcut to send when triggered"
-                                                        LostFocus="HotkeyRouterTo_LostFocus" />
-                                                </Border>
-
-                                                <Button
-                                                    Grid.Column="3"
-                                                    Style="{StaticResource SubtleButtonStyle}"
-                                                    Content="Delete"
-                                                    Click="HotkeyRouterDelete_Click"
-                                                    Tag="{x:Bind}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-
-                                <Button
-                                    x:Name="BtnAddHotkeyRoute"
-                                    Style="{StaticResource AccentButtonStyle}"
-                                    HorizontalAlignment="Left"
-                                    Click="BtnAddHotkeyRoute_Click"
-                                    Content="Add mapping" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
                 </Grid>
 
                 <VisualStateManager.VisualStateGroups>
@@ -914,11 +870,9 @@
                                 <Setter Target="ClipboardCard.(Grid.Column)" Value="0" />
                                 <Setter Target="ClipboardCard.(Grid.Row)" Value="6" />
                                 <Setter Target="ClipboardCard.(Grid.ColumnSpan)" Value="2" />
-                                <Setter Target="HotkeyRouterCard.(Grid.Column)" Value="0" />
-                                <Setter Target="HotkeyRouterCard.(Grid.Row)" Value="7" />
-                                <Setter Target="HotkeyRouterCard.(Grid.ColumnSpan)" Value="2" />
                                 <Setter Target="FormattingActionsPanel.Orientation" Value="Vertical" />
-                                <Setter Target="ClipboardActionsPanel.Orientation" Value="Vertical" />
+                                <Setter Target="ClipboardPrimaryActions.Orientation" Value="Vertical" />
+                                <Setter Target="ClipboardSecondaryActions.Orientation" Value="Vertical" />
                             </VisualState.Setters>
                         </VisualState>
                         <VisualState x:Name="Wide">
@@ -943,11 +897,9 @@
                                 <Setter Target="ClipboardCard.(Grid.Column)" Value="1" />
                                 <Setter Target="ClipboardCard.(Grid.ColumnSpan)" Value="1" />
                                 <Setter Target="ClipboardCard.(Grid.Row)" Value="4" />
-                                <Setter Target="HotkeyRouterCard.(Grid.Column)" Value="0" />
-                                <Setter Target="HotkeyRouterCard.(Grid.ColumnSpan)" Value="2" />
-                                <Setter Target="HotkeyRouterCard.(Grid.Row)" Value="5" />
                                 <Setter Target="FormattingActionsPanel.Orientation" Value="Horizontal" />
-                                <Setter Target="ClipboardActionsPanel.Orientation" Value="Horizontal" />
+                                <Setter Target="ClipboardPrimaryActions.Orientation" Value="Horizontal" />
+                                <Setter Target="ClipboardSecondaryActions.Orientation" Value="Horizontal" />
                             </VisualState.Setters>
                         </VisualState>
                     </VisualStateGroup>

@@ -22,6 +22,7 @@ namespace Mutation.Ui;
 public partial class App : Application
 {
         private Window? _window;
+        internal Window? MainAppWindow => _window;
 	private IHost? _host;
 	private const string OpenAiHttpClientName = "openai-http-client";
 	private const string AnthropicHttpClientName = "anthropic-http-client";
@@ -243,7 +244,7 @@ public partial class App : Application
 			builder.Services.AddSingleton<ILlmService>(sp =>
 			{
 				var llmSettings = settings.LlmSettings;
-				string openAiKey = llmSettings?.ApiKey ?? string.Empty;
+				string openAiKey = llmSettings?.OpenAiApiKey ?? string.Empty;
 				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
 				int timeoutSeconds = llmSettings?.TimeoutSeconds > 0 ? llmSettings.TimeoutSeconds : 60;
 				var allModels = llmSettings?.Models ?? new List<LlmModelConfig>();
@@ -349,136 +350,13 @@ public partial class App : Application
 
                         var hkManager = _host.Services.GetRequiredService<HotkeyManager>();
                         if (_window is MainWindow main)
+                        {
                                 main.AttachHotkeyManager(hkManager);
+                                main.RegisterCoreHotkeys(hkManager);
+                        }
                         var settingsSvc = _host.Services.GetRequiredService<Settings>();
 
-                        if (!string.IsNullOrWhiteSpace(settingsSvc.AzureComputerVisionSettings?.ScreenshotHotKey))
-                        {
-                                hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AzureComputerVisionSettings.ScreenshotHotKey!),
-						  async () =>
-						  {
-							  try
-							  {
-								  await ocrMgr.TakeScreenshotToClipboardAsync();
-							  }
-							  catch (Exception ex) { await ((MainWindow)_window).ShowErrorDialog("Screenshot Error", ex); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.AzureComputerVisionSettings?.ScreenshotOcrHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AzureComputerVisionSettings.ScreenshotOcrHotKey!),
-						  async () =>
-						  {
-							  try
-							  {
-								  var result = await ocrMgr.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
-								  var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-								  mainWindow.SetOcrText(result.Message);
-                                                              HotkeyManager.SendHotkeyAfterDelay(settingsSvc.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
-							  }
-							  catch (Exception ex) { await ((MainWindow)_window).ShowErrorDialog("Screenshot + OCR Error", ex); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.AzureComputerVisionSettings?.ScreenshotLeftToRightTopToBottomOcrHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AzureComputerVisionSettings.ScreenshotLeftToRightTopToBottomOcrHotKey!),
-						  async () =>
-						  {
-							  try
-							  {
-								  var result = await ocrMgr.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
-								  var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-								  mainWindow.SetOcrText(result.Message);
-                                                              HotkeyManager.SendHotkeyAfterDelay(settingsSvc.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
-							  }
-							  catch (Exception ex) { await ((MainWindow)_window).ShowErrorDialog("Screenshot + OCR (LRTB) Error", ex); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.AzureComputerVisionSettings?.OcrHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AzureComputerVisionSettings.OcrHotKey!),
-						  async () =>
-						  {
-							  try
-							  {
-								  var result = await ocrMgr.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
-								  var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-								  mainWindow.SetOcrText(result.Message);
-                                                              HotkeyManager.SendHotkeyAfterDelay(settingsSvc.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
-							  }
-							  catch (Exception ex) { await ((MainWindow)_window).ShowErrorDialog("OCR Clipboard Error", ex); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.AzureComputerVisionSettings?.OcrLeftToRightTopToBottomHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AzureComputerVisionSettings.OcrLeftToRightTopToBottomHotKey!),
-						  async () =>
-						  {
-							  try
-							  {
-								  var result = await ocrMgr.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
-								  var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-								  mainWindow.SetOcrText(result.Message);
-                                                              HotkeyManager.SendHotkeyAfterDelay(settingsSvc.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
-							  }
-							  catch (Exception ex) { await ((MainWindow)_window).ShowErrorDialog("OCR Clipboard (LRTB) Error", ex); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.AudioSettings?.MicrophoneToggleMuteHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.AudioSettings.MicrophoneToggleMuteHotKey!),
-						  () =>
-						  {
-							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).BtnToggleMic_Click(null!, null!)); }
-							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Toggle Mic Error", ex)); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.SpeechToTextSettings?.SpeechToTextHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.SpeechToTextSettings.SpeechToTextHotKey!),
-						  () =>
-						  {
-							  try { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).StartStopSpeechToTextAsync(false)); }
-							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Speech to Text Error", ex)); }
-						  });
-			}
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.SpeechToTextSettings?.SpeechToTextWithLlmFormattingHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.SpeechToTextSettings.SpeechToTextWithLlmFormattingHotKey!),
-						  () =>
-						  {
-							  try { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).StartStopSpeechToTextAsync(true)); }
-							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Speech to Text (LLM) Error", ex)); }
-						  });
-			}
-
-
-
-			if (!string.IsNullOrWhiteSpace(settingsSvc.TextToSpeechSettings?.TextToSpeechHotKey))
-			{
-				hkManager.RegisterHotkey(
-						  Hotkey.Parse(settingsSvc.TextToSpeechSettings.TextToSpeechHotKey!),
-						  () =>
-						  {
-							  try { _window.DispatcherQueue.TryEnqueue(() => ((MainWindow)_window).BtnTextToSpeech_Click(null!, null!)); }
-							  catch (Exception ex) { _window.DispatcherQueue.TryEnqueue(async () => await ((MainWindow)_window).ShowErrorDialog("Text to Speech Error", ex)); }
-						  });
-			}
+                        // Core hotkey registration is now performed by main.RegisterCoreHotkeys above.
 
                         _ = hkManager.RegisterRouterHotkeys();
 
@@ -569,6 +447,11 @@ public partial class App : Application
 					System.Windows.Forms.MessageBoxIcon.Error
 				);
 			}
+
+			// A failed startup leaves the app half-initialized with no
+			// Window.Closed handler attached, so the process would otherwise
+			// linger after the user dismisses the Startup Error dialog.
+			await ShutdownAsync();
 		}
 	}
 
@@ -596,9 +479,12 @@ public partial class App : Application
 		}
 		finally
 		{
-			// Request application shutdown; if background threads keep process alive,
-			// Exit() will terminate the message loop.
+			// End the WinUI message loop, then guarantee process termination.
+			// Application.Exit() alone is not enough: NAudio callbacks, COM
+			// device-enumerator listeners, SAPI synthesizer threads, and the
+			// HotkeyManager's WndProc subclass can keep the process alive.
 			try { Exit(); } catch { }
+			Environment.Exit(0);
 		}
 	}
 

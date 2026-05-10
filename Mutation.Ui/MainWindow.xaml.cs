@@ -3,6 +3,8 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
@@ -16,6 +18,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+using Windows.System;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
@@ -52,7 +55,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
-	private HotkeyRouterController? _hotkeyRouter;
+	private bool _ttsControlsReady;
+	private const string DefaultVoiceLabel = "(System default)";
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 	{
@@ -84,7 +88,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	[DllImport("user32.dll")]
 	private static extern IntPtr GetForegroundWindow();
 
-	public ObservableCollection<HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
+	[DllImport("user32.dll")]
+	private static extern uint GetClipboardSequenceNumber();
 
 	public MainWindow(
 		ClipboardManager clipboard,
@@ -119,6 +124,12 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
 
         InitializeComponent();
+
+        if (Content is UIElement rootForKeys)
+        {
+            rootForKeys.KeyDown += RootContent_KeyDown;
+        }
+
         _microphoneVisualization = new MicrophoneVisualizationController(
             DispatcherQueue,
             _audioDeviceManager,
@@ -195,14 +206,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_audioDeviceManager.Microphone != null)
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
+		InitializeTextToSpeechControls();
 		InitializeHotkeyVisuals();
-		_hotkeyRouter = new HotkeyRouterController(
-			HotkeyRouterEntries,
-			_settings,
-			_settingsManager,
-			DispatcherQueue,
-			HotkeyRouterList);
-		_hotkeyRouter.Initialize();
 
 		this.Closed += MainWindow_Closed;
 	}
@@ -238,14 +243,114 @@ public sealed partial class MainWindow : Window, IDisposable
 		// yield return TxtFormatPrompt;
 		yield return TxtFormatTranscript;
 		yield return TxtOcr;
-		yield return TxtClipboard;
 	}
 
 	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
 	{
 		_hotkeyManager = hotkeyManager;
-		_hotkeyRouter?.AttachHotkeyManager(hotkeyManager);
 		_promptLibrary?.AttachHotkeyManager(hotkeyManager);
+		_hotkeyManager.RegisterRouterHotkeys();
+	}
+
+	internal void RegisterCoreHotkeys(HotkeyManager hk)
+	{
+		var ocr = _settings.AzureComputerVisionSettings;
+		var stt = _settings.SpeechToTextSettings;
+		var tts = _settings.TextToSpeechSettings;
+		var aud = _settings.AudioSettings;
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotHotKey))
+			TryRegister(hk, ocr.ScreenshotHotKey!, async () =>
+			{
+				try { await _ocrManager.TakeScreenshotToClipboardAsync(); }
+				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotOcrHotKey))
+			TryRegister(hk, ocr.ScreenshotOcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotLeftToRightTopToBottomOcrHotKey))
+			TryRegister(hk, ocr.ScreenshotLeftToRightTopToBottomOcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR (LRTB) Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.OcrHotKey))
+			TryRegister(hk, ocr.OcrHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(ocr?.OcrLeftToRightTopToBottomHotKey))
+			TryRegister(hk, ocr.OcrLeftToRightTopToBottomHotKey!, async () =>
+			{
+				try
+				{
+					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
+					SetOcrText(result.Message);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+				}
+				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard (LRTB) Error", ex); }
+			});
+
+		if (!string.IsNullOrWhiteSpace(aud?.MicrophoneToggleMuteHotKey))
+			TryRegister(hk, aud.MicrophoneToggleMuteHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnToggleMic_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextHotKey))
+			TryRegister(hk, stt.SpeechToTextHotKey!, () =>
+				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(false)));
+
+		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextWithLlmProcessingHotKey))
+			TryRegister(hk, stt.SpeechToTextWithLlmProcessingHotKey!, () =>
+				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(true)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakClipboard))
+			TryRegister(hk, tts.SpeakClipboard!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnTextToSpeech_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakSelectionHotKey))
+			TryRegister(hk, tts.SpeakSelectionHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => SpeakActiveSelectionAsync()));
+
+		if (!string.IsNullOrWhiteSpace(tts?.RestartFromBeginningHotKey))
+			TryRegister(hk, tts.RestartFromBeginningHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnRestartTts_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceBackwardHotKey))
+			TryRegister(hk, tts.SkipSentenceBackwardHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceBack_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceForwardHotKey))
+			TryRegister(hk, tts.SkipSentenceForwardHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceForward_Click(null!, null!)));
+	}
+
+	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
+	{
+		try { hk.RegisterHotkey(Hotkey.Parse(hotkey), callback); }
+		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Hotkey '{hotkey}' parse/register failed: {ex.Message}"); }
 	}
 
 	private void RestorePersistedSpeechServiceSelection()
@@ -310,8 +415,12 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnOcrClipboardLrtb, BtnOcrClipboardLrtbHotkey, _settings.AzureComputerVisionSettings?.OcrLeftToRightTopToBottomHotKey, "Run OCR on an image stored in the clipboard using left-to-right reading order");
 		ConfigureButtonHotkey(BtnScreenshotOcr, BtnScreenshotOcrHotkey, _settings.AzureComputerVisionSettings?.ScreenshotOcrHotKey, "Capture a screenshot and extract text automatically");
 		ConfigureButtonHotkey(BtnScreenshotOcrLrtb, BtnScreenshotOcrLrtbHotkey, _settings.AzureComputerVisionSettings?.ScreenshotLeftToRightTopToBottomOcrHotKey, "Capture a screenshot and extract text using left-to-right reading order");
-		ConfigureButtonHotkey(BtnTextToSpeech, BtnTextToSpeechHotkey, _settings.TextToSpeechSettings?.TextToSpeechHotKey, "Play the clipboard text using text-to-speech");
-		ConfigureButtonHotkey(BtnFormatLlm, null, null, "Send transcript through the configured language model");
+		ConfigureButtonHotkey(BtnTextToSpeech, null, _settings.TextToSpeechSettings?.SpeakClipboard, "Play the clipboard text using text-to-speech");
+		ConfigureButtonHotkey(BtnRestartTts, null, _settings.TextToSpeechSettings?.RestartFromBeginningHotKey, "Speak the clipboard from the beginning, ignoring saved position");
+		ConfigureButtonHotkey(BtnSkipSentenceBack, null, _settings.TextToSpeechSettings?.SkipSentenceBackwardHotKey, "Jump to the previous sentence");
+		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");
+		ConfigureButtonHotkey(BtnSpeakSelection, null, _settings.TextToSpeechSettings?.SpeakSelectionHotKey, "Copy the current selection from the active app and read it aloud");
+		ConfigureButtonHotkey(BtnProcessLlm, null, null, "Send transcript through the configured language model");
 	}
 
 	private async void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -339,33 +448,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		// _settings.LlmSettings!.FormatTranscriptPrompt = TxtFormatPrompt.Text;
 
-		var normalizedPairs = _hotkeyRouter?.SyncSettings() ?? new List<(string From, string To)>();
 		_settingsManager.SaveSettingsToFile(_settings);
-		_hotkeyRouter?.UpdateSnapshot(normalizedPairs);
-        
+
         _audioSessionManager.Dispose();
-        
+
 		BeepPlayer.DisposePlayers();
 		Dispose();
 	}
-
-	private void CopyText_Click(object sender, RoutedEventArgs e)
-	{
-		_clipboard.SetText(TxtClipboard.Text);
-		ShowStatus("Clipboard", "Text copied to the clipboard.", InfoBarSeverity.Success);
-	}
-
-	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.AddNewMapping();
-
-	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.DeleteMapping(sender);
-
-	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.CommitFromLostFocus(sender);
-
-	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e) =>
-		_hotkeyRouter?.CommitToLostFocus(sender);
 
 	public void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
 	{
@@ -658,7 +747,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
-	public async Task StartStopSpeechToTextAsync(bool useLlmFormatting = false)
+	public async Task StartStopSpeechToTextAsync(bool useLlmProcessing = false)
 	{
 		try
 		{
@@ -679,7 +768,7 @@ public sealed partial class MainWindow : Window, IDisposable
             }
             
             LlmSettings.LlmPrompt? autoRunPrompt = _promptLibrary?.GetAutoRunPrompt();
-            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmFormatting, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
+            await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmProcessing, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
 		}
 		catch (Exception ex)
 		{
@@ -705,9 +794,211 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public async void BtnTextToSpeech_Click(object? sender, RoutedEventArgs? e)
 	{
-		string text = await _clipboard.GetTextAsync();
-		_textToSpeech.SpeakText(text);
-		ShowStatus("Text to Speech", "Speaking clipboard text.", InfoBarSeverity.Informational);
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		var (kind, clipboardText) = await _clipboard.InspectAsync();
+		string trimmed = (clipboardText ?? string.Empty).Trim();
+
+		if (_textToSpeech.IsSpeaking)
+		{
+			string? wasSpeaking = _textToSpeech.CurrentText;
+			_textToSpeech.Stop();
+
+			bool clipboardChanged = kind == ClipboardKind.Text
+				&& trimmed.Length > 0
+				&& !string.Equals(trimmed, wasSpeaking, StringComparison.Ordinal);
+
+			if (clipboardChanged)
+			{
+				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+					resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
+				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
+			}
+			else
+			{
+				ShowStatus("Text to Speech", "Stopped.", InfoBarSeverity.Informational);
+			}
+			return;
+		}
+
+		if (kind == ClipboardKind.Text && trimmed.Length > 0)
+		{
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing);
+			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+			return;
+		}
+
+		AnnounceUnreadableClipboard(kind, tts);
+	}
+
+	public async void BtnRestartTts_Click(object? sender, RoutedEventArgs? e)
+	{
+		await ReadClipboardFreshAsync();
+	}
+
+	public void BtnSkipSentenceBack_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName);
+	}
+
+	public void BtnSkipSentenceForward_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName);
+	}
+
+	public async void SpeakActiveSelectionAsync()
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		var ownHwnd = WindowNative.GetWindowHandle(this);
+		if (ownHwnd != IntPtr.Zero && GetForegroundWindow() == ownHwnd)
+		{
+			AnnounceSelectionUnavailable(
+				"Read selection only works when another application is active with text selected.",
+				tts);
+			return;
+		}
+
+		uint before = GetClipboardSequenceNumber();
+		try { await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+C")); }
+		catch { /* sending may fail if focus is on a non-input control */ }
+
+		const int timeoutMs = 2000;
+		const int pollMs = 30;
+		int elapsed = 0;
+		while (GetClipboardSequenceNumber() == before && elapsed < timeoutMs)
+		{
+			await Task.Delay(pollMs);
+			elapsed += pollMs;
+		}
+
+		if (GetClipboardSequenceNumber() == before)
+		{
+			AnnounceSelectionUnavailable(
+				"No text was selected, or the active application did not copy anything.",
+				tts);
+			return;
+		}
+
+		BtnTextToSpeech_Click(null, null);
+	}
+
+	private void AnnounceSelectionUnavailable(string message, TextToSpeechSettings tts)
+	{
+		_textToSpeech.SpeakAnnouncement(message, tts.Rate, tts.Volume, tts.VoiceName);
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
+	}
+
+	public void BtnSpeakSelection_Click(object? sender, RoutedEventArgs? e) => SpeakActiveSelectionAsync();
+
+	private async Task ReadClipboardFreshAsync()
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		var (kind, clipboardText) = await _clipboard.InspectAsync();
+		string trimmed = (clipboardText ?? string.Empty).Trim();
+
+		if (kind == ClipboardKind.Text && trimmed.Length > 0)
+		{
+			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+				resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
+			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+			return;
+		}
+
+		AnnounceUnreadableClipboard(kind, tts);
+	}
+
+	private void AnnounceUnreadableClipboard(ClipboardKind kind, TextToSpeechSettings tts)
+	{
+		string message = kind switch
+		{
+			ClipboardKind.Image => "The clipboard contains an image, not text. Use OCR to extract text first.",
+			ClipboardKind.Unsupported => "The clipboard does not contain readable text.",
+			_ => "No text on the clipboard.",
+		};
+
+		_textToSpeech.SpeakAnnouncement(message, tts.Rate, tts.Volume, tts.VoiceName);
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
+	}
+
+	private void InitializeTextToSpeechControls()
+	{
+		var settings = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		var voiceItems = new List<string> { DefaultVoiceLabel };
+		try { voiceItems.AddRange(_textToSpeech.GetVoiceNames()); }
+		catch { /* leave default-only list if voice enumeration fails */ }
+
+		CmbTtsVoice.ItemsSource = voiceItems;
+		string? configuredVoice = settings.VoiceName;
+		string selectedVoice = !string.IsNullOrWhiteSpace(configuredVoice) && voiceItems.Contains(configuredVoice)
+			? configuredVoice!
+			: DefaultVoiceLabel;
+		CmbTtsVoice.SelectedItem = selectedVoice;
+
+		int rate = settings.Rate;
+		if (rate < -10) rate = -10;
+		else if (rate > 10) rate = 10;
+		SldTtsRate.Value = rate;
+
+		int volume = settings.Volume;
+		if (volume < 0) volume = 0;
+		else if (volume > 100) volume = 100;
+		SldTtsVolume.Value = volume;
+
+		_ttsControlsReady = true;
+	}
+
+	private void CmbTtsVoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		string? selected = CmbTtsVoice.SelectedItem as string;
+		string? voiceName = string.IsNullOrEmpty(selected) || selected == DefaultVoiceLabel
+			? null
+			: selected;
+
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (string.Equals(_settings.TextToSpeechSettings.VoiceName, voiceName, StringComparison.Ordinal))
+			return;
+
+		_settings.TextToSpeechSettings.VoiceName = voiceName;
+		_settingsManager.SaveSettingsToFile(_settings);
+
+		string sampleSubject = voiceName ?? "system default voice";
+		_textToSpeech.SpeakAnnouncement(
+			$"Currently selected {sampleSubject}.",
+			_settings.TextToSpeechSettings.Rate,
+			_settings.TextToSpeechSettings.Volume,
+			voiceName);
+	}
+
+	private void SldTtsRate_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		int rate = (int)Math.Round(e.NewValue);
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (_settings.TextToSpeechSettings.Rate == rate) return;
+
+		_settings.TextToSpeechSettings.Rate = rate;
+		_settingsManager.SaveSettingsToFile(_settings);
+	}
+
+	private void SldTtsVolume_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+
+		int volume = (int)Math.Round(e.NewValue);
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		if (_settings.TextToSpeechSettings.Volume == volume) return;
+
+		_settings.TextToSpeechSettings.Volume = volume;
+		_settingsManager.SaveSettingsToFile(_settings);
 	}
 
 	public void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)
@@ -721,18 +1012,18 @@ public sealed partial class MainWindow : Window, IDisposable
 		ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
 	}
 
-	public async void BtnFormatLlm_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnProcessLlm_Click(object? sender, RoutedEventArgs? e)
 	{
 		try
 		{
             // Use the prompt marked as AutoRun, or the first available one, or prompt user?
             // For now, let's use the AutoRun prompt if available.
-            var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun) 
+            var prompt = _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun)
                          ?? _settings.LlmSettings?.Prompts.FirstOrDefault();
-                         
+
             if (prompt == null)
             {
-                ShowStatus("Formatting", "No prompts configured.", InfoBarSeverity.Warning);
+                ShowStatus("Processing", "No prompts configured.", InfoBarSeverity.Warning);
                 return;
             }
 
@@ -741,8 +1032,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
-			ShowStatus("Formatting", ex.Message, InfoBarSeverity.Error);
-			await ShowErrorDialog("Format with LLM Error", ex);
+			ShowStatus("Processing", ex.Message, InfoBarSeverity.Error);
+			await ShowErrorDialog("Process with LLM Error", ex);
 		}
 	}
 
@@ -758,28 +1049,28 @@ public sealed partial class MainWindow : Window, IDisposable
              }
         
 			BeepPlayer.Play(BeepType.Start);
-			TxtFormatTranscript.Text = "Formatting...";
+			TxtFormatTranscript.Text = "Processing...";
 			string raw = await _clipboard.GetTextAsync();
 			if (string.IsNullOrWhiteSpace(raw))
 			{
-				ShowStatus("Formatting", "Clipboard is empty.", InfoBarSeverity.Warning);
+				ShowStatus("Processing", "Clipboard is empty.", InfoBarSeverity.Warning);
 				TxtFormatTranscript.Text = string.Empty;
 				return;
 			}
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
-			string formatted = await _transcriptFormatter.FormatWithLlmAsync(raw, prompt.Content, modelName);
-            
-			TxtFormatTranscript.Text = formatted;
-			_clipboard.SetText(formatted);
-			InsertIntoActiveApplication(formatted);
+			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName);
+
+			TxtFormatTranscript.Text = processed;
+			_clipboard.SetText(processed);
+			InsertIntoActiveApplication(processed);
 			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Formatting", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
+			ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
         }
         catch (Exception ex)
         {
-             ShowStatus("Formatting Failed", ex.Message, InfoBarSeverity.Error);
+             ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }
@@ -822,7 +1113,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BtnSpeechToTextWithFormatIcon.Glyph = MagicGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
 			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Record and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmFormattingHotKey, "Record and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Record and Format");
 		}
 		else if (label == "Stop")
 		{
@@ -835,7 +1126,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BtnSpeechToTextWithFormatIcon.Glyph = StopGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
 			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Stop and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmFormattingHotKey, "Stop and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Stop and Format");
 		}
 		else
 		{
@@ -1006,11 +1297,27 @@ public sealed partial class MainWindow : Window, IDisposable
         });
     }
 
+	private readonly Dictionary<Button, string> _buttonBaseNames = new();
+
 	private void ConfigureButtonHotkey(Button button, TextBlock? hotkeyTextBlock, string? hotkey, string baseTooltip)
 	{
+		if (!_buttonBaseNames.TryGetValue(button, out var baseName))
+		{
+			baseName = AutomationProperties.GetName(button);
+			if (string.IsNullOrWhiteSpace(baseName))
+				baseName = baseTooltip;
+			_buttonBaseNames[button] = baseName;
+		}
+
+		string composedName = string.IsNullOrWhiteSpace(hotkey)
+			? baseName
+			: $"{baseName}, {hotkey}";
+		AutomationProperties.SetName(button, composedName);
+
 		string tooltip = ComposeTooltip(baseTooltip, hotkey);
 		ToolTipService.SetToolTip(button, tooltip);
 		AutomationProperties.SetHelpText(button, tooltip);
+		AutomationProperties.SetAcceleratorKey(button, string.IsNullOrWhiteSpace(hotkey) ? string.Empty : hotkey);
 		UpdateHotkeyText(hotkeyTextBlock, hotkey);
 	}
 
@@ -1288,6 +1595,23 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
+	private void RootContent_KeyDown(object sender, KeyRoutedEventArgs e)
+	{
+		if (e.Handled)
+			return;
+		// VK_OEM_COMMA (0xBC) — no named VirtualKey enum member exists for ','
+		if (e.Key != (VirtualKey)0xBC)
+			return;
+
+		var ctrlState = Microsoft.UI.Input.InputKeyboardSource
+			.GetKeyStateForCurrentThread(VirtualKey.Control);
+		if ((ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) != Windows.UI.Core.CoreVirtualKeyStates.Down)
+			return;
+
+		e.Handled = true;
+		SettingsMenuItem_Click(this, new RoutedEventArgs());
+	}
+
 	private async void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
 	{
 		if (Content is not FrameworkElement rootElement)
@@ -1295,15 +1619,89 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		var settingsDialog = new SettingsDialog(_settings)
+		var settingsDialog = new SettingsDialog(
+			_settings,
+			_settingsManager,
+			_settingsManager.SettingsFilePath,
+			ApplyLiveSettings)
 		{
 			XamlRoot = rootElement.XamlRoot,
 			RequestedTheme = rootElement.ActualTheme
 		};
 
-		if (await ShowDialogAsync(settingsDialog) == ContentDialogResult.Primary)
+		await ShowDialogAsync(settingsDialog);
+	}
+
+	internal void ApplyLiveSettings()
+	{
+		try
 		{
-			_settingsManager.SaveSettingsToFile(_settings);
+			_microphoneVisualization?.ApplyEnabledStateFromSettings();
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (mic viz) failed: {ex.Message}");
+		}
+
+		IReadOnlyList<HotkeyManager.HotkeyRegistrationResult>? routerResults = null;
+		try
+		{
+			if (_hotkeyManager is not null)
+			{
+				_hotkeyManager.ClearAllForRebind();
+				RegisterCoreHotkeys(_hotkeyManager);
+				routerResults = _hotkeyManager.RegisterRouterHotkeys();
+				_hotkeyManager.RegisterPromptHotkeys(
+					_settings.LlmSettings?.Prompts ?? Enumerable.Empty<LlmSettings.LlmPrompt>(),
+					ExecutePrompt);
+			}
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (hotkeys) failed: {ex.Message}");
+		}
+
+		if (routerResults is not null)
+		{
+			var failures = routerResults.Where(r => !r.Success).ToList();
+			if (failures.Count > 0)
+				_ = ShowRouterBindingFailuresAsync(failures);
+		}
+	}
+
+	private async Task ShowRouterBindingFailuresAsync(IReadOnlyList<HotkeyManager.HotkeyRegistrationResult> failures)
+	{
+		try
+		{
+			if (Content is not FrameworkElement rootElement)
+				return;
+
+			var lines = failures.Select(f =>
+			{
+				var from = string.IsNullOrWhiteSpace(f.Map?.FromHotKey) ? "(empty)" : f.Map!.FromHotKey;
+				var to = string.IsNullOrWhiteSpace(f.Map?.ToHotKey) ? "(empty)" : f.Map!.ToHotKey;
+				var reason = string.IsNullOrWhiteSpace(f.ErrorMessage) ? "Unknown error." : f.ErrorMessage;
+				return $"• {from} → {to}: {reason}";
+			});
+
+			var dialog = new ContentDialog
+			{
+				Title = "Some hotkey router mappings could not be registered",
+				Content = new TextBlock
+				{
+					Text = string.Join(Environment.NewLine, lines),
+					TextWrapping = TextWrapping.Wrap,
+				},
+				CloseButtonText = "OK",
+				XamlRoot = rootElement.XamlRoot,
+				RequestedTheme = rootElement.ActualTheme,
+			};
+
+			await ShowDialogAsync(dialog);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ShowRouterBindingFailures failed: {ex.Message}");
 		}
 	}
 

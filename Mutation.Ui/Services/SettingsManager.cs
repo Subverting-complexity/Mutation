@@ -18,7 +18,7 @@ internal class SettingsManager : ISettingsManager
 		Converters = new List<JsonConverter> { new StringEnumConverter() }
 	};
 
-	private string SettingsFilePath { get; set; }
+	public string SettingsFilePath { get; }
 	private string SettingsFileFullPath => Path.GetFullPath(SettingsFilePath);
 
 	public SettingsManager(
@@ -41,18 +41,12 @@ internal class SettingsManager : ISettingsManager
 		return false;
 	}
 
-	private bool EnsureSettings(Settings settings, bool isNewFile)
+	internal bool EnsureSettings(Settings settings, bool isNewFile)
 	{
 		const string PlaceholderValue = "<placeholder>";
 		const string PlaceholderUrl = "https://placeholder.com";
 
 		bool somethingWasMissing = false;
-
-                if (string.IsNullOrWhiteSpace(settings.UserInstructions))
-                {
-                        settings.UserInstructions = "Change the values of the settings below to your preferences, save the file, and restart Mutation.exe. DeploymentId in the LlmSettings should be set to your Azure model Deployment Name.";
-                        somethingWasMissing = true;
-                }
 
                 if (settings.MainWindowUiSettings is null)
                 {
@@ -328,9 +322,9 @@ internal class SettingsManager : ISettingsManager
 			}
 		}
 
-		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmFormattingHotKey))
+		if (string.IsNullOrWhiteSpace(speechToTextSettings.SpeechToTextWithLlmProcessingHotKey))
 		{
-			speechToTextSettings.SpeechToTextWithLlmFormattingHotKey = "SHIFT+ALT+I";
+			speechToTextSettings.SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 			somethingWasMissing = true;
 		}
 		if (string.IsNullOrWhiteSpace(speechToTextSettings.TempDirectory))
@@ -367,9 +361,9 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 		var llmSettings = settings.LlmSettings;
-		if (string.IsNullOrWhiteSpace(llmSettings.ApiKey))
+		if (string.IsNullOrWhiteSpace(llmSettings.OpenAiApiKey))
 		{
-			llmSettings.ApiKey = PlaceholderValue;
+			llmSettings.OpenAiApiKey = PlaceholderValue;
 			somethingWasMissing = true;
 		}
 		if (string.IsNullOrWhiteSpace(llmSettings.AnthropicApiKey))
@@ -394,12 +388,7 @@ internal class SettingsManager : ISettingsManager
 
 		if (!llmSettings.Prompts.Any())
 		{
-             string? legacyPrompt = llmSettings.FormatTranscriptPrompt;
-             string? legacyHotkey = llmSettings.FormatWithLlmHotKey;
-             
-             if (string.IsNullOrWhiteSpace(legacyPrompt))
-             {
-                 legacyPrompt = @"You are a helpful proofreader and editor. When you are asked to format a transcript, apply the following rules to improve the formatting of the text:
+             string defaultPrompt = @"You are a helpful proofreader and editor. When you are asked to format a transcript, apply the following rules to improve the formatting of the text:
 Replace the words 'new line' (case insensitive) with an actual new line character, and replace the words 'new paragraph' (case insensitive) with 2 new line characters, and replace the words 'new bullet' (case insensitive) with a newline character and a bullet character, eg. '- ', and end the preceding sentence with a full stop '.', and start the new sentence with a capital letter, and do not make any other changes.
 
 Here is an example of a raw transcript and the reformatted text:
@@ -421,17 +410,15 @@ Depending on the results, this might include:
 Collaboration among various healthcare professionals ensures that the information gleaned from the radiology report is utilized to provide the most effective and individualized care tailored to your specific condition and needs.
 End of summary.
 ";
-             }
-             
+
+             string? legacyHotkey = llmSettings.ProcessWithLlmHotKey;
              if (string.IsNullOrWhiteSpace(legacyHotkey))
-             {
                  legacyHotkey = "ALT+SHIFT+P";
-             }
-             
+
              llmSettings.Prompts.Add(new LlmSettings.LlmPrompt {
                 Id = 1,
                 Name = "Default",
-                Content = legacyPrompt,
+                Content = defaultPrompt,
                 Hotkey = legacyHotkey,
                 AutoRun = false,
                 ModelName = LlmSettings.DefaultModel
@@ -459,121 +446,121 @@ End of summary.
 			}
 		}
 
-		if (llmSettings.TranscriptFormatRules == null || !llmSettings.TranscriptFormatRules.Any())
+		if (settings.TranscriptFormatRules == null || !settings.TranscriptFormatRules.Any())
 		{
-			llmSettings.TranscriptFormatRules = new List<LlmSettings.TranscriptFormatRule>
+			settings.TranscriptFormatRules = new List<TranscriptFormatRule>
 			{
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new line",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "newline",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next line",
 					ReplaceWith= $"{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new paragraph",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new paragraphs",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next paragraph",
 					ReplaceWith= $"{Environment.NewLine}{Environment.NewLine}",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new bullet",
 					ReplaceWith= $"{Environment.NewLine}- ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "next bullet",
 					ReplaceWith= $"{Environment.NewLine}- ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "new colon",
 					ReplaceWith= $": ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "semicolon",
 					ReplaceWith= $"; ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "full stop",
 					ReplaceWith= $". ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "comma",
 					ReplaceWith= $", ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "exclamation mark",
 					ReplaceWith= $"! ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "question mark",
 					ReplaceWith= $"? ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "ellipsis",
 					ReplaceWith= $"... ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
-				new LlmSettings.TranscriptFormatRule
+				new TranscriptFormatRule
 				{
 					Find= "dot dot dot",
 					ReplaceWith= $"... ",
 					CaseSensitive = false,
-					MatchType = LlmSettings.TranscriptFormatRule.MatchTypeEnum.Smart,
+					MatchType = TranscriptFormatRule.MatchTypeEnum.Smart,
 				},
 
 
@@ -587,9 +574,29 @@ End of summary.
 			somethingWasMissing = true;
 		}
 		var textToSpeechSettings = settings.TextToSpeechSettings;
-		if (string.IsNullOrWhiteSpace(textToSpeechSettings.TextToSpeechHotKey))
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakClipboard))
 		{
-			textToSpeechSettings.TextToSpeechHotKey = "CTRL+SHIFT+Q";
+			textToSpeechSettings.SpeakClipboard = "CTRL+SHIFT+ALT+Q";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakSelectionHotKey))
+		{
+			textToSpeechSettings.SpeakSelectionHotKey = "CTRL+SHIFT+Q";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.RestartFromBeginningHotKey))
+		{
+			textToSpeechSettings.RestartFromBeginningHotKey = "CTRL+SHIFT+B";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SkipSentenceBackwardHotKey))
+		{
+			textToSpeechSettings.SkipSentenceBackwardHotKey = "CTRL+SHIFT+J";
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SkipSentenceForwardHotKey))
+		{
+			textToSpeechSettings.SkipSentenceForwardHotKey = "CTRL+SHIFT+K";
 			somethingWasMissing = true;
 		}
 
@@ -616,17 +623,47 @@ End of summary.
 		JObject jObj = JObject.Parse(json);
 		bool saveRequired = false;
 
+		// Drop legacy UserInstructions (removed setting).
+		if (jObj.Remove("UserInstructions"))
+			saveRequired = true;
+
 		JObject? speechSettings = jObj["SpeechToTextSettings"] as JObject;
 		if (speechSettings is null && jObj["SpeetchToTextSettings"] is JObject legacySpeechSettings)
 		{
-			speechSettings = legacySpeechSettings;
 			jObj["SpeechToTextSettings"] = legacySpeechSettings;
 			jObj.Remove("SpeetchToTextSettings");
+			// Re-fetch from jObj — Newtonsoft.Json deep-clones a JToken with an existing
+			// parent on assignment, so the local `legacySpeechSettings` reference points at
+			// a detached object. Subsequent in-block STT migrations would silently no-op
+			// without this re-fetch.
+			speechSettings = jObj["SpeechToTextSettings"] as JObject;
 			saveRequired = true;
 		}
 
 		if (speechSettings is not null)
 		{
+			// Rename SpeechToTextWithLlmFormattingHotKey -> SpeechToTextWithLlmProcessingHotKey.
+			if (speechSettings["SpeechToTextWithLlmFormattingHotKey"] is JToken legacyFormattingHotkey)
+			{
+				if (speechSettings["SpeechToTextWithLlmProcessingHotKey"] is null)
+				{
+					speechSettings["SpeechToTextWithLlmProcessingHotKey"] = legacyFormattingHotkey;
+				}
+				speechSettings.Remove("SpeechToTextWithLlmFormattingHotKey");
+				saveRequired = true;
+			}
+
+			// Run the Active...Speetch... typo fix BEFORE the Service->Services collapse.
+			// The collapse populates ActiveSpeechToTextService from the loose Service field,
+			// which would otherwise shadow this typo-fix's null guard and leave the legacy
+			// key in the JSON forever. (Caught by the full-legacy chain test.)
+			if (speechSettings["ActiveSpeechToTextService"] == null && speechSettings["ActiveSpeetchToTextService"] != null)
+			{
+				speechSettings["ActiveSpeechToTextService"] = speechSettings["ActiveSpeetchToTextService"];
+				speechSettings.Remove("ActiveSpeetchToTextService");
+				saveRequired = true;
+			}
+
 			if (speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
 			{
 				string providerName = speechSettings.Value<string>("Service") ?? string.Empty;
@@ -649,15 +686,13 @@ End of summary.
 				speechSettings.Remove("ModelId");
 				speechSettings.Remove("SpeechToTextPrompt");
 
-				speechSettings["ActiveSpeechToTextService"] = providerName;
+				// Only seed ActiveSpeechToTextService if the typo-fix above didn't already
+				// populate it from a legacy ActiveSpeetchToTextService.
+				if (speechSettings["ActiveSpeechToTextService"] == null)
+				{
+					speechSettings["ActiveSpeechToTextService"] = providerName;
+				}
 				speechSettings["Services"] = createdServicesArray;
-				saveRequired = true;
-			}
-
-			if (speechSettings["ActiveSpeechToTextService"] == null && speechSettings["ActiveSpeetchToTextService"] != null)
-			{
-				speechSettings["ActiveSpeechToTextService"] = speechSettings["ActiveSpeetchToTextService"];
-				speechSettings.Remove("ActiveSpeetchToTextService");
 				saveRequired = true;
 			}
 
@@ -698,6 +733,99 @@ End of summary.
 				saveRequired = true;
 			}
 
+			// Convert legacy Models from List<string> to List<LlmModelConfig>. The schema
+			// changed when LlmModelConfig was introduced (May 2026). Without this, an old
+			// config's `"Models": ["gpt-4.1", ...]` throws JsonSerializationException on
+			// deserialize, falling through to recovery that wipes the user's LLM config.
+			// Provider is inferred from the model name (claude* -> Anthropic, else OpenAI).
+			if (llmSettingsJObj["Models"] is JArray modelsArray && modelsArray.Any(m => m.Type == JTokenType.String))
+			{
+				var converted = new JArray();
+				foreach (var entry in modelsArray)
+				{
+					if (entry.Type == JTokenType.String)
+					{
+						string name = entry.ToString();
+						string provider = name.StartsWith("claude", StringComparison.OrdinalIgnoreCase)
+							? "Anthropic"
+							: "OpenAI";
+						converted.Add(new JObject
+						{
+							["Name"] = name,
+							["Provider"] = provider,
+							["CustomTemperature"] = null,
+						});
+					}
+					else
+					{
+						converted.Add(entry);
+					}
+				}
+				llmSettingsJObj["Models"] = converted;
+				saveRequired = true;
+			}
+
+			// Rename LlmSettings.ApiKey -> OpenAiApiKey (only this class; Azure/STT ApiKey untouched).
+			if (llmSettingsJObj["ApiKey"] is JToken legacyOpenAiKey)
+			{
+				if (llmSettingsJObj["OpenAiApiKey"] is null)
+				{
+					llmSettingsJObj["OpenAiApiKey"] = legacyOpenAiKey;
+				}
+				llmSettingsJObj.Remove("ApiKey");
+				saveRequired = true;
+			}
+
+			// Move LlmSettings.TranscriptFormatRules -> root TranscriptFormatRules (rules aren't LLM-specific).
+			if (llmSettingsJObj["TranscriptFormatRules"] is JToken legacyRules)
+			{
+				if (jObj["TranscriptFormatRules"] is null)
+				{
+					jObj["TranscriptFormatRules"] = legacyRules;
+				}
+				llmSettingsJObj.Remove("TranscriptFormatRules");
+				saveRequired = true;
+			}
+
+			// Rename LlmSettings.FormatWithLlmHotKey -> ProcessWithLlmHotKey.
+			if (llmSettingsJObj["FormatWithLlmHotKey"] is JToken legacyProcessHotkey)
+			{
+				if (llmSettingsJObj["ProcessWithLlmHotKey"] is null)
+				{
+					llmSettingsJObj["ProcessWithLlmHotKey"] = legacyProcessHotkey;
+				}
+				llmSettingsJObj.Remove("FormatWithLlmHotKey");
+				saveRequired = true;
+			}
+
+			// Drop legacy FormatTranscriptPrompt. If non-empty and Prompts is empty, seed Prompts[0] from it.
+			if (llmSettingsJObj["FormatTranscriptPrompt"] is JToken legacyFormatPrompt)
+			{
+				string? legacyPromptText = legacyFormatPrompt.Type == JTokenType.String ? legacyFormatPrompt.ToString() : null;
+				bool noPrompts = llmSettingsJObj["Prompts"] is not JArray existingPrompts || existingPrompts.Count == 0;
+				if (noPrompts && !string.IsNullOrWhiteSpace(legacyPromptText))
+				{
+					string? legacyHotkey = llmSettingsJObj["ProcessWithLlmHotKey"]?.ToString();
+					if (string.IsNullOrWhiteSpace(legacyHotkey))
+						legacyHotkey = "ALT+SHIFT+P";
+
+					llmSettingsJObj["Prompts"] = new JArray
+					{
+						new JObject
+						{
+							["Id"] = 1,
+							["Name"] = "Default",
+							["Content"] = legacyPromptText,
+							["Hotkey"] = legacyHotkey,
+							["AutoRun"] = false,
+							["ModelName"] = LlmSettings.DefaultModel,
+						},
+					};
+				}
+				llmSettingsJObj.Remove("FormatTranscriptPrompt");
+				saveRequired = true;
+			}
+
 			if (llmSettingsJObj["Prompts"] is JArray promptsArray)
 			{
 				foreach (var promptToken in promptsArray)
@@ -713,6 +841,18 @@ End of summary.
 					}
 				}
 			}
+		}
+
+		// Rename TextToSpeechSettings.TextToSpeechHotKey -> SpeakClipboard.
+		if (jObj["TextToSpeechSettings"] is JObject ttsSettingsJObj
+			&& ttsSettingsJObj["TextToSpeechHotKey"] is JToken legacyTtsHotkey)
+		{
+			if (ttsSettingsJObj["SpeakClipboard"] is null)
+			{
+				ttsSettingsJObj["SpeakClipboard"] = legacyTtsHotkey;
+			}
+			ttsSettingsJObj.Remove("TextToSpeechHotKey");
+			saveRequired = true;
 		}
 
 		if (saveRequired)

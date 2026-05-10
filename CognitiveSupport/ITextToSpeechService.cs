@@ -1,6 +1,12 @@
-﻿namespace CognitiveSupport;
+namespace CognitiveSupport;
 
-public interface ITextToSpeechService
+public interface ITextToSpeechService : IDisposable
 {
-	void SpeakText(string text);
+	bool IsSpeaking { get; }
+	string? CurrentText { get; }
+	IReadOnlyList<string> GetVoiceNames();
+	void Speak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess);
+	void SkipSentence(int direction, int rate, int volume, string? voiceName);
+	void SpeakAnnouncement(string text, int rate, int volume, string? voiceName);
+	void Stop();
 }

@@ -18,7 +18,7 @@ public class HotkeyRouterControllerTests
 		FakeSettingsManager settingsManager,
 		ObservableCollection<HotkeyRouterEntry> entries,
 		List<(string From, string To)> snapshot)
-	BuildController(bool initialized = true)
+	BuildController(bool initialized = true, bool autoPersist = true)
 	{
 		var controller = (HotkeyRouterController)RuntimeHelpers.GetUninitializedObject(typeof(HotkeyRouterController));
 		var settings = new Settings();
@@ -27,10 +27,11 @@ public class HotkeyRouterControllerTests
 		var snapshot = new List<(string From, string To)>();
 
 		SetField(controller, "_settings", settings);
-		SetField(controller, "_settingsManager", settingsManager);
+		SetField(controller, "_settingsManager", autoPersist ? settingsManager : null);
 		SetField(controller, "_entries", entries);
 		SetField(controller, "_persistedSnapshot", snapshot);
 		SetField(controller, "_initialized", initialized);
+		SetField(controller, "_autoPersist", autoPersist);
 
 		return (controller, settings, settingsManager, entries, snapshot);
 	}
@@ -51,6 +52,11 @@ public class HotkeyRouterControllerTests
 		=> (bool)typeof(HotkeyRouterController)
 			.GetMethod("ShouldPersist", BindingFlags.NonPublic | BindingFlags.Instance)!
 			.Invoke(controller, new object[] { pairs })!;
+
+	private static void CallRefreshRegistrations(HotkeyRouterController controller)
+		=> typeof(HotkeyRouterController)
+			.GetMethod("RefreshRegistrations", BindingFlags.NonPublic | BindingFlags.Instance)!
+			.Invoke(controller, null);
 
 	private static void CallRecalculateDuplicates(HotkeyRouterController controller)
 		=> typeof(HotkeyRouterController)
@@ -230,10 +236,37 @@ public class HotkeyRouterControllerTests
 		Assert.False(first.IsDuplicate);
 	}
 
+	// ----- autoPersist=false (settings page editor mode) -----
+
+	[Fact]
+	public void RefreshRegistrations_AutoPersistFalse_DoesNotInvokeSettingsManager()
+	{
+		var (controller, _, settingsManager, entries, _) = BuildController(autoPersist: false);
+		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V")));
+
+		// Should not throw despite _settingsManager being null, and should not attempt to save.
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(0, settingsManager.SaveCount);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_AutoPersistTrue_PersistsWhenSnapshotChanges()
+	{
+		var (controller, _, settingsManager, entries, _) = BuildController(autoPersist: true);
+		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V")));
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(1, settingsManager.SaveCount);
+	}
+
 	private sealed class FakeSettingsManager : ISettingsManager
 	{
 		public int SaveCount { get; private set; }
 		public Settings? LastSaved { get; private set; }
+
+		public string SettingsFilePath => "fake.json";
 
 		public void SaveSettingsToFile(Settings settings)
 		{

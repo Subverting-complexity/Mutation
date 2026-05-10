@@ -1,16 +1,16 @@
 using CognitiveSupport;
 using Mutation.Ui;
-using static CognitiveSupport.LlmSettings;
-using static CognitiveSupport.LlmSettings.TranscriptFormatRule;
+using static CognitiveSupport.TranscriptFormatRule;
 
 namespace Mutation.Tests;
 
 public class TranscriptFormatterTests
 {
-	private static Settings BuildSettings(LlmSettings? llmSettings = null)
+	private static Settings BuildSettings(LlmSettings? llmSettings = null, List<TranscriptFormatRule>? rules = null)
 		=> new()
 		{
 			LlmSettings = llmSettings,
+			TranscriptFormatRules = rules ?? new List<TranscriptFormatRule>(),
 		};
 
 	private static TranscriptFormatRule Rule(string find, string replace, MatchTypeEnum matchType, bool caseSensitive = false)
@@ -88,9 +88,8 @@ public class TranscriptFormatterTests
 	[Fact]
 	public void ApplyRules_AppliesRulesFromSettings()
 	{
-		var llm = new LlmSettings();
-		llm.TranscriptFormatRules.Add(Rule("foo", "bar", MatchTypeEnum.Plain));
-		var formatter = new TranscriptFormatter(BuildSettings(llm), new StubLlmService("ignored"));
+		var rules = new List<TranscriptFormatRule> { Rule("foo", "bar", MatchTypeEnum.Plain) };
+		var formatter = new TranscriptFormatter(BuildSettings(rules: rules), new StubLlmService("ignored"));
 
 		string result = formatter.ApplyRules("foo baz", manualPunctuation: false);
 		Assert.Equal("bar baz", result);
@@ -99,10 +98,12 @@ public class TranscriptFormatterTests
 	[Fact]
 	public void ApplyRules_AppliesRulesInOrder()
 	{
-		var llm = new LlmSettings();
-		llm.TranscriptFormatRules.Add(Rule("a", "b", MatchTypeEnum.Plain));
-		llm.TranscriptFormatRules.Add(Rule("b", "c", MatchTypeEnum.Plain));
-		var formatter = new TranscriptFormatter(BuildSettings(llm), new StubLlmService("ignored"));
+		var rules = new List<TranscriptFormatRule>
+		{
+			Rule("a", "b", MatchTypeEnum.Plain),
+			Rule("b", "c", MatchTypeEnum.Plain),
+		};
+		var formatter = new TranscriptFormatter(BuildSettings(rules: rules), new StubLlmService("ignored"));
 
 		Assert.Equal("c", formatter.ApplyRules("a", manualPunctuation: false));
 	}
@@ -124,30 +125,30 @@ public class TranscriptFormatterTests
 		Assert.Equal("hello. world", result);
 	}
 
-	// ----- FormatWithLlmAsync -----
+	// ----- ProcessWithLlmAsync -----
 
 	[Theory]
 	[InlineData(null)]
 	[InlineData("")]
 	[InlineData("   ")]
-	public async Task FormatWithLlmAsync_NullEmptyOrWhitespace_ReturnsInputUnchanged(string? input)
+	public async Task ProcessWithLlmAsync_NullEmptyOrWhitespace_ReturnsInputUnchanged(string? input)
 	{
 		var stub = new StubLlmService("should-not-be-called");
 		var formatter = new TranscriptFormatter(BuildSettings(), stub);
 
-		string? result = await formatter.FormatWithLlmAsync(input!, "system prompt", "gpt-4");
+		string? result = await formatter.ProcessWithLlmAsync(input!, "system prompt", "gpt-4");
 
 		Assert.Equal(input, result);
 		Assert.Equal(0, stub.CallCount);
 	}
 
 	[Fact]
-	public async Task FormatWithLlmAsync_BuildsSystemAndUserMessages()
+	public async Task ProcessWithLlmAsync_BuildsSystemAndUserMessages()
 	{
 		var stub = new StubLlmService("formatted output");
 		var formatter = new TranscriptFormatter(BuildSettings(), stub);
 
-		await formatter.FormatWithLlmAsync("hello world", "you are a formatter", "gpt-4");
+		await formatter.ProcessWithLlmAsync("hello world", "you are a formatter", "gpt-4");
 
 		Assert.Equal(1, stub.CallCount);
 		Assert.NotNull(stub.LastMessages);
@@ -160,12 +161,12 @@ public class TranscriptFormatterTests
 	}
 
 	[Fact]
-	public async Task FormatWithLlmAsync_RunsFixNewLinesOnResult()
+	public async Task ProcessWithLlmAsync_RunsFixNewLinesOnResult()
 	{
 		var stub = new StubLlmService("line1\r\nline2\rline3\nline4");
 		var formatter = new TranscriptFormatter(BuildSettings(), stub);
 
-		string result = await formatter.FormatWithLlmAsync("input", "system", "model");
+		string result = await formatter.ProcessWithLlmAsync("input", "system", "model");
 
 		string expected = string.Join(Environment.NewLine, new[] { "line1", "line2", "line3", "line4" });
 		Assert.Equal(expected, result);

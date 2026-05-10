@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.AudioSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="16">
+		<TextBlock Text="Audio" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<StackPanel Spacing="6">
+			<TextBlock Text="Active capture device" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtActiveDevice"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+			<TextBlock Text="(Choose a microphone from the dropdown on the main window.)"
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+		</StackPanel>
+
+		<StackPanel Orientation="Horizontal" Spacing="8">
+			<ToggleSwitch x:Name="ToggleMicViz"
+						  Header="Microphone visualization"
+						  OffContent="Off"
+						  OnContent="On"
+						  Toggled="ToggleMicViz_Toggled" />
+			<Button VerticalAlignment="Bottom" Click="BtnResetMicViz_Click" ToolTipService.ToolTip="Reset to default">
+				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+			</Button>
+		</StackPanel>
+
+		<controls:HotkeyEditor x:Name="HkMute" Header="Toggle microphone mute" />
+
+		<StackPanel Spacing="8">
+			<TextBlock Text="Custom beeps" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<ToggleSwitch x:Name="ToggleUseCustomBeeps"
+						  OffContent="Off"
+						  OnContent="On"
+						  Toggled="ToggleUseCustomBeeps_Toggled" />
+
+			<Grid x:Name="BeepFilesPanel" RowSpacing="6" ColumnSpacing="8">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="120" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+				</Grid.RowDefinitions>
+
+				<TextBlock Text="Success" VerticalAlignment="Center" Grid.Row="0" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepSuccess" Grid.Row="0" Grid.Column="1" TextChanged="BeepText_Changed" Tag="success" />
+				<Button Content="Browse..." Grid.Row="0" Grid.Column="2" Click="BrowseBeep_Click" Tag="success" />
+
+				<TextBlock Text="Failure" VerticalAlignment="Center" Grid.Row="1" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepFailure" Grid.Row="1" Grid.Column="1" TextChanged="BeepText_Changed" Tag="failure" />
+				<Button Content="Browse..." Grid.Row="1" Grid.Column="2" Click="BrowseBeep_Click" Tag="failure" />
+
+				<TextBlock Text="Start" VerticalAlignment="Center" Grid.Row="2" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepStart" Grid.Row="2" Grid.Column="1" TextChanged="BeepText_Changed" Tag="start" />
+				<Button Content="Browse..." Grid.Row="2" Grid.Column="2" Click="BrowseBeep_Click" Tag="start" />
+
+				<TextBlock Text="End" VerticalAlignment="Center" Grid.Row="3" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepEnd" Grid.Row="3" Grid.Column="1" TextChanged="BeepText_Changed" Tag="end" />
+				<Button Content="Browse..." Grid.Row="3" Grid.Column="2" Click="BrowseBeep_Click" Tag="end" />
+
+				<TextBlock Text="Mute" VerticalAlignment="Center" Grid.Row="4" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepMute" Grid.Row="4" Grid.Column="1" TextChanged="BeepText_Changed" Tag="mute" />
+				<Button Content="Browse..." Grid.Row="4" Grid.Column="2" Click="BrowseBeep_Click" Tag="mute" />
+
+				<TextBlock Text="Unmute" VerticalAlignment="Center" Grid.Row="5" Grid.Column="0" />
+				<TextBox x:Name="TxtBeepUnmute" Grid.Row="5" Grid.Column="1" TextChanged="BeepText_Changed" Tag="unmute" />
+				<Button Content="Browse..." Grid.Row="5" Grid.Column="2" Click="BrowseBeep_Click" Tag="unmute" />
+			</Grid>
+		</StackPanel>
+	</StackPanel>
+</UserControl>

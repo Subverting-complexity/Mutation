@@ -1,7 +1,7 @@
 # Mutation
 
 ## Introduction
-Mutation is a .NET productivity tool that provides configurable global hotkeys for essential accessibility and workflow tasks. It lets you toggle microphones, capture screens, run Optical Character Recognition (OCR), convert speech to text, and process text with LLMs—all powered by Azure Vision Services, OpenAI, Deepgram, and other APIs.
+Mutation is a .NET productivity tool that provides configurable global hotkeys for essential accessibility and workflow tasks. It lets you toggle microphones, capture screens, run Optical Character Recognition (OCR), convert speech to text, speak text aloud, and process text with LLMs—all powered by Azure Vision Services, OpenAI, Anthropic, Deepgram, Groq, and other APIs.
 
 ## Features
 
@@ -47,7 +47,7 @@ Press one hotkey to start recording, press it again to stop and send the audio f
 | Hotkey | Description |
 |--------|-------------|
 | `SpeechToTextHotKey` | Start/stop recording for transcription. |
-| `SpeechToTextWithLlmFormattingHotKey` | Start/stop recording with automatic LLM formatting applied. |
+| `SpeechToTextWithLlmProcessingHotKey` | Start/stop recording with automatic LLM processing applied. |
 | `SendHotkeyAfterTranscriptionOperation` | Sends a specified hotkey after transcription completes. |
 
 **Additional Features:**
@@ -57,19 +57,23 @@ Press one hotkey to start recording, press it again to stop and send the audio f
 - **Dictation Insert Options:** Choose between pasting, typing (SendKeys), or clipboard-only for inserting transcriptions.
 
 ### 4. LLM Processing  
-Process text through OpenAI or compatible LLMs with configurable prompts. Define multiple prompts and assign each a hotkey for quick access.
+Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Define multiple prompts, assign each a hotkey, and optionally pin each prompt to a specific model.
 
 **Hotkeys:**
 
 | Hotkey | Description |
 |--------|-------------|
-| `FormatWithLlmHotKey` | Apply the auto-run prompt to clipboard text. |
+| `ProcessWithLlmHotKey` | Apply the auto-run prompt to clipboard text. |
 | Per-prompt `Hotkey` | Trigger a specific prompt directly. |
 
 **Prompt Configuration:**
 - Create named prompts with custom system instructions
 - Mark one prompt as "AutoRun" for the default LLM action
 - Assign individual hotkeys to prompts for instant access
+- Set `ModelName` on a prompt to override the default model on a per-prompt basis (must match a `Name` from `LlmSettings.Models`)
+
+**Model Configuration:**
+Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). OpenAI keys go in `OpenAiApiKey`; Anthropic keys go in `AnthropicApiKey`.
 
 ### 5. Transcript Formatting Rules  
 Apply find-and-replace rules to transcripts before or instead of LLM processing:
@@ -78,7 +82,7 @@ Apply find-and-replace rules to transcripts before or instead of LLM processing:
 - **RegEx** – regular expression matching
 - **Smart** – intelligent matching (e.g., whole word boundaries)
 
-Rules run before LLM formatting, enabling pre-processing of transcribed text.
+Rules run before LLM processing, enabling pre-processing of transcribed text.
 
 ### 6. Hotkey Router  
 Remap any global hotkey to another. When a "From" hotkey is pressed, Mutation sends the corresponding "To" hotkey instead. Useful for creating shortcut aliases or working around application conflicts.
@@ -100,11 +104,20 @@ Replace the default system beeps with custom audio files for different actions:
 - `BeepStartFile` / `BeepEndFile` – for recording start/stop
 - `BeepMuteFile` / `BeepUnmuteFile` – for microphone state changes
 
+### 8. Text-to-Speech
+Press a hotkey to speak the current clipboard text aloud through your default audio output.
+
+**Hotkey:**
+
+| Hotkey | Description |
+|--------|-------------|
+| `SpeakClipboard` | Speak the clipboard text aloud. |
+
 ## Getting Started
 Install the .NET 10 runtime (or newer) and run **Mutation.exe**. On first launch, the app writes *Mutation.json* and opens it in Notepad for you to configure.
 
 ## Configuration / Settings
-All hotkeys are global and fully customisable. Below is a comprehensive example with every section and key.
+All hotkeys are global and fully customisable. Below is an example covering every section a user is expected to edit. (Mutation also persists a few UI-state values such as window position/size and the active microphone — those are written automatically and you don't need to set them by hand.)
 
 ```json
 {
@@ -115,6 +128,8 @@ All hotkeys are global and fully customisable. Below is a comprehensive example 
       "UseCustomBeeps": false,
       "BeepSuccessFile": "sounds/success.wav",
       "BeepFailureFile": "sounds/failure.wav",
+      "BeepStartFile": "sounds/start.wav",
+      "BeepEndFile": "sounds/end.wav",
       "BeepMuteFile": "sounds/mute.wav",
       "BeepUnmuteFile": "sounds/unmute.wav"
     }
@@ -139,16 +154,19 @@ All hotkeys are global and fully customisable. Below is a comprehensive example 
 
   "SpeechToTextSettings": {
     "SpeechToTextHotKey": "Ctrl+Shift+T",
-    "SpeechToTextWithLlmFormattingHotKey": "Ctrl+Shift+Y",
+    "SpeechToTextWithLlmProcessingHotKey": "Ctrl+Shift+Y",
     "SendHotkeyAfterTranscriptionOperation": "Ctrl+Alt+V",
     "FileTranscriptionTimeoutSeconds": 300,
+    "TempDirectory": null,
+    "ActiveSpeechToTextService": "OpenAI gpt-4o-transcribe",
     "Services": [
       {
         "Name": "OpenAI gpt-4o-transcribe",
         "Provider": "OpenAi",
         "ApiKey": "<your OpenAI key>",
         "BaseDomain": "https://api.openai.com/",
-        "ModelId": "gpt-4o-transcribe"
+        "ModelId": "gpt-4o-transcribe",
+        "SpeechToTextPrompt": "Optional per-service prompt to bias transcription (e.g. domain vocabulary)."
       },
       {
         "Name": "Groq Whisper 3",
@@ -168,22 +186,31 @@ All hotkeys are global and fully customisable. Below is a comprehensive example 
   },
 
   "LlmSettings": {
-    "ApiKey": "<your OpenAI key>",
-    "Models": ["gpt-4.1", "claude-sonnet-4-6"],
-    "FormatWithLlmHotKey": "Ctrl+Shift+F",
-    "FormatTranscriptPrompt": "Clean up this transcript for readability.",
-    "TranscriptFormatRules": [
-      { "Find": "um", "ReplaceWith": "", "CaseSensitive": false, "MatchType": "Smart" }
+    "OpenAiApiKey": "<your OpenAI key>",
+    "AnthropicApiKey": "<your Anthropic key>",
+    "Models": [
+      { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null },
+      { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null }
     ],
+    "ProcessWithLlmHotKey": "Ctrl+Shift+F",
     "Prompts": [
       {
         "Id": 1,
         "Name": "Fix Grammar",
         "Content": "Fix grammar and punctuation in the following text.",
         "Hotkey": "Ctrl+Alt+G",
-        "AutoRun": true
+        "AutoRun": true,
+        "ModelName": "gpt-4.1"
       }
     ]
+  },
+
+  "TranscriptFormatRules": [
+    { "Find": "um", "ReplaceWith": "", "CaseSensitive": false, "MatchType": "Smart" }
+  ],
+
+  "TextToSpeechSettings": {
+    "SpeakClipboard": "Ctrl+Shift+P"
   },
 
   "HotKeyRouterSettings": {
@@ -198,6 +225,8 @@ All hotkeys are global and fully customisable. Below is a comprehensive example 
   }
 }
 ```
+
+> **Note on transcript formatting rules:** `TranscriptFormatRules` is a top-level setting. Rules run as a pre-processing pass on the transcript before any LLM processing is applied.
 
 ### Provisioning Azure Computer Vision
 
@@ -217,11 +246,11 @@ Pull requests are welcome—open an issue to discuss ideas first, then fork, com
 
 ## License
 
-See *LICENCE* in the repository.
+See [License.txt](License.txt) in the repository.
 
 
 ## Backstory.
-So I got tired of having to learn the hotkeys of all the different online meeting applications that I use for toggling the microphone on and off mute. As a visually impaired computer user, finding the microphone icon visually and clicking on it is not really a viable option. I'm a very heavy AutoHotKey user, and I first tried to build a solution with that, but it was clunky. I then asked a buddy of mine if he has some experience with manipulating the microphone with C#. He didn't, but he quickly put together something in LINQPad to toggle the microphone using the audio switcher library. I then took that code and started a little WinForms application that had the microphone toggle functionality wired up to a global hotkey., and I called it Mutation. As in, I could mute the microphone at any time I wanted, no matter which application I was busy working in. This was incredibly useful, but I once had the situation where Microsoft Teams was using my second microphone and not the main one, and so when I thought I was muted with mutation, the second mic was still active and the person on the call heard while I was talking to someone locally. Luckily, it wasn't too embarrassing. I then updated mutation to list all the detected microphones and to mute and unmute them all on the toggle. In that way, I could be sure that when I wanted it muted, it was definitely muted across my system, across all the microphones. This capability became indispensable to me in my daily usage and meetings.
+So I got tired of having to learn the hotkeys of all the different online meeting applications that I use for toggling the microphone on and off mute. As a visually impaired computer user, finding the microphone icon visually and clicking on it is not really a viable option. I'm a very heavy AutoHotKey user, and I first tried to build a solution with that, but it was clunky. I then asked a buddy of mine if he has some experience with manipulating the microphone with C#. He didn't, but he quickly put together something in LINQPad to toggle the microphone using the audio switcher library. I then took that code and started a little WinForms application that had the microphone toggle functionality wired up to a global hotkey, and I called it Mutation. As in, I could mute the microphone at any time I wanted, no matter which application I was busy working in. This was incredibly useful, but I once had the situation where Microsoft Teams was using my second microphone and not the main one, and so when I thought I was muted with mutation, the second mic was still active and the person on the call heard while I was talking to someone locally. Luckily, it wasn't too embarrassing. I then updated mutation to list all the detected microphones and to mute and unmute them all on the toggle. In that way, I could be sure that when I wanted it muted, it was definitely muted across my system, across all the microphones. This capability became indispensable to me in my daily usage and meetings.
 
 Being almost blind, I have the problem, like many others in the same situation, where I could not really read any screenshots or images containing text. And those come along more often than you realize in my kind of work. So, what I did was to provision myself a free Microsoft Computer Vision resource on my Azure subscription and wired up a hotkey that grabs an image from the clipboard, performs OCR on it, and puts the text back on the clipboard. Suddenly, Mutation became even more useful. This worked great for images that came our way over emails or instant messages, etc., but if I wanted to create my own screenshot of a portion of the screen, I still had to use a third-party application to put the screenshot on the clipboard. I decided, why can't mutation do that for me as well? So I extended it with the capability, again wired up to a hotkey, to take a screenshot of the entire application and then allow a rectangle selection with the mouse. At the end of the mouse drag, the image would be copied automatically onto the clipboard. I added a second hotkey that combined the screenshot and the OCR into an automated process. Now I could press a hotkey, select a rectangle on the screen, OCR was automatically performed and the text was placed on the clipboard. At which point I can just press another hotkey to read the contents of the clipboard with my screen reader.
 

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.LlmSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="14">
+		<TextBlock Text="AI assistance" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<controls:SecretBox x:Name="TxtOpenAiKey" Header="OpenAI API key" />
+		<controls:SecretBox x:Name="TxtAnthropicKey" Header="Anthropic API key" />
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Request timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbTimeout"
+						   Minimum="5" Maximum="600"
+						   SmallChange="5"
+						   Width="180"
+						   SpinButtonPlacementMode="Inline"
+						   ValueChanged="NbTimeout_ValueChanged" />
+				<Button Click="BtnResetTimeout_Click" ToolTipService.ToolTip="Reset to default">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Models" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtModelsSummary"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<TextBlock Text="Prompts" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock x:Name="TxtPromptsSummary"
+					   TextWrapping="Wrap"
+					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+			<TextBlock Text="Manage prompts using the Prompts panel on the main window."
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+		</StackPanel>
+	</StackPanel>
+</UserControl>

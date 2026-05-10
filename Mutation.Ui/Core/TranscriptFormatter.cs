@@ -29,13 +29,13 @@ public class TranscriptFormatter
 			text = text.Replace("  ", " ");
 		}
 
-		var rules = _settings.LlmSettings?.TranscriptFormatRules ?? new List<LlmSettings.TranscriptFormatRule>();
+		var rules = _settings.TranscriptFormatRules ?? new List<TranscriptFormatRule>();
 		text = text.FormatWithRules(rules);
 		text = text.CleanupPunctuation();
 		return text;
 	}
 
-	public async Task<string> FormatWithLlmAsync(string transcript, string systemPrompt, string modelName)
+	public async Task<string> ProcessWithLlmAsync(string transcript, string systemPrompt, string modelName)
 	{
 		if (string.IsNullOrWhiteSpace(transcript))
 			return transcript;

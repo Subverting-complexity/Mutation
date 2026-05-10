@@ -27,7 +27,7 @@ public class AudioSessionManager : IDisposable
     private readonly AudioPlayer _playbackPlayer;
     private SpeechSession? _playingSession;
     private SpeechSession? _selectedSession;
-    private bool _currentRecordingUsesLlmFormatting;
+    private bool _currentRecordingUsesLlmProcessing;
 
     public ObservableCollection<SpeechSession> SessionHistory { get; } = new();
 
@@ -128,7 +128,7 @@ public class AudioSessionManager : IDisposable
         await PlaySelectedSessionAsync();
     }
 
-    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmFormatting, string prompt, LlmSettings.LlmPrompt? llmPrompt = null, CancellationToken cancellationToken = default)
+    public async Task StartStopRecordingAsync(ISpeechToTextService activeService, bool useLlmProcessing, string prompt, LlmSettings.LlmPrompt? llmPrompt = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -143,7 +143,7 @@ public class AudioSessionManager : IDisposable
 
             if (!IsRecording)
             {
-                _currentRecordingUsesLlmFormatting = useLlmFormatting;
+                _currentRecordingUsesLlmProcessing = useLlmProcessing;
                 StopPlayback();
 
                 StatusMessage?.Invoke(this, "Listening for audio...");
@@ -155,7 +155,7 @@ public class AudioSessionManager : IDisposable
             }
             else
             {
-                _currentRecordingUsesLlmFormatting = useLlmFormatting;
+                _currentRecordingUsesLlmProcessing = useLlmProcessing;
                 StopPlayback();
                 StatusMessage?.Invoke(this, "Transcribing your recording...");
                 StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Transcribing...)
@@ -203,7 +203,7 @@ public class AudioSessionManager : IDisposable
             StateChanged?.Invoke(this, EventArgs.Empty);
 
             string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, cancellationToken);
-            // Retry doesn't apply LLM formatting — pass raw text only so
+            // Retry doesn't apply LLM processing — pass raw text only so
             // FinalizeTranscript applies rules-based formatting as usual.
             TranscriptReady?.Invoke(this, new TranscriptResult(text));
             StatusMessage?.Invoke(this, "Transcript refreshed from the selected session.");
@@ -261,27 +261,27 @@ public class AudioSessionManager : IDisposable
     {
         // Always run rules-based formatting first
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
-        string? llmFormattedText = null;
+        string? llmProcessedText = null;
 
-        if (_currentRecordingUsesLlmFormatting && llmPrompt != null)
+        if (_currentRecordingUsesLlmProcessing && llmPrompt != null)
         {
             try
             {
-                StatusMessage?.Invoke(this, "Formatting with LLM...");
+                StatusMessage?.Invoke(this, "Processing with LLM...");
                 string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
                 // Pass the rules-formatted text to the LLM
-                llmFormattedText = await _transcriptFormatter.FormatWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName);
+                llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName);
             }
             catch (Exception ex)
             {
-                StatusMessage?.Invoke(this, $"LLM formatting failed: {ex.Message}. Using rules-formatted transcript.");
-                // llmFormattedText remains null — FinalizeTranscript will fall back to rules-only
+                StatusMessage?.Invoke(this, $"LLM processing failed: {ex.Message}. Using rules-formatted transcript.");
+                // llmProcessedText remains null — FinalizeTranscript will fall back to rules-only
             }
         }
 
-        // Pass raw text and the final formatted text separately so that
+        // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output.
-        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmFormattedText ?? rulesFormattedText));
+        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText));
         StatusMessage?.Invoke(this, "Transcript ready and copied.");
     }
 
