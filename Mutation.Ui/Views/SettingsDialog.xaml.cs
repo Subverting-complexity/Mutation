@@ -216,23 +216,49 @@ public sealed partial class SettingsDialog : ContentDialog
 		}
 	}
 
+	private XamlRoot? _sizingRoot;
+
 	private void SetDialogSize()
 	{
 		HorizontalAlignment = HorizontalAlignment.Stretch;
 		VerticalAlignment = VerticalAlignment.Stretch;
 
-		Loaded += (s, e) =>
-		{
-			if (XamlRoot is null)
-				return;
+		Loaded += SettingsDialog_Loaded;
+		Closed += SettingsDialog_Closed;
+	}
 
-			var bounds = XamlRoot.Size;
-			MinWidth = 0;
-			MinHeight = 0;
-			Width = bounds.Width;
-			Height = bounds.Height;
-			MaxWidth = bounds.Width;
-			MaxHeight = bounds.Height;
-		};
+	private void SettingsDialog_Loaded(object sender, RoutedEventArgs e)
+	{
+		if (XamlRoot is null)
+			return;
+
+		ApplyRootSize();
+
+		_sizingRoot = XamlRoot;
+		_sizingRoot.Changed += XamlRoot_Changed;
+	}
+
+	private void SettingsDialog_Closed(ContentDialog sender, ContentDialogClosedEventArgs args)
+	{
+		if (_sizingRoot is not null)
+		{
+			_sizingRoot.Changed -= XamlRoot_Changed;
+			_sizingRoot = null;
+		}
+	}
+
+	private void XamlRoot_Changed(XamlRoot sender, XamlRootChangedEventArgs args)
+	{
+		ApplyRootSize();
+	}
+
+	private void ApplyRootSize()
+	{
+		if (XamlRoot is null || RootGrid is null)
+			return;
+
+		var bounds = XamlRoot.Size;
+		RootGrid.Width = bounds.Width;
+		RootGrid.Height = bounds.Height;
 	}
 }
