@@ -6,6 +6,8 @@ using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
 using CognitiveSupport;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views.SettingsUi;
@@ -58,6 +60,23 @@ public sealed partial class SettingsDialog : ContentDialog
 		}
 
 		PrimaryButtonClick += SettingsDialog_PrimaryButtonClick;
+		KeyDown += SettingsDialog_KeyDown;
+	}
+
+	private void SettingsDialog_KeyDown(object sender, KeyRoutedEventArgs e)
+	{
+		if (e.Handled || e.Key != VirtualKey.Escape)
+			return;
+
+		if (SearchBox.FocusState != FocusState.Unfocused && !string.IsNullOrEmpty(SearchBox.Text))
+		{
+			SearchBox.Text = string.Empty;
+			e.Handled = true;
+			return;
+		}
+
+		Hide();
+		e.Handled = true;
 	}
 
 	private void PopulateCategories()

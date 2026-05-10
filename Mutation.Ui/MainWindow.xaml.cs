@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
@@ -17,6 +18,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+using Windows.System;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
@@ -122,6 +124,12 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
 
         InitializeComponent();
+
+        if (Content is UIElement rootForKeys)
+        {
+            rootForKeys.KeyDown += RootContent_KeyDown;
+        }
+
         _microphoneVisualization = new MicrophoneVisualizationController(
             DispatcherQueue,
             _audioDeviceManager,
@@ -1585,6 +1593,23 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			BtnDownloadOcrResults.IsEnabled = !string.IsNullOrWhiteSpace(safeMessage);
 		}
+	}
+
+	private void RootContent_KeyDown(object sender, KeyRoutedEventArgs e)
+	{
+		if (e.Handled)
+			return;
+		// VK_OEM_COMMA (0xBC) — no named VirtualKey enum member exists for ','
+		if (e.Key != (VirtualKey)0xBC)
+			return;
+
+		var ctrlState = Microsoft.UI.Input.InputKeyboardSource
+			.GetKeyStateForCurrentThread(VirtualKey.Control);
+		if ((ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) != Windows.UI.Core.CoreVirtualKeyStates.Down)
+			return;
+
+		e.Handled = true;
+		SettingsMenuItem_Click(this, new RoutedEventArgs());
 	}
 
 	private async void SettingsMenuItem_Click(object sender, RoutedEventArgs e)

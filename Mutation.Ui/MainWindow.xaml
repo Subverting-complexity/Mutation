@@ -33,19 +33,22 @@
             </Grid.ColumnDefinitions>
 
             <!-- Hamburger Menu Button (Top Left) -->
-            <Button 
+            <Button
                 x:Name="HamburgerButton"
                 Grid.Column="0"
                 Style="{StaticResource IconButtonStyle}"
                 Margin="16,24,0,12"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
-                ToolTipService.ToolTip="Menu">
+                AccessKey="H"
+                AutomationProperties.Name="Menu"
+                ToolTipService.ToolTip="Menu (Alt, H)">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                        <MenuFlyoutItem 
+                        <MenuFlyoutItem
                             x:Name="SettingsMenuItem"
-                            Text="Settings" 
+                            Text="Settings"
+                            KeyboardAcceleratorTextOverride="Ctrl+,"
                             Click="SettingsMenuItem_Click">
                             <MenuFlyoutItem.Icon>
                                 <FontIcon Glyph="&#xE713;"/>
