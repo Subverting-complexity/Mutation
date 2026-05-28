@@ -17,13 +17,6 @@
 
 		<StackPanel x:Name="HotkeyList" Spacing="8" />
 
-		<StackPanel Spacing="6">
-			<TextBlock Text="Per-prompt hotkeys" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtPromptHotkeys"
-					   TextWrapping="Wrap"
-					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-		</StackPanel>
-
 		<Border Style="{StaticResource CardStyle}">
 			<StackPanel Spacing="18">
 				<StackPanel Spacing="4">

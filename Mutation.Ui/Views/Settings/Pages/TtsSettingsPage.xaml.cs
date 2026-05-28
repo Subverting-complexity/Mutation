@@ -22,10 +22,6 @@ public sealed partial class TtsSettingsPage : UserControl
 		try
 		{
 			var tts = _settings.TextToSpeechSettings ??= new TextToSpeechSettings();
-			TxtVoiceSummary.Text = string.IsNullOrWhiteSpace(tts.VoiceName)
-				? "(System default voice)"
-				: $"Voice: {tts.VoiceName}";
-			TxtRateVolumeSummary.Text = $"Rate: {tts.Rate}    Volume: {tts.Volume}%";
 			ToggleSpeechPreprocessing.IsOn = tts.EnableSpeechPreprocessing;
 		}
 		finally { _suppressEvents = false; }

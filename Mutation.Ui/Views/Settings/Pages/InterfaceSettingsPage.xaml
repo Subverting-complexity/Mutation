@@ -51,9 +51,6 @@
 
 		<StackPanel Spacing="4">
 			<TextBlock Text="Window position &amp; size" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtWindowSummary"
-					   TextWrapping="Wrap"
-					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 			<Button x:Name="BtnResetWindow"
 					Content="Reset window position"
 					HorizontalAlignment="Left"

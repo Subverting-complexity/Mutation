@@ -10,15 +10,9 @@
 	<StackPanel Spacing="14">
 		<TextBlock Text="Text to Speech" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<TextBlock Text="Voice / rate / volume controls live on the main window. Other narration options:"
+		<TextBlock Text="Voice, rate, and volume controls live on the main window. Other narration options:"
 				   TextWrapping="Wrap"
 				   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-		<StackPanel Spacing="6">
-			<TextBlock Text="Current voice" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtVoiceSummary" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-			<TextBlock x:Name="TxtRateVolumeSummary" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-		</StackPanel>
 
 		<StackPanel Orientation="Horizontal" Spacing="8">
 			<ToggleSwitch x:Name="ToggleSpeechPreprocessing"

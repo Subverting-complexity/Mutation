@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using CognitiveSupport;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -25,7 +24,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_settings = settings;
 		InitializeComponent();
 		BuildRows();
-		RenderSummaries();
 		RecomputeDuplicates();
 
 		_routerController = new HotkeyRouterController(
@@ -205,15 +203,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			bool isDup = !string.IsNullOrEmpty(hk) && counts.TryGetValue(hk, out var n) && n > 1;
 			row.DuplicateBadge.Visibility = isDup ? Visibility.Visible : Visibility.Collapsed;
 		}
-	}
-
-	private void RenderSummaries()
-	{
-		var prompts = _settings.LlmSettings?.Prompts ?? new List<LlmSettings.LlmPrompt>();
-		TxtPromptHotkeys.Text = prompts.Count == 0
-			? "(no prompts)"
-			: string.Join("    ", prompts.Select(p =>
-				string.IsNullOrWhiteSpace(p.Hotkey) ? $"• {p.Name}: (none)" : $"• {p.Name}: {p.Hotkey}"));
 	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>

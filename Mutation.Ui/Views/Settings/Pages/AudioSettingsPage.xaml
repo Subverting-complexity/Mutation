@@ -11,16 +11,6 @@
 	<StackPanel Spacing="16">
 		<TextBlock Text="Audio" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<StackPanel Spacing="6">
-			<TextBlock Text="Active capture device" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtActiveDevice"
-					   TextWrapping="Wrap"
-					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-			<TextBlock Text="(Choose a microphone from the dropdown on the main window.)"
-					   Style="{StaticResource CaptionTextBlockStyle}"
-					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-		</StackPanel>
-
 		<StackPanel Orientation="Horizontal" Spacing="8">
 			<ToggleSwitch x:Name="ToggleMicViz"
 						  Header="Microphone visualization"

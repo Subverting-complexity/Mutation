@@ -30,9 +30,6 @@ public sealed partial class AudioSettingsPage : UserControl
 		try
 		{
 			var aud = _settings.AudioSettings ??= new AudioSettings();
-			TxtActiveDevice.Text = string.IsNullOrWhiteSpace(aud.ActiveCaptureDeviceFullName)
-				? "(none selected)"
-				: aud.ActiveCaptureDeviceFullName!;
 			ToggleMicViz.IsOn = aud.EnableMicrophoneVisualization;
 			HkMute.Hotkey = aud.MicrophoneToggleMuteHotKey ?? string.Empty;
 
