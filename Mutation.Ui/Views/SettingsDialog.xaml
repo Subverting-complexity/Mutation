@@ -93,7 +93,10 @@
 			BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
 			BorderThickness="1"
 			CornerRadius="12">
-			<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
+			<ScrollViewer VerticalScrollBarVisibility="Visible"
+						  HorizontalScrollBarVisibility="Disabled"
+						  ScrollViewer.IsVerticalScrollChainingEnabled="False"
+						  Padding="24">
 				<ContentControl x:Name="PageHost"
 								HorizontalContentAlignment="Stretch"
 								VerticalContentAlignment="Top" />
