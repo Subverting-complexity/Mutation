@@ -14,12 +14,12 @@ public static class AudioFileConverter
 	/// </summary>
 	/// <param name="inputPath">Path to the input file (MP4, AVI, etc.)</param>
 	/// <returns>Path to the temporary OGG file. Caller is responsible for cleanup.</returns>
-	public static string ConvertMp4ToOgg(string inputPath)
+	public static string ConvertMp4ToOgg(string inputPath, SilenceTrimmerOptions? silenceOptions = null)
 	{
 		string tempOggPath = Path.ChangeExtension(Path.GetTempFileName(), ".ogg");
 		try
 		{
-			ConvertMp4ToOgg(inputPath, tempOggPath);
+			ConvertMp4ToOgg(inputPath, tempOggPath, silenceOptions);
 			return tempOggPath;
 		}
 		catch
@@ -37,7 +37,7 @@ public static class AudioFileConverter
 	/// </summary>
 	/// <param name="inputPath">Path to the input file (MP4, AVI, etc.)</param>
 	/// <param name="outputOggPath">Path where the OGG file will be written.</param>
-	public static void ConvertMp4ToOgg(string inputPath, string outputOggPath)
+	public static void ConvertMp4ToOgg(string inputPath, string outputOggPath, SilenceTrimmerOptions? silenceOptions = null)
 	{
 		if (string.IsNullOrWhiteSpace(inputPath))
 			throw new ArgumentException("Input path cannot be empty", nameof(inputPath));
@@ -78,6 +78,18 @@ public static class AudioFileConverter
 		int bytesPerFrame = samplesPerFrame * 2;
 		List<byte> accumulationBuffer = new List<byte>();
 
+		var trimmer = silenceOptions is null
+			? null
+			: new SilenceTrimmer(48000, samplesPerFrame, silenceOptions);
+
+		void WriteFrame(short[] pcmSamples)
+		{
+			if (trimmer is null)
+				oggStream.WriteSamples(pcmSamples, 0, pcmSamples.Length);
+			else
+				trimmer.ProcessFrame(pcmSamples, f => oggStream.WriteSamples(f, 0, f.Length));
+		}
+
 		while ((bytesRead = resampler.Read(buffer, 0, buffer.Length)) > 0)
 		{
 			for (int i = 0; i < bytesRead; i++)
@@ -94,13 +106,13 @@ public static class AudioFileConverter
 				short[] pcmSamples = new short[samplesPerFrame];
 				Buffer.BlockCopy(frameBytes, 0, pcmSamples, 0, bytesPerFrame);
 
-				oggStream.WriteSamples(pcmSamples, 0, samplesPerFrame);
+				WriteFrame(pcmSamples);
 			}
 		}
 
 		// Handle remaining bytes (pad with silence if needed, or just finish)
-		// For speech, we can probably drop the last partial frame if it's very short, 
-		// or pad it. 
+		// For speech, we can probably drop the last partial frame if it's very short,
+		// or pad it.
 		if (accumulationBuffer.Count > 0)
 		{
 			// Padding with silence to reach frame size
@@ -108,12 +120,14 @@ public static class AudioFileConverter
 			{
 				accumulationBuffer.Add(0);
 			}
-			
+
 			byte[] frameBytes = accumulationBuffer.ToArray();
 			short[] pcmSamples = new short[samplesPerFrame];
 			Buffer.BlockCopy(frameBytes, 0, pcmSamples, 0, bytesPerFrame);
-			oggStream.WriteSamples(pcmSamples, 0, samplesPerFrame);
+			WriteFrame(pcmSamples);
 		}
+
+		trimmer?.Flush(f => oggStream.WriteSamples(f, 0, f.Length));
 
 		oggStream.Finish();
 	}

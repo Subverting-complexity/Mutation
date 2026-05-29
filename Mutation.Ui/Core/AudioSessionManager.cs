@@ -169,6 +169,11 @@ public class AudioSessionManager : IDisposable
                 {
                     StatusMessage?.Invoke(this, "Transcription cancelled.");
                 }
+                catch (NoSpeechDetectedException)
+                {
+                    BeepPlayer.Play(BeepType.Failure);
+                    StatusMessage?.Invoke(this, "No speech detected — nothing to transcribe.");
+                }
                 finally
                 {
                     StateChanged?.Invoke(this, EventArgs.Empty);

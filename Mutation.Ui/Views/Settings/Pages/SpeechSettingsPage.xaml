@@ -73,5 +73,79 @@
 							   HelpText="{StaticResource Help.Speech.SendHotkeyAfter}"
 							   AllowEmpty="True"
 							   AllowSendKeysSyntax="True" />
+
+		<TextBlock Text="Silence stripping" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<CheckBox x:Name="ChkStripSilence"
+						  Content="Strip silent gaps from audio"
+						  AutomationProperties.Name="Strip silent gaps from audio"
+						  AutomationProperties.HelpText="{StaticResource Help.Speech.StripSilence}"
+						  Checked="ChkStripSilence_Changed"
+						  Unchecked="ChkStripSilence_Changed" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.StripSilence}" VerticalAlignment="Center" />
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Minimum silence to keep (seconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.MinSilence}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbMinSilence"
+						   AutomationProperties.Name="Minimum silence to keep (seconds)"
+						   AutomationProperties.HelpText="{StaticResource Help.Speech.MinSilence}"
+						   Minimum="0" Maximum="5"
+						   SmallChange="0.1" LargeChange="0.5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbMinSilence_ValueChanged" />
+				<Button Click="BtnResetMinSilence_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset minimum silence to keep">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Silence threshold (dBFS)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.SilenceThreshold}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbSilenceThreshold"
+						   AutomationProperties.Name="Silence threshold (dBFS)"
+						   AutomationProperties.HelpText="{StaticResource Help.Speech.SilenceThreshold}"
+						   Minimum="-60" Maximum="-20"
+						   SmallChange="1" LargeChange="5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbSilenceThreshold_ValueChanged" />
+				<Button Click="BtnResetSilenceThreshold_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset silence threshold">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Edge guard (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.SilenceGuard}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbSilenceGuard"
+						   AutomationProperties.Name="Edge guard (milliseconds)"
+						   AutomationProperties.HelpText="{StaticResource Help.Speech.SilenceGuard}"
+						   Minimum="0" Maximum="500"
+						   SmallChange="10" LargeChange="50"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbSilenceGuard_ValueChanged" />
+				<Button Click="BtnResetSilenceGuard_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset edge guard">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
 	</StackPanel>
 </UserControl>

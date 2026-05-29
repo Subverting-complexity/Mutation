@@ -333,6 +333,26 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		// Clamp silence-stripping values to sane ranges in case the file was hand-edited.
+		double clampedDbFs = Math.Clamp(speechToTextSettings.SilenceThresholdDbFs, -80.0, 0.0);
+		if (clampedDbFs != speechToTextSettings.SilenceThresholdDbFs)
+		{
+			speechToTextSettings.SilenceThresholdDbFs = clampedDbFs;
+			somethingWasMissing = true;
+		}
+		double clampedMinSilence = Math.Clamp(speechToTextSettings.MinSilenceSeconds, 0.0, 30.0);
+		if (clampedMinSilence != speechToTextSettings.MinSilenceSeconds)
+		{
+			speechToTextSettings.MinSilenceSeconds = clampedMinSilence;
+			somethingWasMissing = true;
+		}
+		double clampedGuard = Math.Clamp(speechToTextSettings.SilenceGuardMilliseconds, 0.0, 2000.0);
+		if (clampedGuard != speechToTextSettings.SilenceGuardMilliseconds)
+		{
+			speechToTextSettings.SilenceGuardMilliseconds = clampedGuard;
+			somethingWasMissing = true;
+		}
+
 		var duplicateGroups = speechToTextSettings.Services
 			 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
 			 .Where(g => g.Count() > 1)

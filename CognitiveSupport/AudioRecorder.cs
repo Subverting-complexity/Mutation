@@ -12,7 +12,12 @@ public class AudioRecorder : IDisposable
 	private OpusEncoder? _encoder;
 	private OpusOggWriteStream? _oggStream;
 	private Stream? _fileStream;
+	private SilenceTrimmer? _silenceTrimmer;
 	private readonly object _writeLock = new();
+
+	// After StopRecording, the trimmed speech duration in seconds when silence stripping was
+	// active; null when stripping was disabled (so callers leave the recording untouched).
+	public double? TrimmedSpeechSeconds { get; private set; }
 
 	// Opus requires specific frame sizes. 20ms at 48kHz = 960 samples.
 	private const int SampleRate = 48000;
@@ -23,10 +28,15 @@ public class AudioRecorder : IDisposable
 	// Buffer for incoming PCM data
 	private readonly List<short> _pcmBuffer = new();
 
-	public void StartRecording(int captureDeviceIndex, string outputFile)
+	public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)
 	{
 		lock (_writeLock)
 		{
+			_silenceTrimmer = silenceOptions is null
+				? null
+				: new SilenceTrimmer(SampleRate, SamplesPerFrame, silenceOptions);
+			TrimmedSpeechSeconds = null;
+
 			WaveInEvent? waveIn = null;
 			Stream? fileStream = null;
 			OpusEncoder? encoder = null;
@@ -107,11 +117,16 @@ public class AudioRecorder : IDisposable
 			{
 				var frame = _pcmBuffer.GetRange(0, SamplesPerFrame).ToArray();
 				_pcmBuffer.RemoveRange(0, SamplesPerFrame);
-				
-				_oggStream.WriteSamples(frame, 0, SamplesPerFrame);
+
+				if (_silenceTrimmer is null)
+					_oggStream.WriteSamples(frame, 0, SamplesPerFrame);
+				else
+					_silenceTrimmer.ProcessFrame(frame, WriteFrame);
 			}
 		}
 	}
+
+	private void WriteFrame(short[] frame) => _oggStream?.WriteSamples(frame, 0, frame.Length);
 
 	private void OnRecordingStopped(object? sender, StoppedEventArgs e)
 	{
@@ -128,16 +143,23 @@ public class AudioRecorder : IDisposable
 			{
 				try
 				{
-					// Flush remaining samples if needed? 
+					// Flush remaining samples if needed?
 					// Opus generally works on whole frames. If we have leftover samples < 20ms,
 					// we could pad with silence or just discard.
 					// For voice, discarding < 20ms at the end is usually fine.
-					
+
+					if (_silenceTrimmer is not null)
+					{
+						_silenceTrimmer.Flush(WriteFrame);
+						TrimmedSpeechSeconds = _silenceTrimmer.SpeechFrameCount * SamplesPerFrame / (double)SampleRate;
+					}
+
 					_oggStream.Finish();
 				}
 				finally
 				{
 					_oggStream = null;
+					_silenceTrimmer = null;
 				}
 			}
 		}

@@ -49,6 +49,21 @@ public class SpeechToTextManager : IDisposable
 
 	private string SessionsDirectory => Path.Combine(_settings.SpeechToTextSettings!.TempDirectory!, Constants.SessionsDirectoryName);
 
+	// Minimum trimmed speech below which we treat a recording as "no speech detected".
+	private const double MinSpeechSecondsForTranscription = 0.25;
+
+	private SilenceTrimmerOptions? BuildSilenceOptions()
+	{
+		var stt = _settings.SpeechToTextSettings;
+		if (stt is null || !stt.EnableSilenceStripping)
+			return null;
+
+		return new SilenceTrimmerOptions(
+			stt.SilenceThresholdDbFs,
+			stt.MinSilenceSeconds,
+			stt.SilenceGuardMilliseconds);
+	}
+
 	public bool HasRecordedAudio()
 	{
 		foreach (var session in GetSessions())
@@ -134,7 +149,7 @@ public class SpeechToTextManager : IDisposable
 			}
 
 			_audioRecorder = new CognitiveSupport.AudioRecorder();
-			_audioRecorder.StartRecording(microphoneDeviceIndex, path);
+			_audioRecorder.StartRecording(microphoneDeviceIndex, path, BuildSilenceOptions());
 		}
 		finally
 		{
@@ -165,10 +180,15 @@ public class SpeechToTextManager : IDisposable
 			try
 			{
 				_audioRecorder?.StopRecording();
+				double? trimmedSpeechSeconds = _audioRecorder?.TrimmedSpeechSeconds;
 				_audioRecorder?.Dispose();
 				_audioRecorder = null;
 
 				transcribeToken.ThrowIfCancellationRequested();
+
+				// When silence stripping ran and left almost no speech, skip the API call.
+				if (trimmedSpeechSeconds is double seconds && seconds < MinSpeechSecondsForTranscription)
+					throw new NoSpeechDetectedException("No speech detected after trimming silence.");
 
 				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, transcribeToken).ConfigureAwait(false);
 			}
@@ -260,11 +280,14 @@ public class SpeechToTextManager : IDisposable
 		if (string.IsNullOrWhiteSpace(extension))
 			throw new InvalidOperationException("Uploaded audio must have a file extension.");
 
-		// If this is a video file, convert to OGG Opus format
-		if (AudioFileConverter.IsVideoFile(sourcePath))
+		var silenceOptions = BuildSilenceOptions();
+
+		// Video files always need decoding; audio files are decoded too when silence
+		// stripping is enabled so their silent gaps get trimmed (otherwise copied as-is).
+		if (AudioFileConverter.IsVideoFile(sourcePath) || silenceOptions is not null)
 		{
 			string destinationPath = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
-			await Task.Run(() => AudioFileConverter.ConvertMp4ToOgg(sourcePath, destinationPath), token).ConfigureAwait(false);
+			await Task.Run(() => AudioFileConverter.ConvertMp4ToOgg(sourcePath, destinationPath, silenceOptions), token).ConfigureAwait(false);
 
 			if (!TryCreateSession(destinationPath, out var convertedSession))
 				throw new InvalidOperationException($"Unable to parse converted session '{Path.GetFileName(destinationPath)}'.");
