@@ -252,13 +252,26 @@ public sealed partial class SettingsDialog : ContentDialog
 		ApplyRootSize();
 	}
 
+	// Vertical space the ContentDialog template reserves for its own chrome
+	// (title bar + Save/Cancel command area + dialog padding). The content Grid must
+	// be sized to the window height MINUS this, otherwise the dialog grows taller than
+	// the window and the bottom of the scrollable content is pushed off-screen / behind
+	// the command bar (which hid the last controls on the tallest page).
+	private const double DialogChromeHeight = 160d;
+
+	// Horizontal space the ContentDialog template reserves (left/right padding + insets).
+	// Mirrors DialogChromeHeight: without it RootGrid.Width = full window width pushes the
+	// content's right edge off-screen, clipping the scrollbar gutter and the right side of
+	// full-width controls (API key toggle, endpoint box, etc.).
+	private const double DialogChromeWidth = 56d;
+
 	private void ApplyRootSize()
 	{
 		if (XamlRoot is null || RootGrid is null)
 			return;
 
 		var bounds = XamlRoot.Size;
-		RootGrid.Width = bounds.Width;
-		RootGrid.Height = bounds.Height;
+		RootGrid.Width = Math.Max(0d, bounds.Width - DialogChromeWidth);
+		RootGrid.Height = Math.Max(0d, bounds.Height - DialogChromeHeight);
 	}
 }

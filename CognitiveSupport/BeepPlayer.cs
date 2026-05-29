@@ -28,6 +28,7 @@ public static class BeepPlayer
 	private static SoundPlayer? _playerEnd;
 	private static SoundPlayer? _playerMute;
 	private static SoundPlayer? _playerUnmute;
+	private static SoundPlayer? _previewPlayer;
 	public static IReadOnlyList<string> LastInitializationIssues { get; private set; } = Array.Empty<string>();
 
 	public static void Initialize(Settings settings)
@@ -132,8 +133,38 @@ public static class BeepPlayer
 		}
 	}
 
+	// Plays an arbitrary .wav file for previewing (e.g. from the settings dialog),
+	// independent of the UseCustomBeeps toggle and the cached per-type players.
+	// Expects an already-resolved file path (see CustomBeepSettingsData.ResolveAudioFilePath).
+	// Returns true if playback started; false if the file is missing or could not be loaded.
+	public static bool PreviewFile(string? resolvedFilePath)
+	{
+		if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
+			return false;
+
+		lock (SyncLock)
+		{
+			try
+			{
+				_previewPlayer?.Dispose();
+				_previewPlayer = new SoundPlayer(resolvedFilePath);
+				_previewPlayer.Load();
+				_previewPlayer.Play();
+				return true;
+			}
+			catch
+			{
+				_previewPlayer?.Dispose();
+				_previewPlayer = null;
+				return false;
+			}
+		}
+	}
+
 	public static void DisposePlayers()
 	{
+		_previewPlayer?.Dispose();
+		_previewPlayer = null;
 		_playerStart?.Dispose();
 		_playerSuccess?.Dispose();
 		_playerFailure?.Dispose();

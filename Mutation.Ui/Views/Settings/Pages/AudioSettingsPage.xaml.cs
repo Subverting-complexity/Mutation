@@ -30,9 +30,6 @@ public sealed partial class AudioSettingsPage : UserControl
 		try
 		{
 			var aud = _settings.AudioSettings ??= new AudioSettings();
-			TxtActiveDevice.Text = string.IsNullOrWhiteSpace(aud.ActiveCaptureDeviceFullName)
-				? "(none selected)"
-				: aud.ActiveCaptureDeviceFullName!;
 			ToggleMicViz.IsOn = aud.EnableMicrophoneVisualization;
 			HkMute.Hotkey = aud.MicrophoneToggleMuteHotKey ?? string.Empty;
 
@@ -86,6 +83,46 @@ public sealed partial class AudioSettingsPage : UserControl
 			case "mute": beeps.BeepMuteFile = path; break;
 			case "unmute": beeps.BeepUnmuteFile = path; break;
 		}
+	}
+
+	private void PlayBeep_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is not Button btn) return;
+		string? key = btn.Tag as string;
+		if (string.IsNullOrEmpty(key)) return;
+
+		TextBox source = key switch
+		{
+			"success" => TxtBeepSuccess,
+			"failure" => TxtBeepFailure,
+			"start" => TxtBeepStart,
+			"end" => TxtBeepEnd,
+			"mute" => TxtBeepMute,
+			"unmute" => TxtBeepUnmute,
+			_ => TxtBeepSuccess,
+		};
+
+		string raw = source.Text ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(raw))
+		{
+			ShowPreviewError("No file is configured for this beep.");
+			return;
+		}
+
+		var beeps = (_settings.AudioSettings ??= new AudioSettings()).CustomBeepSettings ??= new AudioSettings.CustomBeepSettingsData();
+		string resolved = beeps.ResolveAudioFilePath(raw);
+
+		if (BeepPlayer.PreviewFile(resolved))
+			BeepPreviewInfoBar.IsOpen = false;
+		else
+			ShowPreviewError($"Could not play this beep file: {raw}");
+	}
+
+	private void ShowPreviewError(string message)
+	{
+		BeepPreviewInfoBar.Severity = InfoBarSeverity.Error;
+		BeepPreviewInfoBar.Message = message;
+		BeepPreviewInfoBar.IsOpen = true;
 	}
 
 	private async void BrowseBeep_Click(object sender, RoutedEventArgs e)

@@ -85,3 +85,8 @@ src/Positron.Website/appsettings.Development.json
 # Logs
 logs/
 
+
+# Claude Code (machine-local)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock

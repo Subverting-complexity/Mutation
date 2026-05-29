@@ -17,20 +17,11 @@
 
 		<StackPanel x:Name="HotkeyList" Spacing="8" />
 
-		<StackPanel Spacing="6">
-			<TextBlock Text="Per-prompt hotkeys" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtPromptHotkeys"
-					   TextWrapping="Wrap"
-					   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-		</StackPanel>
-
 		<Border Style="{StaticResource CardStyle}">
 			<StackPanel Spacing="18">
-				<StackPanel Spacing="4">
-					<TextBlock Text="Hotkey Router" Style="{StaticResource SectionHeaderTextStyle}" />
-					<TextBlock
-						Text="Map one shortcut to another so you can trigger complex workflows from a single key press. Changes apply when you save settings."
-						Style="{StaticResource CaptionTextStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<TextBlock Text="Hotkey Router" VerticalAlignment="Center" Style="{StaticResource SectionHeaderTextStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Hotkeys.Router}" VerticalAlignment="Center" />
 				</StackPanel>
 
 				<StackPanel Spacing="12">
@@ -47,6 +38,7 @@
 
 					<ListView
 						x:Name="HotkeyRouterList"
+						AutomationProperties.Name="Hotkey router mappings"
 						ItemsSource="{x:Bind HotkeyRouterEntries, Mode=OneWay}"
 						SelectionMode="None"
 						IsItemClickEnabled="False"
@@ -69,6 +61,7 @@
 												PlaceholderText="CTRL+ALT+H"
 												Background="Transparent"
 												HorizontalAlignment="Stretch"
+												AutomationProperties.Name="Shortcut to listen for"
 												ToolTipService.ToolTip="Shortcut to listen for"
 												LostFocus="HotkeyRouterFrom_LostFocus" />
 										</Border>
@@ -79,6 +72,7 @@
 											VerticalAlignment="Center"
 											Margin="0,0,8,0"
 											Visibility="{x:Bind BindingErrorVisibility, Mode=OneWay}"
+											AutomationProperties.Name="{x:Bind BindingErrorMessage, Mode=OneWay}"
 											ToolTipService.ToolTip="{x:Bind BindingErrorMessage, Mode=OneWay}" />
 									</Grid>
 
@@ -88,6 +82,7 @@
 											PlaceholderText="CTRL+SHIFT+H"
 											Background="Transparent"
 											HorizontalAlignment="Stretch"
+											AutomationProperties.Name="Shortcut to send when triggered"
 											ToolTipService.ToolTip="Shortcut to send when triggered"
 											LostFocus="HotkeyRouterTo_LostFocus" />
 									</Border>
@@ -96,6 +91,7 @@
 										Grid.Column="2"
 										Style="{StaticResource SubtleButtonStyle}"
 										Content="Delete"
+										AutomationProperties.Name="Delete mapping"
 										Click="HotkeyRouterDelete_Click"
 										Tag="{x:Bind}" />
 								</Grid>

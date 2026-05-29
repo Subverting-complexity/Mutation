@@ -3,6 +3,7 @@
 	x:Class="Mutation.Ui.Views.SettingsUi.Pages.TtsSettingsPage"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
@@ -10,24 +11,20 @@
 	<StackPanel Spacing="14">
 		<TextBlock Text="Text to Speech" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<TextBlock Text="Voice / rate / volume controls live on the main window. Other narration options:"
+		<TextBlock Text="Voice, rate, and volume controls live on the main window. Other narration options:"
 				   TextWrapping="Wrap"
 				   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-		<StackPanel Spacing="6">
-			<TextBlock Text="Current voice" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<TextBlock x:Name="TxtVoiceSummary" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-			<TextBlock x:Name="TxtRateVolumeSummary" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-		</StackPanel>
 
 		<StackPanel Orientation="Horizontal" Spacing="8">
 			<ToggleSwitch x:Name="ToggleSpeechPreprocessing"
 						  Header="Enable speech preprocessing"
+						  AutomationProperties.HelpText="{StaticResource Help.Tts.Preprocessing}"
 						  OffContent="Off"
 						  OnContent="On"
 						  Toggled="ToggleSpeechPreprocessing_Toggled" />
-			<Button VerticalAlignment="Bottom" Click="BtnResetPreproc_Click" ToolTipService.ToolTip="Reset to default">
-				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+			<controls:InfoHint Text="{StaticResource Help.Tts.Preprocessing}" VerticalAlignment="Center" />
+			<Button VerticalAlignment="Bottom" Click="BtnResetPreproc_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset speech preprocessing">
+				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 			</Button>
 		</StackPanel>
 

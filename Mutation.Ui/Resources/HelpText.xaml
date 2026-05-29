@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+	<!--
+		Centralized help copy. Each key feeds both the screen-reader channel
+		(AutomationProperties.HelpText on the input) and the visual hover tooltip
+		(InfoHint.Text), so the two cannot drift. Keys are namespaced by area.
+	-->
+
+	<!-- OCR / screen capture -->
+	<x:String x:Key="Help.Ocr.Timeout">How long to wait for the OCR service to respond before giving up.</x:String>
+	<x:String x:Key="Help.Ocr.FreeTierPageLimit">Maximum number of pages sent per document while the free tier is in use.</x:String>
+	<x:String x:Key="Help.Ocr.MaxParallelDocuments">How many documents are processed at the same time during a batch OCR run.</x:String>
+	<x:String x:Key="Help.Ocr.MaxParallelRequests">How many OCR requests are sent to the service at the same time.</x:String>
+	<x:String x:Key="Help.Ocr.UseFreeTier">Use the free OCR tier, which limits how many pages each document can contain.</x:String>
+	<x:String x:Key="Help.Ocr.InvertScreenshot">Invert image colors before OCR to improve accuracy on light text over a dark background.</x:String>
+	<x:String x:Key="Help.Ocr.SendHotkeyAfter">Optional keystrokes sent to the active app after OCR text is delivered, for example CTRL+V to paste.</x:String>
+
+	<!-- Interface -->
+	<x:String x:Key="Help.Interface.MaxVisibleLines">Caps the height of the transcript and OCR text boxes on the main window.</x:String>
+	<x:String x:Key="Help.Interface.DictationInsert">How transcripts reach the active app: Paste inserts via the clipboard, Type simulates keystrokes, and DoNotInsert leaves the text in Mutation only.</x:String>
+
+	<!-- Text to Speech -->
+	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud.</x:String>
+
+	<!-- Speech to Text -->
+	<x:String x:Key="Help.Speech.ActiveService">The transcription engine used when you record or transcribe speech.</x:String>
+	<x:String x:Key="Help.Speech.FileTimeout">How long to wait for a file transcription to finish before giving up.</x:String>
+	<x:String x:Key="Help.Speech.TempDir">Folder where temporary audio files are written during recording and transcription.</x:String>
+	<x:String x:Key="Help.Speech.SendHotkeyAfter">Optional keystrokes sent to the active app after a transcript is delivered, for example CTRL+V to paste.</x:String>
+
+	<!-- Audio -->
+	<x:String x:Key="Help.Audio.MicVisualization">Show a live waveform of the microphone input while recording.</x:String>
+	<x:String x:Key="Help.Audio.UseCustomBeeps">Play your own sound files instead of the built-in beeps for status cues.</x:String>
+
+	<!-- LLM / AI assistance -->
+	<x:String x:Key="Help.Llm.OpenAiKey">API key used to authenticate requests to OpenAI models.</x:String>
+	<x:String x:Key="Help.Llm.AnthropicKey">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
+	<x:String x:Key="Help.Llm.RequestTimeout">How long to wait for the language model to respond before giving up.</x:String>
+	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>
+
+	<!-- Hotkeys -->
+	<x:String x:Key="Help.Hotkeys.Router">Map one shortcut to another so a single key press can trigger a more complex shortcut. Changes apply when you save settings.</x:String>
+
+	<!-- Main window -->
+	<x:String x:Key="Help.Main.ThirdPartyInteraction">Choose how formatted text is delivered to the active application.</x:String>
+	<x:String x:Key="Help.Main.Record">Start or stop speech capture; the transcript appears in the Raw Transcript box.</x:String>
+	<x:String x:Key="Help.Main.RecordAndFormat">Start or stop speech capture, then automatically process the transcript with the LLM.</x:String>
+	<x:String x:Key="Help.Main.FormatWithRules">Apply your local find-and-replace formatting rules to the raw transcript.</x:String>
+	<x:String x:Key="Help.Main.ProcessWithLlm">Send the raw transcript through the configured language model for formatting.</x:String>
+	<x:String x:Key="Help.Main.OcrReadingOrder">The (L→R) variant reads detected text strictly left to right, top to bottom, which helps with columns or tables the default order misreads.</x:String>
+	<x:String x:Key="Help.Main.AutoRun">This prompt runs automatically after recording finishes instead of waiting for you to trigger it.</x:String>
+
+</ResourceDictionary>

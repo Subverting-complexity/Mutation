@@ -1,5 +1,6 @@
-using System.Linq;
+using System.Collections.ObjectModel;
 using CognitiveSupport;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Mutation.Ui.Views.SettingsUi.Pages;
@@ -8,6 +9,8 @@ public sealed partial class LlmSettingsPage : UserControl
 {
 	private readonly Settings _settings;
 	private bool _suppressEvents;
+
+	public ObservableCollection<LlmModelEntry> ModelEntries { get; } = new();
 
 	public LlmSettingsPage(Settings settings)
 	{
@@ -38,14 +41,25 @@ public sealed partial class LlmSettingsPage : UserControl
 			TxtAnthropicKey.Secret = llm.AnthropicApiKey ?? string.Empty;
 			NbTimeout.Value = llm.TimeoutSeconds > 0 ? llm.TimeoutSeconds : SettingsDefaults.Llm.TimeoutSeconds;
 
-			TxtModelsSummary.Text = llm.Models is { Count: > 0 }
-				? string.Join("    ", llm.Models.Select(m => $"• {m.Name} ({m.Provider})"))
-				: "(none)";
-			TxtPromptsSummary.Text = llm.Prompts is { Count: > 0 }
-				? string.Join("    ", llm.Prompts.Select(p => $"• {p.Name}"))
-				: "(none)";
+			ModelEntries.Clear();
+			foreach (var model in llm.Models)
+				ModelEntries.Add(new LlmModelEntry(model));
 		}
 		finally { _suppressEvents = false; }
+	}
+
+	private void BtnAddModel_Click(object sender, RoutedEventArgs e)
+	{
+		var model = new LlmModelConfig();
+		(_settings.LlmSettings ??= new LlmSettings()).Models.Add(model);
+		ModelEntries.Add(new LlmModelEntry(model));
+	}
+
+	private void ModelDelete_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is not Button { Tag: LlmModelEntry entry }) return;
+		_settings.LlmSettings?.Models.Remove(entry.Model);
+		ModelEntries.Remove(entry);
 	}
 
 	private void NbTimeout_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

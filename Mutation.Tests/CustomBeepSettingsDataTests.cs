@@ -66,19 +66,24 @@ public class CustomBeepSettingsDataTests
 	}
 
 	[Fact]
-	public void Resolve_AbsolutePathOutsideBaseDirectory_RejectedAsEmpty()
+	public void Resolve_AbsolutePathOutsideBaseDirectory_Accepted()
 	{
-		// C:\Windows is virtually guaranteed to be outside the test runner's BaseDirectory.
+		// Local absolute paths anywhere are allowed; only UNC paths are rejected.
 		string outsidePath = Path.Combine(@"C:\", "Windows", "System32", "beep.wav");
-		Assert.Equal(string.Empty, New().ResolveAudioFilePath(outsidePath));
+		Assert.Equal(Path.GetFullPath(outsidePath), New().ResolveAudioFilePath(outsidePath));
 	}
 
 	[Theory]
 	[InlineData(@"..\..\..\Windows\System32\foo.wav")]
 	[InlineData("../../../etc/passwd")]
-	public void Resolve_PathTraversalAttempt_RejectedAsEmpty(string path)
+	public void Resolve_RelativePathEscapingBase_ResolvesToFullPath(string path)
 	{
-		Assert.Equal(string.Empty, New().ResolveAudioFilePath(path));
+		// With local paths permitted anywhere, an escaping relative path simply resolves
+		// to its full rooted form rather than being rejected.
+		string resolved = New().ResolveAudioFilePath(path);
+
+		Assert.False(string.IsNullOrEmpty(resolved));
+		Assert.True(Path.IsPathRooted(resolved));
 	}
 
 	[Fact]

@@ -26,20 +26,8 @@ public sealed partial class InterfaceSettingsPage : UserControl
 			var ui = _settings.MainWindowUiSettings ?? new MainWindowUiSettings();
 			NbMaxLines.Value = ui.MaxTextBoxLineCount > 0 ? ui.MaxTextBoxLineCount : SettingsDefaults.MainWindowUi.MaxTextBoxLineCount;
 			CmbDictationInsert.SelectedItem = ui.DictationInsertPreference ?? SettingsDefaults.MainWindowUi.DictationInsertPreference;
-			UpdateWindowSummary();
 		}
 		finally { _suppressEvents = false; }
-	}
-
-	private void UpdateWindowSummary()
-	{
-		var ui = _settings.MainWindowUiSettings;
-		if (ui is null)
-		{
-			TxtWindowSummary.Text = "(not set)";
-			return;
-		}
-		TxtWindowSummary.Text = $"Position: {ui.WindowLocation.X}, {ui.WindowLocation.Y}    Size: {ui.WindowSize.Width} x {ui.WindowSize.Height}";
 	}
 
 	private void NbMaxLines_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -75,6 +63,5 @@ public sealed partial class InterfaceSettingsPage : UserControl
 		_settings.MainWindowUiSettings ??= new MainWindowUiSettings();
 		_settings.MainWindowUiSettings.WindowLocation = Point.Empty;
 		_settings.MainWindowUiSettings.WindowSize = Size.Empty;
-		UpdateWindowSummary();
 	}
 }
