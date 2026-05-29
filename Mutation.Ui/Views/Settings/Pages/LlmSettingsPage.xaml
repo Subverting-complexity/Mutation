@@ -19,13 +19,16 @@
 			<TextBlock Text="Request timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
 			<StackPanel Orientation="Horizontal" Spacing="6">
 				<NumberBox x:Name="NbTimeout"
+						   AutomationProperties.Name="Request timeout (seconds)"
 						   Minimum="5" Maximum="600"
 						   SmallChange="5"
 						   Width="180"
 						   SpinButtonPlacementMode="Inline"
 						   ValueChanged="NbTimeout_ValueChanged" />
-				<Button Click="BtnResetTimeout_Click" ToolTipService.ToolTip="Reset to default">
-					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+				<Button Click="BtnResetTimeout_Click" ToolTipService.ToolTip="Reset to default"
+						AutomationProperties.Name="Reset request timeout">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12"
+							  AutomationProperties.AccessibilityView="Raw" />
 				</Button>
 			</StackPanel>
 		</StackPanel>
@@ -48,6 +51,7 @@
 
 			<ListView
 				x:Name="ModelsList"
+				AutomationProperties.Name="Models"
 				ItemsSource="{x:Bind ModelEntries, Mode=OneWay}"
 				SelectionMode="None"
 				IsItemClickEnabled="False"
@@ -69,6 +73,7 @@
 								Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 								PlaceholderText="gpt-4.1"
 								HorizontalAlignment="Stretch"
+								AutomationProperties.Name="Model name"
 								ToolTipService.ToolTip="Model name" />
 
 							<ComboBox
@@ -76,6 +81,7 @@
 								ItemsSource="{x:Bind ProviderOptions}"
 								SelectedItem="{x:Bind Provider, Mode=TwoWay}"
 								HorizontalAlignment="Stretch"
+								AutomationProperties.Name="Provider"
 								ToolTipService.ToolTip="Provider" />
 
 							<TextBox
@@ -83,12 +89,14 @@
 								Text="{x:Bind TemperatureText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 								PlaceholderText="(default)"
 								HorizontalAlignment="Stretch"
+								AutomationProperties.Name="Temperature"
 								ToolTipService.ToolTip="Optional temperature; leave empty to use the provider default" />
 
 							<Button
 								Grid.Column="3"
 								Style="{StaticResource SubtleButtonStyle}"
 								Content="Delete"
+								AutomationProperties.Name="Delete model"
 								Click="ModelDelete_Click"
 								Tag="{x:Bind}" />
 						</Grid>

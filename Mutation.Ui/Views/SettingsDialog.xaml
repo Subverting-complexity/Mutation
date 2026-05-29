@@ -21,8 +21,11 @@
 		<x:Double x:Key="ContentDialogMinWidth">0</x:Double>
 		<x:Double x:Key="ContentDialogMinHeight">0</x:Double>
 		<DataTemplate x:Key="SettingsCategoryTemplate" x:DataType="local:SettingsCategoryItem">
-			<StackPanel Orientation="Horizontal" Spacing="12">
-				<FontIcon Glyph="{x:Bind IconGlyph}" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center" />
+			<StackPanel Orientation="Horizontal" Spacing="12"
+						AutomationProperties.Name="{x:Bind DisplayName}"
+						AutomationProperties.HelpText="{x:Bind Description}">
+				<FontIcon Glyph="{x:Bind IconGlyph}" FontFamily="Segoe Fluent Icons" VerticalAlignment="Center"
+						  AutomationProperties.AccessibilityView="Raw" />
 				<TextBlock Text="{x:Bind DisplayName}" Style="{StaticResource BodyStrongTextBlockStyle}" />
 			</StackPanel>
 		</DataTemplate>
@@ -64,6 +67,7 @@
 			CornerRadius="12">
 			<ListView
 				x:Name="CategoryList"
+				AutomationProperties.Name="Settings categories"
 				ItemsSource="{x:Bind FilteredCategories}"
 				ItemTemplate="{StaticResource SettingsCategoryTemplate}"
 				SelectionMode="Single"

@@ -21,6 +21,7 @@
 
 			<TextBox x:Name="HotkeyTextBox"
 					 Grid.Column="0"
+					 AutomationProperties.Name="{x:Bind Header, Mode=OneWay}"
 					 PlaceholderText="e.g. CTRL+ALT+J"
 					 KeyDown="HotkeyTextBox_KeyDown"
 					 TextChanged="HotkeyTextBox_TextChanged"
@@ -30,27 +31,32 @@
 
 			<Button x:Name="RecordButton"
 					Grid.Column="1"
+					AutomationProperties.Name="Record hotkey"
 					Click="RecordButton_Click"
 					ToolTipService.ToolTip="Click and press the desired key combination">
 				<StackPanel Orientation="Horizontal" Spacing="6">
 					<FontIcon x:Name="RecordIcon"
 							  Glyph="&#xE7C8;"
 							  FontFamily="Segoe Fluent Icons"
-							  FontSize="14" />
+							  FontSize="14"
+							  AutomationProperties.AccessibilityView="Raw" />
 					<TextBlock x:Name="RecordLabel" Text="Record" />
 				</StackPanel>
 			</Button>
 
 			<Button x:Name="ClearButton"
 					Grid.Column="2"
+					AutomationProperties.Name="Clear hotkey"
 					Click="ClearButton_Click"
 					ToolTipService.ToolTip="Clear">
-				<FontIcon Glyph="&#xE894;" FontFamily="Segoe Fluent Icons" FontSize="14" />
+				<FontIcon Glyph="&#xE894;" FontFamily="Segoe Fluent Icons" FontSize="14"
+						  AutomationProperties.AccessibilityView="Raw" />
 			</Button>
 		</Grid>
 		<TextBlock x:Name="ValidationText"
 				   Foreground="{ThemeResource SystemFillColorCriticalBrush}"
 				   Visibility="Collapsed"
+				   AutomationProperties.LiveSetting="Assertive"
 				   Style="{StaticResource CaptionTextBlockStyle}"
 				   TextWrapping="Wrap" />
 	</StackPanel>

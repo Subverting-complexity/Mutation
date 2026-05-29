@@ -20,8 +20,8 @@
 						  OffContent="Off"
 						  OnContent="On"
 						  Toggled="ToggleSpeechPreprocessing_Toggled" />
-			<Button VerticalAlignment="Bottom" Click="BtnResetPreproc_Click" ToolTipService.ToolTip="Reset to default">
-				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" />
+			<Button VerticalAlignment="Bottom" Click="BtnResetPreproc_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset speech preprocessing">
+				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 			</Button>
 		</StackPanel>
 
