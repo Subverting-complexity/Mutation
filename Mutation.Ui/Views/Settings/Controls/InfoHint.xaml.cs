@@ -19,4 +19,15 @@ public sealed partial class InfoHint : UserControl
 		get => (string)GetValue(TextProperty);
 		set => SetValue(TextProperty, value ?? string.Empty);
 	}
+
+	private void OnGotFocus(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(Text))
+			HintToolTip.IsOpen = true;
+	}
+
+	private void OnLostFocus(object sender, RoutedEventArgs e)
+	{
+		HintToolTip.IsOpen = false;
+	}
 }
