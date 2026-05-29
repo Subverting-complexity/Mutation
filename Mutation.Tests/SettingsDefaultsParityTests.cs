@@ -70,6 +70,10 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Speech.SpeechToTextWithLlmProcessingHotKey, stt.SpeechToTextWithLlmProcessingHotKey);
 		Assert.Equal(SettingsDefaults.Speech.TempDirectory, stt.TempDirectory);
 		Assert.Equal(SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds, stt.FileTranscriptionTimeoutSeconds);
+		Assert.Equal(SettingsDefaults.Speech.EnableSilenceStripping, stt.EnableSilenceStripping);
+		Assert.Equal(SettingsDefaults.Speech.SilenceThresholdDbFs, stt.SilenceThresholdDbFs);
+		Assert.Equal(SettingsDefaults.Speech.MinSilenceSeconds, stt.MinSilenceSeconds);
+		Assert.Equal(SettingsDefaults.Speech.SilenceGuardMilliseconds, stt.SilenceGuardMilliseconds);
 
 		Assert.NotNull(stt.Services);
 		Assert.NotEmpty(stt.Services!);

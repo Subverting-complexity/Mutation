@@ -47,6 +47,11 @@ public sealed partial class SpeechSettingsPage : UserControl
 				: SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds;
 			TxtTempDir.Text = stt.TempDirectory ?? string.Empty;
 			HkSendAfterTranscription.Hotkey = stt.SendHotkeyAfterTranscriptionOperation ?? string.Empty;
+
+			ChkStripSilence.IsChecked = stt.EnableSilenceStripping;
+			NbMinSilence.Value = stt.MinSilenceSeconds;
+			NbSilenceThreshold.Value = stt.SilenceThresholdDbFs;
+			NbSilenceGuard.Value = stt.SilenceGuardMilliseconds;
 		}
 		finally { _suppressEvents = false; }
 	}
@@ -72,6 +77,42 @@ public sealed partial class SpeechSettingsPage : UserControl
 
 	private void BtnResetFileTimeout_Click(object sender, RoutedEventArgs e) =>
 		NbFileTimeout.Value = SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds;
+
+	private void ChkStripSilence_Changed(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).EnableSilenceStripping = ChkStripSilence.IsChecked == true;
+	}
+
+	private void NbMinSilence_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).MinSilenceSeconds = args.NewValue;
+	}
+
+	private void NbSilenceThreshold_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).SilenceThresholdDbFs = args.NewValue;
+	}
+
+	private void NbSilenceGuard_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).SilenceGuardMilliseconds = args.NewValue;
+	}
+
+	private void BtnResetMinSilence_Click(object sender, RoutedEventArgs e) =>
+		NbMinSilence.Value = SettingsDefaults.Speech.MinSilenceSeconds;
+
+	private void BtnResetSilenceThreshold_Click(object sender, RoutedEventArgs e) =>
+		NbSilenceThreshold.Value = SettingsDefaults.Speech.SilenceThresholdDbFs;
+
+	private void BtnResetSilenceGuard_Click(object sender, RoutedEventArgs e) =>
+		NbSilenceGuard.Value = SettingsDefaults.Speech.SilenceGuardMilliseconds;
 
 	private void BtnResetTempDir_Click(object sender, RoutedEventArgs e) =>
 		TxtTempDir.Text = SettingsDefaults.Speech.TempDirectory;

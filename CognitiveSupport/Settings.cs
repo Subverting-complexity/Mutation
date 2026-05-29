@@ -140,6 +140,18 @@ public class SpeechToTextSettings
         public string? ActiveSpeechToTextService { get; set; }
 
         public int FileTranscriptionTimeoutSeconds { get; set; } = 300;
+
+        // Strip silent gaps from recorded/imported audio before transcription.
+        public bool EnableSilenceStripping { get; set; } = true;
+
+        // RMS loudness floor (dBFS); audio at or below this counts as silence.
+        public double SilenceThresholdDbFs { get; set; } = -40.0;
+
+        // Inter-speech gaps longer than this are trimmed down to this length (seconds).
+        public double MinSilenceSeconds { get; set; } = 1.0;
+
+        // Audio preserved on each side of speech to avoid clipping word edges (milliseconds).
+        public double SilenceGuardMilliseconds { get; set; } = 200.0;
 }
 
 public class SpeechToTextServiceSettings

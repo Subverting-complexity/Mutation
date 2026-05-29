@@ -41,6 +41,10 @@ internal static class SettingsDefaults
 		public const string DefaultServiceModelId = "whisper-1";
 		public const string DefaultServiceBaseDomain = "https://api.openai.com/";
 		public const string DefaultServicePrompt = "Hello, let's use punctuation. Names: Kobus, Piro.";
+		public const bool EnableSilenceStripping = true;
+		public const double SilenceThresholdDbFs = -40.0;
+		public const double MinSilenceSeconds = 1.0;
+		public const double SilenceGuardMilliseconds = 200.0;
 	}
 
 	public static class Tts
