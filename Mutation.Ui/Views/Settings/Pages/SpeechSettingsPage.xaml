@@ -12,9 +12,13 @@
 		<TextBlock Text="Speech to Text" Style="{StaticResource SubtitleTextBlockStyle}" />
 
 		<StackPanel Spacing="4">
-			<TextBlock Text="Active service" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Active service" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.ActiveService}" VerticalAlignment="Center" />
+			</StackPanel>
 			<ComboBox x:Name="CmbActiveService"
 					  AutomationProperties.Name="Active service"
+					  AutomationProperties.HelpText="{StaticResource Help.Speech.ActiveService}"
 					  Width="280"
 					  HorizontalAlignment="Left"
 					  SelectionChanged="CmbActiveService_SelectionChanged" />
@@ -25,10 +29,14 @@
 
 		<StackPanel Orientation="Horizontal" Spacing="16">
 			<StackPanel>
-				<TextBlock Text="File transcription timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<TextBlock Text="File transcription timeout (seconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Speech.FileTimeout}" VerticalAlignment="Center" />
+				</StackPanel>
 				<StackPanel Orientation="Horizontal" Spacing="6">
 					<NumberBox x:Name="NbFileTimeout"
 							   AutomationProperties.Name="File transcription timeout (seconds)"
+							   AutomationProperties.HelpText="{StaticResource Help.Speech.FileTimeout}"
 							   Minimum="10" Maximum="7200"
 							   SmallChange="10" LargeChange="60"
 							   SpinButtonPlacementMode="Inline"
@@ -42,14 +50,17 @@
 		</StackPanel>
 
 		<StackPanel Spacing="4">
-			<TextBlock Text="Temp directory" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Temp directory" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.TempDir}" VerticalAlignment="Center" />
+			</StackPanel>
 			<Grid ColumnSpacing="8">
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
-				<TextBox x:Name="TxtTempDir" Grid.Column="0" AutomationProperties.Name="Temp directory" TextChanged="TxtTempDir_TextChanged" />
+				<TextBox x:Name="TxtTempDir" Grid.Column="0" AutomationProperties.Name="Temp directory" AutomationProperties.HelpText="{StaticResource Help.Speech.TempDir}" TextChanged="TxtTempDir_TextChanged" />
 				<Button x:Name="BtnBrowseTempDir" Grid.Column="1" Content="Browse..." AutomationProperties.Name="Browse for temp directory" Click="BtnBrowseTempDir_Click" />
 				<Button Grid.Column="2" Click="BtnResetTempDir_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset temp directory">
 					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
@@ -59,6 +70,7 @@
 
 		<controls:HotkeyEditor x:Name="HkSendAfterTranscription"
 							   Header="Send hotkey after transcription (optional)"
+							   HelpText="{StaticResource Help.Speech.SendHotkeyAfter}"
 							   AllowEmpty="True"
 							   AllowSendKeysSyntax="True" />
 	</StackPanel>

@@ -3,15 +3,24 @@
 	x:Class="Mutation.Ui.Views.SettingsUi.Controls.HotkeyEditor"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
 
 	<StackPanel Orientation="Vertical" Spacing="4">
-		<TextBlock x:Name="HeaderText"
-				   Text="{x:Bind Header, Mode=OneWay}"
-				   Visibility="{x:Bind HeaderVisibility, Mode=OneWay}"
-				   Style="{StaticResource BodyStrongTextBlockStyle}" />
+		<StackPanel x:Name="HeaderRow"
+					Orientation="Horizontal"
+					Spacing="6"
+					Visibility="{x:Bind HeaderVisibility, Mode=OneWay}">
+			<TextBlock x:Name="HeaderText"
+					   Text="{x:Bind Header, Mode=OneWay}"
+					   VerticalAlignment="Center"
+					   Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<controls:InfoHint x:Name="HelpHint"
+							   Text="{x:Bind HelpText, Mode=OneWay}"
+							   VerticalAlignment="Center" />
+		</StackPanel>
 		<Grid ColumnSpacing="8">
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" />
@@ -22,6 +31,7 @@
 			<TextBox x:Name="HotkeyTextBox"
 					 Grid.Column="0"
 					 AutomationProperties.Name="{x:Bind Header, Mode=OneWay}"
+					 AutomationProperties.HelpText="{x:Bind HelpText, Mode=OneWay}"
 					 PlaceholderText="e.g. CTRL+ALT+J"
 					 KeyDown="HotkeyTextBox_KeyDown"
 					 TextChanged="HotkeyTextBox_TextChanged"

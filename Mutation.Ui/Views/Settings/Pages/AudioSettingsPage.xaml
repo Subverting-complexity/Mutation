@@ -14,9 +14,11 @@
 		<StackPanel Orientation="Horizontal" Spacing="8">
 			<ToggleSwitch x:Name="ToggleMicViz"
 						  Header="Microphone visualization"
+						  AutomationProperties.HelpText="{StaticResource Help.Audio.MicVisualization}"
 						  OffContent="Off"
 						  OnContent="On"
 						  Toggled="ToggleMicViz_Toggled" />
+			<controls:InfoHint Text="{StaticResource Help.Audio.MicVisualization}" VerticalAlignment="Center" />
 			<Button VerticalAlignment="Bottom" Click="BtnResetMicViz_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset microphone visualization">
 				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 			</Button>
@@ -26,11 +28,15 @@
 
 		<StackPanel Spacing="8">
 			<TextBlock Text="Custom beeps" Style="{StaticResource BodyStrongTextBlockStyle}" />
-			<ToggleSwitch x:Name="ToggleUseCustomBeeps"
-						  AutomationProperties.Name="Use custom beeps"
-						  OffContent="Off"
-						  OnContent="On"
-						  Toggled="ToggleUseCustomBeeps_Toggled" />
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<ToggleSwitch x:Name="ToggleUseCustomBeeps"
+							  AutomationProperties.Name="Use custom beeps"
+							  AutomationProperties.HelpText="{StaticResource Help.Audio.UseCustomBeeps}"
+							  OffContent="Off"
+							  OnContent="On"
+							  Toggled="ToggleUseCustomBeeps_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Audio.UseCustomBeeps}" VerticalAlignment="Center" />
+			</StackPanel>
 
 			<Grid x:Name="BeepFilesPanel" RowSpacing="6" ColumnSpacing="8">
 				<Grid.ColumnDefinitions>

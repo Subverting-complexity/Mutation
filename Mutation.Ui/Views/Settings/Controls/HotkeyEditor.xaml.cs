@@ -26,6 +26,10 @@ public sealed partial class HotkeyEditor : UserControl
 		nameof(AllowSendKeysSyntax), typeof(bool), typeof(HotkeyEditor),
 		new PropertyMetadata(false));
 
+	public static readonly DependencyProperty HelpTextProperty = DependencyProperty.Register(
+		nameof(HelpText), typeof(string), typeof(HotkeyEditor),
+		new PropertyMetadata(string.Empty, OnHelpTextChanged));
+
 	private bool _isRecording;
 	private bool _suppressTextChanged;
 
@@ -33,6 +37,7 @@ public sealed partial class HotkeyEditor : UserControl
 	{
 		InitializeComponent();
 		UpdateHeaderVisibility();
+		UpdateHelpVisibility();
 	}
 
 	public string Hotkey
@@ -57,6 +62,12 @@ public sealed partial class HotkeyEditor : UserControl
 	{
 		get => (bool)GetValue(AllowSendKeysSyntaxProperty);
 		set => SetValue(AllowSendKeysSyntaxProperty, value);
+	}
+
+	public string HelpText
+	{
+		get => (string)GetValue(HelpTextProperty);
+		set => SetValue(HelpTextProperty, value ?? string.Empty);
 	}
 
 	public Visibility HeaderVisibility =>
@@ -87,9 +98,22 @@ public sealed partial class HotkeyEditor : UserControl
 			editor.UpdateHeaderVisibility();
 	}
 
+	private static void OnHelpTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+	{
+		if (d is HotkeyEditor editor)
+			editor.UpdateHelpVisibility();
+	}
+
 	private void UpdateHeaderVisibility()
 	{
-		HeaderText.Visibility = string.IsNullOrEmpty(Header)
+		HeaderRow.Visibility = string.IsNullOrEmpty(Header)
+			? Visibility.Collapsed
+			: Visibility.Visible;
+	}
+
+	private void UpdateHelpVisibility()
+	{
+		HelpHint.Visibility = string.IsNullOrEmpty(HelpText)
 			? Visibility.Collapsed
 			: Visibility.Visible;
 	}

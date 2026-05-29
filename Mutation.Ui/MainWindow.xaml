@@ -6,6 +6,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Mutation.Ui"
     xmlns:ScottPlot="using:ScottPlot.WinUI"
+    xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:converters="using:Mutation.Ui.Converters"
@@ -279,7 +280,8 @@
                                         Click="BtnSpeechToText_Click"
                                         AccessKey="R"
                                         AutomationProperties.Name="Record"
-                                        ToolTipService.ToolTip="Start or stop speech capture (Shift+Alt+U)">
+                                        AutomationProperties.HelpText="{StaticResource Help.Main.Record}"
+                                        ToolTipService.ToolTip="Start or stop speech capture (Shift+Alt+U). The transcript appears in the Raw Transcript box.">
                                         <FontIcon
                                             x:Name="BtnSpeechToTextIcon"
                                             Glyph="&#xE7C8;"
@@ -291,7 +293,8 @@
                                         Style="{StaticResource AccentButtonStyle}"
                                         Click="BtnSpeechToTextWithFormat_Click"
                                         AutomationProperties.Name="Record and Format"
-                                        ToolTipService.ToolTip="Start or stop speech capture and process with LLM">
+                                        AutomationProperties.HelpText="{StaticResource Help.Main.RecordAndFormat}"
+                                        ToolTipService.ToolTip="Start or stop speech capture, then automatically process the transcript with the LLM.">
                                         <FontIcon
                                             x:Name="BtnSpeechToTextWithFormatIcon"
                                             Glyph="&#xE890;"
@@ -400,7 +403,7 @@
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <TextBlock Text="{Binding Hotkey}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                    <TextBlock Text="(Auto-Run)" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding AutoRun, Converter={StaticResource BoolToVisConverter}}" />
+                                                    <TextBlock Text="(Auto-Run)" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" AutomationProperties.HelpText="{StaticResource Help.Main.AutoRun}" Visibility="{Binding AutoRun, Converter={StaticResource BoolToVisConverter}}" />
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding ModelName}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             </StackPanel>
@@ -448,7 +451,8 @@
                                     Click="BtnFormatTranscript_Click"
                                     AccessKey="F"
                                     AutomationProperties.Name="Format with rules"
-                                    ToolTipService.ToolTip="Apply local formatting rules to the transcript">
+                                    AutomationProperties.HelpText="{StaticResource Help.Main.FormatWithRules}"
+                                    ToolTipService.ToolTip="Apply your local find-and-replace formatting rules to the transcript (no LLM).">
                                     <FontIcon Glyph="&#xE90F;" FontFamily="Segoe Fluent Icons" />
                                 </Button>
                                 <Button
@@ -457,7 +461,8 @@
                                     Click="BtnProcessLlm_Click"
                                     AccessKey="L"
                                     AutomationProperties.Name="Process with LLM"
-                                    ToolTipService.ToolTip="Send transcript through the configured language model">
+                                    AutomationProperties.HelpText="{StaticResource Help.Main.ProcessWithLlm}"
+                                    ToolTipService.ToolTip="Send the raw transcript through the configured language model for formatting.">
                                     <FontIcon Glyph="&#xE781;" FontFamily="Segoe Fluent Icons" />
                                 </Button>
                             </StackPanel>
@@ -486,12 +491,16 @@
                             </StackPanel>
 
                             <StackPanel Spacing="6">
-                                <TextBlock x:Name="LblThirdPartyInteraction" Text="Third-party interaction" Style="{StaticResource CaptionTextStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock x:Name="LblThirdPartyInteraction" Text="Third-party interaction" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                                    <controls:InfoHint Text="{StaticResource Help.Main.ThirdPartyInteraction}" VerticalAlignment="Center" />
+                                </StackPanel>
                                 <ComboBox
                                     x:Name="CmbInsertOption"
                                     PlaceholderText="Select an automation option"
                                     AutomationProperties.LabeledBy="{Binding ElementName=LblThirdPartyInteraction}"
                                     AutomationProperties.Name="Third-party interaction mode"
+                                    AutomationProperties.HelpText="{StaticResource Help.Main.ThirdPartyInteraction}"
                                     ToolTipService.ToolTip="Choose how formatted text is inserted"
                                     SelectionChanged="CmbInsertOption_SelectionChanged" />
                                 <TextBlock
@@ -580,7 +589,8 @@
                                     Click="BtnOcrClipboardLrtb_Click"
                                     AccessKey="D"
                                     AutomationProperties.Name="OCR clipboard left to right"
-                                    ToolTipService.ToolTip="Run OCR on an image stored in the clipboard using left-to-right reading order">
+                                    AutomationProperties.HelpText="{StaticResource Help.Main.OcrReadingOrder}"
+                                    ToolTipService.ToolTip="Run OCR on a clipboard image, reading strictly left to right and top to bottom — useful for columns or tables the default order misreads.">
                                     <Grid ColumnSpacing="12" VerticalAlignment="Stretch">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />
@@ -640,7 +650,8 @@
                                     Click="BtnScreenshotOcrLrtb_Click"
                                     AccessKey="B"
                                     AutomationProperties.Name="Screenshot and OCR left to right"
-                                    ToolTipService.ToolTip="Capture a screenshot and extract text using left-to-right reading order">
+                                    AutomationProperties.HelpText="{StaticResource Help.Main.OcrReadingOrder}"
+                                    ToolTipService.ToolTip="Capture a screenshot and extract text, reading strictly left to right and top to bottom — useful for columns or tables the default order misreads.">
                                     <Grid ColumnSpacing="12" VerticalAlignment="Stretch">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />

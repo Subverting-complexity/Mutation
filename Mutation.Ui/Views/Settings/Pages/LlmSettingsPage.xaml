@@ -12,14 +12,18 @@
 	<StackPanel Spacing="14">
 		<TextBlock Text="AI assistance" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<controls:SecretBox x:Name="TxtOpenAiKey" Header="OpenAI API key" />
-		<controls:SecretBox x:Name="TxtAnthropicKey" Header="Anthropic API key" />
+		<controls:SecretBox x:Name="TxtOpenAiKey" Header="OpenAI API key" HelpText="{StaticResource Help.Llm.OpenAiKey}" />
+		<controls:SecretBox x:Name="TxtAnthropicKey" Header="Anthropic API key" HelpText="{StaticResource Help.Llm.AnthropicKey}" />
 
 		<StackPanel Spacing="4">
-			<TextBlock Text="Request timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Request timeout (seconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Llm.RequestTimeout}" VerticalAlignment="Center" />
+			</StackPanel>
 			<StackPanel Orientation="Horizontal" Spacing="6">
 				<NumberBox x:Name="NbTimeout"
 						   AutomationProperties.Name="Request timeout (seconds)"
+						   AutomationProperties.HelpText="{StaticResource Help.Llm.RequestTimeout}"
 						   Minimum="5" Maximum="600"
 						   SmallChange="5"
 						   Width="180"
@@ -45,7 +49,10 @@
 				</Grid.ColumnDefinitions>
 				<TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" />
 				<TextBlock Grid.Column="1" Text="Provider" FontWeight="SemiBold" />
-				<TextBlock Grid.Column="2" Text="Temperature" FontWeight="SemiBold" />
+				<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+					<TextBlock Text="Temperature" VerticalAlignment="Center" FontWeight="SemiBold" />
+					<controls:InfoHint Text="{StaticResource Help.Llm.Temperature}" VerticalAlignment="Center" />
+				</StackPanel>
 				<TextBlock Grid.Column="3" Text="Actions" FontWeight="SemiBold" />
 			</Grid>
 
@@ -90,6 +97,7 @@
 								PlaceholderText="(default)"
 								HorizontalAlignment="Stretch"
 								AutomationProperties.Name="Temperature"
+								AutomationProperties.HelpText="{StaticResource Help.Llm.Temperature}"
 								ToolTipService.ToolTip="Optional temperature; leave empty to use the provider default" />
 
 							<Button

@@ -19,11 +19,9 @@
 
 		<Border Style="{StaticResource CardStyle}">
 			<StackPanel Spacing="18">
-				<StackPanel Spacing="4">
-					<TextBlock Text="Hotkey Router" Style="{StaticResource SectionHeaderTextStyle}" />
-					<TextBlock
-						Text="Map one shortcut to another so you can trigger complex workflows from a single key press. Changes apply when you save settings."
-						Style="{StaticResource CaptionTextStyle}" />
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<TextBlock Text="Hotkey Router" VerticalAlignment="Center" Style="{StaticResource SectionHeaderTextStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Hotkeys.Router}" VerticalAlignment="Center" />
 				</StackPanel>
 
 				<StackPanel Spacing="12">

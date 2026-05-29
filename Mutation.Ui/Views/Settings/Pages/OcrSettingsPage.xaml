@@ -20,18 +20,24 @@
 
 		<StackPanel Orientation="Horizontal" Spacing="16">
 			<StackPanel>
-				<TextBlock Text="Timeout (seconds)" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<StackPanel Orientation="Horizontal" Spacing="6">
-					<NumberBox x:Name="NbTimeoutSeconds" AutomationProperties.Name="Timeout (seconds)" Minimum="1" Maximum="600" SmallChange="1" LargeChange="5" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbTimeoutSeconds_ValueChanged" />
+					<TextBlock Text="Timeout (seconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Ocr.Timeout}" VerticalAlignment="Center" />
+				</StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbTimeoutSeconds" AutomationProperties.Name="Timeout (seconds)" AutomationProperties.HelpText="{StaticResource Help.Ocr.Timeout}" Minimum="1" Maximum="600" SmallChange="1" LargeChange="5" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbTimeoutSeconds_ValueChanged" />
 					<Button Click="BtnResetTimeout_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset timeout">
 						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 					</Button>
 				</StackPanel>
 			</StackPanel>
 			<StackPanel>
-				<TextBlock Text="Free-tier page limit" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<StackPanel Orientation="Horizontal" Spacing="6">
-					<NumberBox x:Name="NbFreeTierPageLimit" AutomationProperties.Name="Free-tier page limit" Minimum="1" Maximum="20" SmallChange="1" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbFreeTierPageLimit_ValueChanged" />
+					<TextBlock Text="Free-tier page limit" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Ocr.FreeTierPageLimit}" VerticalAlignment="Center" />
+				</StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbFreeTierPageLimit" AutomationProperties.Name="Free-tier page limit" AutomationProperties.HelpText="{StaticResource Help.Ocr.FreeTierPageLimit}" Minimum="1" Maximum="20" SmallChange="1" Width="160" SpinButtonPlacementMode="Inline" ValueChanged="NbFreeTierPageLimit_ValueChanged" />
 					<Button Click="BtnResetFreeTier_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset free-tier page limit">
 						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 					</Button>
@@ -41,18 +47,24 @@
 
 		<StackPanel Orientation="Horizontal" Spacing="16">
 			<StackPanel>
-				<TextBlock Text="Max parallel documents" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<StackPanel Orientation="Horizontal" Spacing="6">
-					<NumberBox x:Name="NbMaxParallelDocuments" AutomationProperties.Name="Max parallel documents" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelDocuments_ValueChanged" />
+					<TextBlock Text="Max parallel documents" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Ocr.MaxParallelDocuments}" VerticalAlignment="Center" />
+				</StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbMaxParallelDocuments" AutomationProperties.Name="Max parallel documents" AutomationProperties.HelpText="{StaticResource Help.Ocr.MaxParallelDocuments}" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelDocuments_ValueChanged" />
 					<Button Click="BtnResetMaxDocs_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset max parallel documents">
 						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 					</Button>
 				</StackPanel>
 			</StackPanel>
 			<StackPanel>
-				<TextBlock Text="Max parallel requests" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<StackPanel Orientation="Horizontal" Spacing="6">
-					<NumberBox x:Name="NbMaxParallelRequests" AutomationProperties.Name="Max parallel requests" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelRequests_ValueChanged" />
+					<TextBlock Text="Max parallel requests" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Ocr.MaxParallelRequests}" VerticalAlignment="Center" />
+				</StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbMaxParallelRequests" AutomationProperties.Name="Max parallel requests" AutomationProperties.HelpText="{StaticResource Help.Ocr.MaxParallelRequests}" Minimum="1" Maximum="20" SmallChange="1" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbMaxParallelRequests_ValueChanged" />
 					<Button Click="BtnResetMaxReqs_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset max parallel requests">
 						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 					</Button>
@@ -60,10 +72,16 @@
 			</StackPanel>
 		</StackPanel>
 
-		<ToggleSwitch x:Name="ToggleUseFreeTier" Header="Use free tier" Toggled="ToggleUseFreeTier_Toggled" />
-		<ToggleSwitch x:Name="ToggleInvert" Header="Invert screenshot before OCR" Toggled="ToggleInvert_Toggled" />
+		<StackPanel Orientation="Horizontal" Spacing="6">
+			<ToggleSwitch x:Name="ToggleUseFreeTier" Header="Use free tier" AutomationProperties.HelpText="{StaticResource Help.Ocr.UseFreeTier}" Toggled="ToggleUseFreeTier_Toggled" />
+			<controls:InfoHint Text="{StaticResource Help.Ocr.UseFreeTier}" VerticalAlignment="Center" />
+		</StackPanel>
+		<StackPanel Orientation="Horizontal" Spacing="6">
+			<ToggleSwitch x:Name="ToggleInvert" Header="Invert screenshot before OCR" AutomationProperties.HelpText="{StaticResource Help.Ocr.InvertScreenshot}" Toggled="ToggleInvert_Toggled" />
+			<controls:InfoHint Text="{StaticResource Help.Ocr.InvertScreenshot}" VerticalAlignment="Center" />
+		</StackPanel>
 
-		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" AllowEmpty="True" AllowSendKeysSyntax="True" />
+		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" HelpText="{StaticResource Help.Ocr.SendHotkeyAfter}" AllowEmpty="True" AllowSendKeysSyntax="True" />
 
 		<TextBlock Text="OCR action hotkeys appear in the Hotkeys tab."
 				   Style="{StaticResource CaptionTextBlockStyle}"

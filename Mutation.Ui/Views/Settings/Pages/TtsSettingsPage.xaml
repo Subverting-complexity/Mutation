@@ -3,6 +3,7 @@
 	x:Class="Mutation.Ui.Views.SettingsUi.Pages.TtsSettingsPage"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
@@ -17,9 +18,11 @@
 		<StackPanel Orientation="Horizontal" Spacing="8">
 			<ToggleSwitch x:Name="ToggleSpeechPreprocessing"
 						  Header="Enable speech preprocessing"
+						  AutomationProperties.HelpText="{StaticResource Help.Tts.Preprocessing}"
 						  OffContent="Off"
 						  OnContent="On"
 						  Toggled="ToggleSpeechPreprocessing_Toggled" />
+			<controls:InfoHint Text="{StaticResource Help.Tts.Preprocessing}" VerticalAlignment="Center" />
 			<Button VerticalAlignment="Bottom" Click="BtnResetPreproc_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset speech preprocessing">
 				<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
 			</Button>
