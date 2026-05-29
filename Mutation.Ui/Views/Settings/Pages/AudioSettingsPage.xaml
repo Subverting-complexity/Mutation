@@ -37,6 +37,7 @@
 					<ColumnDefinition Width="120" />
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 				<Grid.RowDefinitions>
 					<RowDefinition Height="Auto" />
@@ -49,28 +50,52 @@
 
 				<TextBlock Text="Success" VerticalAlignment="Center" Grid.Row="0" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepSuccess" Grid.Row="0" Grid.Column="1" AutomationProperties.Name="Success beep file" TextChanged="BeepText_Changed" Tag="success" />
-				<Button Content="Browse..." Grid.Row="0" Grid.Column="2" AutomationProperties.Name="Browse for success beep file" Click="BrowseBeep_Click" Tag="success" />
+				<Button Grid.Row="0" Grid.Column="2" AutomationProperties.Name="Play success beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="success">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="0" Grid.Column="3" AutomationProperties.Name="Browse for success beep file" Click="BrowseBeep_Click" Tag="success" />
 
 				<TextBlock Text="Failure" VerticalAlignment="Center" Grid.Row="1" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepFailure" Grid.Row="1" Grid.Column="1" AutomationProperties.Name="Failure beep file" TextChanged="BeepText_Changed" Tag="failure" />
-				<Button Content="Browse..." Grid.Row="1" Grid.Column="2" AutomationProperties.Name="Browse for failure beep file" Click="BrowseBeep_Click" Tag="failure" />
+				<Button Grid.Row="1" Grid.Column="2" AutomationProperties.Name="Play failure beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="failure">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="1" Grid.Column="3" AutomationProperties.Name="Browse for failure beep file" Click="BrowseBeep_Click" Tag="failure" />
 
 				<TextBlock Text="Start" VerticalAlignment="Center" Grid.Row="2" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepStart" Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Start beep file" TextChanged="BeepText_Changed" Tag="start" />
-				<Button Content="Browse..." Grid.Row="2" Grid.Column="2" AutomationProperties.Name="Browse for start beep file" Click="BrowseBeep_Click" Tag="start" />
+				<Button Grid.Row="2" Grid.Column="2" AutomationProperties.Name="Play start beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="start">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="2" Grid.Column="3" AutomationProperties.Name="Browse for start beep file" Click="BrowseBeep_Click" Tag="start" />
 
 				<TextBlock Text="End" VerticalAlignment="Center" Grid.Row="3" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepEnd" Grid.Row="3" Grid.Column="1" AutomationProperties.Name="End beep file" TextChanged="BeepText_Changed" Tag="end" />
-				<Button Content="Browse..." Grid.Row="3" Grid.Column="2" AutomationProperties.Name="Browse for end beep file" Click="BrowseBeep_Click" Tag="end" />
+				<Button Grid.Row="3" Grid.Column="2" AutomationProperties.Name="Play end beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="end">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="3" Grid.Column="3" AutomationProperties.Name="Browse for end beep file" Click="BrowseBeep_Click" Tag="end" />
 
 				<TextBlock Text="Mute" VerticalAlignment="Center" Grid.Row="4" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepMute" Grid.Row="4" Grid.Column="1" AutomationProperties.Name="Mute beep file" TextChanged="BeepText_Changed" Tag="mute" />
-				<Button Content="Browse..." Grid.Row="4" Grid.Column="2" AutomationProperties.Name="Browse for mute beep file" Click="BrowseBeep_Click" Tag="mute" />
+				<Button Grid.Row="4" Grid.Column="2" AutomationProperties.Name="Play mute beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="mute">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="4" Grid.Column="3" AutomationProperties.Name="Browse for mute beep file" Click="BrowseBeep_Click" Tag="mute" />
 
 				<TextBlock Text="Unmute" VerticalAlignment="Center" Grid.Row="5" Grid.Column="0" />
 				<TextBox x:Name="TxtBeepUnmute" Grid.Row="5" Grid.Column="1" AutomationProperties.Name="Unmute beep file" TextChanged="BeepText_Changed" Tag="unmute" />
-				<Button Content="Browse..." Grid.Row="5" Grid.Column="2" AutomationProperties.Name="Browse for unmute beep file" Click="BrowseBeep_Click" Tag="unmute" />
+				<Button Grid.Row="5" Grid.Column="2" AutomationProperties.Name="Play unmute beep" ToolTipService.ToolTip="Play" Click="PlayBeep_Click" Tag="unmute">
+					<FontIcon Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+				<Button Content="Browse..." Grid.Row="5" Grid.Column="3" AutomationProperties.Name="Browse for unmute beep file" Click="BrowseBeep_Click" Tag="unmute" />
 			</Grid>
+
+			<InfoBar x:Name="BeepPreviewInfoBar"
+					 IsOpen="False"
+					 IsClosable="True"
+					 Severity="Error"
+					 Title="Beep preview" />
 		</StackPanel>
 	</StackPanel>
 </UserControl>
