@@ -1643,6 +1643,15 @@ public sealed partial class MainWindow : Window, IDisposable
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (mic viz) failed: {ex.Message}");
 		}
 
+		try
+		{
+			BeepPlayer.Initialize(_settings);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (beeps) failed: {ex.Message}");
+		}
+
 		IReadOnlyList<HotkeyManager.HotkeyRegistrationResult>? routerResults = null;
 		try
 		{

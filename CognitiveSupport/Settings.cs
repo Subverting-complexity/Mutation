@@ -48,10 +48,10 @@ public class AudioSettings
 		public string? BeepMuteFile { get; set; }
 		public string? BeepUnmuteFile { get; set; }
 
-		// Helper to resolve audio file paths relative to the executable directory.
-		// Constraints: rejects UNC paths and any path that escapes AppContext.BaseDirectory.
-		// On violation returns string.Empty so callers' existing File.Exists check fails
-		// gracefully into their normal "could not load" reporting path.
+		// Helper to resolve audio file paths. Relative paths are resolved against the
+		// executable directory; absolute local paths (any drive/folder) are allowed.
+		// Constraint: rejects UNC/network paths, returning string.Empty so callers'
+		// existing File.Exists check fails gracefully into their "could not load" path.
 		public string ResolveAudioFilePath(string path)
 		{
 			if (string.IsNullOrWhiteSpace(path))
@@ -70,21 +70,12 @@ public class AudioSettings
 
 			string combined = Path.IsPathRooted(path) ? path : Path.Combine(baseDir, path);
 
-			string resolved;
-			try { resolved = Path.GetFullPath(combined); }
+			try { return Path.GetFullPath(combined); }
 			catch (Exception ex)
 			{
 				System.Diagnostics.Debug.WriteLine($"ResolveAudioFilePath GetFullPath failed for '{path}': {ex.Message}");
 				return string.Empty;
 			}
-
-			if (!resolved.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase))
-			{
-				System.Diagnostics.Debug.WriteLine($"ResolveAudioFilePath rejected out-of-base path: {path} -> {resolved}");
-				return string.Empty;
-			}
-
-			return resolved;
 		}
 
 	}
