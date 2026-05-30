@@ -181,16 +181,23 @@ public class SpeechToTextManager : IDisposable
 			{
 				_audioRecorder?.StopRecording();
 				double? trimmedSpeechSeconds = _audioRecorder?.TrimmedSpeechSeconds;
+				Exception? captureError = _audioRecorder?.CaptureException;
 				_audioRecorder?.Dispose();
 				_audioRecorder = null;
 
 				transcribeToken.ThrowIfCancellationRequested();
 
+				// A failure on the capture thread was deferred to here so it surfaces as a
+				// normal error (handled by AudioSessionManager) instead of crashing.
+				if (captureError is not null)
+					throw new InvalidOperationException("Audio capture failed during recording.", captureError);
+
 				// When silence stripping ran and left almost no speech, skip the API call.
 				if (trimmedSpeechSeconds is double seconds && seconds < MinSpeechSecondsForTranscription)
 					throw new NoSpeechDetectedException("No speech detected after trimming silence.");
 
-				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, transcribeToken).ConfigureAwait(false);
+				int liveTimeout = _settings.SpeechToTextSettings?.LiveTranscriptionTimeoutSeconds ?? 60;
+				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, transcribeToken, liveTimeout).ConfigureAwait(false);
 			}
 			finally
 			{

@@ -141,6 +141,11 @@ public class SpeechToTextSettings
 
         public int FileTranscriptionTimeoutSeconds { get; set; } = 300;
 
+        // Per-attempt timeout for the live record→transcribe path. Kept generous so the
+        // first call after a reboot or app update can absorb cold-start latency (cold
+        // DNS/TLS/cert-chain and cold JIT) without timing out and triggering retries.
+        public int LiveTranscriptionTimeoutSeconds { get; set; } = 60;
+
         // Strip silent gaps from recorded/imported audio before transcription.
         public bool EnableSilenceStripping { get; set; } = true;
 

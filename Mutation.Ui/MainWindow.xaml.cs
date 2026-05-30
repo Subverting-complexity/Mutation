@@ -1614,22 +1614,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private async void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
 	{
-		if (Content is not FrameworkElement rootElement)
-		{
-			return;
-		}
-
-		var settingsDialog = new SettingsDialog(
-			_settings,
-			_settingsManager,
-			_settingsManager.SettingsFilePath,
-			ApplyLiveSettings)
-		{
-			XamlRoot = rootElement.XamlRoot,
-			RequestedTheme = rootElement.ActualTheme
-		};
-
-		await ShowDialogAsync(settingsDialog);
+		await ShowSettingsDialogAsync();
 	}
 
 	internal void ApplyLiveSettings()

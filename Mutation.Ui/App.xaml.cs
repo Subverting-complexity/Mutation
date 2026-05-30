@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Services;
+using Mutation.Ui.Views.SettingsUi;
 using OpenAI;
 using OpenAI.Audio;
 using System.ClientModel;
@@ -14,7 +15,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Mutation.Ui;
@@ -28,18 +28,14 @@ public partial class App : Application
 	private const string AnthropicHttpClientName = "anthropic-http-client";
 	private bool _isShuttingDown = false;
 
-	// P/Invoke for topmost MessageBox
-	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
-	private static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
-
-	private const uint MB_OK = 0x00000000;
-	private const uint MB_ICONERROR = 0x00000010;
-	private const uint MB_TOPMOST = 0x00040000;
-	private const uint MB_SETFOREGROUND = 0x00010000;
-
         public App()
         {
-		// Global crash handlers for debugging - last resort before process termination
+		// Global last-resort handlers. These log and keep the process alive wherever
+		// possible: a single faulting async-void handler or an orphaned background
+		// Task must not be allowed to terminate the app. Escalating these to
+		// Environment.FailFast previously turned recoverable, expected background
+		// exceptions (e.g. cold-start network timeouts/retries on the first
+		// transcription after a reboot or update) into hard crashes.
 		Application.Current.UnhandledException += OnUnhandledException;
 		AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 		TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
@@ -47,43 +43,41 @@ public partial class App : Application
 
 	private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
 	{
-		e.Handled = true; // Try to prevent immediate termination
-		HandleFatalException("Unhandled UI Exception", e.Exception);
+		// Keep the app alive; a faulting UI handler/async-void should not kill the
+		// process. The error is logged and surfaced through normal in-app paths.
+		e.Handled = true;
+		LogBackgroundException("Unhandled UI Exception", e.Exception);
 	}
 
 	private void OnAppDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
 	{
-		HandleFatalException("Unhandled AppDomain Exception", e.ExceptionObject as Exception);
+		// By the time this fires the runtime is already tearing the process down and
+		// there is nothing to prevent. Record what happened for diagnostics only.
+		LogBackgroundException("Unhandled AppDomain Exception", e.ExceptionObject as Exception);
 	}
 
 	private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
 	{
-		e.SetObserved(); // Prevent termination on .NET 4+
-		HandleFatalException("Unobserved Task Exception", e.Exception);
+		// A background Task faulted with no awaiter — common when cold-start network
+		// timeouts trigger retries that abandon their in-flight requests. This is
+		// non-fatal: observe it so the runtime does not escalate, then log it.
+		e.SetObserved();
+		LogBackgroundException("Unobserved Task Exception", e.Exception);
 	}
 
-	private void HandleFatalException(string source, Exception? exception)
+	// Appends a redacted, non-fatal exception record to a rolling log next to the exe.
+	// Never throws and never terminates the process.
+	private static void LogBackgroundException(string source, Exception? exception)
 	{
-		string sanitizedDetails = SanitizeException(exception);
-		string fileMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}\n\n{sanitizedDetails}";
-
-		// Write to crash log file
-		string? logPath = null;
+		string details = SanitizeException(exception);
+		System.Diagnostics.Debug.WriteLine($"{source}: {details}");
 		try
 		{
-			logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"CrashLog_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
-			File.WriteAllText(logPath, fileMessage);
+			string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mutation_Errors.log");
+			string entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}\n{details}\n----\n";
+			File.AppendAllText(logPath, entry);
 		}
-		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Crash log write failed: {ex.Message}"); }
-
-		// Show a generic, non-leaking message; point users to the crash log for details.
-		string userMessage = logPath is null
-			? "Mutation encountered a fatal error and must close."
-			: $"Mutation encountered a fatal error and must close.\n\nDetails were written to:\n{logPath}";
-		MessageBox(IntPtr.Zero, userMessage, source, MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
-
-		// Forcefully terminate the entire process immediately
-		Environment.FailFast($"Fatal crash: {source}", exception);
+		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error log write failed: {ex.Message}"); }
 	}
 
 	private static string SanitizeException(Exception? exception)
@@ -200,6 +194,19 @@ public partial class App : Application
 		return message;
 	}
 
+	// First-run setup is needed while no LLM provider key is configured. This
+	// covers a brand-new Mutation.json (keys are "<placeholder>") and any later
+	// launch where the user dismissed onboarding without adding a key. Optional
+	// keys (Anthropic alone, Azure OCR) are not required to clear this.
+	private static bool NeedsFirstRunSetup(Settings settings)
+	{
+		var llm = settings.LlmSettings;
+		return !IsKeyConfigured(llm?.OpenAiApiKey) && !IsKeyConfigured(llm?.AnthropicApiKey);
+	}
+
+	private static bool IsKeyConfigured(string? value)
+		=> !string.IsNullOrWhiteSpace(value) && value != SettingsDefaults.PlaceholderValue;
+
         protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
                 try
@@ -253,13 +260,13 @@ public partial class App : Application
 				var anthropicModels = allModels.Where(m => m.Provider == LlmProvider.Anthropic).ToList();
 
 				LlmService? openAiService = null;
-				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != "<placeholder>")
+				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != SettingsDefaults.PlaceholderValue)
 				{
 					openAiService = new LlmService(openAiKey, openAiModels, timeoutSeconds);
 				}
 
 				AnthropicLlmService? anthropicService = null;
-				if (anthropicModels.Any() && !string.IsNullOrEmpty(anthropicKey) && anthropicKey != "<placeholder>")
+				if (anthropicModels.Any() && !string.IsNullOrEmpty(anthropicKey) && anthropicKey != SettingsDefaults.PlaceholderValue)
 				{
 					var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 					var anthropicHttpClient = httpClientFactory.CreateClient(AnthropicHttpClientName);
@@ -397,6 +404,16 @@ public partial class App : Application
 				// Stop background host services and exit the app
 				await ShutdownAsync();
 			};
+
+			// First-run / unconfigured onboarding. Replaces opening Mutation.json
+			// in Notepad: show a friendly welcome, then open the in-app Settings
+			// dialog so the user can add their API keys. Runs last so the window is
+			// fully live first — hotkeys are registered and the Closed/shutdown
+			// handler is wired before the user is parked in modal dialogs.
+			if (_window is MainWindow onboardingWindow && NeedsFirstRunSetup(settings))
+			{
+				await onboardingWindow.ShowFirstRunOnboardingAsync();
+			}
 		}
 		catch (Exception ex)
 		{

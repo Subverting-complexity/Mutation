@@ -14,10 +14,19 @@ public class AudioRecorder : IDisposable
 	private Stream? _fileStream;
 	private SilenceTrimmer? _silenceTrimmer;
 	private readonly object _writeLock = new();
+	private Exception? _captureException;
 
 	// After StopRecording, the trimmed speech duration in seconds when silence stripping was
 	// active; null when stripping was disabled (so callers leave the recording untouched).
 	public double? TrimmedSpeechSeconds { get; private set; }
+
+	// First exception (if any) that occurred while encoding audio on NAudio's capture
+	// thread. Captured rather than thrown there, where it would escape as an unhandled
+	// exception and terminate the process. Callers surface it after StopRecording.
+	public Exception? CaptureException
+	{
+		get { lock (_writeLock) return _captureException; }
+	}
 
 	// Opus requires specific frame sizes. 20ms at 48kHz = 960 samples.
 	private const int SampleRate = 48000;
@@ -36,6 +45,7 @@ public class AudioRecorder : IDisposable
 				? null
 				: new SilenceTrimmer(SampleRate, SamplesPerFrame, silenceOptions);
 			TrimmedSpeechSeconds = null;
+			_captureException = null;
 
 			WaveInEvent? waveIn = null;
 			Stream? fileStream = null;
@@ -103,25 +113,37 @@ public class AudioRecorder : IDisposable
 		{
 			if (_oggStream == null) return;
 
-			// Convert bytes to shorts (16-bit PCM)
-			// e.BytesRecorded is count of bytes. 2 bytes per sample.
-			int incomingSamples = e.BytesRecorded / 2;
-			for (int i = 0; i < incomingSamples; i++)
+			try
 			{
-				short sample = (short)((e.Buffer[i * 2 + 1] << 8) | e.Buffer[i * 2]);
-				_pcmBuffer.Add(sample);
+				// Convert bytes to shorts (16-bit PCM)
+				// e.BytesRecorded is count of bytes. 2 bytes per sample.
+				int incomingSamples = e.BytesRecorded / 2;
+				for (int i = 0; i < incomingSamples; i++)
+				{
+					short sample = (short)((e.Buffer[i * 2 + 1] << 8) | e.Buffer[i * 2]);
+					_pcmBuffer.Add(sample);
+				}
+
+				// Process complete frames
+				while (_pcmBuffer.Count >= SamplesPerFrame)
+				{
+					var frame = _pcmBuffer.GetRange(0, SamplesPerFrame).ToArray();
+					_pcmBuffer.RemoveRange(0, SamplesPerFrame);
+
+					if (_silenceTrimmer is null)
+						_oggStream.WriteSamples(frame, 0, SamplesPerFrame);
+					else
+						_silenceTrimmer.ProcessFrame(frame, WriteFrame);
+				}
 			}
-
-			// Process complete frames
-			while (_pcmBuffer.Count >= SamplesPerFrame)
+			catch (Exception ex)
 			{
-				var frame = _pcmBuffer.GetRange(0, SamplesPerFrame).ToArray();
-				_pcmBuffer.RemoveRange(0, SamplesPerFrame);
-
-				if (_silenceTrimmer is null)
-					_oggStream.WriteSamples(frame, 0, SamplesPerFrame);
-				else
-					_silenceTrimmer.ProcessFrame(frame, WriteFrame);
+				// This runs on NAudio's capture thread; letting it propagate would be an
+				// unhandled exception that terminates the process. Capture the first
+				// failure and stop writing so StopRecording can surface it to the caller.
+				_captureException ??= ex;
+				_pcmBuffer.Clear();
+				_oggStream = null;
 			}
 		}
 	}

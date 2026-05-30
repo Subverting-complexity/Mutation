@@ -31,6 +31,21 @@ var bounds = displayArea.WorkArea;
 const int minWidth = 150;
 const int minHeight = 150;
 
+// No persisted size yet (brand-new settings file): open at 75% of the work
+// area, centred. Without this the window falls back to the 150x150 minimum at
+// (0,0) — a tiny square in the top-left corner.
+if (ui.WindowSize.Width <= 0 || ui.WindowSize.Height <= 0)
+{
+int defaultWidth = Math.Max(minWidth, (int)(bounds.Width * 0.75));
+int defaultHeight = Math.Max(minHeight, (int)(bounds.Height * 0.75));
+int defaultX = bounds.X + (bounds.Width - defaultWidth) / 2;
+int defaultY = bounds.Y + (bounds.Height - defaultHeight) / 2;
+
+appWindow.Resize(new SizeInt32(defaultWidth, defaultHeight));
+appWindow.Move(new PointInt32(defaultX, defaultY));
+return;
+}
+
 int width = Math.Max(minWidth, Math.Min(ui.WindowSize.Width, bounds.Width));
 int height = Math.Max(minHeight, Math.Min(ui.WindowSize.Height, bounds.Height));
 

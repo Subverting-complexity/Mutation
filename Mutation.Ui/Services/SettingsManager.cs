@@ -35,7 +35,10 @@ internal class SettingsManager : ISettingsManager
 			// Brand new file: allow defaults (including sample router mapping)
 			EnsureSettings(settings, isNewFile: true);
 			SaveSettingsToFile(settings);
-			try { Process.Start("notepad.exe", SettingsFilePath); } catch { }
+			// Intentionally NOT opening the file in a text editor. First-run
+			// configuration is handled in-app: App.OnLaunched shows a friendly
+			// welcome message and opens the Settings dialog. The file is still
+			// created here so the dialog has a target to save onto.
 			return true;
 		}
 		return false;
