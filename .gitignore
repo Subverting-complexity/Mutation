@@ -82,6 +82,10 @@ src/Positron.Website/wwwroot/app/1.2/
 src/Positron.Website/appsettings.Development.json
 /src/Positron.Website/wwwroot/internal
 
+# Deploy scripts
+deploy.cmd
+deploy.ps1
+
 # Logs
 logs/
 
