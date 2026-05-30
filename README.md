@@ -114,7 +114,7 @@ Press a hotkey to speak the current clipboard text aloud through your default au
 | `SpeakClipboard` | Speak the clipboard text aloud. |
 
 ## Getting Started
-Install the .NET 10 runtime (or newer) and run **Mutation.exe**. On first launch, the app writes *Mutation.json* and opens it in Notepad for you to configure.
+Install the .NET 10 runtime (or newer) and run **Mutation.exe**. On first launch, the app creates *Mutation.json* with sensible defaults, then shows a welcome message and automatically opens the in-app **Settings** dialog so you can add your API keys (OpenAI for dictation + LLM; Anthropic and Azure Computer Vision are optional). You can reopen Settings anytime with `Ctrl+,`.
 
 ## Configuration / Settings
 All hotkeys are global and fully customisable. Below is an example covering every section a user is expected to edit. (Mutation also persists a few UI-state values such as window position/size and the active microphone — those are written automatically and you don't need to set them by hand.)

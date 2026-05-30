@@ -17,8 +17,8 @@ public class SettingsDefaultsParityTests : IDisposable
 	public SettingsDefaultsParityTests()
 	{
 		_tempPath = Path.Combine(Path.GetTempPath(), $"mutation-defaults-{Guid.NewGuid():N}.json");
-		// Pre-create the file so EnsureSettings doesn't take the new-file branch
-		// (which spawns notepad.exe). EnsureSettings will still apply all defaults.
+		// Pre-create the file so CreateSettingsFileIfNotExists doesn't take the
+		// new-file branch. EnsureSettings will still apply all defaults.
 		File.WriteAllText(_tempPath, "{}");
 	}
 

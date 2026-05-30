@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Services;
+using Mutation.Ui.Views.SettingsUi;
 using OpenAI;
 using OpenAI.Audio;
 using System.ClientModel;
@@ -193,6 +194,19 @@ public partial class App : Application
 		return message;
 	}
 
+	// First-run setup is needed while no LLM provider key is configured. This
+	// covers a brand-new Mutation.json (keys are "<placeholder>") and any later
+	// launch where the user dismissed onboarding without adding a key. Optional
+	// keys (Anthropic alone, Azure OCR) are not required to clear this.
+	private static bool NeedsFirstRunSetup(Settings settings)
+	{
+		var llm = settings.LlmSettings;
+		return !IsKeyConfigured(llm?.OpenAiApiKey) && !IsKeyConfigured(llm?.AnthropicApiKey);
+	}
+
+	private static bool IsKeyConfigured(string? value)
+		=> !string.IsNullOrWhiteSpace(value) && value != SettingsDefaults.PlaceholderValue;
+
         protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
                 try
@@ -246,13 +260,13 @@ public partial class App : Application
 				var anthropicModels = allModels.Where(m => m.Provider == LlmProvider.Anthropic).ToList();
 
 				LlmService? openAiService = null;
-				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != "<placeholder>")
+				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != SettingsDefaults.PlaceholderValue)
 				{
 					openAiService = new LlmService(openAiKey, openAiModels, timeoutSeconds);
 				}
 
 				AnthropicLlmService? anthropicService = null;
-				if (anthropicModels.Any() && !string.IsNullOrEmpty(anthropicKey) && anthropicKey != "<placeholder>")
+				if (anthropicModels.Any() && !string.IsNullOrEmpty(anthropicKey) && anthropicKey != SettingsDefaults.PlaceholderValue)
 				{
 					var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 					var anthropicHttpClient = httpClientFactory.CreateClient(AnthropicHttpClientName);
@@ -390,6 +404,16 @@ public partial class App : Application
 				// Stop background host services and exit the app
 				await ShutdownAsync();
 			};
+
+			// First-run / unconfigured onboarding. Replaces opening Mutation.json
+			// in Notepad: show a friendly welcome, then open the in-app Settings
+			// dialog so the user can add their API keys. Runs last so the window is
+			// fully live first — hotkeys are registered and the Closed/shutdown
+			// handler is wired before the user is parked in modal dialogs.
+			if (_window is MainWindow onboardingWindow && NeedsFirstRunSetup(settings))
+			{
+				await onboardingWindow.ShowFirstRunOnboardingAsync();
+			}
 		}
 		catch (Exception ex)
 		{
