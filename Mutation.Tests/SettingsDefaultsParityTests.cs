@@ -101,6 +101,13 @@ public class SettingsDefaultsParityTests : IDisposable
 	}
 
 	[Fact]
+	public void Llm_Defaults_Match()
+	{
+		var s = ApplyDefaults();
+		Assert.Equal(SettingsDefaults.Llm.RetryCount, s.LlmSettings!.RetryCount);
+	}
+
+	[Fact]
 	public void MainWindowUi_Defaults_Match()
 	{
 		var s = ApplyDefaults();

@@ -37,6 +37,28 @@
 			</StackPanel>
 		</StackPanel>
 
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Retries" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Llm.RetryCount}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbRetryCount"
+						   AutomationProperties.Name="Retry count"
+						   AutomationProperties.HelpText="{StaticResource Help.Llm.RetryCount}"
+						   Minimum="0" Maximum="10"
+						   SmallChange="1"
+						   Width="180"
+						   SpinButtonPlacementMode="Inline"
+						   ValueChanged="NbRetryCount_ValueChanged" />
+				<Button Click="BtnResetRetryCount_Click" ToolTipService.ToolTip="Reset to default"
+						AutomationProperties.Name="Reset retry count">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12"
+							  AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
 		<StackPanel Spacing="8">
 			<TextBlock Text="Models" Style="{StaticResource BodyStrongTextBlockStyle}" />
 

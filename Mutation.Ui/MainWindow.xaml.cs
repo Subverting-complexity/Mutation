@@ -1032,6 +1032,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
+			ErrorLogger.LogError("Process with LLM", ex);
 			ShowStatus("Processing", ex.Message, InfoBarSeverity.Error);
 			await ShowErrorDialog("Process with LLM Error", ex);
 		}
@@ -1070,6 +1071,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
+             ErrorLogger.LogError("Process with LLM", ex);
              ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }

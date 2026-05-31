@@ -43,6 +43,7 @@
 	<x:String x:Key="Help.Llm.OpenAiKey">API key used to authenticate requests to OpenAI models.</x:String>
 	<x:String x:Key="Help.Llm.AnthropicKey">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
 	<x:String x:Key="Help.Llm.RequestTimeout">How long to wait for the language model to respond before giving up.</x:String>
+	<x:String x:Key="Help.Llm.RetryCount">How many times to retry a failed language-model request before giving up. Retries help the first request after a reboot succeed while the network warms up. Default 3.</x:String>
 	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>
 
 	<!-- Hotkeys -->
