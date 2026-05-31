@@ -395,6 +395,19 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		// Correct hand-edited invalid retry counts. A fresh LlmSettings already has
+		// RetryCount = 3 via field init, so a clean object is unchanged (parity holds).
+		if (llmSettings.RetryCount < 0)
+		{
+			llmSettings.RetryCount = 3;
+			somethingWasMissing = true;
+		}
+		if (llmSettings.RetryCount > 10)
+		{
+			llmSettings.RetryCount = 10;
+			somethingWasMissing = true;
+		}
+
 		/* ResourceName removed
 		if (string.IsNullOrWhiteSpace(llmSettings.ResourceName))
 		{

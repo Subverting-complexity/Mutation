@@ -46,14 +46,14 @@ public partial class App : Application
 		// Keep the app alive; a faulting UI handler/async-void should not kill the
 		// process. The error is logged and surfaced through normal in-app paths.
 		e.Handled = true;
-		LogBackgroundException("Unhandled UI Exception", e.Exception);
+		ErrorLogger.LogError("Unhandled UI Exception", e.Exception);
 	}
 
 	private void OnAppDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
 	{
 		// By the time this fires the runtime is already tearing the process down and
 		// there is nothing to prevent. Record what happened for diagnostics only.
-		LogBackgroundException("Unhandled AppDomain Exception", e.ExceptionObject as Exception);
+		ErrorLogger.LogError("Unhandled AppDomain Exception", e.ExceptionObject as Exception);
 	}
 
 	private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
@@ -62,43 +62,7 @@ public partial class App : Application
 		// timeouts trigger retries that abandon their in-flight requests. This is
 		// non-fatal: observe it so the runtime does not escalate, then log it.
 		e.SetObserved();
-		LogBackgroundException("Unobserved Task Exception", e.Exception);
-	}
-
-	// Appends a redacted, non-fatal exception record to a rolling log next to the exe.
-	// Never throws and never terminates the process.
-	private static void LogBackgroundException(string source, Exception? exception)
-	{
-		string details = SanitizeException(exception);
-		System.Diagnostics.Debug.WriteLine($"{source}: {details}");
-		try
-		{
-			string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mutation_Errors.log");
-			string entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}\n{details}\n----\n";
-			File.AppendAllText(logPath, entry);
-		}
-		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Error log write failed: {ex.Message}"); }
-	}
-
-	private static string SanitizeException(Exception? exception)
-	{
-		if (exception is null) return "(no exception details)";
-
-		var sb = new System.Text.StringBuilder();
-		Exception? current = exception;
-		int depth = 0;
-		while (current is not null && depth < 8)
-		{
-			sb.Append(current.GetType().FullName);
-			sb.Append(": ");
-			sb.AppendLine(RedactSecrets(current.Message));
-			if (!string.IsNullOrEmpty(current.StackTrace))
-				sb.AppendLine(current.StackTrace);
-			current = current.InnerException;
-			if (current is not null) sb.AppendLine("---- inner exception ----");
-			depth++;
-		}
-		return sb.ToString();
+		ErrorLogger.LogError("Unobserved Task Exception", e.Exception);
 	}
 
 	private static Settings? TryRecoverSettings(string filePath, SettingsManager manager, Exception originalException)
@@ -183,17 +147,6 @@ public partial class App : Application
 		return null;
 	}
 
-	private static string RedactSecrets(string message)
-	{
-		if (string.IsNullOrEmpty(message)) return string.Empty;
-		// Common API key shapes: long alphanumeric runs (>=24) and OpenAI/Anthropic-style prefixes.
-		message = System.Text.RegularExpressions.Regex.Replace(
-			message, @"\b(sk-[A-Za-z0-9_\-]{20,}|sk-ant-[A-Za-z0-9_\-]{20,})\b", "[REDACTED-KEY]");
-		message = System.Text.RegularExpressions.Regex.Replace(
-			message, @"\b[A-Fa-f0-9]{32,}\b", "[REDACTED-HEX]");
-		return message;
-	}
-
 	// First-run setup is needed while no LLM provider key is configured. This
 	// covers a brand-new Mutation.json (keys are "<placeholder>") and any later
 	// launch where the user dismissed onboarding without adding a key. Optional
@@ -211,6 +164,7 @@ public partial class App : Application
         {
                 try
 		{
+			ErrorLogger.LogInfo("Startup", "OnLaunched starting");
 			HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
 			string exeDir = AppDomain.CurrentDomain.BaseDirectory;
@@ -254,6 +208,8 @@ public partial class App : Application
 				string openAiKey = llmSettings?.OpenAiApiKey ?? string.Empty;
 				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
 				int timeoutSeconds = llmSettings?.TimeoutSeconds > 0 ? llmSettings.TimeoutSeconds : 60;
+				int retryCount = llmSettings?.RetryCount ?? SettingsDefaults.Llm.RetryCount;
+				if (retryCount < 0) retryCount = SettingsDefaults.Llm.RetryCount;
 				var allModels = llmSettings?.Models ?? new List<LlmModelConfig>();
 
 				var openAiModels = allModels.Where(m => m.Provider == LlmProvider.OpenAI).ToList();
@@ -262,7 +218,7 @@ public partial class App : Application
 				LlmService? openAiService = null;
 				if (openAiModels.Any() && !string.IsNullOrEmpty(openAiKey) && openAiKey != SettingsDefaults.PlaceholderValue)
 				{
-					openAiService = new LlmService(openAiKey, openAiModels, timeoutSeconds);
+					openAiService = new LlmService(openAiKey, openAiModels, timeoutSeconds, retryCount);
 				}
 
 				AnthropicLlmService? anthropicService = null;
@@ -270,7 +226,7 @@ public partial class App : Application
 				{
 					var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 					var anthropicHttpClient = httpClientFactory.CreateClient(AnthropicHttpClientName);
-					anthropicService = new AnthropicLlmService(anthropicKey, anthropicModels, anthropicHttpClient, timeoutSeconds);
+					anthropicService = new AnthropicLlmService(anthropicKey, anthropicModels, anthropicHttpClient, timeoutSeconds, retryCount);
 				}
 
 				var modelProviders = allModels
@@ -417,17 +373,11 @@ public partial class App : Application
 		}
 		catch (Exception ex)
 		{
-			string? logPath = null;
-			try
-			{
-				logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"CrashLog_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
-				File.WriteAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Startup Error\n\n{SanitizeException(ex)}");
-			}
-			catch (Exception logEx) { System.Diagnostics.Debug.WriteLine($"Startup crash log write failed: {logEx.Message}"); }
+			ErrorLogger.LogError("Startup Error", ex);
+			string logPath = ErrorLogger.PrimaryLogPath;
 
-			string userMessage = logPath is null
-				? $"An error occurred during startup: {ex.GetType().Name}."
-				: $"An error occurred during startup: {ex.GetType().Name}.\n\nDetails were written to:\n{logPath}";
+			string userMessage =
+				$"An error occurred during startup: {ex.GetType().Name}.\n\nDetails were written to:\n{logPath}";
 
 			bool dialogShown = false;
 			try

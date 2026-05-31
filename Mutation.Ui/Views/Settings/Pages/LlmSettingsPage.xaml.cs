@@ -40,6 +40,7 @@ public sealed partial class LlmSettingsPage : UserControl
 			TxtOpenAiKey.Secret = llm.OpenAiApiKey ?? string.Empty;
 			TxtAnthropicKey.Secret = llm.AnthropicApiKey ?? string.Empty;
 			NbTimeout.Value = llm.TimeoutSeconds > 0 ? llm.TimeoutSeconds : SettingsDefaults.Llm.TimeoutSeconds;
+			NbRetryCount.Value = llm.RetryCount >= 0 ? llm.RetryCount : SettingsDefaults.Llm.RetryCount;
 
 			ModelEntries.Clear();
 			foreach (var model in llm.Models)
@@ -69,6 +70,16 @@ public sealed partial class LlmSettingsPage : UserControl
 		(_settings.LlmSettings ??= new LlmSettings()).TimeoutSeconds = (int)args.NewValue;
 	}
 
+	private void NbRetryCount_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.LlmSettings ??= new LlmSettings()).RetryCount = (int)args.NewValue;
+	}
+
 	private void BtnResetTimeout_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) =>
 		NbTimeout.Value = SettingsDefaults.Llm.TimeoutSeconds;
+
+	private void BtnResetRetryCount_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) =>
+		NbRetryCount.Value = SettingsDefaults.Llm.RetryCount;
 }

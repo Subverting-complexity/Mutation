@@ -1,3 +1,6 @@
+using Polly;
+using Polly.Contrib.WaitAndRetry;
+using Polly.Timeout;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -15,12 +18,14 @@ public class AnthropicLlmService : ILlmService
 	private readonly HttpClient _httpClient;
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
+	private readonly int _retryCount;
 
 	public AnthropicLlmService(
 		string apiKey,
 		IEnumerable<LlmModelConfig> models,
 		HttpClient httpClient,
-		int timeoutSeconds = 60)
+		int timeoutSeconds = 60,
+		int retryCount = 3)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 		if (models is null) throw new ArgumentNullException(nameof(models));
@@ -28,6 +33,7 @@ public class AnthropicLlmService : ILlmService
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
+		_retryCount = retryCount < 0 ? 0 : retryCount;
 		_modelConfigs = models.ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
 	}
 
@@ -73,33 +79,74 @@ public class AnthropicLlmService : ILlmService
 		};
 		string jsonBody = JsonSerializer.Serialize(request, jsonOptions);
 
-		using var httpRequest = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
-		httpRequest.Headers.Add("x-api-key", _apiKey);
-		httpRequest.Headers.Add("anthropic-version", AnthropicVersion);
-		httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
+		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
+		// attempts instead of an unhandled failure.
+		// Only transient failures (network/timeout, 429, 5xx) are surfaced as the
+		// retryable HttpRequestException; permanent 4xx errors such as 401 Unauthorized
+		// throw NonTransientLlmException, which the policy does not handle, so a bad API
+		// key fails fast instead of after every retry.
+		const string AttemptKey = "Attempt";
 
-		using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_timeoutSeconds));
-		using var httpResponse = await _httpClient.SendAsync(httpRequest, timeoutCts.Token);
+		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: _retryCount, factor: 1);
+		var retryPolicy = Policy
+			.Handle<HttpRequestException>()
+			.Or<TimeoutRejectedException>()
+			.Or<TaskCanceledException>()
+				.WaitAndRetryAsync(
+					delay,
+					onRetry: (exception, timeSpan, attemptNumber, context) =>
+					{
+						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
+						context[AttemptKey] = ++attempt;
+					}
+				);
 
-		string responseBody = await httpResponse.Content.ReadAsStringAsync(timeoutCts.Token);
+		var pollyContext = new Context();
+		pollyContext[AttemptKey] = 1;
 
-		if (!httpResponse.IsSuccessStatusCode)
+		string responseBody = await retryPolicy.ExecuteAsync(async (ctx) =>
 		{
-			string errorMessage = $"Anthropic API returned {(int)httpResponse.StatusCode} {httpResponse.StatusCode}";
-			try
+			int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;
+			int timeout = _timeoutSeconds * attempt;
+			using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+
+			// HttpRequestMessage is single-use; rebuild it for each attempt.
+			using var httpRequest = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
+			httpRequest.Headers.Add("x-api-key", _apiKey);
+			httpRequest.Headers.Add("anthropic-version", AnthropicVersion);
+			httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+			using var httpResponse = await _httpClient.SendAsync(httpRequest, timeoutCts.Token).ConfigureAwait(false);
+
+			string body = await httpResponse.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+
+			if (!httpResponse.IsSuccessStatusCode)
 			{
-				var errorResponse = JsonSerializer.Deserialize<AnthropicErrorResponse>(responseBody);
-				if (errorResponse?.Error != null)
+				int statusCode = (int)httpResponse.StatusCode;
+				string errorMessage = $"Anthropic API returned {statusCode} {httpResponse.StatusCode}";
+				try
 				{
-					errorMessage = $"Anthropic API error ({errorResponse.Error.Type}): {errorResponse.Error.Message}";
+					var errorResponse = JsonSerializer.Deserialize<AnthropicErrorResponse>(body);
+					if (errorResponse?.Error != null)
+					{
+						errorMessage = $"Anthropic API error ({errorResponse.Error.Type}): {errorResponse.Error.Message}";
+					}
 				}
+				catch (JsonException)
+				{
+					// If we can't parse the error, use the raw status code message
+				}
+
+				// Retry only transient failures (429, 5xx); fail fast on permanent
+				// 4xx errors like 401 Unauthorized so a bad API key is reported at once.
+				if (LlmHttpStatus.IsTransient(statusCode))
+					throw new HttpRequestException(errorMessage);
+				throw new NonTransientLlmException(errorMessage, statusCode);
 			}
-			catch (JsonException)
-			{
-				// If we can't parse the error, use the raw status code message
-			}
-			throw new HttpRequestException(errorMessage);
-		}
+
+			return body;
+		}, pollyContext).ConfigureAwait(false);
 
 		var response = JsonSerializer.Deserialize<AnthropicResponse>(responseBody);
 		if (response?.Content != null && response.Content.Length > 0)

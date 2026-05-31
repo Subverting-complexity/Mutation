@@ -274,11 +274,13 @@ public class AudioSessionManager : IDisposable
             {
                 StatusMessage?.Invoke(this, "Processing with LLM...");
                 string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
+                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}).");
                 // Pass the rules-formatted text to the LLM
                 llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName);
             }
             catch (Exception ex)
             {
+                ErrorLogger.LogError("LLM processing failed", ex);
                 StatusMessage?.Invoke(this, $"LLM processing failed: {ex.Message}. Using rules-formatted transcript.");
                 // llmProcessedText remains null — FinalizeTranscript will fall back to rules-only
             }

@@ -87,6 +87,7 @@ internal static class SettingsWorkingCopy
 			dst.ProcessWithLlmHotKey = src.ProcessWithLlmHotKey;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;
+			dst.RetryCount = src.RetryCount;
 		}
 
 		live.TranscriptFormatRules = workingCopy.TranscriptFormatRules ?? new List<TranscriptFormatRule>();
