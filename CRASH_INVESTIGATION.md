@@ -116,11 +116,15 @@
   `[Startup] OnLaunched starting` breadcrumb on every launch. The "Retries" NumberBox appears on
   the LLM settings page with full screen-reader name/help text.
 
+## Resolved follow-ups
+- **~~Anthropic retries 4xx (e.g. 401 Unauthorized).~~ Resolved.** Both LLM services now classify
+  HTTP statuses via `LlmHttpStatus.IsTransient` (`CognitiveSupport/LlmHttpStatus.cs`): only
+  connection failures, 408, 429 and 5xx are retried. Permanent 4xx (401/403/400/404/422) throw
+  `NonTransientLlmException` (Anthropic) or are detected via `ClientResultException.Status` (OpenAI
+  SDK), so a bad API key fails fast instead of retrying. Covered by
+  `Mutation.Tests/LlmHttpStatusTests.cs`.
+
 ## Remaining follow-ups
-- **Anthropic retries 4xx (e.g. 401 Unauthorized).** Because a non-success status is surfaced as
-  `HttpRequestException`, the Polly policy retries it. This matches existing transcription
-  behavior but wastes attempts on permanent failures; consider not retrying 4xx (parse status,
-  rethrow non-retryable as a distinct type the policy doesn't handle).
 - **Consider escalating the transcription-style timeout** consistently across all network paths,
   and surfacing per-attempt diagnostics to the log.
 - The OpenAI SDK's `CompleteChatAsync` may apply its own internal retry/timeout; the added Polly
