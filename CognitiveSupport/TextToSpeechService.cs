@@ -29,6 +29,16 @@ namespace CognitiveSupport
 		// Events from a cancelled prompt are ignored so stale callbacks can't corrupt
 		// the cursor after a rapid skip.
 		private Prompt? _currentPrompt;
+		// Skip-burst tracking. Consecutive skip presses within the grace window form a
+		// "burst" and step relative to the last skip target (_pendingSkipIndex) rather
+		// than the playback position. This lets the user hold the modifiers and tap the
+		// hotkey, stepping one sentence per tap, even when playback advances between taps
+		// (which would otherwise move _navIndex out from under them and cause ping-pong).
+		// Half of MinValue (not MinValue itself) so `now - _lastSkipTick` stays well
+		// within long range — MinValue would overflow and wrongly report a burst.
+		private const long NoRecentSkipTick = long.MinValue / 2;
+		private long _lastSkipTick = NoRecentSkipTick;
+		private int _pendingSkipIndex;
 		private bool _speakingAnnouncement;
 		private bool _disposed;
 		private CancellationTokenSource? _opCts;
@@ -112,6 +122,7 @@ namespace CognitiveSupport
 					_lastInputText = text;
 					_spokenToCurrentDelta = _currentPosition;
 					EnterSentence(FindSentenceIndex(_currentPosition));
+					ResetSkipBurst();
 					_currentPrompt = _synth.SpeakAsync(processed.Substring(_currentPosition));
 				}
 				else
@@ -121,6 +132,7 @@ namespace CognitiveSupport
 					_currentPosition = 0;
 					_sentenceStarts = FindSentenceStarts(processed);
 					EnterSentence(0);
+					ResetSkipBurst();
 
 					string warning = ShouldAnnounceLength(processed)
 						? BuildLengthAnnouncement(processed)
@@ -154,41 +166,30 @@ namespace CognitiveSupport
 				ApplyVoiceParams(rate, volume, voiceName);
 
 				int lastIndex = _sentenceStarts.Count - 1;
-				int currentIndex = Math.Clamp(_navIndex, 0, lastIndex);
+				long now = Environment.TickCount64;
+				int desiredIndex = ComputeSkipTarget(
+					direction, now, _lastSkipTick, _pendingSkipIndex,
+					_navIndex, _sentenceEnteredAtTick, lastIndex, graceWindowMs);
 
-				int targetIndex = currentIndex;
-				string? boundaryAnnouncement = null;
-				if (direction < 0)
-				{
-					// Media-player semantics: if we have only just entered the current
-					// sentence (within the grace window) a back-press steps to the
-					// previous sentence; otherwise it restarts the current one. Because
-					// the grace timer resets on every entry, a rapid burst of presses
-					// keeps stepping back one sentence at a time.
-					long elapsedMs = Environment.TickCount64 - _sentenceEnteredAtTick;
-					bool atSentenceStart = elapsedMs < graceWindowMs;
-					if (atSentenceStart && currentIndex == 0)
-						boundaryAnnouncement = BeginningOfTextAnnouncement; // nothing before the first sentence
-					else
-						targetIndex = atSentenceStart ? currentIndex - 1 : currentIndex;
-				}
-				else
-				{
-					if (currentIndex >= lastIndex)
-						boundaryAnnouncement = EndOfTextAnnouncement; // nothing after the final sentence
-					else
-						targetIndex = currentIndex + 1;
-				}
+				_lastSkipTick = now;
 
-				if (boundaryAnnouncement is not null)
+				if (desiredIndex < 0)
 				{
+					_pendingSkipIndex = 0;
 					_speakingAnnouncement = true;
-					_currentPrompt = _synth!.SpeakAsync(boundaryAnnouncement);
+					_currentPrompt = _synth!.SpeakAsync(BeginningOfTextAnnouncement);
+				}
+				else if (desiredIndex > lastIndex)
+				{
+					_pendingSkipIndex = lastIndex;
+					_speakingAnnouncement = true;
+					_currentPrompt = _synth!.SpeakAsync(EndOfTextAnnouncement);
 				}
 				else
 				{
-					int targetPos = _sentenceStarts[targetIndex];
-					EnterSentence(targetIndex);
+					_pendingSkipIndex = desiredIndex;
+					int targetPos = _sentenceStarts[desiredIndex];
+					EnterSentence(desiredIndex);
 					_currentPosition = targetPos;
 					_spokenToCurrentDelta = targetPos;
 					_currentPrompt = _synth!.SpeakAsync(_currentText.Substring(targetPos));
@@ -203,6 +204,45 @@ namespace CognitiveSupport
 		{
 			_navIndex = index;
 			_sentenceEnteredAtTick = Environment.TickCount64;
+		}
+
+		// Clear any in-progress skip burst so the next skip press is treated as fresh
+		// (media-player semantics) and anchored to the current sentence.
+		private void ResetSkipBurst()
+		{
+			_lastSkipTick = NoRecentSkipTick;
+			_pendingSkipIndex = _navIndex;
+		}
+
+		// Pure decision for which sentence index a skip press targets. Returns a value
+		// in [-1, lastIndex+1]; -1 means "before the first sentence" (beginning-of-text)
+		// and lastIndex+1 means "past the last sentence" (end-of-text). Kept side-effect
+		// free and static so the navigation rules can be unit-tested without a synthesizer.
+		//
+		//  - A press within graceWindowMs of the PREVIOUS press continues a "burst" and
+		//    steps one sentence from the last target (pendingSkipIndex), which playback
+		//    never moves — so repeated taps keep marching even if playback advances.
+		//  - The first press after a gap uses media-player semantics for backward: step
+		//    to the previous sentence only if we just entered the current one, otherwise
+		//    restart the current sentence. Forward always advances.
+		internal static int ComputeSkipTarget(
+			int direction, long now, long lastSkipTick, int pendingSkipIndex,
+			int navIndex, long sentenceEnteredAtTick, int lastIndex, int graceWindowMs)
+		{
+			bool inBurst = now - lastSkipTick < graceWindowMs;
+			if (inBurst)
+			{
+				int anchor = Math.Clamp(pendingSkipIndex, 0, lastIndex);
+				return anchor + (direction < 0 ? -1 : 1);
+			}
+
+			int currentIndex = Math.Clamp(navIndex, 0, lastIndex);
+			if (direction < 0)
+			{
+				bool justEnteredSentence = now - sentenceEnteredAtTick < graceWindowMs;
+				return justEnteredSentence ? currentIndex - 1 : currentIndex;
+			}
+			return currentIndex + 1;
 		}
 
 		public void SpeakAnnouncement(string text, int rate, int volume, string? voiceName)
