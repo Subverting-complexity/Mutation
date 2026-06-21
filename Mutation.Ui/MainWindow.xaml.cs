@@ -839,13 +839,13 @@ public sealed partial class MainWindow : Window, IDisposable
 	public void BtnSkipSentenceBack_Click(object? sender, RoutedEventArgs? e)
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName);
+		_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
 	}
 
 	public void BtnSkipSentenceForward_Click(object? sender, RoutedEventArgs? e)
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName);
+		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
 	}
 
 	public async void SpeakActiveSelectionAsync()

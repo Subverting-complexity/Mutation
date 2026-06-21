@@ -23,6 +23,7 @@ public sealed partial class TtsSettingsPage : UserControl
 		{
 			var tts = _settings.TextToSpeechSettings ??= new TextToSpeechSettings();
 			ToggleSpeechPreprocessing.IsOn = tts.EnableSpeechPreprocessing;
+			NbSkipGrace.Value = tts.SkipSentenceGraceWindowMs;
 		}
 		finally { _suppressEvents = false; }
 	}
@@ -36,5 +37,17 @@ public sealed partial class TtsSettingsPage : UserControl
 	private void BtnResetPreproc_Click(object sender, RoutedEventArgs e)
 	{
 		ToggleSpeechPreprocessing.IsOn = SettingsDefaults.Tts.EnableSpeechPreprocessing;
+	}
+
+	private void NbSkipGrace_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).SkipSentenceGraceWindowMs = (int)args.NewValue;
+	}
+
+	private void BtnResetSkipGrace_Click(object sender, RoutedEventArgs e)
+	{
+		NbSkipGrace.Value = SettingsDefaults.Tts.SkipSentenceGraceWindowMs;
 	}
 }

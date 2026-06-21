@@ -98,6 +98,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Tts.Rate, tts.Rate);
 		Assert.Equal(SettingsDefaults.Tts.Volume, tts.Volume);
 		Assert.Equal(SettingsDefaults.Tts.EnableSpeechPreprocessing, tts.EnableSpeechPreprocessing);
+		Assert.Equal(SettingsDefaults.Tts.SkipSentenceGraceWindowMs, tts.SkipSentenceGraceWindowMs);
 	}
 
 	[Fact]

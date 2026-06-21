@@ -28,6 +28,26 @@
 			</Button>
 		</StackPanel>
 
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Skip-back grace window (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.SkipSentenceGrace}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbSkipGrace"
+						   AutomationProperties.Name="Skip-back grace window (milliseconds)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.SkipSentenceGrace}"
+						   Minimum="250" Maximum="5000"
+						   SmallChange="250" LargeChange="500"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbSkipGrace_ValueChanged" />
+				<Button Click="BtnResetSkipGrace_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset skip-back grace window">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
 		<TextBlock Text="TTS hotkeys appear in the Hotkeys tab."
 				   Style="{StaticResource CaptionTextBlockStyle}"
 				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />

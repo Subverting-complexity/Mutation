@@ -57,6 +57,9 @@ internal static class SettingsDefaults
 		public const int Rate = 8;
 		public const int Volume = 100;
 		public const bool EnableSpeechPreprocessing = true;
+		public const int SkipSentenceGraceWindowMs = 1500;
+		public const int MinSkipSentenceGraceWindowMs = 250;
+		public const int MaxSkipSentenceGraceWindowMs = 5000;
 	}
 
 	public static class Llm

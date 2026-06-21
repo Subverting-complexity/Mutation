@@ -7,6 +7,8 @@ namespace CognitiveSupport
 	public class TextToSpeechService : ITextToSpeechService
 	{
 		private const int LengthWarningThresholdChars = 5000;
+		private const string EndOfTextAnnouncement = "End of text.";
+		private const string BeginningOfTextAnnouncement = "Beginning of text.";
 
 		private readonly object _gate = new object();
 		private SpeechSynthesizer? _synth;
@@ -15,6 +17,18 @@ namespace CognitiveSupport
 		private int _currentPosition;
 		private int _spokenToCurrentDelta;
 		private List<int>? _sentenceStarts;
+		// Authoritative navigation cursor: which sentence index we are on. Driven
+		// explicitly by SkipSentence and nudged forward by playback progress, so
+		// skip presses never race against the continuously-moving spoken position.
+		private int _navIndex;
+		// Monotonic timestamp (Environment.TickCount64) of when the cursor entered
+		// the current sentence. Backward-skip uses this for the "am I at the start?"
+		// grace window instead of the spoken character position.
+		private long _sentenceEnteredAtTick;
+		// The Prompt of the utterance currently owning progress/completion events.
+		// Events from a cancelled prompt are ignored so stale callbacks can't corrupt
+		// the cursor after a rapid skip.
+		private Prompt? _currentPrompt;
 		private bool _speakingAnnouncement;
 		private bool _disposed;
 		private CancellationTokenSource? _opCts;
@@ -97,7 +111,8 @@ namespace CognitiveSupport
 				{
 					_lastInputText = text;
 					_spokenToCurrentDelta = _currentPosition;
-					_synth.SpeakAsync(processed.Substring(_currentPosition));
+					EnterSentence(FindSentenceIndex(_currentPosition));
+					_currentPrompt = _synth.SpeakAsync(processed.Substring(_currentPosition));
 				}
 				else
 				{
@@ -105,18 +120,19 @@ namespace CognitiveSupport
 					_lastInputText = text;
 					_currentPosition = 0;
 					_sentenceStarts = FindSentenceStarts(processed);
+					EnterSentence(0);
 
 					string warning = ShouldAnnounceLength(processed)
 						? BuildLengthAnnouncement(processed)
 						: string.Empty;
 					string spoken = warning + processed;
 					_spokenToCurrentDelta = -warning.Length;
-					_synth.SpeakAsync(spoken);
+					_currentPrompt = _synth.SpeakAsync(spoken);
 				}
 			}
 		}
 
-		public void SkipSentence(int direction, int rate, int volume, string? voiceName)
+		public void SkipSentence(int direction, int rate, int volume, string? voiceName, int graceWindowMs)
 		{
 			CancellationTokenSource? oldCts;
 			CancellationTokenSource newCts = new();
@@ -137,30 +153,56 @@ namespace CognitiveSupport
 
 				ApplyVoiceParams(rate, volume, voiceName);
 
-				int currentIndex = FindSentenceIndex(_currentPosition);
-				int targetIndex;
+				int lastIndex = _sentenceStarts.Count - 1;
+				int currentIndex = Math.Clamp(_navIndex, 0, lastIndex);
+
+				int targetIndex = currentIndex;
+				string? boundaryAnnouncement = null;
 				if (direction < 0)
 				{
-					if (_currentPosition > _sentenceStarts[currentIndex])
-						targetIndex = currentIndex;
+					// Media-player semantics: if we have only just entered the current
+					// sentence (within the grace window) a back-press steps to the
+					// previous sentence; otherwise it restarts the current one. Because
+					// the grace timer resets on every entry, a rapid burst of presses
+					// keeps stepping back one sentence at a time.
+					long elapsedMs = Environment.TickCount64 - _sentenceEnteredAtTick;
+					bool atSentenceStart = elapsedMs < graceWindowMs;
+					if (atSentenceStart && currentIndex == 0)
+						boundaryAnnouncement = BeginningOfTextAnnouncement; // nothing before the first sentence
 					else
-						targetIndex = Math.Max(0, currentIndex - 1);
+						targetIndex = atSentenceStart ? currentIndex - 1 : currentIndex;
 				}
 				else
 				{
-					targetIndex = Math.Min(_sentenceStarts.Count - 1, currentIndex + 1);
+					if (currentIndex >= lastIndex)
+						boundaryAnnouncement = EndOfTextAnnouncement; // nothing after the final sentence
+					else
+						targetIndex = currentIndex + 1;
 				}
 
-				int targetPos = _sentenceStarts[targetIndex];
-				if (targetPos < _currentText.Length)
+				if (boundaryAnnouncement is not null)
 				{
+					_speakingAnnouncement = true;
+					_currentPrompt = _synth!.SpeakAsync(boundaryAnnouncement);
+				}
+				else
+				{
+					int targetPos = _sentenceStarts[targetIndex];
+					EnterSentence(targetIndex);
 					_currentPosition = targetPos;
 					_spokenToCurrentDelta = targetPos;
-					_synth!.SpeakAsync(_currentText.Substring(targetPos));
+					_currentPrompt = _synth!.SpeakAsync(_currentText.Substring(targetPos));
 				}
 			}
 			oldCts?.Cancel();
 			oldCts?.Dispose();
+		}
+
+		// Move the navigation cursor onto a sentence and reset the grace-window timer.
+		private void EnterSentence(int index)
+		{
+			_navIndex = index;
+			_sentenceEnteredAtTick = Environment.TickCount64;
 		}
 
 		public void SpeakAnnouncement(string text, int rate, int volume, string? voiceName)
@@ -179,7 +221,7 @@ namespace CognitiveSupport
 
 				ApplyVoiceParams(rate, volume, voiceName);
 				_speakingAnnouncement = true;
-				_synth!.SpeakAsync(text);
+				_currentPrompt = _synth!.SpeakAsync(text);
 			}
 			oldCts?.Cancel();
 			oldCts?.Dispose();
@@ -195,6 +237,7 @@ namespace CognitiveSupport
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
 				_speakingAnnouncement = false;
+				_currentPrompt = null;
 			}
 			oldCts?.Cancel();
 			oldCts?.Dispose();
@@ -230,12 +273,21 @@ namespace CognitiveSupport
 		{
 			lock (_gate)
 			{
+				// Ignore stragglers from a cancelled/superseded utterance.
+				if (!ReferenceEquals(e.Prompt, _currentPrompt)) return;
 				if (_speakingAnnouncement) return;
 				if (_currentText is null) return;
 				int mapped = e.CharacterPosition + _spokenToCurrentDelta;
 				if (mapped < 0) mapped = 0;
 				if (mapped > _currentText.Length) mapped = _currentText.Length;
 				_currentPosition = mapped;
+
+				// Keep the navigation cursor in step with natural playback so a skip
+				// after the reader has crossed into a new sentence acts from there.
+				// Re-entering a sentence also restarts the back-skip grace window.
+				int sentenceIndex = FindSentenceIndex(mapped);
+				if (sentenceIndex != _navIndex)
+					EnterSentence(sentenceIndex);
 			}
 		}
 
@@ -243,6 +295,7 @@ namespace CognitiveSupport
 		{
 			lock (_gate)
 			{
+				if (!ReferenceEquals(e.Prompt, _currentPrompt)) return;
 				if (_speakingAnnouncement)
 				{
 					_speakingAnnouncement = false;
@@ -251,6 +304,7 @@ namespace CognitiveSupport
 				if (!e.Cancelled && _currentText is not null)
 				{
 					_currentPosition = _currentText.Length;
+					_navIndex = _sentenceStarts is { Count: > 0 } ? _sentenceStarts.Count - 1 : 0;
 				}
 			}
 		}
@@ -283,6 +337,7 @@ namespace CognitiveSupport
 				_currentText = null;
 				_lastInputText = null;
 				_sentenceStarts = null;
+				_currentPrompt = null;
 			}
 			oldCts?.Cancel();
 			oldCts?.Dispose();
