@@ -69,7 +69,6 @@ internal static class SettingsDefaults
 	{
 		public const int TimeoutSeconds = 60;
 		public const int RetryCount = 3;
-		public const string ProcessPromptHotKey = "ALT+SHIFT+P";
 	}
 
 	public static class MainWindowUi

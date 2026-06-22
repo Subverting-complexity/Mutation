@@ -447,15 +447,11 @@ Collaboration among various healthcare professionals ensures that the informatio
 End of summary.
 ";
 
-             string? legacyHotkey = llmSettings.ProcessWithLlmHotKey;
-             if (string.IsNullOrWhiteSpace(legacyHotkey))
-                 legacyHotkey = "ALT+SHIFT+P";
-
              llmSettings.Prompts.Add(new LlmSettings.LlmPrompt {
                 Id = 1,
                 Name = "Default",
                 Content = defaultPrompt,
-                Hotkey = legacyHotkey,
+                Hotkey = "ALT+SHIFT+P",
                 AutoRun = false,
                 ModelName = LlmSettings.DefaultModel
              });
@@ -859,6 +855,16 @@ End of summary.
 					};
 				}
 				llmSettingsJObj.Remove("FormatTranscriptPrompt");
+				saveRequired = true;
+			}
+
+			// Drop the obsolete single-hotkey LlmSettings.ProcessWithLlmHotKey. Per-prompt
+			// hotkeys (Prompts[].Hotkey) now drive every LLM action. This runs AFTER the
+			// FormatTranscriptPrompt seed above, which still reads ProcessWithLlmHotKey to
+			// carry a legacy single hotkey forward into the seeded Prompts[0].
+			if (llmSettingsJObj["ProcessWithLlmHotKey"] is not null)
+			{
+				llmSettingsJObj.Remove("ProcessWithLlmHotKey");
 				saveRequired = true;
 			}
 

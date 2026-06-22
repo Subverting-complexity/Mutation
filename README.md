@@ -63,7 +63,6 @@ Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Defin
 
 | Hotkey | Description |
 |--------|-------------|
-| `ProcessWithLlmHotKey` | Apply the auto-run prompt to clipboard text. |
 | Per-prompt `Hotkey` | Trigger a specific prompt directly. |
 
 **Prompt Configuration:**
@@ -192,7 +191,6 @@ All hotkeys are global and fully customisable. Below is an example covering ever
       { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null },
       { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null }
     ],
-    "ProcessWithLlmHotKey": "Ctrl+Shift+F",
     "Prompts": [
       {
         "Id": 1,

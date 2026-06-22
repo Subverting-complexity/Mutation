@@ -96,11 +96,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SendHotkeyAfterTranscriptionOperation = v,
 			true, null),
 
-		new HotkeySpec("Process with LLM",
-			s => s.LlmSettings?.ProcessWithLlmHotKey,
-			(s, v) => (s.LlmSettings ??= new LlmSettings()).ProcessWithLlmHotKey = v,
-			true, SettingsDefaults.Llm.ProcessPromptHotKey),
-
 		new HotkeySpec("Speak clipboard",
 			s => s.TextToSpeechSettings?.SpeakClipboard,
 			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakClipboard = v,
