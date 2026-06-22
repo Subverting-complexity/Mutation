@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -62,8 +64,9 @@ public sealed partial class MainWindow
 	}
 
 	// Opens the Settings dialog. Reused by the Settings menu item, the Ctrl+,
-	// shortcut, and first-run onboarding in App.OnLaunched.
-	internal async Task ShowSettingsDialogAsync()
+	// shortcut, and first-run onboarding in App.OnLaunched. An optional category key
+	// (e.g. "apikeys") opens the dialog directly on that tab.
+	internal async Task ShowSettingsDialogAsync(string? initialCategoryKey = null)
 	{
 		if (Content is not FrameworkElement rootElement)
 		{
@@ -74,13 +77,59 @@ public sealed partial class MainWindow
 			_settings,
 			_settingsManager,
 			_settingsManager.SettingsFilePath,
-			ApplyLiveSettings)
+			ApplyLiveSettings,
+			initialCategoryKey)
 		{
 			XamlRoot = rootElement.XamlRoot,
 			RequestedTheme = rootElement.ActualTheme
 		};
 
 		await ShowDialogAsync(settingsDialog);
+	}
+
+	// Shown at startup when one or more configured speech-to-text services have no
+	// API key. Mirrors the OpenAI/Anthropic onboarding flow: a friendly,
+	// screen-reader-accessible warning, then the Settings dialog opened on the API
+	// keys tab so the user can add the missing key — instead of the old behaviour of
+	// crashing with a "see the log" error dialog that closed the app on OK.
+	internal async Task ShowMissingSpeechServiceKeysWarningAsync(IReadOnlyList<string> serviceNames)
+	{
+		const string title = "Speech-to-Text API Key Missing";
+		string list = string.Join("\n", serviceNames.Select(n => $"• {n}"));
+		string message =
+			"One or more speech-to-text services are missing their API key and were disabled:\n\n" +
+			list +
+			"\n\nThe Settings window will now open on the API keys tab so you can add the missing key. " +
+			"Restart Mutation after saving for the service to become available.";
+
+		if (Content is FrameworkElement rootElement && rootElement.XamlRoot is not null)
+		{
+			var dialog = new ContentDialog
+			{
+				Title = title,
+				Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
+				CloseButtonText = "Continue",
+				XamlRoot = rootElement.XamlRoot,
+				RequestedTheme = rootElement.ActualTheme
+			};
+			AutomationProperties.SetName(dialog, title);
+			AutomationProperties.SetHelpText(dialog, message);
+
+			await ShowDialogAsync(dialog);
+		}
+		else
+		{
+			System.Windows.Forms.MessageBox.Show(
+				message,
+				title,
+				System.Windows.Forms.MessageBoxButtons.OK,
+				System.Windows.Forms.MessageBoxIcon.Warning);
+		}
+
+		// Yield a dispatcher turn so the warning dialog fully closes before the
+		// Settings dialog opens (WinUI allows only one ContentDialog at a time).
+		await YieldToDispatcherAsync();
+		await ShowSettingsDialogAsync("apikeys");
 	}
 
 	// Completes on a fresh dispatcher turn, breaking out of the current

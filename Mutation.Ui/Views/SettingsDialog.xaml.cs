@@ -38,7 +38,8 @@ public sealed partial class SettingsDialog : ContentDialog
 		Settings settings,
 		ISettingsManager? settingsManager,
 		string? settingsFilePath,
-		Action? onLiveApply)
+		Action? onLiveApply,
+		string? initialCategoryKey = null)
 	{
 		_live = settings ?? throw new ArgumentNullException(nameof(settings));
 		_workingCopy = SettingsWorkingCopy.Clone(_live);
@@ -52,7 +53,7 @@ public sealed partial class SettingsDialog : ContentDialog
 
 		if (FilteredCategories.Count > 0)
 		{
-			CategoryList.SelectedIndex = 0;
+			CategoryList.SelectedIndex = IndexOfCategory(initialCategoryKey);
 		}
 		else
 		{
@@ -102,6 +103,24 @@ public sealed partial class SettingsDialog : ContentDialog
 			new[] { "hotkey", "shortcut", "keys", "binding", "router" }));
 
 		ApplySearchFilter(string.Empty);
+	}
+
+	// Resolve the list index of the category to open initially. Falls back to the
+	// first category (index 0) when no key is supplied or it does not match, so the
+	// dialog always opens on a real page. Used to deep-link callers (e.g. the
+	// missing speech-to-text key warning) straight to the API keys tab.
+	private int IndexOfCategory(string? categoryKey)
+	{
+		if (!string.IsNullOrWhiteSpace(categoryKey))
+		{
+			for (int i = 0; i < FilteredCategories.Count; i++)
+			{
+				if (string.Equals(FilteredCategories[i].Key, categoryKey, StringComparison.OrdinalIgnoreCase))
+					return i;
+			}
+		}
+
+		return 0;
 	}
 
 	private void ApplySearchFilter(string query)
