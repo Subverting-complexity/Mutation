@@ -28,6 +28,8 @@ internal static class SettingsDefaults
 		public const int MaxParallelRequests = 4;
 		public const int MaxFreeTierPageLimit = 20;
 		public const int MaxParallelRequestsLimit = 20;
+		public const long MaxDocumentBytes = 10L * 1024 * 1024;
+		public const int MaxDocumentSizeMbUiMax = 500;
 	}
 
 	public static class Speech
@@ -60,13 +62,15 @@ internal static class SettingsDefaults
 		public const int SkipSentenceGraceWindowMs = 1500;
 		public const int MinSkipSentenceGraceWindowMs = 250;
 		public const int MaxSkipSentenceGraceWindowMs = 5000;
+		public const int ResumeRewindWordCount = 5;
+		public const int MinResumeRewindWordCount = 0;
+		public const int MaxResumeRewindWordCount = 20;
 	}
 
 	public static class Llm
 	{
 		public const int TimeoutSeconds = 60;
 		public const int RetryCount = 3;
-		public const string ProcessPromptHotKey = "ALT+SHIFT+P";
 	}
 
 	public static class MainWindowUi

@@ -7,6 +7,7 @@ public class Settings
 	public AudioSettings? AudioSettings { get; set; }
 	public AzureComputerVisionSettings? AzureComputerVisionSettings { get; set; }
         public SpeechToTextSettings? SpeechToTextSettings { get; set; }
+	public ApiKeys? ApiKeys { get; set; }
 	public LlmSettings? LlmSettings { get; set; }
 	public TextToSpeechSettings? TextToSpeechSettings { get; set; }
 
@@ -120,7 +121,10 @@ public class AzureComputerVisionSettings
 	public int FreeTierPageLimit { get; set; } = 2;
 	public int MaxParallelDocuments { get; set; } = 2;
 	public int MaxParallelRequests { get; set; } = 4;
-	public long? MaxDocumentBytes { get; set; }
+
+	// Maximum size of a single file/page sent for OCR. Files larger than this are
+	// skipped before the upload. null or <= 0 means no limit. Default 10 MB.
+	public long? MaxDocumentBytes { get; set; } = 10L * 1024 * 1024;
 
 	public AzureComputerVisionSettings()
 	{
@@ -170,16 +174,27 @@ public class SpeechToTextServiceSettings
 	public int TimeoutSeconds { get; set; } = 10;
 }
 
+// Central store for provider API keys. These are the primary keys used across the
+// app (LLM, speech-to-text, etc.); they are not LLM-specific. A speech service's
+// per-service ApiKey acts as an optional override that takes precedence when set.
+public class ApiKeys
+{
+	public string? OpenAiApiKey { get; set; }
+	public string? AnthropicApiKey { get; set; }
+	public string? DeepgramApiKey { get; set; }
+
+	public ApiKeys()
+	{
+	}
+}
+
 public class LlmSettings
 {
 	public const string DefaultModel = "chat-latest";
 	public const string DefaultSecondaryModel = "gpt-4.1";
 	public const string DefaultAnthropicModel = "claude-sonnet-4-6";
 
-	public string? OpenAiApiKey { get; set; }
-	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
-	public string? ProcessWithLlmHotKey { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
 	public int TimeoutSeconds { get; set; } = 60;
 	public int RetryCount { get; set; } = 3;
@@ -249,6 +264,11 @@ public class TextToSpeechSettings
 	// style). A larger value makes stepping back easier; a smaller value favours
 	// re-reading the current sentence.
 	public int SkipSentenceGraceWindowMs { get; set; } = 1500;
+
+	// When resuming playback (pressing the speak hotkey again after a pause), rewind
+	// this many words before where playback stopped so the listener regains context
+	// of where they are. 0 resumes exactly where it stopped (no rewind).
+	public int ResumeRewindWordCount { get; set; } = 5;
 
 	public TextToSpeechSettings()
 	{

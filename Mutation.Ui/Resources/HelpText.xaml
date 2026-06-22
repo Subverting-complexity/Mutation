@@ -16,6 +16,7 @@
 	<x:String x:Key="Help.Ocr.MaxParallelRequests">How many OCR requests are sent to the service at the same time.</x:String>
 	<x:String x:Key="Help.Ocr.UseFreeTier">Use the free OCR tier, which limits how many pages each document can contain.</x:String>
 	<x:String x:Key="Help.Ocr.InvertScreenshot">Invert image colors before OCR to improve accuracy on light text over a dark background.</x:String>
+	<x:String x:Key="Help.Ocr.MaxDocumentSize">Maximum size of a file or page sent for OCR. Larger files are skipped before upload to avoid unexpectedly large uploads. Set to 0 for no limit.</x:String>
 	<x:String x:Key="Help.Ocr.SendHotkeyAfter">Optional keystrokes sent to the active app after OCR text is delivered, for example CTRL+V to paste.</x:String>
 
 	<!-- Interface -->
@@ -25,9 +26,9 @@
 	<!-- Text to Speech -->
 	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud.</x:String>
 	<x:String x:Key="Help.Tts.SkipSentenceGrace">When skipping back, how long after a sentence starts that a back-press still steps to the previous sentence. After this window a back-press restarts the current sentence instead. A larger value makes stepping back easier; a smaller value favours re-reading the current sentence.</x:String>
+	<x:String x:Key="Help.Tts.ResumeRewindWords">When you resume reading after pausing, rewind this many words before where it stopped so you regain context of where you are. Set to 0 for no rewind: reading resumes from exactly where it stopped.</x:String>
 
 	<!-- Speech to Text -->
-	<x:String x:Key="Help.Speech.ActiveService">The transcription engine used when you record or transcribe speech.</x:String>
 	<x:String x:Key="Help.Speech.FileTimeout">How long to wait for a file transcription to finish before giving up.</x:String>
 	<x:String x:Key="Help.Speech.TempDir">Folder where temporary audio files are written during recording and transcription.</x:String>
 	<x:String x:Key="Help.Speech.SendHotkeyAfter">Optional keystrokes sent to the active app after a transcript is delivered, for example CTRL+V to paste.</x:String>
@@ -35,17 +36,32 @@
 	<x:String x:Key="Help.Speech.SilenceThreshold">Loudness floor in dBFS. Audio at or below this level counts as silence. Lower (more negative) values are stricter, treating only quieter sounds as silence. Default -40.</x:String>
 	<x:String x:Key="Help.Speech.MinSilence">Shortest silence to keep, in seconds. Pauses shorter than this are left untouched; longer pauses are trimmed down to this length. Default 1.0.</x:String>
 	<x:String x:Key="Help.Speech.SilenceGuard">Audio kept on each side of speech, in milliseconds, so soft word starts, breaths, and word endings are not clipped. Default 200.</x:String>
+	<x:String x:Key="Help.Speech.Services">Define the transcription services you can choose from. Adding, removing, or editing a service definition takes effect after you restart the app; the per-service prompt and the active-service selection apply immediately.</x:String>
+	<x:String x:Key="Help.Speech.Service.Name">A label for this service, shown in the active-service list. Must be unique.</x:String>
+	<x:String x:Key="Help.Speech.Service.Provider">Which transcription backend this service talks to: OpenAI (Whisper) or Deepgram.</x:String>
+	<x:String x:Key="Help.Speech.Service.ApiKey">Optional override of the central API key for this provider (set under API keys). Leave blank to use the central key; fill it in only to use a different key for this service.</x:String>
+	<x:String x:Key="Help.Speech.Service.BaseDomain">The provider's API base URL, for example https://api.openai.com/. Change only to target a proxy or self-hosted endpoint.</x:String>
+	<x:String x:Key="Help.Speech.Service.ModelId">The provider's model identifier, for example whisper-1.</x:String>
+	<x:String x:Key="Help.Speech.Service.Prompt">Optional priming text sent with each transcription to bias spelling of names and punctuation. Applies immediately for the active service.</x:String>
+	<x:String x:Key="Help.Speech.Service.Timeout">Per-attempt timeout in seconds for a transcription request to this service before it is retried or aborted.</x:String>
 
 	<!-- Audio -->
 	<x:String x:Key="Help.Audio.MicVisualization">Show a live waveform of the microphone input while recording.</x:String>
 	<x:String x:Key="Help.Audio.UseCustomBeeps">Play your own sound files instead of the built-in beeps for status cues.</x:String>
 
+	<!-- API keys -->
+	<x:String x:Key="Help.ApiKeys.OpenAi">API key used to authenticate requests to OpenAI, for both LLM models and OpenAI/Whisper speech-to-text. A speech service can override this with its own key.</x:String>
+	<x:String x:Key="Help.ApiKeys.Anthropic">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
+	<x:String x:Key="Help.ApiKeys.Deepgram">API key used to authenticate requests to Deepgram speech-to-text. A speech service can override this with its own key.</x:String>
+
 	<!-- LLM / AI assistance -->
-	<x:String x:Key="Help.Llm.OpenAiKey">API key used to authenticate requests to OpenAI models.</x:String>
-	<x:String x:Key="Help.Llm.AnthropicKey">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
 	<x:String x:Key="Help.Llm.RequestTimeout">How long to wait for the language model to respond before giving up.</x:String>
 	<x:String x:Key="Help.Llm.RetryCount">How many times to retry a failed language-model request before giving up. Retries help the first request after a reboot succeed while the network warms up. Default 3.</x:String>
 	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>
+
+	<!-- Transcript formatting -->
+	<x:String x:Key="Help.Transcript.MatchType">How the Find text is interpreted. Plain replaces the literal text wherever it appears. RegEx treats Find as a regular-expression pattern (and Replace with as its substitution). Smart matches the word with surrounding spaces and punctuation tidied up, useful for replacing a spoken word or phrase cleanly.</x:String>
+	<x:String x:Key="Help.Transcript.CaseSensitive">When on, upper- and lower-case must match exactly. When off, case is ignored.</x:String>
 
 	<!-- Hotkeys -->
 	<x:String x:Key="Help.Hotkeys.Router">Map one shortcut to another so a single key press can trigger a more complex shortcut. Changes apply when you save settings.</x:String>

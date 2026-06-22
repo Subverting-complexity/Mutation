@@ -24,6 +24,7 @@ public sealed partial class TtsSettingsPage : UserControl
 			var tts = _settings.TextToSpeechSettings ??= new TextToSpeechSettings();
 			ToggleSpeechPreprocessing.IsOn = tts.EnableSpeechPreprocessing;
 			NbSkipGrace.Value = tts.SkipSentenceGraceWindowMs;
+			NbResumeRewindWords.Value = tts.ResumeRewindWordCount;
 		}
 		finally { _suppressEvents = false; }
 	}
@@ -49,5 +50,17 @@ public sealed partial class TtsSettingsPage : UserControl
 	private void BtnResetSkipGrace_Click(object sender, RoutedEventArgs e)
 	{
 		NbSkipGrace.Value = SettingsDefaults.Tts.SkipSentenceGraceWindowMs;
+	}
+
+	private void NbResumeRewindWords_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).ResumeRewindWordCount = (int)args.NewValue;
+	}
+
+	private void BtnResetResumeRewind_Click(object sender, RoutedEventArgs e)
+	{
+		NbResumeRewindWords.Value = SettingsDefaults.Tts.ResumeRewindWordCount;
 	}
 }

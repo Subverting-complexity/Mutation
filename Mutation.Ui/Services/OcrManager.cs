@@ -21,6 +21,7 @@ using System.Drawing.Imaging;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Runtime.CompilerServices;
 
 namespace Mutation.Ui.Services;
 
@@ -156,90 +157,64 @@ public class OcrManager
             return new(false, string.Empty, paths.Count, 0, Array.Empty<string>());
         }
 
+        int maxParallelDocuments = GetMaxParallelDocuments();
+        int maxParallelRequests = GetMaxParallelRequests();
+        (bool useFreeTier, int freeTierPageLimit) = GetFreeTierGrouping();
+
+        // Two shared throttles for the whole run: documentGate caps files in flight,
+        // requestGate is the global ceiling on concurrent OCR service calls across all files.
+        using var documentGate = new SemaphoreSlim(maxParallelDocuments, maxParallelDocuments);
+        using var requestGate = new SemaphoreSlim(maxParallelRequests, maxParallelRequests);
+
+        var processedSegments = new StrongBox<int>(0);
+
+        // Map: fan out one self-contained task per file. Each returns a FileOcrOutcome
+        // and never mutates shared run-level state.
+        var tasks = new List<Task<FileOcrOutcome>>(batches.Count);
+        for (int index = 0; index < batches.Count; index++)
+        {
+            tasks.Add(ProcessBatchAsync(
+                batches[index],
+                index,
+                order,
+                documentGate,
+                requestGate,
+                useFreeTier,
+                freeTierPageLimit,
+                totalSegments,
+                processedSegments,
+                progress,
+                cancellationToken));
+        }
+
+        // Throttle is enforced inside the tasks via the two gates. Task.WhenAll propagates
+        // OperationCanceledException so fail-fast cancellation behaviour is preserved.
+        FileOcrOutcome[] outcomes = await Task.WhenAll(tasks);
+
+        // Reduce: combine results on a single thread, in original selection order, so today's
+        // output format and ordering are protected against the concurrent execution above.
         var combinedText = new StringBuilder();
         var failures = new List<string>();
         int successCount = 0;
-        int processedSegments = 0;
 
-		foreach (var batch in batches)
-		{
-			cancellationToken.ThrowIfCancellationRequested();
+        foreach (var outcome in outcomes.OrderBy(outcome => outcome.Order))
+        {
+            if (!string.IsNullOrEmpty(outcome.Section))
+            {
+                if (combinedText.Length > 0)
+                    combinedText.AppendLine().AppendLine();
 
-			bool fileHasSuccess = false;
-			bool fileHasFailure = false;
-			int totalPagesForFile = Math.Max(1, batch.Items.Select(item => Math.Max(item.TotalPages, item.PageNumber)).DefaultIfEmpty(1).Max());
-			var pageResults = new List<(int PageNumber, string Text)>();
+                combinedText.Append(outcome.Section);
+            }
 
-			foreach (var item in batch.Items)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
+            if (outcome.Failures.Count > 0)
+                failures.AddRange(outcome.Failures);
 
-				try
-				{
-					if (item.InitializationError is not null)
-					{
-						fileHasFailure = true;
-						failures.Add($"{batch.FileName}: {item.InitializationError.Message}");
-						continue;
-					}
+            if (outcome.Succeeded)
+                ++successCount;
+        }
 
-					using var stream = await item.OpenStreamAsync();
-					string text = await _ocrService.ExtractText(order, stream, cancellationToken);
-					string sanitizedText = string.IsNullOrWhiteSpace(text) ? string.Empty : text.TrimEnd();
-					pageResults.Add((item.PageNumber, sanitizedText));
-					fileHasSuccess = true;
-				}
-				catch (OperationCanceledException)
-				{
-					throw;
-				}
-				catch (Exception ex)
-				{
-					fileHasFailure = true;
-					failures.Add($"{batch.FileName} (Page {item.PageNumber}): {ex.Message}");
-				}
-				finally
-				{
-					processedSegments++;
-					progress?.Report(new OcrProcessingProgress(processedSegments, totalSegments, batch.FileName, item.PageNumber, totalPagesForFile));
-				}
-			}
-
-			if (fileHasSuccess)
-			{
-				if (combinedText.Length > 0)
-					combinedText.AppendLine().AppendLine();
-
-				combinedText.AppendLine($"[{batch.FileName}]");
-
-				pageResults.Sort((left, right) => left.PageNumber.CompareTo(right.PageNumber));
-				var fileTextBuilder = new StringBuilder();
-
-				for (int index = 0; index < pageResults.Count; index++)
-				{
-					var segment = pageResults[index];
-
-					if (totalPagesForFile > 1)
-						fileTextBuilder.AppendLine($"(Page {segment.PageNumber})");
-
-					if (!string.IsNullOrWhiteSpace(segment.Text))
-						fileTextBuilder.AppendLine(segment.Text);
-
-					bool hasAdditionalSegments = index < pageResults.Count - 1;
-					if (hasAdditionalSegments && totalPagesForFile > 1)
-						fileTextBuilder.AppendLine();
-				}
-
-				string fileText = fileTextBuilder.ToString().TrimEnd();
-				if (!string.IsNullOrWhiteSpace(fileText))
-					combinedText.AppendLine(fileText);
-			}
-
-			if (fileHasSuccess && !fileHasFailure)
-				++successCount;
-		}
-
-		string resultText = combinedText.ToString();
+        string resultText = combinedText.ToString();
         if (successCount > 0 && !string.IsNullOrWhiteSpace(resultText))
             await SetClipboardTextAsync(resultText);
 
@@ -247,6 +222,163 @@ public class OcrManager
         await PlayBeepSafeAsync(success ? BeepType.Success : BeepType.Failure);
 
         return new(success, resultText, paths.Count, successCount, failures.AsReadOnly());
+    }
+
+    // Self-contained processing for a single file. Returns a FileOcrOutcome and never mutates
+    // shared run-level state, so many of these can run concurrently under the shared gates.
+    private async Task<FileOcrOutcome> ProcessBatchAsync(
+        FileOcrBatch batch,
+        int order,
+        OcrReadingOrder readingOrder,
+        SemaphoreSlim documentGate,
+        SemaphoreSlim requestGate,
+        bool useFreeTier,
+        int freeTierPageLimit,
+        int totalSegments,
+        StrongBox<int> processedSegments,
+        IProgress<OcrProcessingProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        await documentGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            bool fileHasSuccess = false;
+            bool fileHasFailure = false;
+            int totalPagesForFile = Math.Max(1, batch.Items.Select(item => Math.Max(item.TotalPages, item.PageNumber)).DefaultIfEmpty(1).Max());
+            var pageResults = new List<(int PageNumber, string Text)>();
+            var failures = new List<string>();
+
+            // Free-tier grouping only defines the logical submission chunk size. Each page is
+            // still processed as its own OCR request, so every page is processed and nothing is
+            // truncated regardless of FreeTierPageLimit.
+            foreach (var submission in GroupIntoSubmissions(batch.Items, useFreeTier, freeTierPageLimit))
+            {
+                foreach (var item in submission)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        if (item.InitializationError is not null)
+                        {
+                            fileHasFailure = true;
+                            failures.Add($"{batch.FileName}: {item.InitializationError.Message}");
+                            continue;
+                        }
+
+                        using var stream = await item.OpenStreamAsync().ConfigureAwait(false);
+
+                        long maxDocumentBytes = GetMaxDocumentBytes();
+                        if (maxDocumentBytes > 0 && stream.CanSeek && stream.Length > maxDocumentBytes)
+                        {
+                            fileHasFailure = true;
+                            failures.Add($"{batch.FileName} (Page {item.PageNumber}): {FormatMegabytes(stream.Length)} exceeds the {FormatMegabytes(maxDocumentBytes)} maximum document size.");
+                            continue;
+                        }
+
+                        string text = await ExtractTextThrottledAsync(readingOrder, stream, requestGate, cancellationToken).ConfigureAwait(false);
+                        string sanitizedText = string.IsNullOrWhiteSpace(text) ? string.Empty : text.TrimEnd();
+                        pageResults.Add((item.PageNumber, sanitizedText));
+                        fileHasSuccess = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        fileHasFailure = true;
+                        failures.Add($"{batch.FileName} (Page {item.PageNumber}): {ex.Message}");
+                    }
+                    finally
+                    {
+                        int processed = Interlocked.Increment(ref processedSegments.Value);
+                        progress?.Report(new OcrProcessingProgress(processed, totalSegments, batch.FileName, item.PageNumber, totalPagesForFile));
+                    }
+                }
+            }
+
+            string section = BuildFileSection(batch.FileName, fileHasSuccess, totalPagesForFile, pageResults);
+            bool succeeded = fileHasSuccess && !fileHasFailure;
+            return new FileOcrOutcome(order, section, failures, succeeded);
+        }
+        finally
+        {
+            documentGate.Release();
+        }
+    }
+
+    // Wraps a single OCR service call with the global request gate so MaxParallelRequests is a
+    // true ceiling across all files and all generated work items.
+    private async Task<string> ExtractTextThrottledAsync(OcrReadingOrder order, Stream stream, SemaphoreSlim requestGate, CancellationToken cancellationToken)
+    {
+        await requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await _ocrService.ExtractText(order, stream, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            requestGate.Release();
+        }
+    }
+
+    // Builds a file's combined-text section exactly as the sequential implementation did, so the
+    // ordered reduce can simply append sections separated by a blank line.
+    private static string BuildFileSection(string fileName, bool fileHasSuccess, int totalPagesForFile, List<(int PageNumber, string Text)> pageResults)
+    {
+        if (!fileHasSuccess)
+            return string.Empty;
+
+        var builder = new StringBuilder();
+        builder.AppendLine($"[{fileName}]");
+
+        pageResults.Sort((left, right) => left.PageNumber.CompareTo(right.PageNumber));
+        var fileTextBuilder = new StringBuilder();
+
+        for (int index = 0; index < pageResults.Count; index++)
+        {
+            var segment = pageResults[index];
+
+            if (totalPagesForFile > 1)
+                fileTextBuilder.AppendLine($"(Page {segment.PageNumber})");
+
+            if (!string.IsNullOrWhiteSpace(segment.Text))
+                fileTextBuilder.AppendLine(segment.Text);
+
+            bool hasAdditionalSegments = index < pageResults.Count - 1;
+            if (hasAdditionalSegments && totalPagesForFile > 1)
+                fileTextBuilder.AppendLine();
+        }
+
+        string fileText = fileTextBuilder.ToString().TrimEnd();
+        if (!string.IsNullOrWhiteSpace(fileText))
+            builder.AppendLine(fileText);
+
+        return builder.ToString();
+    }
+
+    // Groups a file's per-page work items into logical free-tier submissions. We keep one page
+    // per OCR request, so this only documents the intended chunk size; the same FreeTierPageLimit
+    // can drive multi-page submissions later without changing the call sites.
+    private static IReadOnlyList<IReadOnlyList<OcrWorkItem>> GroupIntoSubmissions(IReadOnlyList<OcrWorkItem> items, bool useFreeTier, int freeTierPageLimit)
+    {
+        if (!useFreeTier || freeTierPageLimit <= 1 || items.Count <= freeTierPageLimit)
+            return new[] { items };
+
+        var groups = new List<IReadOnlyList<OcrWorkItem>>();
+        for (int start = 0; start < items.Count; start += freeTierPageLimit)
+        {
+            int count = Math.Min(freeTierPageLimit, items.Count - start);
+            var chunk = new List<OcrWorkItem>(count);
+            for (int offset = 0; offset < count; offset++)
+                chunk.Add(items[start + offset]);
+            groups.Add(chunk);
+        }
+
+        return groups;
     }
 
     private async Task<OcrResult> ExtractTextViaOcrAsync(OcrReadingOrder order, SoftwareBitmap bitmap)
@@ -272,6 +404,31 @@ public class OcrManager
             return new(false, ex.Message);
         }
     }
+
+    // Configured maximum bytes for a single OCR upload, or 0 when no limit applies
+    // (null or a non-positive stored value).
+    private long GetMaxDocumentBytes()
+    {
+        long? configured = _settings.AzureComputerVisionSettings?.MaxDocumentBytes;
+        return configured is > 0 ? configured.Value : 0;
+    }
+
+    // Concurrency knobs are clamped to at least 1, mirroring the GetMaxDocumentBytes pattern.
+    private int GetMaxParallelDocuments() =>
+        Math.Max(1, _settings.AzureComputerVisionSettings?.MaxParallelDocuments ?? 1);
+
+    private int GetMaxParallelRequests() =>
+        Math.Max(1, _settings.AzureComputerVisionSettings?.MaxParallelRequests ?? 1);
+
+    private (bool UseFreeTier, int FreeTierPageLimit) GetFreeTierGrouping()
+    {
+        var settings = _settings.AzureComputerVisionSettings;
+        bool useFreeTier = settings?.UseFreeTier ?? false;
+        int pageLimit = Math.Max(1, settings?.FreeTierPageLimit ?? 1);
+        return (useFreeTier, pageLimit);
+    }
+
+    private static string FormatMegabytes(long bytes) => $"{bytes / (1024.0 * 1024.0):0.#} MB";
 
     private bool IsOcrConfigured(out string message)
     {
@@ -432,6 +589,10 @@ public class OcrManager
         await page.RenderToStreamAsync(stream);
         return stream.AsStreamForRead();
     }
+
+    // Self-contained result for a single file, carried back from ProcessBatchAsync to the
+    // ordered reduce. Order preserves the file's original position in the selection.
+    private sealed record FileOcrOutcome(int Order, string Section, IReadOnlyList<string> Failures, bool Succeeded);
 
     private sealed class FileOcrBatch
     {

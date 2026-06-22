@@ -48,6 +48,26 @@
 			</StackPanel>
 		</StackPanel>
 
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Rewind on resume (words)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.ResumeRewindWords}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbResumeRewindWords"
+						   AutomationProperties.Name="Rewind on resume (words)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.ResumeRewindWords}"
+						   Minimum="0" Maximum="20"
+						   SmallChange="1" LargeChange="5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbResumeRewindWords_ValueChanged" />
+				<Button Click="BtnResetResumeRewind_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset rewind on resume">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
 		<TextBlock Text="TTS hotkeys appear in the Hotkeys tab."
 				   Style="{StaticResource CaptionTextBlockStyle}"
 				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />

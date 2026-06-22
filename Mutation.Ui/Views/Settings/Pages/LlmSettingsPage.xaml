@@ -12,8 +12,10 @@
 	<StackPanel Spacing="14">
 		<TextBlock Text="AI assistance" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<controls:SecretBox x:Name="TxtOpenAiKey" Header="OpenAI API key" HelpText="{StaticResource Help.Llm.OpenAiKey}" />
-		<controls:SecretBox x:Name="TxtAnthropicKey" Header="Anthropic API key" HelpText="{StaticResource Help.Llm.AnthropicKey}" />
+		<TextBlock Text="OpenAI and Anthropic API keys now live under the API keys section."
+				   Style="{StaticResource CaptionTextBlockStyle}"
+				   TextWrapping="Wrap"
+				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
 
 		<StackPanel Spacing="4">
 			<StackPanel Orientation="Horizontal" Spacing="6">

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.ApiKeysSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
+	xmlns:local="using:Mutation.Ui"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="14">
+		<TextBlock Text="API keys" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+		<TextBlock Text="Central provider API keys used across the app. A speech service can override its key from the Speech to Text section; otherwise the key here is used."
+				   Style="{StaticResource CaptionTextBlockStyle}"
+				   TextWrapping="Wrap"
+				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+
+		<controls:SecretBox x:Name="TxtOpenAiKey" Header="OpenAI API key" HelpText="{StaticResource Help.ApiKeys.OpenAi}" />
+		<controls:SecretBox x:Name="TxtAnthropicKey" Header="Anthropic API key" HelpText="{StaticResource Help.ApiKeys.Anthropic}" />
+		<controls:SecretBox x:Name="TxtDeepgramKey" Header="Deepgram API key" HelpText="{StaticResource Help.ApiKeys.Deepgram}" />
+	</StackPanel>
+</UserControl>

@@ -31,14 +31,14 @@ public class CompositeLlmService : ILlmService
 				if (_anthropicService == null)
 					throw new InvalidOperationException(
 						$"Model '{llmModelName}' is an Anthropic model but no Anthropic API key is configured. " +
-						"Please set AnthropicApiKey in Mutation.json and restart.");
+						"Please set AnthropicApiKey in the ApiKeys section of Mutation.json and restart.");
 				return _anthropicService.CreateChatCompletion(messages, llmModelName);
 
 			case LlmProvider.OpenAI:
 				if (_openAiService == null)
 					throw new InvalidOperationException(
 						$"Model '{llmModelName}' is an OpenAI model but no OpenAI API key is configured. " +
-						"Please set ApiKey in Mutation.json and restart.");
+						"Please set OpenAiApiKey in the ApiKeys section of Mutation.json and restart.");
 				return _openAiService.CreateChatCompletion(messages, llmModelName);
 
 			default:

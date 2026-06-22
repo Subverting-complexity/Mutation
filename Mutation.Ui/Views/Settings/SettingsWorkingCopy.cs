@@ -76,15 +76,22 @@ internal static class SettingsWorkingCopy
 			dst.SilenceGuardMilliseconds = src.SilenceGuardMilliseconds;
 		}
 
+		live.ApiKeys ??= new ApiKeys();
+		if (workingCopy.ApiKeys is not null)
+		{
+			var src = workingCopy.ApiKeys;
+			var dst = live.ApiKeys;
+			dst.OpenAiApiKey = src.OpenAiApiKey;
+			dst.AnthropicApiKey = src.AnthropicApiKey;
+			dst.DeepgramApiKey = src.DeepgramApiKey;
+		}
+
 		live.LlmSettings ??= new LlmSettings();
 		if (workingCopy.LlmSettings is not null)
 		{
 			var src = workingCopy.LlmSettings;
 			var dst = live.LlmSettings;
-			dst.OpenAiApiKey = src.OpenAiApiKey;
-			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
-			dst.ProcessWithLlmHotKey = src.ProcessWithLlmHotKey;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;
 			dst.RetryCount = src.RetryCount;
@@ -107,6 +114,7 @@ internal static class SettingsWorkingCopy
 			dst.EnableSpeechPreprocessing = src.EnableSpeechPreprocessing;
 			dst.VoiceName = src.VoiceName;
 			dst.SkipSentenceGraceWindowMs = src.SkipSentenceGraceWindowMs;
+			dst.ResumeRewindWordCount = src.ResumeRewindWordCount;
 		}
 
 		live.MainWindowUiSettings ??= new MainWindowUiSettings();

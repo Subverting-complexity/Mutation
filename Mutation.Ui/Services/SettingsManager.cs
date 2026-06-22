@@ -150,6 +150,14 @@ internal class SettingsManager : ISettingsManager
                         somethingWasMissing = true;
                 }
 
+                // null = never configured -> apply the 10 MB default. A stored 0 (or
+                // negative) is left as-is and means "no limit".
+                if (azureComputerVisionSettings.MaxDocumentBytes is null)
+                {
+                        azureComputerVisionSettings.MaxDocumentBytes = 10L * 1024 * 1024;
+                        somethingWasMissing = true;
+                }
+
 
 		if (settings.AudioSettings is null)
 		{
@@ -310,11 +318,9 @@ internal class SettingsManager : ISettingsManager
 		{
 			if (s.Provider == SpeechToTextProviders.None)
 				s.Provider = SpeechToTextProviders.OpenAi;
-			if (string.IsNullOrWhiteSpace(s.ApiKey))
-			{
-				s.ApiKey = PlaceholderValue;
-				somethingWasMissing = true;
-			}
+			// A service's ApiKey is an optional override of the root-level ApiKeys.
+			// Leave it blank by default so the central key is used unless the user
+			// explicitly supplies a per-service key here.
 			if (string.IsNullOrWhiteSpace(s.SpeechToTextPrompt))
 			{
 				s.SpeechToTextPrompt = "Hello, let's use punctuation. Names: Kobus, Piro.";
@@ -378,22 +384,34 @@ internal class SettingsManager : ISettingsManager
 		}
 
 
+		if (settings.ApiKeys is null)
+		{
+			settings.ApiKeys = new ApiKeys();
+			somethingWasMissing = true;
+		}
+		var apiKeys = settings.ApiKeys;
+		if (string.IsNullOrWhiteSpace(apiKeys.OpenAiApiKey))
+		{
+			apiKeys.OpenAiApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(apiKeys.AnthropicApiKey))
+		{
+			apiKeys.AnthropicApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(apiKeys.DeepgramApiKey))
+		{
+			apiKeys.DeepgramApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+
 		if (settings.LlmSettings is null)
 		{
 			settings.LlmSettings = new LlmSettings();
 			somethingWasMissing = true;
 		}
 		var llmSettings = settings.LlmSettings;
-		if (string.IsNullOrWhiteSpace(llmSettings.OpenAiApiKey))
-		{
-			llmSettings.OpenAiApiKey = PlaceholderValue;
-			somethingWasMissing = true;
-		}
-		if (string.IsNullOrWhiteSpace(llmSettings.AnthropicApiKey))
-		{
-			llmSettings.AnthropicApiKey = PlaceholderValue;
-			somethingWasMissing = true;
-		}
 
 		// Correct hand-edited invalid retry counts. A fresh LlmSettings already has
 		// RetryCount = 3 via field init, so a clean object is unchanged (parity holds).
@@ -447,15 +465,11 @@ Collaboration among various healthcare professionals ensures that the informatio
 End of summary.
 ";
 
-             string? legacyHotkey = llmSettings.ProcessWithLlmHotKey;
-             if (string.IsNullOrWhiteSpace(legacyHotkey))
-                 legacyHotkey = "ALT+SHIFT+P";
-
              llmSettings.Prompts.Add(new LlmSettings.LlmPrompt {
                 Id = 1,
                 Name = "Default",
                 Content = defaultPrompt,
-                Hotkey = legacyHotkey,
+                Hotkey = "ALT+SHIFT+P",
                 AutoRun = false,
                 ModelName = LlmSettings.DefaultModel
              });
@@ -812,6 +826,31 @@ End of summary.
 				saveRequired = true;
 			}
 
+			// Move LlmSettings.OpenAiApiKey / AnthropicApiKey -> root ApiKeys section.
+			// These keys are no longer LLM-specific (e.g. the OpenAI key is also used
+			// for OpenAI/Whisper speech-to-text), so they live in a central ApiKeys
+			// object. Runs AFTER the ApiKey -> OpenAiApiKey rename above so a legacy
+			// LlmSettings.ApiKey is carried all the way to ApiKeys.OpenAiApiKey in one pass.
+			{
+				JObject apiKeys = jObj["ApiKeys"] as JObject ?? new JObject();
+				bool movedAnyKey = false;
+				foreach (string keyName in new[] { "OpenAiApiKey", "AnthropicApiKey" })
+				{
+					if (llmSettingsJObj[keyName] is JToken movedKey)
+					{
+						if (apiKeys[keyName] is null)
+							apiKeys[keyName] = movedKey;
+						llmSettingsJObj.Remove(keyName);
+						movedAnyKey = true;
+					}
+				}
+				if (movedAnyKey)
+				{
+					jObj["ApiKeys"] = apiKeys;
+					saveRequired = true;
+				}
+			}
+
 			// Move LlmSettings.TranscriptFormatRules -> root TranscriptFormatRules (rules aren't LLM-specific).
 			if (llmSettingsJObj["TranscriptFormatRules"] is JToken legacyRules)
 			{
@@ -859,6 +898,16 @@ End of summary.
 					};
 				}
 				llmSettingsJObj.Remove("FormatTranscriptPrompt");
+				saveRequired = true;
+			}
+
+			// Drop the obsolete single-hotkey LlmSettings.ProcessWithLlmHotKey. Per-prompt
+			// hotkeys (Prompts[].Hotkey) now drive every LLM action. This runs AFTER the
+			// FormatTranscriptPrompt seed above, which still reads ProcessWithLlmHotKey to
+			// carry a legacy single hotkey forward into the seeded Prompts[0].
+			if (llmSettingsJObj["ProcessWithLlmHotKey"] is not null)
+			{
+				llmSettingsJObj.Remove("ProcessWithLlmHotKey");
 				saveRequired = true;
 			}
 
