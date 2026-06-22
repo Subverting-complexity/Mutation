@@ -29,7 +29,6 @@
 	<x:String x:Key="Help.Tts.ResumeRewindWords">When you resume reading after pausing, rewind this many words before where it stopped so you regain context of where you are. Set to 0 for no rewind: reading resumes from exactly where it stopped.</x:String>
 
 	<!-- Speech to Text -->
-	<x:String x:Key="Help.Speech.ActiveService">The transcription engine used when you record or transcribe speech.</x:String>
 	<x:String x:Key="Help.Speech.FileTimeout">How long to wait for a file transcription to finish before giving up.</x:String>
 	<x:String x:Key="Help.Speech.TempDir">Folder where temporary audio files are written during recording and transcription.</x:String>
 	<x:String x:Key="Help.Speech.SendHotkeyAfter">Optional keystrokes sent to the active app after a transcript is delivered, for example CTRL+V to paste.</x:String>

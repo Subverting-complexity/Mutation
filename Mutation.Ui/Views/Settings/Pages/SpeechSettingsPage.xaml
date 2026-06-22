@@ -12,25 +12,12 @@
 	<StackPanel Spacing="14">
 		<TextBlock Text="Speech to Text" Style="{StaticResource SubtitleTextBlockStyle}" />
 
-		<StackPanel Spacing="4">
-			<StackPanel Orientation="Horizontal" Spacing="6">
-				<TextBlock Text="Active service" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
-				<controls:InfoHint Text="{StaticResource Help.Speech.ActiveService}" VerticalAlignment="Center" />
-			</StackPanel>
-			<ComboBox x:Name="CmbActiveService"
-					  AutomationProperties.Name="Active service"
-					  AutomationProperties.HelpText="{StaticResource Help.Speech.ActiveService}"
-					  Width="280"
-					  HorizontalAlignment="Left"
-					  SelectionChanged="CmbActiveService_SelectionChanged" />
-		</StackPanel>
-
 		<StackPanel Spacing="8">
 			<StackPanel Orientation="Horizontal" Spacing="6">
 				<TextBlock Text="Service definitions" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<controls:InfoHint Text="{StaticResource Help.Speech.Services}" VerticalAlignment="Center" />
 			</StackPanel>
-			<TextBlock Text="Changes to a service definition take effect after you restart the app. The per-service prompt and the active-service selection apply immediately."
+			<TextBlock Text="Changes to a service definition take effect after you restart the app; the per-service prompt applies immediately. Choose which service is active from the main window."
 					   Style="{StaticResource CaptionTextBlockStyle}"
 					   TextWrapping="Wrap"
 					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />

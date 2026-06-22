@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -54,7 +53,6 @@ public sealed partial class SpeechSettingsPage : UserControl
 			}
 			_activeEntry = ServiceEntries.FirstOrDefault(e =>
 				string.Equals(e.Name, stt.ActiveSpeechToTextService, StringComparison.Ordinal));
-			RefreshActiveServiceCombo();
 
 			NbFileTimeout.Value = stt.FileTranscriptionTimeoutSeconds > 0
 				? stt.FileTranscriptionTimeoutSeconds
@@ -70,55 +68,17 @@ public sealed partial class SpeechSettingsPage : UserControl
 		finally { _suppressEvents = false; }
 	}
 
-	private void CmbActiveService_SelectionChanged(object sender, SelectionChangedEventArgs e)
-	{
-		if (_suppressEvents) return;
-		string? name = CmbActiveService.SelectedItem as string;
-		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).ActiveSpeechToTextService = name;
-		_activeEntry = name is null
-			? null
-			: ServiceEntries.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.Ordinal));
-	}
-
-	// Rebuilds the active-service dropdown from the current entries, skipping blank
-	// or duplicate names (only uniquely named services can be the active one), and
-	// restores the selection from the stored active-service name.
-	private void RefreshActiveServiceCombo()
-	{
-		bool previous = _suppressEvents;
-		_suppressEvents = true;
-		try
-		{
-			string? desired = _settings.SpeechToTextSettings?.ActiveSpeechToTextService;
-			CmbActiveService.Items.Clear();
-			var seen = new HashSet<string>(StringComparer.Ordinal);
-			foreach (var entry in ServiceEntries)
-			{
-				string name = entry.Name;
-				if (string.IsNullOrWhiteSpace(name)) continue;
-				if (!seen.Add(name)) continue;
-				CmbActiveService.Items.Add(name);
-			}
-			CmbActiveService.SelectedItem =
-				!string.IsNullOrWhiteSpace(desired) && CmbActiveService.Items.Contains(desired)
-					? desired
-					: null;
-		}
-		finally { _suppressEvents = previous; }
-	}
-
+	// The active service is chosen from the main window, not here. When the user
+	// renames the service that happens to be active, follow the rename so the stored
+	// reference does not dangle (PropertyChanged does not carry the previous name).
 	private void ServiceEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (e.PropertyName != nameof(SpeechServiceEntry.Name)) return;
 		if (sender is not SpeechServiceEntry entry) return;
+		if (!ReferenceEquals(entry, _activeEntry)) return;
 
-		// Keep the active-service reference pointed at the (possibly renamed) service.
-		if (ReferenceEquals(entry, _activeEntry))
-		{
-			(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).ActiveSpeechToTextService =
-				string.IsNullOrWhiteSpace(entry.Name) ? null : entry.Name;
-		}
-		RefreshActiveServiceCombo();
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).ActiveSpeechToTextService =
+			string.IsNullOrWhiteSpace(entry.Name) ? null : entry.Name;
 	}
 
 	private void BtnAddService_Click(object sender, RoutedEventArgs e)
@@ -136,7 +96,6 @@ public sealed partial class SpeechSettingsPage : UserControl
 		entry.PropertyChanged += ServiceEntry_PropertyChanged;
 		ServiceEntries.Add(entry);
 		SyncServicesArray();
-		RefreshActiveServiceCombo();
 	}
 
 	private void ServiceDelete_Click(object sender, RoutedEventArgs e)
@@ -158,7 +117,6 @@ public sealed partial class SpeechSettingsPage : UserControl
 		}
 
 		SyncServicesArray();
-		RefreshActiveServiceCombo();
 	}
 
 	// Writes the entry-backed models back as the Services array. Field edits mutate
