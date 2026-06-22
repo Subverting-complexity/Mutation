@@ -219,30 +219,37 @@ namespace CognitiveSupport
 		// and lastIndex+1 means "past the last sentence" (end-of-text). Kept side-effect
 		// free and static so the navigation rules can be unit-tested without a synthesizer.
 		//
-		//  - A press within graceWindowMs of the PREVIOUS press continues a "burst" and
-		//    steps one sentence from the last target (pendingSkipIndex), which playback
-		//    never moves — so repeated taps keep marching even if playback advances.
-		//  - The first press after a gap uses media-player semantics for backward: step
-		//    to the previous sentence only if we just entered the current one, otherwise
-		//    restart the current sentence. Forward always advances.
+		// The handling is asymmetric because playback only ever drifts FORWARD:
+		//
+		//  - Forward always steps from the LIVE playback position (navIndex + 1). It can
+		//    therefore never re-read the sentence currently playing and reliably reaches
+		//    end-of-text — even if you navigated earlier and then listened on. (A frozen
+		//    anchor would go stale here and re-read the last sentence instead of ending.)
+		//  - Backward, in a "burst" (a press within graceWindowMs of the PREVIOUS press),
+		//    steps from the last target (pendingSkipIndex), which playback never moves —
+		//    so rapid back-taps keep marching even as playback drifts forward between taps
+		//    (otherwise they'd ping-pong). Reaching before the first sentence -> -1.
+		//  - The first backward press after a gap uses media-player semantics: at the
+		//    first sentence there is nothing before it, so announce beginning-of-text;
+		//    otherwise step to the previous sentence if we only just entered the current
+		//    one, else restart the current sentence.
 		internal static int ComputeSkipTarget(
 			int direction, long now, long lastSkipTick, int pendingSkipIndex,
 			int navIndex, long sentenceEnteredAtTick, int lastIndex, int graceWindowMs)
 		{
+			if (direction >= 0)
+				return Math.Clamp(navIndex, 0, lastIndex) + 1;
+
 			bool inBurst = now - lastSkipTick < graceWindowMs;
 			if (inBurst)
-			{
-				int anchor = Math.Clamp(pendingSkipIndex, 0, lastIndex);
-				return anchor + (direction < 0 ? -1 : 1);
-			}
+				return Math.Clamp(pendingSkipIndex, 0, lastIndex) - 1;
 
 			int currentIndex = Math.Clamp(navIndex, 0, lastIndex);
-			if (direction < 0)
-			{
-				bool justEnteredSentence = now - sentenceEnteredAtTick < graceWindowMs;
-				return justEnteredSentence ? currentIndex - 1 : currentIndex;
-			}
-			return currentIndex + 1;
+			if (currentIndex == 0)
+				return -1; // already at the first sentence -> beginning of text
+
+			bool justEnteredSentence = now - sentenceEnteredAtTick < graceWindowMs;
+			return justEnteredSentence ? currentIndex - 1 : currentIndex;
 		}
 
 		public void SpeakAnnouncement(string text, int rate, int volume, string? voiceName)
