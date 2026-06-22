@@ -366,9 +366,23 @@ public partial class App : Application
 			// dialog so the user can add their API keys. Runs last so the window is
 			// fully live first — hotkeys are registered and the Closed/shutdown
 			// handler is wired before the user is parked in modal dialogs.
-			if (_window is MainWindow onboardingWindow && NeedsFirstRunSetup(settings))
+			if (_window is MainWindow onboardingWindow)
 			{
-				await onboardingWindow.ShowFirstRunOnboardingAsync();
+				if (NeedsFirstRunSetup(settings))
+				{
+					// No LLM provider key at all: full first-run onboarding already opens
+					// Settings (on the API keys tab path), so don't also raise the per-service
+					// speech warning here — it would double up the dialogs.
+					await onboardingWindow.ShowFirstRunOnboardingAsync();
+				}
+				else
+				{
+					// LLM is configured, but a speech-to-text service (e.g. Deepgram) may still
+					// be missing its key. Warn and open the API keys tab instead of crashing.
+					var missingSpeechKeys = GetSpeechServicesMissingApiKey(settings);
+					if (missingSpeechKeys.Count > 0)
+						await onboardingWindow.ShowMissingSpeechServiceKeysWarningAsync(missingSpeechKeys);
+				}
 			}
 		}
 		catch (Exception ex)
@@ -466,19 +480,66 @@ public partial class App : Application
 				switch (serviceSettings.Provider)
 				{
 					case SpeechToTextProviders.OpenAi:
-						services.Add(CreateWhisperSpeechToTextService(
-							builder, serviceSettings, ResolveServiceApiKey(settings.ApiKeys?.OpenAiApiKey, serviceSettings.ApiKey), sp));
+					{
+						// A missing key would make the OpenAI client constructor throw and crash
+						// startup. Skip the service instead; the user is warned and steered to the
+						// API keys tab (see GetSpeechServicesMissingApiKey / OnLaunched).
+						string apiKey = ResolveServiceApiKey(settings.ApiKeys?.OpenAiApiKey, serviceSettings.ApiKey);
+						if (string.IsNullOrEmpty(apiKey))
+							break;
+						services.Add(CreateWhisperSpeechToTextService(builder, serviceSettings, apiKey, sp));
 						break;
+					}
 					case SpeechToTextProviders.Deepgram:
-						services.Add(CreateDeepgramSpeechToTextService(
-							builder, serviceSettings, ResolveServiceApiKey(settings.ApiKeys?.DeepgramApiKey, serviceSettings.ApiKey)));
+					{
+						// Same rationale as OpenAI above: ClientFactory.CreateListenRESTClient throws
+						// on an empty key, which previously surfaced as a fatal startup error dialog.
+						string apiKey = ResolveServiceApiKey(settings.ApiKeys?.DeepgramApiKey, serviceSettings.ApiKey);
+						if (string.IsNullOrEmpty(apiKey))
+							break;
+						services.Add(CreateDeepgramSpeechToTextService(builder, serviceSettings, apiKey));
 						break;
+					}
 					default:
 						throw new NotSupportedException($"The SpeechToText service '{serviceSettings.Provider}' is not supported.");
 				}
 			}
 			return services.ToArray();
 		});
+	}
+
+	// Names of configured speech-to-text services that have no resolvable API key.
+	// These are skipped during service creation (so startup no longer crashes), and
+	// the names are surfaced in the missing-key warning that opens the API keys tab.
+	private static List<string> GetSpeechServicesMissingApiKey(Settings settings)
+	{
+		var missing = new List<string>();
+		var sttSettings = settings.SpeechToTextSettings?.Services ?? Array.Empty<SpeechToTextServiceSettings>();
+		foreach (var serviceSettings in sttSettings)
+		{
+			string? rootKey = serviceSettings.Provider switch
+			{
+				SpeechToTextProviders.OpenAi => settings.ApiKeys?.OpenAiApiKey,
+				SpeechToTextProviders.Deepgram => settings.ApiKeys?.DeepgramApiKey,
+				_ => null,
+			};
+
+			// Only providers that require a key participate; unknown/None providers are ignored.
+			if (serviceSettings.Provider != SpeechToTextProviders.OpenAi
+				&& serviceSettings.Provider != SpeechToTextProviders.Deepgram)
+				continue;
+
+			string apiKey = ResolveServiceApiKey(rootKey, serviceSettings.ApiKey);
+			if (string.IsNullOrEmpty(apiKey))
+			{
+				string name = string.IsNullOrWhiteSpace(serviceSettings.Name)
+					? serviceSettings.Provider.ToString()
+					: serviceSettings.Name!;
+				missing.Add(name);
+			}
+		}
+
+		return missing;
 	}
 
 	// Resolve the API key for a speech service: the per-service key is an optional
