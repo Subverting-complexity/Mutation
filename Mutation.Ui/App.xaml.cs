@@ -153,8 +153,8 @@ public partial class App : Application
 	// keys (Anthropic alone, Azure OCR) are not required to clear this.
 	private static bool NeedsFirstRunSetup(Settings settings)
 	{
-		var llm = settings.LlmSettings;
-		return !IsKeyConfigured(llm?.OpenAiApiKey) && !IsKeyConfigured(llm?.AnthropicApiKey);
+		var keys = settings.ApiKeys;
+		return !IsKeyConfigured(keys?.OpenAiApiKey) && !IsKeyConfigured(keys?.AnthropicApiKey);
 	}
 
 	private static bool IsKeyConfigured(string? value)
@@ -205,8 +205,8 @@ public partial class App : Application
 			builder.Services.AddSingleton<ILlmService>(sp =>
 			{
 				var llmSettings = settings.LlmSettings;
-				string openAiKey = llmSettings?.OpenAiApiKey ?? string.Empty;
-				string anthropicKey = llmSettings?.AnthropicApiKey ?? string.Empty;
+				string openAiKey = settings.ApiKeys?.OpenAiApiKey ?? string.Empty;
+				string anthropicKey = settings.ApiKeys?.AnthropicApiKey ?? string.Empty;
 				int timeoutSeconds = llmSettings?.TimeoutSeconds > 0 ? llmSettings.TimeoutSeconds : 60;
 				int retryCount = llmSettings?.RetryCount ?? SettingsDefaults.Llm.RetryCount;
 				if (retryCount < 0) retryCount = SettingsDefaults.Llm.RetryCount;
@@ -466,10 +466,12 @@ public partial class App : Application
 				switch (serviceSettings.Provider)
 				{
 					case SpeechToTextProviders.OpenAi:
-						services.Add(CreateWhisperSpeechToTextService(builder, serviceSettings, sp));
+						services.Add(CreateWhisperSpeechToTextService(
+							builder, serviceSettings, ResolveServiceApiKey(settings.ApiKeys?.OpenAiApiKey, serviceSettings.ApiKey), sp));
 						break;
 					case SpeechToTextProviders.Deepgram:
-						services.Add(CreateDeepgramSpeechToTextService(builder, serviceSettings));
+						services.Add(CreateDeepgramSpeechToTextService(
+							builder, serviceSettings, ResolveServiceApiKey(settings.ApiKeys?.DeepgramApiKey, serviceSettings.ApiKey)));
 						break;
 					default:
 						throw new NotSupportedException($"The SpeechToText service '{serviceSettings.Provider}' is not supported.");
@@ -479,10 +481,22 @@ public partial class App : Application
 		});
 	}
 
-	private static ISpeechToTextService CreateWhisperSpeechToTextService(HostApplicationBuilder builder, SpeechToTextServiceSettings serviceSettings, IServiceProvider sp)
+	// Resolve the API key for a speech service: the per-service key is an optional
+	// override that wins when set; otherwise the central root-level key is used.
+	// A placeholder value counts as "not set" so it never shadows a real root key.
+	private static string ResolveServiceApiKey(string? rootKey, string? overrideKey)
+	{
+		string ov = overrideKey?.Trim() ?? string.Empty;
+		if (ov.Length > 0 && ov != SettingsDefaults.PlaceholderValue)
+			return ov;
+
+		string root = rootKey?.Trim() ?? string.Empty;
+		return root == SettingsDefaults.PlaceholderValue ? string.Empty : root;
+	}
+
+	private static ISpeechToTextService CreateWhisperSpeechToTextService(HostApplicationBuilder builder, SpeechToTextServiceSettings serviceSettings, string apiKey, IServiceProvider sp)
 	{
 		string baseDomain = serviceSettings.BaseDomain?.Trim() ?? string.Empty;
-		string apiKey = serviceSettings.ApiKey ?? string.Empty;
 		string modelId = serviceSettings.ModelId ?? string.Empty;
 
 		AudioClient audioClient;
@@ -507,9 +521,9 @@ public partial class App : Application
 				  serviceSettings.TimeoutSeconds > 0 ? serviceSettings.TimeoutSeconds : 10);
 	}
 
-	private static ISpeechToTextService CreateDeepgramSpeechToTextService(HostApplicationBuilder builder, SpeechToTextServiceSettings serviceSettings)
+	private static ISpeechToTextService CreateDeepgramSpeechToTextService(HostApplicationBuilder builder, SpeechToTextServiceSettings serviceSettings, string apiKey)
 	{
-		Deepgram.Clients.Interfaces.v1.IListenRESTClient deepgramClient = ClientFactory.CreateListenRESTClient(serviceSettings.ApiKey ?? string.Empty);
+		Deepgram.Clients.Interfaces.v1.IListenRESTClient deepgramClient = ClientFactory.CreateListenRESTClient(apiKey);
 
 		return new DeepgramSpeechToTextService(
 				  serviceSettings.Name ?? string.Empty,

@@ -318,11 +318,9 @@ internal class SettingsManager : ISettingsManager
 		{
 			if (s.Provider == SpeechToTextProviders.None)
 				s.Provider = SpeechToTextProviders.OpenAi;
-			if (string.IsNullOrWhiteSpace(s.ApiKey))
-			{
-				s.ApiKey = PlaceholderValue;
-				somethingWasMissing = true;
-			}
+			// A service's ApiKey is an optional override of the root-level ApiKeys.
+			// Leave it blank by default so the central key is used unless the user
+			// explicitly supplies a per-service key here.
 			if (string.IsNullOrWhiteSpace(s.SpeechToTextPrompt))
 			{
 				s.SpeechToTextPrompt = "Hello, let's use punctuation. Names: Kobus, Piro.";
@@ -386,22 +384,34 @@ internal class SettingsManager : ISettingsManager
 		}
 
 
+		if (settings.ApiKeys is null)
+		{
+			settings.ApiKeys = new ApiKeys();
+			somethingWasMissing = true;
+		}
+		var apiKeys = settings.ApiKeys;
+		if (string.IsNullOrWhiteSpace(apiKeys.OpenAiApiKey))
+		{
+			apiKeys.OpenAiApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(apiKeys.AnthropicApiKey))
+		{
+			apiKeys.AnthropicApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+		if (string.IsNullOrWhiteSpace(apiKeys.DeepgramApiKey))
+		{
+			apiKeys.DeepgramApiKey = PlaceholderValue;
+			somethingWasMissing = true;
+		}
+
 		if (settings.LlmSettings is null)
 		{
 			settings.LlmSettings = new LlmSettings();
 			somethingWasMissing = true;
 		}
 		var llmSettings = settings.LlmSettings;
-		if (string.IsNullOrWhiteSpace(llmSettings.OpenAiApiKey))
-		{
-			llmSettings.OpenAiApiKey = PlaceholderValue;
-			somethingWasMissing = true;
-		}
-		if (string.IsNullOrWhiteSpace(llmSettings.AnthropicApiKey))
-		{
-			llmSettings.AnthropicApiKey = PlaceholderValue;
-			somethingWasMissing = true;
-		}
 
 		// Correct hand-edited invalid retry counts. A fresh LlmSettings already has
 		// RetryCount = 3 via field init, so a clean object is unchanged (parity holds).
@@ -814,6 +824,31 @@ End of summary.
 				}
 				llmSettingsJObj.Remove("ApiKey");
 				saveRequired = true;
+			}
+
+			// Move LlmSettings.OpenAiApiKey / AnthropicApiKey -> root ApiKeys section.
+			// These keys are no longer LLM-specific (e.g. the OpenAI key is also used
+			// for OpenAI/Whisper speech-to-text), so they live in a central ApiKeys
+			// object. Runs AFTER the ApiKey -> OpenAiApiKey rename above so a legacy
+			// LlmSettings.ApiKey is carried all the way to ApiKeys.OpenAiApiKey in one pass.
+			{
+				JObject apiKeys = jObj["ApiKeys"] as JObject ?? new JObject();
+				bool movedAnyKey = false;
+				foreach (string keyName in new[] { "OpenAiApiKey", "AnthropicApiKey" })
+				{
+					if (llmSettingsJObj[keyName] is JToken movedKey)
+					{
+						if (apiKeys[keyName] is null)
+							apiKeys[keyName] = movedKey;
+						llmSettingsJObj.Remove(keyName);
+						movedAnyKey = true;
+					}
+				}
+				if (movedAnyKey)
+				{
+					jObj["ApiKeys"] = apiKeys;
+					saveRequired = true;
+				}
 			}
 
 			// Move LlmSettings.TranscriptFormatRules -> root TranscriptFormatRules (rules aren't LLM-specific).

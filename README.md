@@ -72,7 +72,7 @@ Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Defin
 - Set `ModelName` on a prompt to override the default model on a per-prompt basis (must match a `Name` from `LlmSettings.Models`)
 
 **Model Configuration:**
-Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). OpenAI keys go in `OpenAiApiKey`; Anthropic keys go in `AnthropicApiKey`.
+Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). Provider API keys live in the top-level `ApiKeys` section: `OpenAiApiKey`, `AnthropicApiKey`, and `DeepgramApiKey`.
 
 ### 5. Transcript Formatting Rules  
 Apply find-and-replace rules to transcripts before or instead of LLM processing:
@@ -153,6 +153,12 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     }
   },
 
+  "ApiKeys": {
+    "OpenAiApiKey": "<your OpenAI key>",
+    "AnthropicApiKey": "<your Anthropic key>",
+    "DeepgramApiKey": "<your Deepgram key>"
+  },
+
   "AzureComputerVisionSettings": {
     "ApiKey": "<your Azure key>",
     "Endpoint": "https://<region>.api.cognitive.microsoft.com/",
@@ -181,7 +187,6 @@ All hotkeys are global and fully customisable. Below is an example covering ever
       {
         "Name": "OpenAI gpt-4o-transcribe",
         "Provider": "OpenAi",
-        "ApiKey": "<your OpenAI key>",
         "BaseDomain": "https://api.openai.com/",
         "ModelId": "gpt-4o-transcribe",
         "SpeechToTextPrompt": "Optional per-service prompt to bias transcription (e.g. domain vocabulary)."
@@ -196,7 +201,6 @@ All hotkeys are global and fully customisable. Below is an example covering ever
       {
         "Name": "Deepgram Nova3",
         "Provider": "Deepgram",
-        "ApiKey": "<your Deepgram key>",
         "BaseDomain": null,
         "ModelId": "nova-3"
       }
@@ -204,8 +208,6 @@ All hotkeys are global and fully customisable. Below is an example covering ever
   },
 
   "LlmSettings": {
-    "OpenAiApiKey": "<your OpenAI key>",
-    "AnthropicApiKey": "<your Anthropic key>",
     "Models": [
       { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null },
       { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null }
@@ -255,7 +257,8 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 ### Provisioning Speech-to-Text Providers
 
 * Follow each provider's portal to create an account and API key.
-* Paste the credentials into the relevant object under `SpeechToTextSettings → Services`.
+* Paste OpenAI/Whisper and Deepgram keys into the top-level `ApiKeys` section (`OpenAiApiKey`, `DeepgramApiKey`); they are shared with the rest of the app.
+* A service's own `ApiKey` under `SpeechToTextSettings → Services` is an optional override — set it only when that service needs a different key (for example a Groq endpoint that reuses the OpenAI provider).
 
 ## Contribute
 

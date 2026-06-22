@@ -39,7 +39,7 @@
 	<x:String x:Key="Help.Speech.Services">Define the transcription services you can choose from. Adding, removing, or editing a service definition takes effect after you restart the app; the per-service prompt and the active-service selection apply immediately.</x:String>
 	<x:String x:Key="Help.Speech.Service.Name">A label for this service, shown in the active-service list. Must be unique.</x:String>
 	<x:String x:Key="Help.Speech.Service.Provider">Which transcription backend this service talks to: OpenAI (Whisper) or Deepgram.</x:String>
-	<x:String x:Key="Help.Speech.Service.ApiKey">The secret API key used to authenticate with the provider.</x:String>
+	<x:String x:Key="Help.Speech.Service.ApiKey">Optional override of the central API key for this provider (set under API keys). Leave blank to use the central key; fill it in only to use a different key for this service.</x:String>
 	<x:String x:Key="Help.Speech.Service.BaseDomain">The provider's API base URL, for example https://api.openai.com/. Change only to target a proxy or self-hosted endpoint.</x:String>
 	<x:String x:Key="Help.Speech.Service.ModelId">The provider's model identifier, for example whisper-1.</x:String>
 	<x:String x:Key="Help.Speech.Service.Prompt">Optional priming text sent with each transcription to bias spelling of names and punctuation. Applies immediately for the active service.</x:String>
@@ -49,9 +49,12 @@
 	<x:String x:Key="Help.Audio.MicVisualization">Show a live waveform of the microphone input while recording.</x:String>
 	<x:String x:Key="Help.Audio.UseCustomBeeps">Play your own sound files instead of the built-in beeps for status cues.</x:String>
 
+	<!-- API keys -->
+	<x:String x:Key="Help.ApiKeys.OpenAi">API key used to authenticate requests to OpenAI, for both LLM models and OpenAI/Whisper speech-to-text. A speech service can override this with its own key.</x:String>
+	<x:String x:Key="Help.ApiKeys.Anthropic">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
+	<x:String x:Key="Help.ApiKeys.Deepgram">API key used to authenticate requests to Deepgram speech-to-text. A speech service can override this with its own key.</x:String>
+
 	<!-- LLM / AI assistance -->
-	<x:String x:Key="Help.Llm.OpenAiKey">API key used to authenticate requests to OpenAI models.</x:String>
-	<x:String x:Key="Help.Llm.AnthropicKey">API key used to authenticate requests to Anthropic (Claude) models.</x:String>
 	<x:String x:Key="Help.Llm.RequestTimeout">How long to wait for the language model to respond before giving up.</x:String>
 	<x:String x:Key="Help.Llm.RetryCount">How many times to retry a failed language-model request before giving up. Retries help the first request after a reboot succeed while the network warms up. Default 3.</x:String>
 	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>

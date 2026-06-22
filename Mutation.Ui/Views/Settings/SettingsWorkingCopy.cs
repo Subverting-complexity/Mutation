@@ -76,13 +76,21 @@ internal static class SettingsWorkingCopy
 			dst.SilenceGuardMilliseconds = src.SilenceGuardMilliseconds;
 		}
 
+		live.ApiKeys ??= new ApiKeys();
+		if (workingCopy.ApiKeys is not null)
+		{
+			var src = workingCopy.ApiKeys;
+			var dst = live.ApiKeys;
+			dst.OpenAiApiKey = src.OpenAiApiKey;
+			dst.AnthropicApiKey = src.AnthropicApiKey;
+			dst.DeepgramApiKey = src.DeepgramApiKey;
+		}
+
 		live.LlmSettings ??= new LlmSettings();
 		if (workingCopy.LlmSettings is not null)
 		{
 			var src = workingCopy.LlmSettings;
 			var dst = live.LlmSettings;
-			dst.OpenAiApiKey = src.OpenAiApiKey;
-			dst.AnthropicApiKey = src.AnthropicApiKey;
 			dst.Models = src.Models;
 			dst.Prompts = src.Prompts;
 			dst.TimeoutSeconds = src.TimeoutSeconds;

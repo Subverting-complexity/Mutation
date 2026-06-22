@@ -149,8 +149,10 @@ public class SettingsManagerMigrationTests : IDisposable
 	}
 
 	[Fact]
-	public void UpgradeSettings_RenamesLlmApiKeyToOpenAiApiKey()
+	public void UpgradeSettings_RenamesLegacyLlmApiKeyAndMovesToRootApiKeys()
 	{
+		// Legacy LlmSettings.ApiKey is renamed to OpenAiApiKey, then both provider keys
+		// are moved out of LlmSettings into the central root ApiKeys section.
 		string json = """
 			{
 				"LlmSettings": {
@@ -165,8 +167,39 @@ public class SettingsManagerMigrationTests : IDisposable
 		var llm = (JObject)result["LlmSettings"]!;
 
 		Assert.Null(llm["ApiKey"]);
-		Assert.Equal("sk-openai-xxx", llm["OpenAiApiKey"]?.ToString());
-		Assert.Equal("ant-yyy", llm["AnthropicApiKey"]?.ToString());
+		Assert.Null(llm["OpenAiApiKey"]);
+		Assert.Null(llm["AnthropicApiKey"]);
+
+		var apiKeys = (JObject)result["ApiKeys"]!;
+		Assert.Equal("sk-openai-xxx", apiKeys["OpenAiApiKey"]?.ToString());
+		Assert.Equal("ant-yyy", apiKeys["AnthropicApiKey"]?.ToString());
+	}
+
+	[Fact]
+	public void UpgradeSettings_DoesNotOverwriteExistingRootApiKeys()
+	{
+		// A key already present under root ApiKeys wins; the stale LlmSettings copy is
+		// dropped rather than clobbering the central one.
+		string json = """
+			{
+				"ApiKeys": { "OpenAiApiKey": "root-key" },
+				"LlmSettings": {
+					"OpenAiApiKey": "stale-llm-key",
+					"AnthropicApiKey": "ant-yyy",
+					"Prompts": []
+				}
+			}
+			""";
+
+		JObject result = UpgradeAndReload(json);
+		var llm = (JObject)result["LlmSettings"]!;
+
+		Assert.Null(llm["OpenAiApiKey"]);
+		Assert.Null(llm["AnthropicApiKey"]);
+
+		var apiKeys = (JObject)result["ApiKeys"]!;
+		Assert.Equal("root-key", apiKeys["OpenAiApiKey"]?.ToString());
+		Assert.Equal("ant-yyy", apiKeys["AnthropicApiKey"]?.ToString());
 	}
 
 	[Fact]
@@ -175,9 +208,11 @@ public class SettingsManagerMigrationTests : IDisposable
 		string json = """
 			{
 				"TextToSpeechSettings": { "SpeakClipboard": "CTRL+SHIFT+ALT+Q" },
-				"LlmSettings": {
+				"ApiKeys": {
 					"OpenAiApiKey": "sk-openai-xxx",
-					"AnthropicApiKey": "ant-yyy",
+					"AnthropicApiKey": "ant-yyy"
+				},
+				"LlmSettings": {
 					"Prompts": [
 						{ "Id": 1, "Name": "P1", "Content": "x", "ModelName": "chat-latest" }
 					]
@@ -448,7 +483,8 @@ public class SettingsManagerMigrationTests : IDisposable
 		Assert.Equal("azure-key", result["AzureComputerVisionSettings"]?["ApiKey"]?.ToString());
 		Assert.Equal("stt-key", result["SpeechToTextSettings"]?["Services"]?[0]?["ApiKey"]?.ToString());
 		Assert.Null(result["LlmSettings"]?["ApiKey"]);
-		Assert.Equal("llm-key", result["LlmSettings"]?["OpenAiApiKey"]?.ToString());
+		Assert.Null(result["LlmSettings"]?["OpenAiApiKey"]);
+		Assert.Equal("llm-key", result["ApiKeys"]?["OpenAiApiKey"]?.ToString());
 	}
 
 	// Chain test: a JSON containing every legacy key still recognised by UpgradeSettings.
@@ -532,12 +568,13 @@ public class SettingsManagerMigrationTests : IDisposable
 		Assert.Null(vision["SendKotKeyAfterOcrOperation"]);
 		Assert.Equal("CTRL+ALT+C", vision["SendHotkeyAfterOcrOperation"]?.ToString());
 
-		// LlmSettings: SelectedLlmModel dropped, ApiKey -> OpenAiApiKey,
+		// LlmSettings: SelectedLlmModel dropped, ApiKey -> OpenAiApiKey -> moved to root ApiKeys,
 		// FormatWithLlmHotKey -> ProcessWithLlmHotKey -> dropped as obsolete.
 		var llm = (JObject)result["LlmSettings"]!;
 		Assert.Null(llm["SelectedLlmModel"]);
 		Assert.Null(llm["ApiKey"]);
-		Assert.Equal("openai-key", llm["OpenAiApiKey"]?.ToString());
+		Assert.Null(llm["OpenAiApiKey"]);
+		Assert.Equal("openai-key", result["ApiKeys"]?["OpenAiApiKey"]?.ToString());
 		Assert.Null(llm["FormatWithLlmHotKey"]);
 		Assert.Null(llm["ProcessWithLlmHotKey"]);
 

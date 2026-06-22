@@ -60,7 +60,7 @@
 											  AutomationProperties.HelpText="{StaticResource Help.Speech.Service.Provider}" />
 								</StackPanel>
 
-								<controls:SecretBox Header="API key"
+								<controls:SecretBox Header="API key override (optional)"
 													HelpText="{StaticResource Help.Speech.Service.ApiKey}"
 													Secret="{x:Bind ApiKey, Mode=TwoWay}" />
 

@@ -7,6 +7,7 @@ public class Settings
 	public AudioSettings? AudioSettings { get; set; }
 	public AzureComputerVisionSettings? AzureComputerVisionSettings { get; set; }
         public SpeechToTextSettings? SpeechToTextSettings { get; set; }
+	public ApiKeys? ApiKeys { get; set; }
 	public LlmSettings? LlmSettings { get; set; }
 	public TextToSpeechSettings? TextToSpeechSettings { get; set; }
 
@@ -173,14 +174,26 @@ public class SpeechToTextServiceSettings
 	public int TimeoutSeconds { get; set; } = 10;
 }
 
+// Central store for provider API keys. These are the primary keys used across the
+// app (LLM, speech-to-text, etc.); they are not LLM-specific. A speech service's
+// per-service ApiKey acts as an optional override that takes precedence when set.
+public class ApiKeys
+{
+	public string? OpenAiApiKey { get; set; }
+	public string? AnthropicApiKey { get; set; }
+	public string? DeepgramApiKey { get; set; }
+
+	public ApiKeys()
+	{
+	}
+}
+
 public class LlmSettings
 {
 	public const string DefaultModel = "chat-latest";
 	public const string DefaultSecondaryModel = "gpt-4.1";
 	public const string DefaultAnthropicModel = "claude-sonnet-4-6";
 
-	public string? OpenAiApiKey { get; set; }
-	public string? AnthropicApiKey { get; set; }
 	public List<LlmModelConfig> Models { get; set; }
 	public List<LlmPrompt> Prompts { get; set; } = new List<LlmPrompt>();
 	public int TimeoutSeconds { get; set; } = 60;
