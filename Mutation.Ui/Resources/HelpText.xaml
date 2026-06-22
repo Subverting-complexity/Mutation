@@ -24,6 +24,7 @@
 
 	<!-- Text to Speech -->
 	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud.</x:String>
+	<x:String x:Key="Help.Tts.SkipSentenceGrace">When skipping back, how long after a sentence starts that a back-press still steps to the previous sentence. After this window a back-press restarts the current sentence instead. A larger value makes stepping back easier; a smaller value favours re-reading the current sentence.</x:String>
 
 	<!-- Speech to Text -->
 	<x:String x:Key="Help.Speech.ActiveService">The transcription engine used when you record or transcribe speech.</x:String>

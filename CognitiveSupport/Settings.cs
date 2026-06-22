@@ -243,6 +243,13 @@ public class TextToSpeechSettings
 	public bool EnableSpeechPreprocessing { get; set; } = true;
 	public string? VoiceName { get; set; }
 
+	// How long (milliseconds) after a sentence starts that a "skip backward" press
+	// counts as "still at the start" and therefore steps to the previous sentence.
+	// After this window a back-press restarts the current sentence (media-player
+	// style). A larger value makes stepping back easier; a smaller value favours
+	// re-reading the current sentence.
+	public int SkipSentenceGraceWindowMs { get; set; } = 1500;
+
 	public TextToSpeechSettings()
 	{
 	}
