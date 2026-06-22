@@ -271,6 +271,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			{
 				try
 				{
+					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
 					SetOcrText(result.Message);
 					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -283,6 +284,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			{
 				try
 				{
+					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
 					SetOcrText(result.Message);
 					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -295,6 +297,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			{
 				try
 				{
+					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
 					SetOcrText(result.Message);
 					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -307,6 +310,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			{
 				try
 				{
+					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
 					SetOcrText(result.Message);
 					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -483,6 +487,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
+			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
 			SetOcrText(result.Message);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -502,6 +507,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
+			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
 			SetOcrText(result.Message);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -521,6 +527,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
+			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
 			SetOcrText(result.Message);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -540,6 +547,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
+			if (!await EnsureOcrConfiguredAsync()) return;
 			var picker = new FileOpenPicker
 			{
 				SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
@@ -732,6 +740,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
+			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
 			SetOcrText(result.Message);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
@@ -1596,6 +1605,57 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			BtnDownloadOcrResults.IsEnabled = !string.IsNullOrWhiteSpace(safeMessage);
 		}
+	}
+
+	// Guards an OCR action: returns true when Azure OCR is configured, otherwise warns
+	// the user and opens Settings on the OCR tab, returning false so the caller skips
+	// the attempt. Mirrors the speech-to-text missing-key flow, but routes to the OCR
+	// tab because the Azure key and endpoint live there, not on the API keys tab.
+	private async Task<bool> EnsureOcrConfiguredAsync()
+	{
+		if (_ocrManager.IsOcrConfigured(out string message))
+			return true;
+
+		await ShowOcrNotConfiguredWarningAsync(message);
+		return false;
+	}
+
+	private async Task ShowOcrNotConfiguredWarningAsync(string detail)
+	{
+		const string title = "OCR Not Configured";
+		string message =
+			(string.IsNullOrWhiteSpace(detail) ? "Azure Computer Vision is not configured." : detail) +
+			"\n\nThe Settings window will now open on the Screen capture & OCR tab so you can add the " +
+			"Azure Computer Vision API key and endpoint.";
+
+		if (Content is FrameworkElement rootElement && rootElement.XamlRoot is not null)
+		{
+			var dialog = new ContentDialog
+			{
+				Title = title,
+				Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+				CloseButtonText = "Continue",
+				XamlRoot = rootElement.XamlRoot,
+				RequestedTheme = rootElement.ActualTheme
+			};
+			AutomationProperties.SetName(dialog, title);
+			AutomationProperties.SetHelpText(dialog, message);
+
+			await ShowDialogAsync(dialog);
+		}
+		else
+		{
+			System.Windows.Forms.MessageBox.Show(
+				message,
+				title,
+				System.Windows.Forms.MessageBoxButtons.OK,
+				System.Windows.Forms.MessageBoxIcon.Warning);
+		}
+
+		// Yield a dispatcher turn so the warning dialog finishes closing before the
+		// Settings dialog opens (WinUI allows only one ContentDialog at a time).
+		await YieldToDispatcherAsync();
+		await ShowSettingsDialogAsync("ocr");
 	}
 
 	private void RootContent_KeyDown(object sender, KeyRoutedEventArgs e)

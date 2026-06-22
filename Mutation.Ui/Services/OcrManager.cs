@@ -430,7 +430,10 @@ public class OcrManager
 
     private static string FormatMegabytes(long bytes) => $"{bytes / (1024.0 * 1024.0):0.#} MB";
 
-    private bool IsOcrConfigured(out string message)
+    // True when Azure Computer Vision has a real key and endpoint (neither is the
+    // placeholder default). Exposed so the UI can warn and steer the user to the OCR
+    // settings tab before attempting an operation that would otherwise just fail.
+    public bool IsOcrConfigured(out string message)
     {
         var settings = _settings.AzureComputerVisionSettings;
         if (settings is null)
