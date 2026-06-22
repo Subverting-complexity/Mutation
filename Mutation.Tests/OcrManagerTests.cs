@@ -507,6 +507,49 @@ public class OcrManagerTests
 		Assert.Contains(BeepType.Success, manager.Beeps);
 	}
 
+	[Fact]
+	public async Task ExtractTextFromFilesAsync_SkipsFile_ExceedingMaxDocumentBytes()
+	{
+		var settings = CreateValidSettings();
+		settings.AzureComputerVisionSettings!.MaxDocumentBytes = 10; // 10-byte cap
+		var clipboard = new TestClipboard();
+		var service = new StubOcrService("should not run");
+		using var file = new TempFile(".png", new string('x', 50)); // 50 bytes > cap
+		var manager = new TestableOcrManager(settings, service, clipboard);
+
+		var result = await manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None);
+
+		Assert.False(result.Success);
+		Assert.Equal(1, result.TotalCount);
+		Assert.Equal(0, result.SuccessCount);
+		Assert.Single(result.Failures);
+		Assert.Contains("maximum document size", result.Failures[0], StringComparison.OrdinalIgnoreCase);
+		Assert.Contains(Path.GetFileName(file.Path), result.Failures[0]);
+		Assert.Equal(0, service.CallCount); // OCR never invoked for the oversized file
+		Assert.Equal(0, clipboard.SetTextCalls);
+		WaitForBeep(manager, 1);
+		Assert.Contains(BeepType.Failure, manager.Beeps);
+	}
+
+	[Fact]
+	public async Task ExtractTextFromFilesAsync_ProcessesLargeFile_WhenMaxDocumentBytesIsZero()
+	{
+		var settings = CreateValidSettings();
+		settings.AzureComputerVisionSettings!.MaxDocumentBytes = 0; // 0 = no limit
+		var clipboard = new TestClipboard();
+		var service = new StubOcrService("recognized text");
+		using var file = new TempFile(".png", new string('x', 50));
+		var manager = new TestableOcrManager(settings, service, clipboard);
+
+		var result = await manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None);
+
+		Assert.True(result.Success);
+		Assert.Equal(1, result.SuccessCount);
+		Assert.Equal(1, service.CallCount);
+		WaitForBeep(manager, 1);
+		Assert.Contains(BeepType.Success, manager.Beeps);
+	}
+
 	private static string ExtractSection(string text, string header)
 	{
 		int start = text.IndexOf(header, StringComparison.Ordinal);

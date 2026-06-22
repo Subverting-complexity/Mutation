@@ -120,7 +120,10 @@ public class AzureComputerVisionSettings
 	public int FreeTierPageLimit { get; set; } = 2;
 	public int MaxParallelDocuments { get; set; } = 2;
 	public int MaxParallelRequests { get; set; } = 4;
-	public long? MaxDocumentBytes { get; set; }
+
+	// Maximum size of a single file/page sent for OCR. Files larger than this are
+	// skipped before the upload. null or <= 0 means no limit. Default 10 MB.
+	public long? MaxDocumentBytes { get; set; } = 10L * 1024 * 1024;
 
 	public AzureComputerVisionSettings()
 	{

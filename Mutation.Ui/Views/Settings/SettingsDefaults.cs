@@ -28,6 +28,8 @@ internal static class SettingsDefaults
 		public const int MaxParallelRequests = 4;
 		public const int MaxFreeTierPageLimit = 20;
 		public const int MaxParallelRequestsLimit = 20;
+		public const long MaxDocumentBytes = 10L * 1024 * 1024;
+		public const int MaxDocumentSizeMbUiMax = 500;
 	}
 
 	public static class Speech

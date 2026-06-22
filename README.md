@@ -32,7 +32,7 @@ Mutation supports two OCR reading orders via Azure **Computer Vision**:
 - `UseFreeTier` – respects Azure free tier limits by default
 - `FreeTierPageLimit` – limits pages per PDF on free tier (default: 2)
 - `MaxParallelDocuments` / `MaxParallelRequests` – concurrency controls for paid tiers
-- `MaxDocumentBytes` – caps upload size to avoid unexpectedly large files
+- `MaxDocumentBytes` – caps the size of a file/page sent for OCR; larger files are skipped before upload (default: 10 MB; 0 = no limit)
 
 ### 3. Speech to Text Conversion  
 Press one hotkey to start recording, press it again to stop and send the audio for transcription. Supported providers:
@@ -104,13 +104,32 @@ Replace the default system beeps with custom audio files for different actions:
 - `BeepMuteFile` / `BeepUnmuteFile` – for microphone state changes
 
 ### 8. Text-to-Speech
-Press a hotkey to speak the current clipboard text aloud through your default audio output.
+Mutation can read text aloud — either whatever is on your clipboard or text you've selected in another app — through your default audio output. All hotkeys are global, so they work no matter which app is in front; you don't need to switch back to Mutation first. Once you know the handful of shortcuts below you can drive it like a media player: play, pause, skip ahead, jump back.
 
-**Hotkey:**
+**Starting to read:**
 
-| Hotkey | Description |
-|--------|-------------|
-| `SpeakClipboard` | Speak the clipboard text aloud. |
+| Hotkey | Default | Description |
+|--------|---------|-------------|
+| `SpeakClipboard` | `Ctrl+Shift+Alt+Q` | Copy text anywhere, then press this to read your clipboard aloud. |
+| `SpeakSelectionHotKey` | `Ctrl+Shift+Q` | Highlight text in any app and press this — Mutation reads the selection without you having to copy first. |
+
+If your clipboard is empty or holds something that can't be read (such as an image), Mutation announces that out loud rather than staying silent. For very long text (over ~5,000 characters) it first announces roughly how many minutes the reading will take.
+
+**Pause and resume:** The `SpeakClipboard` hotkey doubles as pause/resume. Press it while reading to **pause**; press it again to **resume**, backing up a few words first for context (5 words by default, configurable). If you copied new text while paused, pressing it reads the new clipboard instead of resuming.
+
+**Moving around the text** (sentence by sentence, like a media player's skip buttons):
+
+| Hotkey | Default | Description |
+|--------|---------|-------------|
+| `SkipSentenceForwardHotKey` | `Ctrl+Shift+K` | Skip forward one sentence. Past the last sentence, announces "End of text." |
+| `SkipSentenceBackwardHotKey` | `Ctrl+Shift+J` | Skip back one sentence. Just landed on a sentence? Back jumps to the previous one; settled in for a moment? Back restarts the current sentence. Before the first sentence, announces "Beginning of text." |
+| `RestartFromBeginningHotKey` | `Ctrl+Shift+B` | Restart from the very beginning of the text. |
+
+**Voice, rate, and volume:** The main window's **Voice & Speech** card lets you pick any voice installed on Windows (a short sample plays when you choose one), set the reading **Rate** from `-10` (slow) to `+10` (fast, default `8`), and set the **Volume** from 0–100%. To add more voices, install them through Windows' own speech settings and they'll appear in the dropdown.
+
+**Tidier reading:** By default Mutation cleans text up before speaking so it sounds natural — skipping markdown clutter (`#`, `**bold**`, backticks, bullets), turning long links into "link to [site]," and expanding shorthand ("e.g." → "for example," "i.e." → "that is," "etc." → "et cetera," "vs." → "versus"). You can turn this off to hear text exactly as written.
+
+**Customising it all:** Open **Settings** with `Ctrl+,`. The **Hotkeys** tab lets you rebind every shortcut above. The **Text to Speech** tab lets you toggle speech preprocessing, set how many words to rewind on resume (`0`–`20`, default `5`), and adjust the skip-back grace window (`250`–`5000` ms, default `1500`) that decides whether a back-press goes to the previous sentence or restarts the current one. Voice, rate, and volume live on the main window and are saved automatically.
 
 ## Getting Started
 Install the .NET 10 runtime (or newer) and run **Mutation.exe**. On first launch, the app creates *Mutation.json* with sensible defaults, then shows a welcome message and automatically opens the in-app **Settings** dialog so you can add your API keys (OpenAI for dictation + LLM; Anthropic and Azure Computer Vision are optional). You can reopen Settings anytime with `Ctrl+,`.
@@ -148,7 +167,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "FreeTierPageLimit": 2,
     "MaxParallelDocuments": 2,
     "MaxParallelRequests": 4,
-    "MaxDocumentBytes": null
+    "MaxDocumentBytes": 10485760
   },
 
   "SpeechToTextSettings": {

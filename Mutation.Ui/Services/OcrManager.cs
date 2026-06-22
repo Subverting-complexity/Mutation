@@ -184,6 +184,15 @@ public class OcrManager
 					}
 
 					using var stream = await item.OpenStreamAsync();
+
+					long maxDocumentBytes = GetMaxDocumentBytes();
+					if (maxDocumentBytes > 0 && stream.CanSeek && stream.Length > maxDocumentBytes)
+					{
+						fileHasFailure = true;
+						failures.Add($"{batch.FileName} (Page {item.PageNumber}): {FormatMegabytes(stream.Length)} exceeds the {FormatMegabytes(maxDocumentBytes)} maximum document size.");
+						continue;
+					}
+
 					string text = await _ocrService.ExtractText(order, stream, cancellationToken);
 					string sanitizedText = string.IsNullOrWhiteSpace(text) ? string.Empty : text.TrimEnd();
 					pageResults.Add((item.PageNumber, sanitizedText));
@@ -272,6 +281,16 @@ public class OcrManager
             return new(false, ex.Message);
         }
     }
+
+    // Configured maximum bytes for a single OCR upload, or 0 when no limit applies
+    // (null or a non-positive stored value).
+    private long GetMaxDocumentBytes()
+    {
+        long? configured = _settings.AzureComputerVisionSettings?.MaxDocumentBytes;
+        return configured is > 0 ? configured.Value : 0;
+    }
+
+    private static string FormatMegabytes(long bytes) => $"{bytes / (1024.0 * 1024.0):0.#} MB";
 
     private bool IsOcrConfigured(out string message)
     {

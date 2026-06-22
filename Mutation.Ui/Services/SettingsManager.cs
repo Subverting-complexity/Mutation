@@ -150,6 +150,14 @@ internal class SettingsManager : ISettingsManager
                         somethingWasMissing = true;
                 }
 
+                // null = never configured -> apply the 10 MB default. A stored 0 (or
+                // negative) is left as-is and means "no limit".
+                if (azureComputerVisionSettings.MaxDocumentBytes is null)
+                {
+                        azureComputerVisionSettings.MaxDocumentBytes = 10L * 1024 * 1024;
+                        somethingWasMissing = true;
+                }
+
 
 		if (settings.AudioSettings is null)
 		{

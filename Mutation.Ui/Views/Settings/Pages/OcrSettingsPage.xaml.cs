@@ -6,6 +6,8 @@ namespace Mutation.Ui.Views.SettingsUi.Pages;
 
 public sealed partial class OcrSettingsPage : UserControl
 {
+	private const double BytesPerMb = 1024.0 * 1024.0;
+
 	private readonly Settings _settings;
 	private bool _suppressEvents;
 
@@ -40,6 +42,9 @@ public sealed partial class OcrSettingsPage : UserControl
 			NbFreeTierPageLimit.Value = ocr.FreeTierPageLimit > 0 ? ocr.FreeTierPageLimit : SettingsDefaults.Ocr.FreeTierPageLimit;
 			NbMaxParallelDocuments.Value = ocr.MaxParallelDocuments > 0 ? ocr.MaxParallelDocuments : SettingsDefaults.Ocr.MaxParallelDocuments;
 			NbMaxParallelRequests.Value = ocr.MaxParallelRequests > 0 ? ocr.MaxParallelRequests : SettingsDefaults.Ocr.MaxParallelRequests;
+			NbMaxDocumentSizeMb.Value = ocr.MaxDocumentBytes is > 0
+				? System.Math.Round(ocr.MaxDocumentBytes.Value / BytesPerMb, 1)
+				: 0;
 			ToggleUseFreeTier.IsOn = ocr.UseFreeTier;
 			ToggleInvert.IsOn = ocr.InvertScreenshot;
 			HkSendAfterOcr.Hotkey = ocr.SendHotkeyAfterOcrOperation ?? string.Empty;
@@ -64,6 +69,15 @@ public sealed partial class OcrSettingsPage : UserControl
 
 	private void NbMaxParallelRequests_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
 		WriteInt(args.NewValue, v => (_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).MaxParallelRequests = v);
+
+	private void NbMaxDocumentSizeMb_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		// 0 (or less) stores 0 = "no limit"; otherwise convert MB -> bytes.
+		long bytes = args.NewValue <= 0 ? 0 : (long)System.Math.Round(args.NewValue * BytesPerMb);
+		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).MaxDocumentBytes = bytes;
+	}
 
 	private void ToggleUseFreeTier_Toggled(object sender, RoutedEventArgs e)
 	{
@@ -92,4 +106,6 @@ public sealed partial class OcrSettingsPage : UserControl
 		NbMaxParallelDocuments.Value = SettingsDefaults.Ocr.MaxParallelDocuments;
 	private void BtnResetMaxReqs_Click(object sender, RoutedEventArgs e) =>
 		NbMaxParallelRequests.Value = SettingsDefaults.Ocr.MaxParallelRequests;
+	private void BtnResetMaxDocSize_Click(object sender, RoutedEventArgs e) =>
+		NbMaxDocumentSizeMb.Value = SettingsDefaults.Ocr.MaxDocumentBytes / BytesPerMb;
 }

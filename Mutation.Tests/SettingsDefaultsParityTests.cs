@@ -59,6 +59,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Ocr.FreeTierPageLimit, ocr.FreeTierPageLimit);
 		Assert.Equal(SettingsDefaults.Ocr.MaxParallelDocuments, ocr.MaxParallelDocuments);
 		Assert.Equal(SettingsDefaults.Ocr.MaxParallelRequests, ocr.MaxParallelRequests);
+		Assert.Equal(SettingsDefaults.Ocr.MaxDocumentBytes, ocr.MaxDocumentBytes!.Value);
 	}
 
 	[Fact]
