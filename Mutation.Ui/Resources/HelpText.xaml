@@ -37,6 +37,14 @@
 	<x:String x:Key="Help.Speech.SilenceThreshold">Loudness floor in dBFS. Audio at or below this level counts as silence. Lower (more negative) values are stricter, treating only quieter sounds as silence. Default -40.</x:String>
 	<x:String x:Key="Help.Speech.MinSilence">Shortest silence to keep, in seconds. Pauses shorter than this are left untouched; longer pauses are trimmed down to this length. Default 1.0.</x:String>
 	<x:String x:Key="Help.Speech.SilenceGuard">Audio kept on each side of speech, in milliseconds, so soft word starts, breaths, and word endings are not clipped. Default 200.</x:String>
+	<x:String x:Key="Help.Speech.Services">Define the transcription services you can choose from. Adding, removing, or editing a service definition takes effect after you restart the app; the per-service prompt and the active-service selection apply immediately.</x:String>
+	<x:String x:Key="Help.Speech.Service.Name">A label for this service, shown in the active-service list. Must be unique.</x:String>
+	<x:String x:Key="Help.Speech.Service.Provider">Which transcription backend this service talks to: OpenAI (Whisper) or Deepgram.</x:String>
+	<x:String x:Key="Help.Speech.Service.ApiKey">The secret API key used to authenticate with the provider.</x:String>
+	<x:String x:Key="Help.Speech.Service.BaseDomain">The provider's API base URL, for example https://api.openai.com/. Change only to target a proxy or self-hosted endpoint.</x:String>
+	<x:String x:Key="Help.Speech.Service.ModelId">The provider's model identifier, for example whisper-1.</x:String>
+	<x:String x:Key="Help.Speech.Service.Prompt">Optional priming text sent with each transcription to bias spelling of names and punctuation. Applies immediately for the active service.</x:String>
+	<x:String x:Key="Help.Speech.Service.Timeout">Per-attempt timeout in seconds for a transcription request to this service before it is retried or aborted.</x:String>
 
 	<!-- Audio -->
 	<x:String x:Key="Help.Audio.MicVisualization">Show a live waveform of the microphone input while recording.</x:String>
