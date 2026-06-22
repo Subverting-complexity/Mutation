@@ -94,3 +94,13 @@ logs/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+
+# github-workflow plugin scratch files
+.claude/plan.md
+
+# graphify — generated artifacts (rebuild via `graphify update .`, ~10s, 0 tokens)
+graphify-out/graph.json
+graphify-out/graph.html
+graphify-out/cost.json
+graphify-out/.graphify_python
+graphify-out/.graphify_root
