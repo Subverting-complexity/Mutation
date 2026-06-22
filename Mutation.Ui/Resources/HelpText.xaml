@@ -25,6 +25,7 @@
 	<!-- Text to Speech -->
 	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud.</x:String>
 	<x:String x:Key="Help.Tts.SkipSentenceGrace">When skipping back, how long after a sentence starts that a back-press still steps to the previous sentence. After this window a back-press restarts the current sentence instead. A larger value makes stepping back easier; a smaller value favours re-reading the current sentence.</x:String>
+	<x:String x:Key="Help.Tts.ResumeRewindWords">When you resume reading after pausing, rewind this many words before where it stopped so you regain context of where you are. Set to 0 for no rewind: reading resumes from exactly where it stopped.</x:String>
 
 	<!-- Speech to Text -->
 	<x:String x:Key="Help.Speech.ActiveService">The transcription engine used when you record or transcribe speech.</x:String>

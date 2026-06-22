@@ -250,6 +250,11 @@ public class TextToSpeechSettings
 	// re-reading the current sentence.
 	public int SkipSentenceGraceWindowMs { get; set; } = 1500;
 
+	// When resuming playback (pressing the speak hotkey again after a pause), rewind
+	// this many words before where playback stopped so the listener regains context
+	// of where they are. 0 resumes exactly where it stopped (no rewind).
+	public int ResumeRewindWordCount { get; set; } = 5;
+
 	public TextToSpeechSettings()
 	{
 	}

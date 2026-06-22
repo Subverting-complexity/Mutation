@@ -823,7 +823,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (kind == ClipboardKind.Text && trimmed.Length > 0)
 		{
 			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
-				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing);
+				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing,
+				resumeRewindWordCount: tts.ResumeRewindWordCount);
 			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 			return;
 		}

@@ -107,6 +107,7 @@ internal static class SettingsWorkingCopy
 			dst.EnableSpeechPreprocessing = src.EnableSpeechPreprocessing;
 			dst.VoiceName = src.VoiceName;
 			dst.SkipSentenceGraceWindowMs = src.SkipSentenceGraceWindowMs;
+			dst.ResumeRewindWordCount = src.ResumeRewindWordCount;
 		}
 
 		live.MainWindowUiSettings ??= new MainWindowUiSettings();

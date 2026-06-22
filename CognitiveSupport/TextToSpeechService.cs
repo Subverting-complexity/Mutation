@@ -74,7 +74,7 @@ namespace CognitiveSupport
 			}
 		}
 
-		public void Speak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess)
+		public void Speak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount = 0)
 		{
 			if (string.IsNullOrEmpty(text)) return;
 
@@ -93,10 +93,10 @@ namespace CognitiveSupport
 			oldCts?.Dispose();
 
 			CancellationToken token = newCts.Token;
-			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, token));
+			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, resumeRewindWordCount, token));
 		}
 
-		private void RunSpeak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, CancellationToken token)
+		private void RunSpeak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount, CancellationToken token)
 		{
 			if (token.IsCancellationRequested) return;
 
@@ -120,10 +120,14 @@ namespace CognitiveSupport
 				if (canResume)
 				{
 					_lastInputText = text;
-					_spokenToCurrentDelta = _currentPosition;
-					EnterSentence(FindSentenceIndex(_currentPosition));
+					// Rewind a few words before the stop point so the listener regains
+					// context of where they are, then resume from there.
+					int resumePos = RewindByWords(processed, _currentPosition, resumeRewindWordCount);
+					_currentPosition = resumePos;
+					_spokenToCurrentDelta = resumePos;
+					EnterSentence(FindSentenceIndex(resumePos));
 					ResetSkipBurst();
-					_currentPrompt = _synth.SpeakAsync(processed.Substring(_currentPosition));
+					_currentPrompt = _synth.SpeakAsync(processed.Substring(resumePos));
 				}
 				else
 				{
@@ -361,6 +365,22 @@ namespace CognitiveSupport
 					_navIndex = _sentenceStarts is { Count: > 0 } ? _sentenceStarts.Count - 1 : 0;
 				}
 			}
+		}
+
+		// Move `position` backward past `wordCount` whitespace-delimited words so a
+		// resumed read re-speaks a little prior context. Clamped to the start of the
+		// text. Kept side-effect free and static so it can be unit-tested. If `position`
+		// falls mid-word, that partial word counts as the first word stepped over.
+		internal static int RewindByWords(string text, int position, int wordCount)
+		{
+			if (wordCount <= 0) return position;
+			int i = Math.Clamp(position, 0, text.Length);
+			for (int w = 0; w < wordCount && i > 0; w++)
+			{
+				while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
+				while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+			}
+			return i;
 		}
 
 		private int FindSentenceIndex(int position)

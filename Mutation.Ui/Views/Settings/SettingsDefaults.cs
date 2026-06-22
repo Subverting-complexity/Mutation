@@ -60,6 +60,9 @@ internal static class SettingsDefaults
 		public const int SkipSentenceGraceWindowMs = 1500;
 		public const int MinSkipSentenceGraceWindowMs = 250;
 		public const int MaxSkipSentenceGraceWindowMs = 5000;
+		public const int ResumeRewindWordCount = 5;
+		public const int MinResumeRewindWordCount = 0;
+		public const int MaxResumeRewindWordCount = 20;
 	}
 
 	public static class Llm
