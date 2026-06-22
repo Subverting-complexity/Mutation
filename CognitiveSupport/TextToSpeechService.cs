@@ -175,9 +175,16 @@ namespace CognitiveSupport
 
 				if (desiredIndex < 0)
 				{
+					// Reached before the first sentence: announce the boundary, then keep
+					// reading from the start rather than stopping. The announcement is
+					// prepended to the text (like the length warning in RunSpeak) and the
+					// spoken->current delta offsets it so progress maps back onto sentence 0.
 					_pendingSkipIndex = 0;
-					_speakingAnnouncement = true;
-					_currentPrompt = _synth!.SpeakAsync(BeginningOfTextAnnouncement);
+					EnterSentence(0);
+					_currentPosition = 0;
+					string announcement = BeginningOfTextAnnouncement + " ";
+					_spokenToCurrentDelta = -announcement.Length;
+					_currentPrompt = _synth!.SpeakAsync(announcement + _currentText);
 				}
 				else if (desiredIndex > lastIndex)
 				{
