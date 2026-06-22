@@ -49,6 +49,10 @@
 	<x:String x:Key="Help.Llm.RetryCount">How many times to retry a failed language-model request before giving up. Retries help the first request after a reboot succeed while the network warms up. Default 3.</x:String>
 	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>
 
+	<!-- Transcript formatting -->
+	<x:String x:Key="Help.Transcript.MatchType">How the Find text is interpreted. Plain replaces the literal text wherever it appears. RegEx treats Find as a regular-expression pattern (and Replace with as its substitution). Smart matches the word with surrounding spaces and punctuation tidied up, useful for replacing a spoken word or phrase cleanly.</x:String>
+	<x:String x:Key="Help.Transcript.CaseSensitive">When on, upper- and lower-case must match exactly. When off, case is ignored.</x:String>
+
 	<!-- Hotkeys -->
 	<x:String x:Key="Help.Hotkeys.Router">Map one shortcut to another so a single key press can trigger a more complex shortcut. Changes apply when you save settings.</x:String>
 

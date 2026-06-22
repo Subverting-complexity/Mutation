@@ -92,6 +92,8 @@ public sealed partial class SettingsDialog : ContentDialog
 			new[] { "llm", "openai", "anthropic", "claude", "api key", "prompts", "models" }));
 		_allCategories.Add(new SettingsCategoryItem("tts", "Text to Speech", "Voice playback and narration.", "",
 			new[] { "tts", "text to speech", "voice", "rate", "volume", "preprocessing" }));
+		_allCategories.Add(new SettingsCategoryItem("transcript", "Transcript formatting", "Find-and-replace rules applied by the Format button.", "",
+			new[] { "transcript", "format", "find", "replace", "regex", "rule", "rules", "smart" }));
 		_allCategories.Add(new SettingsCategoryItem("ui", "Interface", "Window layout and dictation insert behavior.", "",
 			new[] { "ui", "interface", "max line", "dictation", "paste", "type" }));
 		_allCategories.Add(new SettingsCategoryItem("hotkeys", "Hotkeys", "All keyboard shortcuts in one place.", "",
@@ -138,6 +140,7 @@ public sealed partial class SettingsDialog : ContentDialog
 			"speech" => new SpeechSettingsPage(_workingCopy),
 			"llm" => new LlmSettingsPage(_workingCopy),
 			"tts" => new TtsSettingsPage(_workingCopy),
+			"transcript" => new TranscriptFormattingSettingsPage(_workingCopy),
 			"ui" => new InterfaceSettingsPage(_workingCopy),
 			"hotkeys" => new HotkeysSettingsPage(_workingCopy),
 			_ => null,
