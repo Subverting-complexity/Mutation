@@ -57,8 +57,9 @@ namespace CognitiveSupport
 		private int _liveVolume;
 		private string? _liveVoice;
 
-		// Highest progress threshold already announced for the current read (0 = none).
-		private int _lastAnnouncedProgressPercent;
+		// Deferral state for periodic progress announcements: which thresholds have been
+		// passed and which (if any) is waiting to be spoken at the next sentence boundary.
+		private ProgressDeferral _progress;
 		// Set while a progress announcement is being scheduled/spoken so the flood of
 		// SpeakProgress events does not stack up duplicate announcements.
 		private bool _progressInterjectionInFlight;
@@ -157,8 +158,9 @@ namespace CognitiveSupport
 					EnterSentence(FindSentenceIndex(resumePos));
 					ResetSkipBurst();
 					// Keep already-passed progress thresholds marked so resuming mid-read
-					// does not re-announce them.
-					_lastAnnouncedProgressPercent = ProgressPercentAt(resumePos, processed.Length);
+					// does not re-announce them, and clear any pending announcement.
+					_progress.Reset();
+					_progress.LastAnnouncedPercent = ProgressPercentAt(resumePos, processed.Length);
 					_currentPrompt = _synth.SpeakAsync(processed.Substring(resumePos));
 				}
 				else
@@ -169,7 +171,7 @@ namespace CognitiveSupport
 					_sentenceStarts = FindSentenceStarts(processed);
 					EnterSentence(0);
 					ResetSkipBurst();
-					_lastAnnouncedProgressPercent = 0;
+					_progress.Reset();
 
 					string warning = ShouldAnnounceLength(processed)
 						? BuildLengthAnnouncement(processed)
@@ -207,6 +209,10 @@ namespace CognitiveSupport
 				_playbackEpoch++;
 				_progressInterjectionInFlight = false;
 
+				// A skip is a fresh navigation: drop any announcement that was waiting for a
+				// boundary, since its percentage no longer matches the new position.
+				_progress.PendingPercent = 0;
+
 				int lastIndex = _sentenceStarts.Count - 1;
 				long now = Environment.TickCount64;
 				int desiredIndex = ComputeSkipTarget(
@@ -224,7 +230,7 @@ namespace CognitiveSupport
 					_pendingSkipIndex = 0;
 					EnterSentence(0);
 					_currentPosition = 0;
-					_lastAnnouncedProgressPercent = 0;
+					_progress.Reset();
 					string announcement = BeginningOfTextAnnouncement + " ";
 					_spokenToCurrentDelta = -announcement.Length;
 					_currentPrompt = _synth!.SpeakAsync(announcement + _currentText);
@@ -366,6 +372,7 @@ namespace CognitiveSupport
 				_opCts = null;
 				_playbackEpoch++;
 				_progressInterjectionInFlight = false;
+				_progress.PendingPercent = 0;
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
 				_speakingAnnouncement = false;
@@ -418,16 +425,25 @@ namespace CognitiveSupport
 				// after the reader has crossed into a new sentence acts from there.
 				// Re-entering a sentence also restarts the back-skip grace window.
 				int sentenceIndex = FindSentenceIndex(mapped);
-				if (sentenceIndex != _navIndex)
+				bool sentenceAdvanced = sentenceIndex != _navIndex;
+				if (sentenceAdvanced)
 					EnterSentence(sentenceIndex);
+
+				// A progress announcement crossed mid-sentence is held until the sentence
+				// finishes, so it lands cleanly between sentences instead of cutting the
+				// current one off. A new sentence has just begun — flush it now.
+				if (sentenceAdvanced)
+					FlushPendingProgressAtBoundary();
 
 				MaybeAnnounceProgress();
 			}
 		}
 
-		// Decide, on each progress tick, whether the read has crossed a new percentage
-		// threshold worth announcing. Cheap by design: a couple of integer comparisons in
-		// the common case. The actual speak is deferred off the synth's event thread.
+		// Record, on each progress tick, whether the read has crossed a new percentage
+		// threshold. Cheap by design: a couple of integer comparisons in the common case.
+		// Crossing a threshold only marks it pending; the announcement itself is spoken at
+		// the next sentence boundary (see FlushPendingProgressAtBoundary) so it never cuts
+		// the current sentence off mid-way.
 		private void MaybeAnnounceProgress()
 		{
 			if (!_announceProgressEnabled || _speakingAnnouncement || _progressInterjectionInFlight)
@@ -438,18 +454,39 @@ namespace CognitiveSupport
 				return;
 
 			int percent = ProgressPercentAt(_currentPosition, _currentText.Length);
-			int crossed = ReadingProgress.HighestThresholdCrossed(
-				_lastAnnouncedProgressPercent, percent, _announceProgressEveryPercent);
-			if (crossed <= 0)
+			// Hold the highest crossed threshold pending. Multiple thresholds crossed before
+			// the next boundary collapse to a single announcement of the highest.
+			_progress.Observe(percent, _announceProgressEveryPercent);
+		}
+
+		// Flush a pending progress announcement now that playback has reached a sentence
+		// boundary. Minutes-remaining is recomputed here so the spoken estimate reflects the
+		// boundary position rather than the earlier crossing point.
+		private void FlushPendingProgressAtBoundary()
+		{
+			if (!_announceProgressEnabled || _speakingAnnouncement || _progressInterjectionInFlight)
+				return;
+			if (_currentText is null)
 				return;
 
-			// Mark every threshold up to the highest crossed as announced so a single big
-			// jump never queues a burst of lower announcements.
-			_lastAnnouncedProgressPercent = crossed;
-			_progressInterjectionInFlight = true;
+			int percent = _progress.TakeAtBoundary();
+			if (percent <= 0)
+				return;
 
+			SchedulePendingAnnouncement(percent);
+		}
+
+		// Schedule the deferred speak off the synth's event thread. Reuses the cancel +
+		// re-speak interjection path; because it now runs at a sentence start, no sentence
+		// is cut mid-way.
+		private void SchedulePendingAnnouncement(int percent)
+		{
+			if (_currentText is null)
+				return;
+
+			_progressInterjectionInFlight = true;
 			int minutesRemaining = ReadingEstimate.RemainingWholeMinutes(_currentText.Length - _currentPosition);
-			string text = ReadingAnnouncements.Progress(crossed, minutesRemaining);
+			string text = ReadingAnnouncements.Progress(percent, minutesRemaining);
 			long epoch = _playbackEpoch;
 			Task.Run(() => SpeakProgressInterjection(text, epoch));
 		}
@@ -514,6 +551,16 @@ namespace CognitiveSupport
 				{
 					_currentPosition = _currentText.Length;
 					_navIndex = _sentenceStarts is { Count: > 0 } ? _sentenceStarts.Count - 1 : 0;
+
+					// A threshold crossed during the final sentence has no following boundary
+					// to flush at. The read has reached 100%, which is never announced as
+					// progress, so the pending announcement is dropped here (end of text
+					// speaks for itself). The guard keeps it correct if a completion ever
+					// lands below 100%.
+					int finalPercent = ProgressPercentAt(_currentPosition, _currentText.Length);
+					int pending = _progress.TakeOnCompletion(finalPercent);
+					if (pending > 0)
+						SchedulePendingAnnouncement(pending);
 				}
 			}
 		}
