@@ -849,6 +849,18 @@
                                             ToolTipService.ToolTip="Jump to the next sentence">
                                             <FontIcon Glyph="&#xE893;" FontFamily="Segoe Fluent Icons" />
                                         </Button>
+
+                                        <Button
+                                            x:Name="BtnSpeakToFile"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSpeakToFile_Click"
+                                            AutomationProperties.Name="Speak to file"
+                                            ToolTipService.ToolTip="Save the clipboard text as a spoken WAV audio file">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE105;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Speak to file" />
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
