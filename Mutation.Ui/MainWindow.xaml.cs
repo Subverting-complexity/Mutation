@@ -356,6 +356,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakToFileHotKey))
 			TryRegister(hk, tts.SpeakToFileHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSpeakToFile_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakPositionHotKey))
+			TryRegister(hk, tts.SpeakPositionHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSpeakPosition_Click(null!, null!)));
 	}
 
 	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
@@ -432,6 +436,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");
 		ConfigureButtonHotkey(BtnSpeakSelection, null, _settings.TextToSpeechSettings?.SpeakSelectionHotKey, "Copy the current selection from the active app and read it aloud");
 		ConfigureButtonHotkey(BtnSpeakToFile, null, _settings.TextToSpeechSettings?.SpeakToFileHotKey, "Save the clipboard text as a spoken WAV audio file");
+		ConfigureButtonHotkey(BtnSpeakPosition, null, _settings.TextToSpeechSettings?.SpeakPositionHotKey, "Speak the current reading position: sentence, percentage, and time remaining");
 		ConfigureButtonHotkey(BtnProcessLlm, null, null, "Send transcript through the configured language model");
 	}
 
@@ -866,6 +871,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
 	}
 
+	public void BtnSpeakPosition_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		ReadingPosition position = _textToSpeech.GetReadingPosition();
+		string announcement = ReadingAnnouncements.Position(position);
+		_textToSpeech.SpeakAnnouncement(announcement, tts.Rate, tts.Volume, tts.VoiceName);
+		ShowStatus("Text to Speech", announcement, InfoBarSeverity.Informational);
+	}
+
 	public async void BtnSpeakToFile_Click(object? sender, RoutedEventArgs? e)
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
@@ -1031,7 +1045,57 @@ public sealed partial class MainWindow : Window, IDisposable
 		else if (volume > 100) volume = 100;
 		SldTtsVolume.Value = volume;
 
+		ToggleAnnounceReadingTime.IsOn = settings.AnnounceReadingTimeAtStart;
+		ToggleAnnounceProgress.IsOn = settings.AnnounceProgressEnabled;
+
 		_ttsControlsReady = true;
+		PushTtsAnnouncementOptions();
+	}
+
+	// Mirror the on-screen toggle states from the current settings. Called after the
+	// settings dialog closes so a change made there shows on the main window too.
+	private void RefreshTtsAnnouncementToggles()
+	{
+		var settings = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		bool wasReady = _ttsControlsReady;
+		_ttsControlsReady = false;
+		try
+		{
+			ToggleAnnounceReadingTime.IsOn = settings.AnnounceReadingTimeAtStart;
+			ToggleAnnounceProgress.IsOn = settings.AnnounceProgressEnabled;
+		}
+		finally { _ttsControlsReady = wasReady; }
+	}
+
+	// Push the configurable announcement settings into the speech service so the next
+	// read picks them up.
+	private void PushTtsAnnouncementOptions()
+	{
+		var settings = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		_textToSpeech.SetAnnouncementOptions(
+			settings.AnnounceReadingTimeAtStart,
+			settings.AnnounceReadingTimeMinimumMinutes,
+			settings.AnnounceProgressEnabled,
+			settings.AnnounceProgressEveryPercent,
+			settings.AnnounceProgressMinimumMinutes);
+	}
+
+	private void ToggleAnnounceReadingTime_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		_settings.TextToSpeechSettings.AnnounceReadingTimeAtStart = ToggleAnnounceReadingTime.IsOn;
+		_settingsManager.SaveSettingsToFile(_settings);
+		PushTtsAnnouncementOptions();
+	}
+
+	private void ToggleAnnounceProgress_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (!_ttsControlsReady) return;
+		_settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		_settings.TextToSpeechSettings.AnnounceProgressEnabled = ToggleAnnounceProgress.IsOn;
+		_settingsManager.SaveSettingsToFile(_settings);
+		PushTtsAnnouncementOptions();
 	}
 
 	private void CmbTtsVoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1769,6 +1833,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (beeps) failed: {ex.Message}");
+		}
+
+		try
+		{
+			RefreshTtsAnnouncementToggles();
+			PushTtsAnnouncementOptions();
+			InitializeHotkeyVisuals();
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (tts) failed: {ex.Message}");
 		}
 
 		IReadOnlyList<HotkeyManager.HotkeyRegistrationResult>? routerResults = null;

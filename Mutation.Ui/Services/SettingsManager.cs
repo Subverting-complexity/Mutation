@@ -649,6 +649,11 @@ End of summary.
 			textToSpeechSettings.SkipSentenceForwardHotKey = "CTRL+SHIFT+K";
 			somethingWasMissing = true;
 		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.SpeakPositionHotKey))
+		{
+			textToSpeechSettings.SpeakPositionHotKey = "CTRL+SHIFT+P";
+			somethingWasMissing = true;
+		}
 
 		// Only inject a sample router mapping on FIRST creation of the settings file.
 		// Previously we also injected when the list was empty, which could overwrite ("wipe")

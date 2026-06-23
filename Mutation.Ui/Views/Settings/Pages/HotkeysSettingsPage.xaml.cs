@@ -116,6 +116,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			s => s.TextToSpeechSettings?.SkipSentenceForwardHotKey,
 			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SkipSentenceForwardHotKey = v,
 			false, SettingsDefaults.Tts.SkipSentenceForwardHotKey),
+		new HotkeySpec("Speak reading position",
+			s => s.TextToSpeechSettings?.SpeakPositionHotKey,
+			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakPositionHotKey = v,
+			false, SettingsDefaults.Tts.SpeakPositionHotKey),
 	};
 
 	private void BuildRows()

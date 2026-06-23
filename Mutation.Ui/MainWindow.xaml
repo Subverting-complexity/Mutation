@@ -791,6 +791,25 @@
                                         ToolTipService.ToolTip="Adjust speech volume independent of system volume" />
                                 </StackPanel>
 
+                                <StackPanel Spacing="8">
+                                    <ToggleSwitch
+                                        x:Name="ToggleAnnounceReadingTime"
+                                        Header="Announce reading time at start"
+                                        OffContent="Off"
+                                        OnContent="On"
+                                        AutomationProperties.Name="Announce reading time at start"
+                                        ToolTipService.ToolTip="Speak an estimate of how long the text will take to read before reading begins"
+                                        Toggled="ToggleAnnounceReadingTime_Toggled" />
+                                    <ToggleSwitch
+                                        x:Name="ToggleAnnounceProgress"
+                                        Header="Announce progress while reading"
+                                        OffContent="Off"
+                                        OnContent="On"
+                                        AutomationProperties.Name="Announce progress while reading"
+                                        ToolTipService.ToolTip="Speak your progress at regular points while reading a long text"
+                                        Toggled="ToggleAnnounceProgress_Toggled" />
+                                </StackPanel>
+
                                 <StackPanel x:Name="ClipboardActionsPanel" Orientation="Vertical" Spacing="8">
                                     <StackPanel x:Name="ClipboardPrimaryActions" Orientation="Horizontal" Spacing="12">
                                         <Button
@@ -848,6 +867,18 @@
                                             AutomationProperties.Name="Skip sentence forward"
                                             ToolTipService.ToolTip="Jump to the next sentence">
                                             <FontIcon Glyph="&#xE893;" FontFamily="Segoe Fluent Icons" />
+                                        </Button>
+
+                                        <Button
+                                            x:Name="BtnSpeakPosition"
+                                            Style="{StaticResource OutlinedButtonStyle}"
+                                            Click="BtnSpeakPosition_Click"
+                                            AutomationProperties.Name="Speak reading position"
+                                            ToolTipService.ToolTip="Speak the current reading position: sentence, percentage, and time remaining">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                                <FontIcon Glyph="&#xE8B9;" FontFamily="Segoe Fluent Icons" />
+                                                <TextBlock Text="Position" />
+                                            </StackPanel>
                                         </Button>
 
                                         <Button

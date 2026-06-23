@@ -109,12 +109,18 @@ internal static class SettingsWorkingCopy
 			dst.RestartFromBeginningHotKey = src.RestartFromBeginningHotKey;
 			dst.SkipSentenceBackwardHotKey = src.SkipSentenceBackwardHotKey;
 			dst.SkipSentenceForwardHotKey = src.SkipSentenceForwardHotKey;
+			dst.SpeakPositionHotKey = src.SpeakPositionHotKey;
 			dst.Rate = src.Rate;
 			dst.Volume = src.Volume;
 			dst.EnableSpeechPreprocessing = src.EnableSpeechPreprocessing;
 			dst.VoiceName = src.VoiceName;
 			dst.SkipSentenceGraceWindowMs = src.SkipSentenceGraceWindowMs;
 			dst.ResumeRewindWordCount = src.ResumeRewindWordCount;
+			dst.AnnounceReadingTimeAtStart = src.AnnounceReadingTimeAtStart;
+			dst.AnnounceReadingTimeMinimumMinutes = src.AnnounceReadingTimeMinimumMinutes;
+			dst.AnnounceProgressEnabled = src.AnnounceProgressEnabled;
+			dst.AnnounceProgressEveryPercent = src.AnnounceProgressEveryPercent;
+			dst.AnnounceProgressMinimumMinutes = src.AnnounceProgressMinimumMinutes;
 		}
 
 		live.MainWindowUiSettings ??= new MainWindowUiSettings();

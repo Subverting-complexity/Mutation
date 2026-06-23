@@ -254,6 +254,7 @@ public class TextToSpeechSettings
 	public string? SkipSentenceBackwardHotKey { get; set; }
 	public string? SkipSentenceForwardHotKey { get; set; }
 	public string? SpeakToFileHotKey { get; set; }
+	public string? SpeakPositionHotKey { get; set; }
 	public int Rate { get; set; } = 8;
 	public int Volume { get; set; } = 100;
 	public bool EnableSpeechPreprocessing { get; set; } = true;
@@ -270,6 +271,24 @@ public class TextToSpeechSettings
 	// this many words before where playback stopped so the listener regains context
 	// of where they are. 0 resumes exactly where it stopped (no rewind).
 	public int ResumeRewindWordCount { get; set; } = 5;
+
+	// Master on/off for the startup "Reading approximately N minutes" announcement.
+	// Default true to preserve the previous behaviour.
+	public bool AnnounceReadingTimeAtStart { get; set; } = true;
+
+	// The startup announcement plays only when the estimated read time exceeds this
+	// many minutes. Replaces the old hardcoded 5000-character cutoff.
+	public int AnnounceReadingTimeMinimumMinutes { get; set; } = 1;
+
+	// Master on/off for the periodic progress announcements spoken while reading.
+	public bool AnnounceProgressEnabled { get; set; } = true;
+
+	// Announce progress at each multiple of this percentage (e.g. 25 -> 25/50/75%).
+	public int AnnounceProgressEveryPercent { get; set; } = 25;
+
+	// Periodic progress is announced only when the estimated total read time exceeds
+	// this many minutes; shorter reads stay silent.
+	public int AnnounceProgressMinimumMinutes { get; set; } = 2;
 
 	public TextToSpeechSettings()
 	{
