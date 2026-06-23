@@ -6,7 +6,6 @@ namespace CognitiveSupport
 {
 	public class TextToSpeechService : ITextToSpeechService
 	{
-		private const int LengthWarningThresholdChars = 5000;
 		private const string EndOfTextAnnouncement = "End of text.";
 		private const string BeginningOfTextAnnouncement = "Beginning of text.";
 
@@ -42,6 +41,31 @@ namespace CognitiveSupport
 		private bool _speakingAnnouncement;
 		private bool _disposed;
 		private CancellationTokenSource? _opCts;
+
+		// Configurable announcement behaviour, pushed in from settings. Defaults mirror
+		// the settings defaults so the service behaves sensibly before it is configured.
+		private bool _announceReadingTimeAtStart = true;
+		private int _announceReadingTimeMinimumMinutes = 1;
+		private bool _announceProgressEnabled = true;
+		private int _announceProgressEveryPercent = 25;
+		private int _announceProgressMinimumMinutes = 2;
+
+		// The voice parameters of the live read, captured so a periodic progress
+		// announcement can re-speak the remainder in the same voice without the caller
+		// having to thread them back in.
+		private int _liveRate;
+		private int _liveVolume;
+		private string? _liveVoice;
+
+		// Highest progress threshold already announced for the current read (0 = none).
+		private int _lastAnnouncedProgressPercent;
+		// Set while a progress announcement is being scheduled/spoken so the flood of
+		// SpeakProgress events does not stack up duplicate announcements.
+		private bool _progressInterjectionInFlight;
+		// Bumped whenever a new top-level operation begins (read, stop, skip, spoken
+		// announcement). A deferred progress interjection captures the value at schedule
+		// time and bails if it changed, so a Stop/Skip during the gap always wins.
+		private long _playbackEpoch;
 
 		public bool IsSpeaking
 		{
@@ -112,6 +136,11 @@ namespace CognitiveSupport
 				if (_synth is null) return;
 
 				ApplyVoiceParams(rate, volume, voiceName);
+				_liveRate = rate;
+				_liveVolume = volume;
+				_liveVoice = voiceName;
+				_playbackEpoch++;
+				_progressInterjectionInFlight = false;
 
 				bool sameContent = string.Equals(processed, _currentText, StringComparison.Ordinal);
 				bool canResume = resumeIfSame && sameContent
@@ -127,6 +156,9 @@ namespace CognitiveSupport
 					_spokenToCurrentDelta = resumePos;
 					EnterSentence(FindSentenceIndex(resumePos));
 					ResetSkipBurst();
+					// Keep already-passed progress thresholds marked so resuming mid-read
+					// does not re-announce them.
+					_lastAnnouncedProgressPercent = ProgressPercentAt(resumePos, processed.Length);
 					_currentPrompt = _synth.SpeakAsync(processed.Substring(resumePos));
 				}
 				else
@@ -137,6 +169,7 @@ namespace CognitiveSupport
 					_sentenceStarts = FindSentenceStarts(processed);
 					EnterSentence(0);
 					ResetSkipBurst();
+					_lastAnnouncedProgressPercent = 0;
 
 					string warning = ShouldAnnounceLength(processed)
 						? BuildLengthAnnouncement(processed)
@@ -168,6 +201,11 @@ namespace CognitiveSupport
 				_opCts = newCts;
 
 				ApplyVoiceParams(rate, volume, voiceName);
+				_liveRate = rate;
+				_liveVolume = volume;
+				_liveVoice = voiceName;
+				_playbackEpoch++;
+				_progressInterjectionInFlight = false;
 
 				int lastIndex = _sentenceStarts.Count - 1;
 				long now = Environment.TickCount64;
@@ -186,6 +224,7 @@ namespace CognitiveSupport
 					_pendingSkipIndex = 0;
 					EnterSentence(0);
 					_currentPosition = 0;
+					_lastAnnouncedProgressPercent = 0;
 					string announcement = BeginningOfTextAnnouncement + " ";
 					_spokenToCurrentDelta = -announcement.Length;
 					_currentPrompt = _synth!.SpeakAsync(announcement + _currentText);
@@ -279,10 +318,43 @@ namespace CognitiveSupport
 
 				ApplyVoiceParams(rate, volume, voiceName);
 				_speakingAnnouncement = true;
+				_playbackEpoch++;
+				_progressInterjectionInFlight = false;
 				_currentPrompt = _synth!.SpeakAsync(text);
 			}
 			oldCts?.Cancel();
 			oldCts?.Dispose();
+		}
+
+		public ReadingPosition GetReadingPosition()
+		{
+			lock (_gate)
+			{
+				if (_currentText is null || _currentText.Length == 0
+					|| _sentenceStarts is null || _sentenceStarts.Count == 0)
+					return ReadingPosition.NotReading;
+
+				int sentenceIndex = FindSentenceIndex(_currentPosition);
+				return ReadingPosition.Create(
+					_currentPosition, _currentText.Length, sentenceIndex, _sentenceStarts.Count);
+			}
+		}
+
+		public void SetAnnouncementOptions(
+			bool announceReadingTimeAtStart,
+			int readingTimeMinimumMinutes,
+			bool announceProgressEnabled,
+			int announceProgressEveryPercent,
+			int announceProgressMinimumMinutes)
+		{
+			lock (_gate)
+			{
+				_announceReadingTimeAtStart = announceReadingTimeAtStart;
+				_announceReadingTimeMinimumMinutes = readingTimeMinimumMinutes;
+				_announceProgressEnabled = announceProgressEnabled;
+				_announceProgressEveryPercent = announceProgressEveryPercent > 0 ? announceProgressEveryPercent : 25;
+				_announceProgressMinimumMinutes = announceProgressMinimumMinutes;
+			}
 		}
 
 		public void Stop()
@@ -292,6 +364,8 @@ namespace CognitiveSupport
 			{
 				oldCts = _opCts;
 				_opCts = null;
+				_playbackEpoch++;
+				_progressInterjectionInFlight = false;
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
 				_speakingAnnouncement = false;
@@ -346,7 +420,84 @@ namespace CognitiveSupport
 				int sentenceIndex = FindSentenceIndex(mapped);
 				if (sentenceIndex != _navIndex)
 					EnterSentence(sentenceIndex);
+
+				MaybeAnnounceProgress();
 			}
+		}
+
+		// Decide, on each progress tick, whether the read has crossed a new percentage
+		// threshold worth announcing. Cheap by design: a couple of integer comparisons in
+		// the common case. The actual speak is deferred off the synth's event thread.
+		private void MaybeAnnounceProgress()
+		{
+			if (!_announceProgressEnabled || _speakingAnnouncement || _progressInterjectionInFlight)
+				return;
+			if (_currentText is null || _currentText.Length == 0)
+				return;
+			if (!ReadingEstimate.ExceedsMinutes(_currentText.Length, _announceProgressMinimumMinutes))
+				return;
+
+			int percent = ProgressPercentAt(_currentPosition, _currentText.Length);
+			int crossed = ReadingProgress.HighestThresholdCrossed(
+				_lastAnnouncedProgressPercent, percent, _announceProgressEveryPercent);
+			if (crossed <= 0)
+				return;
+
+			// Mark every threshold up to the highest crossed as announced so a single big
+			// jump never queues a burst of lower announcements.
+			_lastAnnouncedProgressPercent = crossed;
+			_progressInterjectionInFlight = true;
+
+			int minutesRemaining = ReadingEstimate.RemainingWholeMinutes(_currentText.Length - _currentPosition);
+			string text = ReadingAnnouncements.Progress(crossed, minutesRemaining);
+			long epoch = _playbackEpoch;
+			Task.Run(() => SpeakProgressInterjection(text, epoch));
+		}
+
+		// Speak a progress update, then carry on reading from where playback was. We
+		// cannot interleave audio into the single in-flight utterance, so we cancel it and
+		// re-issue "<progress>. <remaining text>" as one new utterance — the same prefix +
+		// offset idiom the length warning and beginning-of-text announcement already use,
+		// which keeps progress character positions mapping back onto the real text.
+		private void SpeakProgressInterjection(string progressText, long epoch)
+		{
+			CancellationTokenSource? oldCts;
+			CancellationTokenSource newCts = new();
+			lock (_gate)
+			{
+				// A Stop/Skip/new read between scheduling and running bumps the epoch; in
+				// that case the read we meant to resume no longer exists, so do nothing.
+				if (_disposed || _currentText is null || _playbackEpoch != epoch)
+				{
+					newCts.Dispose();
+					_progressInterjectionInFlight = false;
+					return;
+				}
+
+				EnsureSynth();
+				try { _synth!.SpeakAsyncCancelAll(); } catch { }
+				oldCts = _opCts;
+				_opCts = newCts;
+
+				ApplyVoiceParams(_liveRate, _liveVolume, _liveVoice);
+
+				int position = Math.Clamp(_currentPosition, 0, _currentText.Length);
+				string prefix = progressText + " ";
+				string remainder = _currentText.Substring(position);
+				_spokenToCurrentDelta = position - prefix.Length;
+				_speakingAnnouncement = false;
+				_currentPrompt = _synth!.SpeakAsync(prefix + remainder);
+				_progressInterjectionInFlight = false;
+			}
+			oldCts?.Cancel();
+			oldCts?.Dispose();
+		}
+
+		private static int ProgressPercentAt(int position, int length)
+		{
+			if (length <= 0) return 0;
+			int pos = Math.Clamp(position, 0, length);
+			return (int)((double)pos * 100d / length);
 		}
 
 		private void OnSpeakCompleted(object? sender, SpeakCompletedEventArgs e)
@@ -433,17 +584,15 @@ namespace CognitiveSupport
 			return starts;
 		}
 
-		private static bool ShouldAnnounceLength(string text) => text.Length > LengthWarningThresholdChars;
+		// The startup reading-time announcement plays when it is enabled AND the estimated
+		// read is longer than the configured minimum minutes. This replaces the old fixed
+		// 5000-character cutoff with a minutes-based threshold from the shared estimate.
+		private bool ShouldAnnounceLength(string text)
+			=> _announceReadingTimeAtStart
+				&& ReadingEstimate.ExceedsMinutes(text.Length, _announceReadingTimeMinimumMinutes);
 
 		private static string BuildLengthAnnouncement(string text)
-		{
-			int wordsApprox = Math.Max(1, text.Length / 5);
-			int wpm = 180;
-			int minutes = (int)Math.Round((double)wordsApprox / wpm);
-			if (minutes < 1) minutes = 1;
-			string unit = minutes == 1 ? "minute" : "minutes";
-			return $"Reading approximately {minutes} {unit} of text. ";
-		}
+			=> ReadingAnnouncements.StartupReadingTime(ReadingEstimate.SpokenWholeMinutes(text.Length));
 
 		private static readonly Regex CodeFenceRegex = new(@"```[\s\S]*?```", RegexOptions.Compiled);
 		private static readonly Regex InlineCodeRegex = new(@"`([^`\n]+)`", RegexOptions.Compiled);

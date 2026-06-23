@@ -68,6 +68,72 @@
 			</StackPanel>
 		</StackPanel>
 
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Announce reading time only above (minutes)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.AnnounceReadingTimeMinimumMinutes}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbAnnounceReadingTimeMin"
+						   AutomationProperties.Name="Announce reading time only above (minutes)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.AnnounceReadingTimeMinimumMinutes}"
+						   Minimum="0" Maximum="120"
+						   SmallChange="1" LargeChange="5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbAnnounceReadingTimeMin_ValueChanged" />
+				<Button Click="BtnResetAnnounceReadingTimeMin_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset announce reading time minimum">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+			<TextBlock Text="The reading-time announcement is turned on or off on the main window."
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Announce progress every (percent)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.AnnounceProgressEveryPercent}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbAnnounceProgressPercent"
+						   AutomationProperties.Name="Announce progress every (percent)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.AnnounceProgressEveryPercent}"
+						   Minimum="5" Maximum="50"
+						   SmallChange="5" LargeChange="10"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbAnnounceProgressPercent_ValueChanged" />
+				<Button Click="BtnResetAnnounceProgressPercent_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset announce progress percent">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Announce progress only above (minutes)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.AnnounceProgressMinimumMinutes}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbAnnounceProgressMin"
+						   AutomationProperties.Name="Announce progress only above (minutes)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.AnnounceProgressMinimumMinutes}"
+						   Minimum="0" Maximum="120"
+						   SmallChange="1" LargeChange="5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbAnnounceProgressMin_ValueChanged" />
+				<Button Click="BtnResetAnnounceProgressMin_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset announce progress minimum">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+			<TextBlock Text="Progress announcements are turned on or off on the main window."
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+		</StackPanel>
+
 		<TextBlock Text="TTS hotkeys appear in the Hotkeys tab."
 				   Style="{StaticResource CaptionTextBlockStyle}"
 				   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />

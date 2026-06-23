@@ -56,6 +56,7 @@ internal static class SettingsDefaults
 		public const string RestartFromBeginningHotKey = "CTRL+SHIFT+B";
 		public const string SkipSentenceBackwardHotKey = "CTRL+SHIFT+J";
 		public const string SkipSentenceForwardHotKey = "CTRL+SHIFT+K";
+		public const string SpeakPositionHotKey = "CTRL+SHIFT+P";
 		public const int Rate = 8;
 		public const int Volume = 100;
 		public const bool EnableSpeechPreprocessing = true;
@@ -65,6 +66,19 @@ internal static class SettingsDefaults
 		public const int ResumeRewindWordCount = 5;
 		public const int MinResumeRewindWordCount = 0;
 		public const int MaxResumeRewindWordCount = 20;
+
+		public const bool AnnounceReadingTimeAtStart = true;
+		public const int AnnounceReadingTimeMinimumMinutes = 1;
+		public const int MinAnnounceReadingTimeMinimumMinutes = 0;
+		public const int MaxAnnounceReadingTimeMinimumMinutes = 120;
+
+		public const bool AnnounceProgressEnabled = true;
+		public const int AnnounceProgressEveryPercent = 25;
+		public const int MinAnnounceProgressEveryPercent = 5;
+		public const int MaxAnnounceProgressEveryPercent = 50;
+		public const int AnnounceProgressMinimumMinutes = 2;
+		public const int MinAnnounceProgressMinimumMinutes = 0;
+		public const int MaxAnnounceProgressMinimumMinutes = 120;
 	}
 
 	public static class Llm
