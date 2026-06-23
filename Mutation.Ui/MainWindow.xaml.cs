@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
+	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
 	private readonly Settings _settings;
 	private HotkeyManager? _hotkeyManager;
 	private MicrophoneVisualizationController? _microphoneVisualization;
@@ -98,6 +99,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		OcrManager ocrManager,
 		ISpeechToTextService[] speechServices,
 		ITextToSpeechService textToSpeech,
+		IWavFileSpeechExporter wavFileSpeechExporter,
 		TranscriptFormatter transcriptFormatter,
 
 		ISettingsManager settingsManager,
@@ -111,6 +113,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_ocrManager = ocrManager;
 		_speechServices = speechServices;
 		_textToSpeech = textToSpeech;
+		_wavFileSpeechExporter = wavFileSpeechExporter;
 		_transcriptFormatter = transcriptFormatter;
 		_settings = settings;
 
@@ -349,6 +352,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceForwardHotKey))
 			TryRegister(hk, tts.SkipSentenceForwardHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceForward_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.SpeakToFileHotKey))
+			TryRegister(hk, tts.SpeakToFileHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnSpeakToFile_Click(null!, null!)));
 	}
 
 	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
@@ -424,6 +431,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		ConfigureButtonHotkey(BtnSkipSentenceBack, null, _settings.TextToSpeechSettings?.SkipSentenceBackwardHotKey, "Jump to the previous sentence");
 		ConfigureButtonHotkey(BtnSkipSentenceForward, null, _settings.TextToSpeechSettings?.SkipSentenceForwardHotKey, "Jump to the next sentence");
 		ConfigureButtonHotkey(BtnSpeakSelection, null, _settings.TextToSpeechSettings?.SpeakSelectionHotKey, "Copy the current selection from the active app and read it aloud");
+		ConfigureButtonHotkey(BtnSpeakToFile, null, _settings.TextToSpeechSettings?.SpeakToFileHotKey, "Save the clipboard text as a spoken WAV audio file");
 		ConfigureButtonHotkey(BtnProcessLlm, null, null, "Send transcript through the configured language model");
 	}
 
@@ -856,6 +864,69 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
 		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
+	}
+
+	public async void BtnSpeakToFile_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		var (kind, clipboardText) = await _clipboard.InspectAsync();
+		if (kind != ClipboardKind.Text)
+		{
+			AnnounceUnreadableClipboard(kind, tts);
+			return;
+		}
+
+		if (!TtsFileExport.TryResolveExportText(clipboardText, out string text, out string resolveError))
+		{
+			_textToSpeech.SpeakAnnouncement(resolveError, tts.Rate, tts.Volume, tts.VoiceName);
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus("Speak to file", resolveError, InfoBarSeverity.Warning);
+			return;
+		}
+
+		StorageFile? file;
+		try
+		{
+			var picker = new FileSavePicker
+			{
+				SuggestedStartLocation = PickerLocationId.MusicLibrary,
+				SuggestedFileName = TtsFileExport.BuildSuggestedFileName(DateTime.Now)
+			};
+			picker.FileTypeChoices.Add("Audio (WAV)", new List<string> { ".wav" });
+
+			InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+			file = await picker.PickSaveFileAsync();
+		}
+		catch (Exception ex)
+		{
+			ShowStatus("Speak to file", ex.Message, InfoBarSeverity.Error);
+			await ShowErrorDialog("Speak to File Error", ex);
+			return;
+		}
+
+		if (file is null)
+			return; // user cancelled the picker
+
+		BtnSpeakToFile.IsEnabled = false;
+		ShowStatus("Speak to file", $"Saving audio to {file.Name}…", InfoBarSeverity.Informational);
+		try
+		{
+			// Synthesize off the UI thread so a long article does not freeze the window.
+			// A dedicated exporter writes to the file, leaving any live read untouched.
+			await Task.Run(() => _wavFileSpeechExporter.ExportToWavFile(
+				text, file.Path, tts.Rate, tts.Volume, tts.VoiceName, tts.EnableSpeechPreprocessing));
+			ShowStatus("Speak to file", $"Saved audio to {file.Name}.", InfoBarSeverity.Success);
+		}
+		catch (Exception ex)
+		{
+			ShowStatus("Speak to file", ex.Message, InfoBarSeverity.Error);
+			await ShowErrorDialog("Speak to File Error", ex);
+		}
+		finally
+		{
+			BtnSpeakToFile.IsEnabled = true;
+		}
 	}
 
 	public async void SpeakActiveSelectionAsync()

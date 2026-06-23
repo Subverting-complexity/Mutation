@@ -239,6 +239,7 @@ public partial class App : Application
 			builder.Services.AddSingleton<SpeechToTextManager>();
 			builder.Services.AddSingleton<Mutation.Ui.Core.AudioSessionManager>();
                         builder.Services.AddSingleton<ITextToSpeechService, TextToSpeechService>();
+                        builder.Services.AddSingleton<IWavFileSpeechExporter, WavFileSpeechExporter>();
 			builder.Services.AddHttpClient(OpenAiHttpClientName);
 			builder.Services.AddHttpClient(AnthropicHttpClientName);
 			AddSpeechToTextServices(builder, settings);
