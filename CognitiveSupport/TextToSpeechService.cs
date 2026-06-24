@@ -9,8 +9,18 @@ namespace CognitiveSupport
 		private const string EndOfTextAnnouncement = "End of text.";
 		private const string BeginningOfTextAnnouncement = "Beginning of text.";
 
+		private const string PausedAnnouncement = "Paused.";
+
 		private readonly object _gate = new object();
 		private SpeechSynthesizer? _synth;
+		// A second synthesizer reserved for short state cues (currently "Paused"). The main
+		// synth is held in its native Paused state to preserve the exact word position, so it
+		// cannot speak the cue without cancelling that held utterance; a separate synth speaks
+		// the cue while the main read stays frozen and silent.
+		private SpeechSynthesizer? _cueSynth;
+		// Monotonic timestamp (Environment.TickCount64) captured when Pause() froze the read.
+		// Resume() measures elapsed pause time against it to decide whether to rewind.
+		private long _pausedAtTick;
 		private string? _currentText;
 		private string? _lastInputText;
 		private int _currentPosition;
@@ -81,6 +91,17 @@ namespace CognitiveSupport
 			}
 		}
 
+		public bool IsPaused
+		{
+			get
+			{
+				lock (_gate)
+				{
+					return _synth is not null && _synth.State == SynthesizerState.Paused;
+				}
+			}
+		}
+
 		public string? CurrentText
 		{
 			get { lock (_gate) return _lastInputText; }
@@ -109,7 +130,7 @@ namespace CognitiveSupport
 			{
 				if (_disposed) { newCts.Dispose(); return; }
 				EnsureSynth();
-				try { _synth!.SpeakAsyncCancelAll(); } catch { }
+				CancelAllAndClearPause();
 				_speakingAnnouncement = false;
 				oldCts = _opCts;
 				_opCts = newCts;
@@ -197,7 +218,7 @@ namespace CognitiveSupport
 				}
 
 				EnsureSynth();
-				try { _synth!.SpeakAsyncCancelAll(); } catch { }
+				CancelAllAndClearPause();
 				_speakingAnnouncement = false;
 				oldCts = _opCts;
 				_opCts = newCts;
@@ -318,7 +339,7 @@ namespace CognitiveSupport
 			{
 				if (_disposed) { newCts.Dispose(); return; }
 				EnsureSynth();
-				try { _synth!.SpeakAsyncCancelAll(); } catch { }
+				CancelAllAndClearPause();
 				oldCts = _opCts;
 				_opCts = newCts;
 
@@ -375,6 +396,13 @@ namespace CognitiveSupport
 				_progress.PendingPercent = 0;
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
+				// If the read was frozen by Pause(), the engine is still in its Paused state with
+				// nothing queued. Release it so IsPaused returns false and the resume intent is
+				// cleared — a Stop is a full halt, not a pause.
+				if (_synth.State == SynthesizerState.Paused)
+				{
+					try { _synth.Resume(); } catch { }
+				}
 				_speakingAnnouncement = false;
 				_currentPrompt = null;
 			}
@@ -382,19 +410,129 @@ namespace CognitiveSupport
 			oldCts?.Dispose();
 		}
 
+		public void Pause(int rate, int volume, string? voiceName)
+		{
+			lock (_gate)
+			{
+				if (_disposed || _synth is null) return;
+				// Only freeze an actively-speaking read. Already paused, stopped, or speaking a
+				// transient announcement: nothing to pause.
+				if (_synth.State != SynthesizerState.Speaking || _speakingAnnouncement) return;
+
+				_synth.Pause();
+				_pausedAtTick = Environment.TickCount64;
+			}
+
+			// Speak the cue outside the engine state above so the held main utterance is never
+			// touched; the cue runs on a separate synth and the main read stays frozen.
+			SpeakCue(PausedAnnouncement, rate, volume, voiceName);
+		}
+
+		public void Resume(int rate, int volume, string? voiceName, int resumeRewindWordCount, int rewindAfterPauseSeconds)
+		{
+			lock (_gate)
+			{
+				if (_disposed || _synth is null) return;
+				if (_synth.State != SynthesizerState.Paused) return;
+
+				long elapsedMs = Environment.TickCount64 - _pausedAtTick;
+				bool rewind = ShouldRewindAfterPause(elapsedMs, rewindAfterPauseSeconds);
+
+				// Within the threshold (or nothing to rewind into): continue from the exact word
+				// using the engine's native resume. No cancel, no respeak — seamless.
+				if (!rewind || _currentText is null)
+				{
+					_synth.Resume();
+					return;
+				}
+
+				// Beyond the threshold: cancel the frozen utterance and respeak from a rewound
+				// position so the listener regains context. Mirrors RunSpeak's resume branch.
+				ApplyVoiceParams(rate, volume, voiceName);
+				_liveRate = rate;
+				_liveVolume = volume;
+				_liveVoice = voiceName;
+				_playbackEpoch++;
+				_progressInterjectionInFlight = false;
+
+				int resumePos = ComputeResumePosition(_currentText, _currentPosition, resumeRewindWordCount, rewind: true);
+				_currentPosition = resumePos;
+				_spokenToCurrentDelta = resumePos;
+				EnterSentence(FindSentenceIndex(resumePos));
+				ResetSkipBurst();
+				_progress.Reset();
+				_progress.LastAnnouncedPercent = ProgressPercentAt(resumePos, _currentText.Length);
+
+				try { _synth.SpeakAsyncCancelAll(); } catch { }
+				_currentPrompt = _synth.SpeakAsync(_currentText.Substring(resumePos));
+				// The engine is still in its paused state; un-pause it so the newly queued
+				// utterance actually plays.
+				try { _synth.Resume(); } catch { }
+			}
+		}
+
+		// Pure decision for whether a resume should rewind for context. A pause at or below the
+		// threshold resumes seamlessly (false); one that exceeds it rewinds (true). A threshold
+		// of 0 (or negative, defensively) always rewinds. Side-effect free so the threshold
+		// branch is unit-testable with explicit elapsed values, no real waits.
+		internal static bool ShouldRewindAfterPause(long elapsedMs, int rewindAfterPauseSeconds)
+		{
+			if (rewindAfterPauseSeconds <= 0) return true;
+			return elapsedMs > (long)rewindAfterPauseSeconds * 1000;
+		}
+
+		// Pure resume-position computation: rewind by words for context, or hold the exact
+		// position when resuming seamlessly. Kept static so both branches can be unit-tested.
+		internal static int ComputeResumePosition(string text, int currentPosition, int rewindWordCount, bool rewind)
+			=> rewind ? RewindByWords(text, currentPosition, rewindWordCount) : currentPosition;
+
+		// Speak a short state cue on the dedicated cue synthesizer, leaving the main synth (and
+		// any utterance it holds paused) untouched.
+		private void SpeakCue(string text, int rate, int volume, string? voiceName)
+		{
+			if (string.IsNullOrEmpty(text)) return;
+			lock (_gate)
+			{
+				if (_disposed) return;
+				if (_cueSynth is null)
+				{
+					_cueSynth = new SpeechSynthesizer();
+					_cueSynth.SetOutputToDefaultAudioDevice();
+				}
+				ApplyVoiceParamsTo(_cueSynth, rate, volume, voiceName);
+				try { _cueSynth.SpeakAsyncCancelAll(); } catch { }
+				_cueSynth.SpeakAsync(text);
+			}
+		}
+
+		// Cancel any in-flight utterance and release a native pause, so a freshly queued
+		// utterance is never stuck behind a frozen engine. Callers hold _gate and have ensured
+		// _synth is non-null (via EnsureSynth).
+		private void CancelAllAndClearPause()
+		{
+			try { _synth!.SpeakAsyncCancelAll(); } catch { }
+			if (_synth!.State == SynthesizerState.Paused)
+			{
+				try { _synth.Resume(); } catch { }
+			}
+		}
+
 		private void ApplyVoiceParams(int rate, int volume, string? voiceName)
+			=> ApplyVoiceParamsTo(_synth!, rate, volume, voiceName);
+
+		private static void ApplyVoiceParamsTo(SpeechSynthesizer synth, int rate, int volume, string? voiceName)
 		{
 			if (rate < -10) rate = -10;
 			else if (rate > 10) rate = 10;
-			_synth!.Rate = rate;
+			synth.Rate = rate;
 
 			if (volume < 0) volume = 0;
 			else if (volume > 100) volume = 100;
-			_synth.Volume = volume;
+			synth.Volume = volume;
 
 			if (!string.IsNullOrWhiteSpace(voiceName))
 			{
-				try { _synth.SelectVoice(voiceName); }
+				try { synth.SelectVoice(voiceName); }
 				catch { /* fall back to default voice */ }
 			}
 		}
@@ -512,7 +650,7 @@ namespace CognitiveSupport
 				}
 
 				EnsureSynth();
-				try { _synth!.SpeakAsyncCancelAll(); } catch { }
+				CancelAllAndClearPause();
 				oldCts = _opCts;
 				_opCts = newCts;
 
@@ -605,6 +743,12 @@ namespace CognitiveSupport
 					_synth.SpeakCompleted -= OnSpeakCompleted;
 					try { _synth.Dispose(); } catch { }
 					_synth = null;
+				}
+				if (_cueSynth is not null)
+				{
+					try { _cueSynth.SpeakAsyncCancelAll(); } catch { }
+					try { _cueSynth.Dispose(); } catch { }
+					_cueSynth = null;
 				}
 				_currentText = null;
 				_lastInputText = null;

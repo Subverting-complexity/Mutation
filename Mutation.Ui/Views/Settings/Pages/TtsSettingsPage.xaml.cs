@@ -25,6 +25,7 @@ public sealed partial class TtsSettingsPage : UserControl
 			ToggleSpeechPreprocessing.IsOn = tts.EnableSpeechPreprocessing;
 			NbSkipGrace.Value = tts.SkipSentenceGraceWindowMs;
 			NbResumeRewindWords.Value = tts.ResumeRewindWordCount;
+			NbResumeRewindAfterPauseSeconds.Value = tts.ResumeRewindAfterPauseSeconds;
 			NbAnnounceReadingTimeMin.Value = tts.AnnounceReadingTimeMinimumMinutes;
 			NbAnnounceProgressPercent.Value = tts.AnnounceProgressEveryPercent;
 			NbAnnounceProgressMin.Value = tts.AnnounceProgressMinimumMinutes;
@@ -65,6 +66,18 @@ public sealed partial class TtsSettingsPage : UserControl
 	private void BtnResetResumeRewind_Click(object sender, RoutedEventArgs e)
 	{
 		NbResumeRewindWords.Value = SettingsDefaults.Tts.ResumeRewindWordCount;
+	}
+
+	private void NbResumeRewindAfterPauseSeconds_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).ResumeRewindAfterPauseSeconds = (int)args.NewValue;
+	}
+
+	private void BtnResetResumeRewindAfterPause_Click(object sender, RoutedEventArgs e)
+	{
+		NbResumeRewindAfterPauseSeconds.Value = SettingsDefaults.Tts.ResumeRewindAfterPauseSeconds;
 	}
 
 	private void NbAnnounceReadingTimeMin_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
