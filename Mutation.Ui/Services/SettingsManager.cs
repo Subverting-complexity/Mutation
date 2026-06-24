@@ -654,6 +654,11 @@ End of summary.
 			textToSpeechSettings.SpeakPositionHotKey = "CTRL+SHIFT+P";
 			somethingWasMissing = true;
 		}
+		if (string.IsNullOrWhiteSpace(textToSpeechSettings.PauseResumeHotKey))
+		{
+			textToSpeechSettings.PauseResumeHotKey = "CTRL+SHIFT+SPACE";
+			somethingWasMissing = true;
+		}
 
 		// Only inject a sample router mapping on FIRST creation of the settings file.
 		// Previously we also injected when the list was empty, which could overwrite ("wipe")

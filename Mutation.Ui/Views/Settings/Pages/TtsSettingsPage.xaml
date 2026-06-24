@@ -70,6 +70,29 @@
 
 		<StackPanel Spacing="4">
 			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Rewind on resume after (seconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.ResumeRewindAfterPauseSeconds}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbResumeRewindAfterPauseSeconds"
+						   AutomationProperties.Name="Rewind on resume after (seconds)"
+						   AutomationProperties.HelpText="{StaticResource Help.Tts.ResumeRewindAfterPauseSeconds}"
+						   Minimum="0" Maximum="120"
+						   SmallChange="1" LargeChange="5"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbResumeRewindAfterPauseSeconds_ValueChanged" />
+				<Button Click="BtnResetResumeRewindAfterPause_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset rewind on resume after seconds">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+			<TextBlock Text="The Pause/Resume hotkey is set on the Hotkeys tab."
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
 				<TextBlock Text="Announce reading time only above (minutes)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<controls:InfoHint Text="{StaticResource Help.Tts.AnnounceReadingTimeMinimumMinutes}" VerticalAlignment="Center" />
 			</StackPanel>

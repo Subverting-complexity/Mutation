@@ -110,12 +110,14 @@ internal static class SettingsWorkingCopy
 			dst.SkipSentenceBackwardHotKey = src.SkipSentenceBackwardHotKey;
 			dst.SkipSentenceForwardHotKey = src.SkipSentenceForwardHotKey;
 			dst.SpeakPositionHotKey = src.SpeakPositionHotKey;
+			dst.PauseResumeHotKey = src.PauseResumeHotKey;
 			dst.Rate = src.Rate;
 			dst.Volume = src.Volume;
 			dst.EnableSpeechPreprocessing = src.EnableSpeechPreprocessing;
 			dst.VoiceName = src.VoiceName;
 			dst.SkipSentenceGraceWindowMs = src.SkipSentenceGraceWindowMs;
 			dst.ResumeRewindWordCount = src.ResumeRewindWordCount;
+			dst.ResumeRewindAfterPauseSeconds = src.ResumeRewindAfterPauseSeconds;
 			dst.AnnounceReadingTimeAtStart = src.AnnounceReadingTimeAtStart;
 			dst.AnnounceReadingTimeMinimumMinutes = src.AnnounceReadingTimeMinimumMinutes;
 			dst.AnnounceProgressEnabled = src.AnnounceProgressEnabled;

@@ -97,11 +97,13 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Tts.SkipSentenceBackwardHotKey, tts.SkipSentenceBackwardHotKey);
 		Assert.Equal(SettingsDefaults.Tts.SkipSentenceForwardHotKey, tts.SkipSentenceForwardHotKey);
 		Assert.Equal(SettingsDefaults.Tts.SpeakPositionHotKey, tts.SpeakPositionHotKey);
+		Assert.Equal(SettingsDefaults.Tts.PauseResumeHotKey, tts.PauseResumeHotKey);
 		Assert.Equal(SettingsDefaults.Tts.Rate, tts.Rate);
 		Assert.Equal(SettingsDefaults.Tts.Volume, tts.Volume);
 		Assert.Equal(SettingsDefaults.Tts.EnableSpeechPreprocessing, tts.EnableSpeechPreprocessing);
 		Assert.Equal(SettingsDefaults.Tts.SkipSentenceGraceWindowMs, tts.SkipSentenceGraceWindowMs);
 		Assert.Equal(SettingsDefaults.Tts.ResumeRewindWordCount, tts.ResumeRewindWordCount);
+		Assert.Equal(SettingsDefaults.Tts.ResumeRewindAfterPauseSeconds, tts.ResumeRewindAfterPauseSeconds);
 		Assert.Equal(SettingsDefaults.Tts.AnnounceReadingTimeAtStart, tts.AnnounceReadingTimeAtStart);
 		Assert.Equal(SettingsDefaults.Tts.AnnounceReadingTimeMinimumMinutes, tts.AnnounceReadingTimeMinimumMinutes);
 		Assert.Equal(SettingsDefaults.Tts.AnnounceProgressEnabled, tts.AnnounceProgressEnabled);

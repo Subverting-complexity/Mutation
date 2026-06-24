@@ -255,6 +255,11 @@ public class TextToSpeechSettings
 	public string? SkipSentenceForwardHotKey { get; set; }
 	public string? SpeakToFileHotKey { get; set; }
 	public string? SpeakPositionHotKey { get; set; }
+
+	// Toggles a true pause/resume of the current read, separate from Stop. Default
+	// Ctrl+Shift+Space. One press freezes playback in place; the next resumes it.
+	public string? PauseResumeHotKey { get; set; }
+
 	public int Rate { get; set; } = 8;
 	public int Volume { get; set; } = 100;
 	public bool EnableSpeechPreprocessing { get; set; } = true;
@@ -271,6 +276,12 @@ public class TextToSpeechSettings
 	// this many words before where playback stopped so the listener regains context
 	// of where they are. 0 resumes exactly where it stopped (no rewind).
 	public int ResumeRewindWordCount { get; set; } = 5;
+
+	// When resuming after a Pause, rewind for context (by ResumeRewindWordCount words)
+	// only if the pause lasted longer than this many seconds; a quicker pause resumes
+	// seamlessly from the exact word. 0 means always rewind on resume, however brief
+	// the pause.
+	public int ResumeRewindAfterPauseSeconds { get; set; } = 10;
 
 	// Master on/off for the startup "Reading approximately N minutes" announcement.
 	// Default true to preserve the previous behaviour.

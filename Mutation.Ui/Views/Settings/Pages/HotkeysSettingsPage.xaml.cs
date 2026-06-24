@@ -120,6 +120,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			s => s.TextToSpeechSettings?.SpeakPositionHotKey,
 			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakPositionHotKey = v,
 			false, SettingsDefaults.Tts.SpeakPositionHotKey),
+		new HotkeySpec("Pause or resume reading",
+			s => s.TextToSpeechSettings?.PauseResumeHotKey,
+			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).PauseResumeHotKey = v,
+			false, SettingsDefaults.Tts.PauseResumeHotKey),
 	};
 
 	private void BuildRows()

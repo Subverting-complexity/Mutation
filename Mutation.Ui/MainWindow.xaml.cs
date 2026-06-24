@@ -360,6 +360,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakPositionHotKey))
 			TryRegister(hk, tts.SpeakPositionHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSpeakPosition_Click(null!, null!)));
+
+		if (!string.IsNullOrWhiteSpace(tts?.PauseResumeHotKey))
+			TryRegister(hk, tts.PauseResumeHotKey!, () =>
+				DispatcherQueue.TryEnqueue(() => BtnPauseResume_Click(null!, null!)));
 	}
 
 	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
@@ -878,6 +882,31 @@ public sealed partial class MainWindow : Window, IDisposable
 		string announcement = ReadingAnnouncements.Position(position);
 		_textToSpeech.SpeakAnnouncement(announcement, tts.Rate, tts.Volume, tts.VoiceName);
 		ShowStatus("Text to Speech", announcement, InfoBarSeverity.Informational);
+	}
+
+	// Toggle pause/resume on its own hotkey, distinct from Stop. While speaking, freeze the
+	// read in place (the service speaks a brief "Paused" cue). While paused, resume it. When
+	// nothing is playing, announce that there is nothing to resume — this never starts a fresh
+	// read; that remains the job of the speak hotkey.
+	public void BtnPauseResume_Click(object? sender, RoutedEventArgs? e)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+		if (_textToSpeech.IsPaused)
+		{
+			_textToSpeech.Resume(tts.Rate, tts.Volume, tts.VoiceName,
+				tts.ResumeRewindWordCount, tts.ResumeRewindAfterPauseSeconds);
+			ShowStatus("Text to Speech", "Resuming.", InfoBarSeverity.Informational);
+		}
+		else if (_textToSpeech.IsSpeaking)
+		{
+			_textToSpeech.Pause(tts.Rate, tts.Volume, tts.VoiceName);
+			ShowStatus("Text to Speech", "Paused.", InfoBarSeverity.Informational);
+		}
+		else
+		{
+			_textToSpeech.SpeakAnnouncement("Nothing to resume.", tts.Rate, tts.Volume, tts.VoiceName);
+			ShowStatus("Text to Speech", "Nothing to resume.", InfoBarSeverity.Informational);
+		}
 	}
 
 	public async void BtnSpeakToFile_Click(object? sender, RoutedEventArgs? e)

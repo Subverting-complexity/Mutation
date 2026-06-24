@@ -57,6 +57,7 @@ internal static class SettingsDefaults
 		public const string SkipSentenceBackwardHotKey = "CTRL+SHIFT+J";
 		public const string SkipSentenceForwardHotKey = "CTRL+SHIFT+K";
 		public const string SpeakPositionHotKey = "CTRL+SHIFT+P";
+		public const string PauseResumeHotKey = "CTRL+SHIFT+SPACE";
 		public const int Rate = 8;
 		public const int Volume = 100;
 		public const bool EnableSpeechPreprocessing = true;
@@ -66,6 +67,9 @@ internal static class SettingsDefaults
 		public const int ResumeRewindWordCount = 5;
 		public const int MinResumeRewindWordCount = 0;
 		public const int MaxResumeRewindWordCount = 20;
+		public const int ResumeRewindAfterPauseSeconds = 10;
+		public const int MinResumeRewindAfterPauseSeconds = 0;
+		public const int MaxResumeRewindAfterPauseSeconds = 120;
 
 		public const bool AnnounceReadingTimeAtStart = true;
 		public const int AnnounceReadingTimeMinimumMinutes = 1;
