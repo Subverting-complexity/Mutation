@@ -60,6 +60,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private bool _isDialogOpen;
 	private bool _ttsControlsReady;
 	private bool _micLevelControlsReady;
+	private bool _playbackSpeedReady;
 	// True once the mic-level controls have been set up at least once, so the
 	// microphone-selection handler knows it is safe to re-sync them for a new device.
 	private bool _micLevelInitialized;
@@ -223,6 +224,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
 		InitializeTextToSpeechControls();
+		InitializePlaybackSpeedControl();
 		InitializeMicrophoneLevelControls();
 		InitializeHotkeyVisuals();
 
@@ -1093,6 +1095,49 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		_ttsControlsReady = true;
 		PushTtsAnnouncementOptions();
+	}
+
+	// Populates the playback-speed dropdown and selects the saved speed, applying
+	// it to the player so the first playback honours the persisted preference.
+	private void InitializePlaybackSpeedControl()
+	{
+		var speeds = PlaybackSpeedOptions.Speeds;
+		CmbPlaybackSpeed.ItemsSource = speeds.Select(FormatPlaybackSpeed).ToList();
+
+		double saved = _settings.AudioSettings?.PlaybackSpeed ?? PlaybackSpeedOptions.Default;
+		double normalized = PlaybackSpeedOptions.Normalize(saved);
+		int index = speeds.ToList().IndexOf(normalized);
+		if (index < 0)
+			index = speeds.ToList().IndexOf(PlaybackSpeedOptions.Default);
+		CmbPlaybackSpeed.SelectedIndex = index;
+
+		_audioSessionManager.PlaybackSpeed = normalized;
+		_playbackSpeedReady = true;
+	}
+
+	// Labels a speed value for the dropdown, e.g. "1.0 (Normal)", "1.5", "0.75".
+	private static string FormatPlaybackSpeed(double speed)
+	{
+		string number = speed.ToString("0.0#", System.Globalization.CultureInfo.InvariantCulture);
+		return speed == PlaybackSpeedOptions.Default ? $"{number} (Normal)" : number;
+	}
+
+	private void CmbPlaybackSpeed_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (!_playbackSpeedReady) return;
+
+		int index = CmbPlaybackSpeed.SelectedIndex;
+		if (index < 0 || index >= PlaybackSpeedOptions.Speeds.Count) return;
+
+		double speed = PlaybackSpeedOptions.Speeds[index];
+		_settings.AudioSettings ??= new AudioSettings();
+		if (_settings.AudioSettings.PlaybackSpeed == speed) return;
+
+		_settings.AudioSettings.PlaybackSpeed = speed;
+		_settingsManager.SaveSettingsToFile(_settings);
+
+		// Apply live so a change while a recording is playing takes effect at once.
+		_audioSessionManager.PlaybackSpeed = speed;
 	}
 
 	// Sets up the "Pin input level" toggle and the input-level slider on the main

@@ -49,6 +49,17 @@ public class AudioSessionManager : IDisposable
     public bool IsRecording => _speechManager.Recording;
     public bool IsTranscribing => _speechManager.Transcribing;
 
+    /// <summary>
+    /// Playback speed for the recorded-audio player (1.0 = normal). Setting it
+    /// retunes audio that is already playing, without restarting. The value is
+    /// snapped to the nearest supported speed by the player.
+    /// </summary>
+    public double PlaybackSpeed
+    {
+        get => _playbackPlayer.Speed;
+        set => _playbackPlayer.Speed = value;
+    }
+
     public event EventHandler? SelectedSessionChanged;
     public event EventHandler? PlaybackStarted;
     public event EventHandler? PlaybackStopped;
@@ -321,6 +332,9 @@ public class AudioSessionManager : IDisposable
             }
 
             _playingSession = SelectedSession;
+            // Start each playback at the persisted speed so a saved preference is
+            // honoured on launch and after navigating between sessions.
+            _playbackPlayer.Speed = _settings.AudioSettings?.PlaybackSpeed ?? PlaybackSpeedOptions.Default;
             _playbackPlayer.Play(SelectedSession.FilePath);
             
             PlaybackStarted?.Invoke(this, EventArgs.Empty);

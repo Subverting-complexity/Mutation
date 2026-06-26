@@ -37,6 +37,11 @@ public class AudioSettings
         // so it stays consistent regardless of what other apps do. null means pinning is
         // disabled ("don't manage the level").
         public int? PinnedCaptureLevel { get; set; }
+
+	// Playback speed multiplier for the recorded-audio file player (1.0 = normal).
+	// Restored on launch and snapped to the nearest supported speed on load. Pitch
+	// is preserved at every speed. See PlaybackSpeedOptions for the allowed values.
+	public double PlaybackSpeed { get; set; } = PlaybackSpeedOptions.Default;
 	public CustomBeepSettingsData? CustomBeepSettings { get => customBeepSettings; set => customBeepSettings = value; }
 
 	public AudioSettings() { }

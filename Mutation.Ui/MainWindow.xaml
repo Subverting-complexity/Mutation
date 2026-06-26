@@ -376,6 +376,15 @@
                                         ToolTipService.ToolTip="Upload an audio file for transcription">
                                         <FontIcon Glyph="&#xE898;" FontFamily="Segoe Fluent Icons" />
                                     </Button>
+
+                                    <ComboBox
+                                        x:Name="CmbPlaybackSpeed"
+                                        Header="Speed"
+                                        MinWidth="96"
+                                        VerticalAlignment="Center"
+                                        SelectionChanged="CmbPlaybackSpeed_SelectionChanged"
+                                        AutomationProperties.Name="Playback speed"
+                                        ToolTipService.ToolTip="Change how fast recordings play back; pitch stays natural at every speed" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="6">
