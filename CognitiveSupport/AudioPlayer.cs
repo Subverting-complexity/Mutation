@@ -1,22 +1,29 @@
 using Concentus.Oggfile;
 using Concentus.Structs;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace CognitiveSupport;
 
 /// <summary>
 /// Audio player that supports OGG/Opus files using NAudio and Concentus.
 /// This bypasses Windows Media Foundation which doesn't natively support OGG/Opus.
+///
+/// Every format flows through a single chain: the decoded/read audio becomes a
+/// common sample source, passes through a pitch-preserving time-stretch stage
+/// (<see cref="SoundTouchSampleProvider"/>), and is then sent to the output
+/// device. That lets <see cref="Speed"/> change how fast playback runs — live,
+/// without restarting — while the voice keeps its natural pitch.
 /// </summary>
 public class AudioPlayer : IDisposable
 {
     private WaveOutEvent? _waveOut;
     private OpusDecoder? _decoder;
     private MemoryStream? _pcmStream;
-    private RawSourceWaveStream? _waveStream;
-    private WaveStream? _readerStream;
-    private WaveStream? _conversionStream;
+    private WaveStream? _sourceStream;
+    private SoundTouchSampleProvider? _speedProvider;
     private readonly object _playLock = new();
+    private double _speed = PlaybackSpeedOptions.Default;
     private bool _disposed;
 
     // Opus parameters matching AudioRecorder
@@ -24,6 +31,27 @@ public class AudioPlayer : IDisposable
     private const int Channels = 1;
 
     public bool IsPlaying => _waveOut?.PlaybackState == PlaybackState.Playing;
+
+    /// <summary>
+    /// Playback speed multiplier (1.0 = normal). Any value is snapped to the
+    /// nearest supported speed. Setting it applies immediately to audio that is
+    /// already playing — without stopping, restarting, or losing position — and
+    /// is remembered for the next file played.
+    /// </summary>
+    public double Speed
+    {
+        get { lock (_playLock) { return _speed; } }
+        set
+        {
+            lock (_playLock)
+            {
+                double normalized = PlaybackSpeedOptions.Normalize(value);
+                _speed = normalized;
+                if (_speedProvider != null)
+                    _speedProvider.Tempo = normalized;
+            }
+        }
+    }
 
     public event EventHandler? PlaybackEnded;
     public event EventHandler<string>? PlaybackFailed;
@@ -98,12 +126,7 @@ public class AudioPlayer : IDisposable
 
         _pcmStream = new MemoryStream(pcmBytes);
         var waveFormat = new WaveFormat(SampleRate, 16, Channels);
-        _waveStream = new RawSourceWaveStream(_pcmStream, waveFormat);
-
-        _waveOut = new WaveOutEvent();
-        _waveOut.PlaybackStopped += OnPlaybackStopped;
-        _waveOut.Init(_waveStream);
-        _waveOut.Play();
+        StartPlayback(new RawSourceWaveStream(_pcmStream, waveFormat));
     }
 
     /// <summary>
@@ -117,23 +140,27 @@ public class AudioPlayer : IDisposable
             ".mp3" => new Mp3FileReader(filePath),
             _ => new AudioFileReader(filePath) // Generic reader for other formats
         };
-        _readerStream = reader;
+
+        StartPlayback(reader);
+    }
+
+    /// <summary>
+    /// Wraps a format-specific audio source in the pitch-preserving speed stage and
+    /// starts playback. Shared by every playback path so the speed control applies
+    /// uniformly to OGG/Opus, WAV, MP3, and any other supported format.
+    /// </summary>
+    private void StartPlayback(WaveStream source)
+    {
+        _sourceStream = source;
+
+        // ToSampleProvider normalises every format to float samples; SoundTouch then
+        // time-stretches them, and SampleToWaveProvider converts back for output.
+        _speedProvider = new SoundTouchSampleProvider(source.ToSampleProvider()) { Tempo = _speed };
+        IWaveProvider output = new SampleToWaveProvider(_speedProvider);
 
         _waveOut = new WaveOutEvent();
         _waveOut.PlaybackStopped += OnPlaybackStopped;
-
-        // If the format isn't PCM, we need to convert it
-        if (reader.WaveFormat.Encoding != WaveFormatEncoding.Pcm)
-        {
-            var pcmStream = WaveFormatConversionStream.CreatePcmStream(reader);
-            _conversionStream = pcmStream;
-            _waveOut.Init(pcmStream);
-        }
-        else
-        {
-            _waveOut.Init(reader);
-        }
-
+        _waveOut.Init(output);
         _waveOut.Play();
     }
 
@@ -163,14 +190,10 @@ public class AudioPlayer : IDisposable
                     _waveOut = null;
                 }
 
-                _waveStream?.Dispose();
-                _waveStream = null;
+                _speedProvider = null;
 
-                _conversionStream?.Dispose();
-                _conversionStream = null;
-
-                _readerStream?.Dispose();
-                _readerStream = null;
+                _sourceStream?.Dispose();
+                _sourceStream = null;
 
                 _pcmStream?.Dispose();
                 _pcmStream = null;

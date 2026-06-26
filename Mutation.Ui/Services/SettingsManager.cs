@@ -175,6 +175,14 @@ internal class SettingsManager : ISettingsManager
 			audioSettings.CustomBeepSettings = new AudioSettings.CustomBeepSettingsData();
 			somethingWasMissing = true;
 		}
+		// Snap playback speed to the nearest supported value so a hand-edited or
+		// missing value can never set the player to an unsupported speed.
+		double normalizedSpeed = PlaybackSpeedOptions.Normalize(audioSettings.PlaybackSpeed);
+		if (normalizedSpeed != audioSettings.PlaybackSpeed)
+		{
+			audioSettings.PlaybackSpeed = normalizedSpeed;
+			somethingWasMissing = true;
+		}
 		if (audioSettings.CustomBeepSettings.UseCustomBeeps)
 		{
 			string[] allowedExtensions = new[] { ".wav" };
