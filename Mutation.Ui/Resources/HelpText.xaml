@@ -37,6 +37,7 @@
 	<!-- Speech to Text -->
 	<x:String x:Key="Help.Speech.FileTimeout">How long to wait for a file transcription to finish before giving up.</x:String>
 	<x:String x:Key="Help.Speech.TempDir">Folder where temporary audio files are written during recording and transcription.</x:String>
+	<x:String x:Key="Help.Speech.MaxRetainedSessions">How many past recording sessions to keep on disk. When you exceed this, the oldest are deleted first; the recording in progress is never deleted. Range 1 to 500. Default 10.</x:String>
 	<x:String x:Key="Help.Speech.SendHotkeyAfter">Optional keystrokes sent to the active app after a transcript is delivered, for example CTRL+V to paste.</x:String>
 	<x:String x:Key="Help.Speech.StripSilence">Remove long silent gaps from audio before transcription, so pauses while you think do not bloat the recording. Applies to live recordings and imported files.</x:String>
 	<x:String x:Key="Help.Speech.SilenceThreshold">Loudness floor in dBFS. Audio at or below this level counts as silence. Lower (more negative) values are stricter, treating only quieter sounds as silence. Default -40.</x:String>

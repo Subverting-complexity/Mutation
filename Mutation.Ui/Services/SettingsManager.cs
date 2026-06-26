@@ -362,6 +362,16 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		// A settings file missing this field keeps the property initializer default (10);
+		// an explicit out-of-range value is clamped to [1, 500] so cleanup cannot retain
+		// zero (which would delete every recording) or an unbounded count.
+		int clampedRetained = SpeechToTextSettings.ClampRetainedSessions(speechToTextSettings.MaxRetainedSessions);
+		if (clampedRetained != speechToTextSettings.MaxRetainedSessions)
+		{
+			speechToTextSettings.MaxRetainedSessions = clampedRetained;
+			somethingWasMissing = true;
+		}
+
 		var duplicateGroups = speechToTextSettings.Services
 			 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
 			 .Where(g => g.Count() > 1)

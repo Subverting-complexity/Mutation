@@ -70,6 +70,7 @@ internal static class SettingsWorkingCopy
 			dst.Services = src.Services;
 			dst.ActiveSpeechToTextService = src.ActiveSpeechToTextService;
 			dst.FileTranscriptionTimeoutSeconds = src.FileTranscriptionTimeoutSeconds;
+			dst.MaxRetainedSessions = src.MaxRetainedSessions;
 			dst.EnableSilenceStripping = src.EnableSilenceStripping;
 			dst.SilenceThresholdDbFs = src.SilenceThresholdDbFs;
 			dst.MinSilenceSeconds = src.MinSilenceSeconds;

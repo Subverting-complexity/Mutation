@@ -57,6 +57,7 @@ public sealed partial class SpeechSettingsPage : UserControl
 			NbFileTimeout.Value = stt.FileTranscriptionTimeoutSeconds > 0
 				? stt.FileTranscriptionTimeoutSeconds
 				: SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds;
+			NbMaxRetainedSessions.Value = SpeechToTextSettings.ClampRetainedSessions(stt.MaxRetainedSessions);
 			TxtTempDir.Text = stt.TempDirectory ?? string.Empty;
 			HkSendAfterTranscription.Hotkey = stt.SendHotkeyAfterTranscriptionOperation ?? string.Empty;
 
@@ -140,6 +141,17 @@ public sealed partial class SpeechSettingsPage : UserControl
 
 	private void BtnResetFileTimeout_Click(object sender, RoutedEventArgs e) =>
 		NbFileTimeout.Value = SettingsDefaults.Speech.FileTranscriptionTimeoutSeconds;
+
+	private void NbMaxRetainedSessions_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).MaxRetainedSessions =
+			SpeechToTextSettings.ClampRetainedSessions((int)args.NewValue);
+	}
+
+	private void BtnResetMaxRetainedSessions_Click(object sender, RoutedEventArgs e) =>
+		NbMaxRetainedSessions.Value = SettingsDefaults.Speech.MaxRetainedSessions;
 
 	private void ChkStripSilence_Changed(object sender, RoutedEventArgs e)
 	{

@@ -5,14 +5,8 @@ namespace Mutation.Ui.Core;
 /// </summary>
 public static class AppConstants
 {
-    // ============================================================
-    // Session Management
-    // ============================================================
-
-    /// <summary>
-    /// Maximum number of speech sessions to retain before cleanup removes the oldest.
-    /// </summary>
-    public const int MaxSpeechSessions = 10;
+    // Speech session retention is now user-configurable; see
+    // SpeechToTextSettings.MaxRetainedSessions (default 10, range 1–500).
 
     // ============================================================
     // Rate Limiting
