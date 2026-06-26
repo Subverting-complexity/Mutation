@@ -115,7 +115,7 @@ namespace CognitiveSupport
 			}
 		}
 
-		public void Speak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount = 0)
+		public void Speak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount = 0, SpeechPreprocessingOptions? options = null)
 		{
 			if (string.IsNullOrEmpty(text)) return;
 
@@ -134,15 +134,15 @@ namespace CognitiveSupport
 			oldCts?.Dispose();
 
 			CancellationToken token = newCts.Token;
-			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, resumeRewindWordCount, token));
+			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, resumeRewindWordCount, options, token));
 		}
 
-		private void RunSpeak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount, CancellationToken token)
+		private void RunSpeak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount, SpeechPreprocessingOptions? options, CancellationToken token)
 		{
 			if (token.IsCancellationRequested) return;
 
 			string processed;
-			try { processed = preprocess ? PreprocessForSpeech(text) : text; }
+			try { processed = preprocess ? PreprocessForSpeech(text, options ?? SpeechPreprocessingOptions.All) : text; }
 			catch { return; }
 
 			if (token.IsCancellationRequested || string.IsNullOrEmpty(processed)) return;
@@ -722,24 +722,48 @@ namespace CognitiveSupport
 		private static readonly Regex AbbrevEtcRegex = new(@"\betc\.", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 		private static readonly Regex AbbrevVsRegex = new(@"\bvs\.", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+		// Apply every cleanup rule. Kept for callers that always want the full
+		// pass; delegates to the per-rule overload with all rules enabled.
 		public static string PreprocessForSpeech(string text)
+			=> PreprocessForSpeech(text, SpeechPreprocessingOptions.All);
+
+		// Apply each cleanup rule only when its toggle in <paramref name="options"/>
+		// is on. Steps run in the same order as the original all-on pass, so the
+		// result with every rule enabled is identical to the previous behaviour.
+		public static string PreprocessForSpeech(string text, SpeechPreprocessingOptions options)
 		{
 			if (string.IsNullOrEmpty(text)) return text;
+			options ??= SpeechPreprocessingOptions.All;
+
 			string s = text;
-			s = CodeFenceRegex.Replace(s, " ");
-			s = InlineCodeRegex.Replace(s, "$1");
-			s = HeadingRegex.Replace(s, string.Empty);
-			s = UrlRegex.Replace(s, ReplaceUrlWithHost);
-			s = BoldRegex.Replace(s, "$1");
-			s = ItalicStarRegex.Replace(s, "$1");
-			s = ItalicUnderscoreRegex.Replace(s, "$1");
-			s = BulletRegex.Replace(s, string.Empty);
-			s = AbbrevEgRegex.Replace(s, "for example");
-			s = AbbrevIeRegex.Replace(s, "that is");
-			s = AbbrevEtcRegex.Replace(s, "et cetera");
-			s = AbbrevVsRegex.Replace(s, "versus");
-			s = ParagraphBreakRegex.Replace(s, ". ");
-			s = WhitespaceRegex.Replace(s, " ");
+			if (options.RemoveCodeBlocks)
+				s = CodeFenceRegex.Replace(s, " ");
+			if (options.StripBoldItalicCode)
+				s = InlineCodeRegex.Replace(s, "$1");
+			if (options.StripHeadingMarks)
+				s = HeadingRegex.Replace(s, string.Empty);
+			if (options.ShortenWebLinks)
+				s = UrlRegex.Replace(s, ReplaceUrlWithHost);
+			if (options.StripBoldItalicCode)
+			{
+				s = BoldRegex.Replace(s, "$1");
+				s = ItalicStarRegex.Replace(s, "$1");
+				s = ItalicUnderscoreRegex.Replace(s, "$1");
+			}
+			if (options.StripBulletMarkers)
+				s = BulletRegex.Replace(s, string.Empty);
+			if (options.ExpandAbbreviations)
+			{
+				s = AbbrevEgRegex.Replace(s, "for example");
+				s = AbbrevIeRegex.Replace(s, "that is");
+				s = AbbrevEtcRegex.Replace(s, "et cetera");
+				s = AbbrevVsRegex.Replace(s, "versus");
+			}
+			if (options.NormaliseWhitespace)
+			{
+				s = ParagraphBreakRegex.Replace(s, ". ");
+				s = WhitespaceRegex.Replace(s, " ");
+			}
 			return s.Trim();
 		}
 	}

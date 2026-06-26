@@ -6,8 +6,10 @@ namespace CognitiveSupport;
 public interface IWavFileSpeechExporter
 {
 	// Synthesize <paramref name="text"/> to a .wav file at <paramref name="filePath"/>
-	// using the given voice/rate/volume and optional speech preprocessing. Runs
-	// synchronously (the caller should invoke it off the UI thread); throws on empty
-	// input or synthesis/IO failure so the caller can surface an accessible error.
-	void ExportToWavFile(string text, string filePath, int rate, int volume, string? voiceName, bool preprocess);
+	// using the given voice/rate/volume and optional speech preprocessing. When
+	// <paramref name="preprocess"/> is true, <paramref name="options"/> selects which
+	// cleanup rules run (null means every rule). Runs synchronously (the caller should
+	// invoke it off the UI thread); throws on empty input or synthesis/IO failure so the
+	// caller can surface an accessible error.
+	void ExportToWavFile(string text, string filePath, int rate, int volume, string? voiceName, bool preprocess, SpeechPreprocessingOptions? options = null);
 }

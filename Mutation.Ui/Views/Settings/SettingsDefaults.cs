@@ -68,6 +68,17 @@ internal static class SettingsDefaults
 		public const int Rate = 8;
 		public const int Volume = 100;
 		public const bool EnableSpeechPreprocessing = true;
+
+		// Per-rule preprocessing defaults — all on, matching the previous
+		// all-or-nothing cleanup so existing users see no change.
+		public const bool PreprocessRemoveCodeBlocks = true;
+		public const bool PreprocessStripBoldItalicCode = true;
+		public const bool PreprocessStripHeadingMarks = true;
+		public const bool PreprocessShortenWebLinks = true;
+		public const bool PreprocessStripBulletMarkers = true;
+		public const bool PreprocessExpandAbbreviations = true;
+		public const bool PreprocessNormaliseWhitespace = true;
+
 		public const int SkipSentenceGraceWindowMs = 1500;
 		public const int MinSkipSentenceGraceWindowMs = 250;
 		public const int MaxSkipSentenceGraceWindowMs = 5000;
