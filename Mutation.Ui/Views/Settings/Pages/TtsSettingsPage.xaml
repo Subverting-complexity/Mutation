@@ -28,6 +28,99 @@
 			</Button>
 		</StackPanel>
 
+		<StackPanel x:Name="PreprocessingRulesPanel" Spacing="8" Margin="20,0,0,0">
+			<TextBlock Text="Individual cleanup rules"
+					   Style="{StaticResource BodyStrongTextBlockStyle}" />
+			<TextBlock Text="Turn each clean-up on or off independently. These apply only while the master switch above is on."
+					   TextWrapping="Wrap"
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleRemoveCodeBlocks"
+							  Header="Remove code blocks"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.RemoveCodeBlocks}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleRemoveCodeBlocks_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.RemoveCodeBlocks}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetRemoveCodeBlocks_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset remove code blocks">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleStripBoldItalicCode"
+							  Header="Strip bold, italic, and inline-code symbols"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.StripBoldItalicCode}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleStripBoldItalicCode_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.StripBoldItalicCode}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetStripBoldItalicCode_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset strip bold, italic, and inline-code symbols">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleStripHeadingMarks"
+							  Header="Strip heading marks"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.StripHeadingMarks}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleStripHeadingMarks_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.StripHeadingMarks}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetStripHeadingMarks_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset strip heading marks">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleShortenWebLinks"
+							  Header="Shorten web links"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.ShortenWebLinks}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleShortenWebLinks_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.ShortenWebLinks}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetShortenWebLinks_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset shorten web links">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleStripBulletMarkers"
+							  Header="Strip bullet markers"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.StripBulletMarkers}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleStripBulletMarkers_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.StripBulletMarkers}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetStripBulletMarkers_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset strip bullet markers">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleExpandAbbreviations"
+							  Header="Expand abbreviations"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.ExpandAbbreviations}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleExpandAbbreviations_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.ExpandAbbreviations}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetExpandAbbreviations_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset expand abbreviations">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<ToggleSwitch x:Name="ToggleNormaliseWhitespace"
+							  Header="Normalise paragraph breaks and whitespace"
+							  AutomationProperties.HelpText="{StaticResource Help.Tts.Preproc.NormaliseWhitespace}"
+							  OffContent="Off" OnContent="On"
+							  Toggled="ToggleNormaliseWhitespace_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Tts.Preproc.NormaliseWhitespace}" VerticalAlignment="Center" />
+				<Button VerticalAlignment="Bottom" Click="BtnResetNormaliseWhitespace_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset normalise paragraph breaks and whitespace">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
 		<StackPanel Spacing="4">
 			<StackPanel Orientation="Horizontal" Spacing="6">
 				<TextBlock Text="Skip-back grace window (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />

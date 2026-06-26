@@ -8,13 +8,15 @@ namespace CognitiveSupport;
 // exporting never disturbs an in-progress live read.
 public class WavFileSpeechExporter : IWavFileSpeechExporter
 {
-	public void ExportToWavFile(string text, string filePath, int rate, int volume, string? voiceName, bool preprocess)
+	public void ExportToWavFile(string text, string filePath, int rate, int volume, string? voiceName, bool preprocess, SpeechPreprocessingOptions? options = null)
 	{
 		if (!TtsFileExport.TryResolveExportText(text, out string resolved, out string error))
 			throw new ArgumentException(error, nameof(text));
 
 		string wavPath = TtsFileExport.EnsureWavExtension(filePath);
-		string spoken = preprocess ? TextToSpeechService.PreprocessForSpeech(resolved) : resolved;
+		string spoken = preprocess
+			? TextToSpeechService.PreprocessForSpeech(resolved, options ?? SpeechPreprocessingOptions.All)
+			: resolved;
 		if (string.IsNullOrWhiteSpace(spoken))
 			throw new ArgumentException("Nothing to speak after preprocessing.", nameof(text));
 

@@ -24,7 +24,14 @@
 	<x:String x:Key="Help.Interface.DictationInsert">How transcripts reach the active app: Paste inserts via the clipboard, Type simulates keystrokes, and DoNotInsert leaves the text in Mutation only.</x:String>
 
 	<!-- Text to Speech -->
-	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud.</x:String>
+	<x:String x:Key="Help.Tts.Preprocessing">Clean up text, such as expanding abbreviations and symbols, before it is spoken aloud. The individual rules below let you choose exactly which clean-ups run; this master switch turns all of them on or off at once.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.RemoveCodeBlocks">Drop fenced code blocks (text between triple backticks) entirely so they are not read aloud.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.StripBoldItalicCode">Remove bold, italic, and inline-code symbols (such as asterisks, underscores, and backticks), keeping the words between them.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.StripHeadingMarks">Remove leading heading marks (one or more # symbols) so headings are read as plain text.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.ShortenWebLinks">Replace long web links with a short spoken phrase such as "link to example.com" instead of reading the full address.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.StripBulletMarkers">Remove leading bullet markers (such as -, *, or +) at the start of list items.</x:String>
+	<x:String x:Key="Help.Tts.Preproc.ExpandAbbreviations">Expand common abbreviations so they are spoken in full: e.g. becomes "for example", i.e. becomes "that is", etc. becomes "et cetera", and vs. becomes "versus".</x:String>
+	<x:String x:Key="Help.Tts.Preproc.NormaliseWhitespace">Collapse blank lines and runs of spaces into single spaces so paragraph breaks do not cause long pauses.</x:String>
 	<x:String x:Key="Help.Tts.SkipSentenceGrace">When skipping back, how long after a sentence starts that a back-press still steps to the previous sentence. After this window a back-press restarts the current sentence instead. A larger value makes stepping back easier; a smaller value favours re-reading the current sentence.</x:String>
 	<x:String x:Key="Help.Tts.ResumeRewindWords">When you resume reading after pausing, rewind this many words before where it stopped so you regain context of where you are. Set to 0 for no rewind: reading resumes from exactly where it stopped.</x:String>
 	<x:String x:Key="Help.Tts.ResumeRewindAfterPauseSeconds">When you resume after pausing, only rewind for context if the pause lasted longer than this many seconds. A quick pause resumes seamlessly from the exact word; a longer break rewinds first. Set to 0 to always rewind, however brief the pause.</x:String>

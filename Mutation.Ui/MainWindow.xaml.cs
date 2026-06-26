@@ -852,7 +852,8 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (clipboardChanged)
 			{
 				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
-					resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
+					resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing,
+					options: SpeechPreprocessingOptions.FromSettings(tts));
 				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
 			}
 			else
@@ -866,7 +867,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
 				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing,
-				resumeRewindWordCount: tts.ResumeRewindWordCount);
+				resumeRewindWordCount: tts.ResumeRewindWordCount,
+				options: SpeechPreprocessingOptions.FromSettings(tts));
 			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 			return;
 		}
@@ -974,7 +976,8 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Synthesize off the UI thread so a long article does not freeze the window.
 			// A dedicated exporter writes to the file, leaving any live read untouched.
 			await Task.Run(() => _wavFileSpeechExporter.ExportToWavFile(
-				text, file.Path, tts.Rate, tts.Volume, tts.VoiceName, tts.EnableSpeechPreprocessing));
+				text, file.Path, tts.Rate, tts.Volume, tts.VoiceName, tts.EnableSpeechPreprocessing,
+				SpeechPreprocessingOptions.FromSettings(tts)));
 			ShowStatus("Speak to file", $"Saved audio to {file.Name}.", InfoBarSeverity.Success);
 		}
 		catch (Exception ex)
@@ -1043,7 +1046,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (kind == ClipboardKind.Text && trimmed.Length > 0)
 		{
 			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
-				resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing);
+				resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing,
+				options: SpeechPreprocessingOptions.FromSettings(tts));
 			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 			return;
 		}

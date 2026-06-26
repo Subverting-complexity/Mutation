@@ -23,6 +23,14 @@ public sealed partial class TtsSettingsPage : UserControl
 		{
 			var tts = _settings.TextToSpeechSettings ??= new TextToSpeechSettings();
 			ToggleSpeechPreprocessing.IsOn = tts.EnableSpeechPreprocessing;
+			ToggleRemoveCodeBlocks.IsOn = tts.PreprocessRemoveCodeBlocks;
+			ToggleStripBoldItalicCode.IsOn = tts.PreprocessStripBoldItalicCode;
+			ToggleStripHeadingMarks.IsOn = tts.PreprocessStripHeadingMarks;
+			ToggleShortenWebLinks.IsOn = tts.PreprocessShortenWebLinks;
+			ToggleStripBulletMarkers.IsOn = tts.PreprocessStripBulletMarkers;
+			ToggleExpandAbbreviations.IsOn = tts.PreprocessExpandAbbreviations;
+			ToggleNormaliseWhitespace.IsOn = tts.PreprocessNormaliseWhitespace;
+			UpdatePreprocessingRulesEnabled();
 			NbSkipGrace.Value = tts.SkipSentenceGraceWindowMs;
 			NbResumeRewindWords.Value = tts.ResumeRewindWordCount;
 			NbResumeRewindAfterPauseSeconds.Value = tts.ResumeRewindAfterPauseSeconds;
@@ -35,6 +43,9 @@ public sealed partial class TtsSettingsPage : UserControl
 
 	private void ToggleSpeechPreprocessing_Toggled(object sender, RoutedEventArgs e)
 	{
+		// Keep the master state current even while suppressing persistence during load,
+		// so the per-rule panel's enabled state always reflects the master switch.
+		UpdatePreprocessingRulesEnabled();
 		if (_suppressEvents) return;
 		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).EnableSpeechPreprocessing = ToggleSpeechPreprocessing.IsOn;
 	}
@@ -42,6 +53,98 @@ public sealed partial class TtsSettingsPage : UserControl
 	private void BtnResetPreproc_Click(object sender, RoutedEventArgs e)
 	{
 		ToggleSpeechPreprocessing.IsOn = SettingsDefaults.Tts.EnableSpeechPreprocessing;
+	}
+
+	// The individual rules only take effect while the master switch is on, so disable
+	// each rule toggle when it is off — screen readers then announce each rule as
+	// unavailable rather than letting a user toggle a control that does nothing.
+	private void UpdatePreprocessingRulesEnabled()
+	{
+		bool enabled = ToggleSpeechPreprocessing.IsOn;
+		ToggleRemoveCodeBlocks.IsEnabled = enabled;
+		ToggleStripBoldItalicCode.IsEnabled = enabled;
+		ToggleStripHeadingMarks.IsEnabled = enabled;
+		ToggleShortenWebLinks.IsEnabled = enabled;
+		ToggleStripBulletMarkers.IsEnabled = enabled;
+		ToggleExpandAbbreviations.IsEnabled = enabled;
+		ToggleNormaliseWhitespace.IsEnabled = enabled;
+	}
+
+	private void ToggleRemoveCodeBlocks_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessRemoveCodeBlocks = ToggleRemoveCodeBlocks.IsOn;
+	}
+
+	private void BtnResetRemoveCodeBlocks_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleRemoveCodeBlocks.IsOn = SettingsDefaults.Tts.PreprocessRemoveCodeBlocks;
+	}
+
+	private void ToggleStripBoldItalicCode_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessStripBoldItalicCode = ToggleStripBoldItalicCode.IsOn;
+	}
+
+	private void BtnResetStripBoldItalicCode_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleStripBoldItalicCode.IsOn = SettingsDefaults.Tts.PreprocessStripBoldItalicCode;
+	}
+
+	private void ToggleStripHeadingMarks_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessStripHeadingMarks = ToggleStripHeadingMarks.IsOn;
+	}
+
+	private void BtnResetStripHeadingMarks_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleStripHeadingMarks.IsOn = SettingsDefaults.Tts.PreprocessStripHeadingMarks;
+	}
+
+	private void ToggleShortenWebLinks_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessShortenWebLinks = ToggleShortenWebLinks.IsOn;
+	}
+
+	private void BtnResetShortenWebLinks_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleShortenWebLinks.IsOn = SettingsDefaults.Tts.PreprocessShortenWebLinks;
+	}
+
+	private void ToggleStripBulletMarkers_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessStripBulletMarkers = ToggleStripBulletMarkers.IsOn;
+	}
+
+	private void BtnResetStripBulletMarkers_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleStripBulletMarkers.IsOn = SettingsDefaults.Tts.PreprocessStripBulletMarkers;
+	}
+
+	private void ToggleExpandAbbreviations_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessExpandAbbreviations = ToggleExpandAbbreviations.IsOn;
+	}
+
+	private void BtnResetExpandAbbreviations_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleExpandAbbreviations.IsOn = SettingsDefaults.Tts.PreprocessExpandAbbreviations;
+	}
+
+	private void ToggleNormaliseWhitespace_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.TextToSpeechSettings ??= new TextToSpeechSettings()).PreprocessNormaliseWhitespace = ToggleNormaliseWhitespace.IsOn;
+	}
+
+	private void BtnResetNormaliseWhitespace_Click(object sender, RoutedEventArgs e)
+	{
+		ToggleNormaliseWhitespace.IsOn = SettingsDefaults.Tts.PreprocessNormaliseWhitespace;
 	}
 
 	private void NbSkipGrace_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

@@ -290,6 +290,18 @@ public class TextToSpeechSettings
 	public int Rate { get; set; } = 8;
 	public int Volume { get; set; } = 100;
 	public bool EnableSpeechPreprocessing { get; set; } = true;
+
+	// Per-rule speech-preprocessing switches. Each gates one cleanup rule applied
+	// before text is spoken; all default true so existing behaviour is unchanged.
+	// The master EnableSpeechPreprocessing switch above gates all of them at once.
+	public bool PreprocessRemoveCodeBlocks { get; set; } = true;
+	public bool PreprocessStripBoldItalicCode { get; set; } = true;
+	public bool PreprocessStripHeadingMarks { get; set; } = true;
+	public bool PreprocessShortenWebLinks { get; set; } = true;
+	public bool PreprocessStripBulletMarkers { get; set; } = true;
+	public bool PreprocessExpandAbbreviations { get; set; } = true;
+	public bool PreprocessNormaliseWhitespace { get; set; } = true;
+
 	public string? VoiceName { get; set; }
 
 	// How long (milliseconds) after a sentence starts that a "skip backward" press
