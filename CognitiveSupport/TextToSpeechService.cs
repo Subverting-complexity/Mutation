@@ -24,7 +24,11 @@ namespace CognitiveSupport
 		private string? _currentText;
 		private string? _lastInputText;
 		private int _currentPosition;
-		private int _spokenToCurrentDelta;
+		// Maps the in-flight spoken string back to real-text offsets. A read with no
+		// woven markers degrades to a single scalar shift, identical to the old
+		// _spokenToCurrentDelta; a read with progress markers carries one breakpoint
+		// per marker so OnSpeakProgress still reports the real position.
+		private SpokenWeaveMap _spokenMap;
 		private List<int>? _sentenceStarts;
 		// Authoritative navigation cursor: which sentence index we are on. Driven
 		// explicitly by SkipSentence and nudged forward by playback progress, so
@@ -60,22 +64,13 @@ namespace CognitiveSupport
 		private int _announceProgressEveryPercent = 25;
 		private int _announceProgressMinimumMinutes = 2;
 
-		// The voice parameters of the live read, captured so a periodic progress
-		// announcement can re-speak the remainder in the same voice without the caller
-		// having to thread them back in.
-		private int _liveRate;
-		private int _liveVolume;
-		private string? _liveVoice;
-
-		// Deferral state for periodic progress announcements: which thresholds have been
-		// passed and which (if any) is waiting to be spoken at the next sentence boundary.
-		private ProgressDeferral _progress;
-		// Set while a progress announcement is being scheduled/spoken so the flood of
-		// SpeakProgress events does not stack up duplicate announcements.
-		private bool _progressInterjectionInFlight;
+		// Highest progress threshold already announced (spoken) in the current read,
+		// 0 = none. Advanced as each woven marker is reached so a re-plan after a
+		// skip/resume never re-announces a threshold the listener already heard, and
+		// backward navigation does not re-announce a passed threshold.
+		private int _lastAnnouncedPercent;
 		// Bumped whenever a new top-level operation begins (read, stop, skip, spoken
-		// announcement). A deferred progress interjection captures the value at schedule
-		// time and bails if it changed, so a Stop/Skip during the gap always wins.
+		// announcement) so a stale deferred task can detect it was superseded.
 		private long _playbackEpoch;
 
 		public bool IsSpeaking
@@ -158,11 +153,7 @@ namespace CognitiveSupport
 				if (_synth is null) return;
 
 				ApplyVoiceParams(rate, volume, voiceName);
-				_liveRate = rate;
-				_liveVolume = volume;
-				_liveVoice = voiceName;
 				_playbackEpoch++;
-				_progressInterjectionInFlight = false;
 
 				bool sameContent = string.Equals(processed, _currentText, StringComparison.Ordinal);
 				bool canResume = resumeIfSame && sameContent
@@ -175,14 +166,13 @@ namespace CognitiveSupport
 					// context of where they are, then resume from there.
 					int resumePos = RewindByWords(processed, _currentPosition, resumeRewindWordCount);
 					_currentPosition = resumePos;
-					_spokenToCurrentDelta = resumePos;
 					EnterSentence(FindSentenceIndex(resumePos));
 					ResetSkipBurst();
-					// Keep already-passed progress thresholds marked so resuming mid-read
-					// does not re-announce them, and clear any pending announcement.
-					_progress.Reset();
-					_progress.LastAnnouncedPercent = ProgressPercentAt(resumePos, processed.Length);
-					_currentPrompt = _synth.SpeakAsync(processed.Substring(resumePos));
+					// Mark the thresholds already passed at the resume point as announced so
+					// resuming mid-read does not re-announce them; the weave plans only the
+					// thresholds still ahead.
+					_lastAnnouncedPercent = ProgressPercentAt(resumePos, processed.Length);
+					_currentPrompt = _synth.SpeakAsync(BuildWovenSpeech(resumePos, string.Empty));
 				}
 				else
 				{
@@ -192,14 +182,12 @@ namespace CognitiveSupport
 					_sentenceStarts = FindSentenceStarts(processed);
 					EnterSentence(0);
 					ResetSkipBurst();
-					_progress.Reset();
+					_lastAnnouncedPercent = 0;
 
 					string warning = ShouldAnnounceLength(processed)
 						? BuildLengthAnnouncement(processed)
 						: string.Empty;
-					string spoken = warning + processed;
-					_spokenToCurrentDelta = -warning.Length;
-					_currentPrompt = _synth.SpeakAsync(spoken);
+					_currentPrompt = _synth.SpeakAsync(BuildWovenSpeech(0, warning));
 				}
 			}
 		}
@@ -224,15 +212,7 @@ namespace CognitiveSupport
 				_opCts = newCts;
 
 				ApplyVoiceParams(rate, volume, voiceName);
-				_liveRate = rate;
-				_liveVolume = volume;
-				_liveVoice = voiceName;
 				_playbackEpoch++;
-				_progressInterjectionInFlight = false;
-
-				// A skip is a fresh navigation: drop any announcement that was waiting for a
-				// boundary, since its percentage no longer matches the new position.
-				_progress.PendingPercent = 0;
 
 				int lastIndex = _sentenceStarts.Count - 1;
 				long now = Environment.TickCount64;
@@ -245,16 +225,15 @@ namespace CognitiveSupport
 				if (desiredIndex < 0)
 				{
 					// Reached before the first sentence: announce the boundary, then keep
-					// reading from the start rather than stopping. The announcement is
-					// prepended to the text (like the length warning in RunSpeak) and the
-					// spoken->current delta offsets it so progress maps back onto sentence 0.
+					// reading from the start rather than stopping. The boundary phrase is
+					// woven in as the spoken-only prefix (like the length warning in
+					// RunSpeak); progress markers ahead are re-planned from the start.
 					_pendingSkipIndex = 0;
 					EnterSentence(0);
 					_currentPosition = 0;
-					_progress.Reset();
-					string announcement = BeginningOfTextAnnouncement + " ";
-					_spokenToCurrentDelta = -announcement.Length;
-					_currentPrompt = _synth!.SpeakAsync(announcement + _currentText);
+					_lastAnnouncedPercent = 0;
+					_currentPrompt = _synth!.SpeakAsync(
+						BuildWovenSpeech(0, BeginningOfTextAnnouncement + " "));
 				}
 				else if (desiredIndex > lastIndex)
 				{
@@ -268,8 +247,10 @@ namespace CognitiveSupport
 					int targetPos = _sentenceStarts[desiredIndex];
 					EnterSentence(desiredIndex);
 					_currentPosition = targetPos;
-					_spokenToCurrentDelta = targetPos;
-					_currentPrompt = _synth!.SpeakAsync(_currentText.Substring(targetPos));
+					// _lastAnnouncedPercent is deliberately preserved: a forward skip that
+					// vaults past thresholds re-plans and announces only the highest at the
+					// next boundary, and a backward skip never re-announces a passed one.
+					_currentPrompt = _synth!.SpeakAsync(BuildWovenSpeech(targetPos, string.Empty));
 				}
 			}
 			oldCts?.Cancel();
@@ -346,7 +327,6 @@ namespace CognitiveSupport
 				ApplyVoiceParams(rate, volume, voiceName);
 				_speakingAnnouncement = true;
 				_playbackEpoch++;
-				_progressInterjectionInFlight = false;
 				_currentPrompt = _synth!.SpeakAsync(text);
 			}
 			oldCts?.Cancel();
@@ -392,8 +372,6 @@ namespace CognitiveSupport
 				oldCts = _opCts;
 				_opCts = null;
 				_playbackEpoch++;
-				_progressInterjectionInFlight = false;
-				_progress.PendingPercent = 0;
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
 				// If the read was frozen by Pause(), the engine is still in its Paused state with
@@ -449,22 +427,17 @@ namespace CognitiveSupport
 				// Beyond the threshold: cancel the frozen utterance and respeak from a rewound
 				// position so the listener regains context. Mirrors RunSpeak's resume branch.
 				ApplyVoiceParams(rate, volume, voiceName);
-				_liveRate = rate;
-				_liveVolume = volume;
-				_liveVoice = voiceName;
 				_playbackEpoch++;
-				_progressInterjectionInFlight = false;
 
 				int resumePos = ComputeResumePosition(_currentText, _currentPosition, resumeRewindWordCount, rewind: true);
 				_currentPosition = resumePos;
-				_spokenToCurrentDelta = resumePos;
 				EnterSentence(FindSentenceIndex(resumePos));
 				ResetSkipBurst();
-				_progress.Reset();
-				_progress.LastAnnouncedPercent = ProgressPercentAt(resumePos, _currentText.Length);
+				// Mark thresholds passed at the resume point as announced; weave only ahead.
+				_lastAnnouncedPercent = ProgressPercentAt(resumePos, _currentText.Length);
 
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
-				_currentPrompt = _synth.SpeakAsync(_currentText.Substring(resumePos));
+				_currentPrompt = _synth.SpeakAsync(BuildWovenSpeech(resumePos, string.Empty));
 				// The engine is still in its paused state; un-pause it so the newly queued
 				// utterance actually plays.
 				try { _synth.Resume(); } catch { }
@@ -554,118 +527,56 @@ namespace CognitiveSupport
 				if (!ReferenceEquals(e.Prompt, _currentPrompt)) return;
 				if (_speakingAnnouncement) return;
 				if (_currentText is null) return;
-				int mapped = e.CharacterPosition + _spokenToCurrentDelta;
-				if (mapped < 0) mapped = 0;
-				if (mapped > _currentText.Length) mapped = _currentText.Length;
+				int mapped = _spokenMap.ToReal(e.CharacterPosition);
 				_currentPosition = mapped;
+
+				// Advance the announced tracker as each baked progress marker is reached, so
+				// a later skip/resume re-plan never re-announces a threshold already heard.
+				int reached = _spokenMap.HighestMarkerPercentAtOrBefore(mapped);
+				if (reached > _lastAnnouncedPercent)
+					_lastAnnouncedPercent = reached;
 
 				// Keep the navigation cursor in step with natural playback so a skip
 				// after the reader has crossed into a new sentence acts from there.
 				// Re-entering a sentence also restarts the back-skip grace window.
 				int sentenceIndex = FindSentenceIndex(mapped);
-				bool sentenceAdvanced = sentenceIndex != _navIndex;
-				if (sentenceAdvanced)
+				if (sentenceIndex != _navIndex)
 					EnterSentence(sentenceIndex);
-
-				// A progress announcement crossed mid-sentence is held until the sentence
-				// finishes, so it lands cleanly between sentences instead of cutting the
-				// current one off. A new sentence has just begun — flush it now.
-				if (sentenceAdvanced)
-					FlushPendingProgressAtBoundary();
-
-				MaybeAnnounceProgress();
 			}
 		}
 
-		// Record, on each progress tick, whether the read has crossed a new percentage
-		// threshold. Cheap by design: a couple of integer comparisons in the common case.
-		// Crossing a threshold only marks it pending; the announcement itself is spoken at
-		// the next sentence boundary (see FlushPendingProgressAtBoundary) so it never cuts
-		// the current sentence off mid-way.
-		private void MaybeAnnounceProgress()
+		// Build the single spoken string for a read that starts at real offset `fromReal`,
+		// weaving every still-upcoming progress announcement into it at sentence boundaries
+		// so the engine reads straight through with no cancel/restart seam. `prefix` is
+		// spoken-only lead-in text (a length or beginning-of-text announcement); pass "" for
+		// none. Records the spoken->real map as a side effect and returns the string to
+		// speak. Caller holds _gate with _currentText and _sentenceStarts set.
+		private string BuildWovenSpeech(int fromReal, string prefix)
 		{
-			if (!_announceProgressEnabled || _speakingAnnouncement || _progressInterjectionInFlight)
-				return;
-			if (_currentText is null || _currentText.Length == 0)
-				return;
-			if (!ReadingEstimate.ExceedsMinutes(_currentText.Length, _announceProgressMinimumMinutes))
-				return;
+			string real = _currentText!;
+			int length = real.Length;
 
-			int percent = ProgressPercentAt(_currentPosition, _currentText.Length);
-			// Hold the highest crossed threshold pending. Multiple thresholds crossed before
-			// the next boundary collapse to a single announcement of the highest.
-			_progress.Observe(percent, _announceProgressEveryPercent);
-		}
+			int step = _announceProgressEnabled
+				&& ReadingEstimate.ExceedsMinutes(length, _announceProgressMinimumMinutes)
+					? _announceProgressEveryPercent
+					: 0;
 
-		// Flush a pending progress announcement now that playback has reached a sentence
-		// boundary. Minutes-remaining is recomputed here so the spoken estimate reflects the
-		// boundary position rather than the earlier crossing point.
-		private void FlushPendingProgressAtBoundary()
-		{
-			if (!_announceProgressEnabled || _speakingAnnouncement || _progressInterjectionInFlight)
-				return;
-			if (_currentText is null)
-				return;
+			var weaves = ProgressWeavePlanner.Plan(
+				length, _sentenceStarts!, fromReal, _lastAnnouncedPercent, step);
 
-			int percent = _progress.TakeAtBoundary();
-			if (percent <= 0)
-				return;
-
-			SchedulePendingAnnouncement(percent);
-		}
-
-		// Schedule the deferred speak off the synth's event thread. Reuses the cancel +
-		// re-speak interjection path; because it now runs at a sentence start, no sentence
-		// is cut mid-way.
-		private void SchedulePendingAnnouncement(int percent)
-		{
-			if (_currentText is null)
-				return;
-
-			_progressInterjectionInFlight = true;
-			int minutesRemaining = ReadingEstimate.RemainingWholeMinutes(_currentText.Length - _currentPosition);
-			string text = ReadingAnnouncements.Progress(percent, minutesRemaining);
-			long epoch = _playbackEpoch;
-			Task.Run(() => SpeakProgressInterjection(text, epoch));
-		}
-
-		// Speak a progress update, then carry on reading from where playback was. We
-		// cannot interleave audio into the single in-flight utterance, so we cancel it and
-		// re-issue "<progress>. <remaining text>" as one new utterance — the same prefix +
-		// offset idiom the length warning and beginning-of-text announcement already use,
-		// which keeps progress character positions mapping back onto the real text.
-		private void SpeakProgressInterjection(string progressText, long epoch)
-		{
-			CancellationTokenSource? oldCts;
-			CancellationTokenSource newCts = new();
-			lock (_gate)
+			var markers = new List<SpokenWeave.Marker>(weaves.Count);
+			foreach (var w in weaves)
 			{
-				// A Stop/Skip/new read between scheduling and running bumps the epoch; in
-				// that case the read we meant to resume no longer exists, so do nothing.
-				if (_disposed || _currentText is null || _playbackEpoch != epoch)
-				{
-					newCts.Dispose();
-					_progressInterjectionInFlight = false;
-					return;
-				}
-
-				EnsureSynth();
-				CancelAllAndClearPause();
-				oldCts = _opCts;
-				_opCts = newCts;
-
-				ApplyVoiceParams(_liveRate, _liveVolume, _liveVoice);
-
-				int position = Math.Clamp(_currentPosition, 0, _currentText.Length);
-				string prefix = progressText + " ";
-				string remainder = _currentText.Substring(position);
-				_spokenToCurrentDelta = position - prefix.Length;
-				_speakingAnnouncement = false;
-				_currentPrompt = _synth!.SpeakAsync(prefix + remainder);
-				_progressInterjectionInFlight = false;
+				// Rate is constant during a read, so the minutes-remaining at each boundary
+				// can be computed now, at weave time.
+				int minutes = ReadingEstimate.RemainingWholeMinutes(length - w.RealOffset);
+				string text = ReadingAnnouncements.Progress(w.Percent, minutes) + " ";
+				markers.Add(new SpokenWeave.Marker(w.RealOffset, w.Percent, text));
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
+
+			var (spoken, map) = SpokenWeave.Build(real, fromReal, prefix, markers);
+			_spokenMap = map;
+			return spoken;
 		}
 
 		private static int ProgressPercentAt(int position, int length)
@@ -689,16 +600,10 @@ namespace CognitiveSupport
 				{
 					_currentPosition = _currentText.Length;
 					_navIndex = _sentenceStarts is { Count: > 0 } ? _sentenceStarts.Count - 1 : 0;
-
-					// A threshold crossed during the final sentence has no following boundary
-					// to flush at. The read has reached 100%, which is never announced as
-					// progress, so the pending announcement is dropped here (end of text
-					// speaks for itself). The guard keeps it correct if a completion ever
-					// lands below 100%.
-					int finalPercent = ProgressPercentAt(_currentPosition, _currentText.Length);
-					int pending = _progress.TakeOnCompletion(finalPercent);
-					if (pending > 0)
-						SchedulePendingAnnouncement(pending);
+					// A threshold whose boundary fell inside the final sentence was never
+					// woven (it has no following boundary), so nothing is announced here.
+					// The read has reached 100%, which is never announced as progress —
+					// "End of text." speaks for itself.
 				}
 			}
 		}

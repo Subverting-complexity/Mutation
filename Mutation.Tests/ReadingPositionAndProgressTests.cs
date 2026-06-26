@@ -140,83 +140,14 @@ public class ReadingPositionAndProgressTests
 		Assert.Equal(0, ReadingProgress.HighestThresholdCrossed(0, 50, 0));
 	}
 
-	// ---- ProgressDeferral: hold the announcement until a sentence boundary ----
-
-	[Fact]
-	public void Deferral_CrossingThreshold_HoldsItPendingNotImmediate()
+	[Theory]
+	[InlineData(25, 75)]   // largest multiple of 25 below 100
+	[InlineData(30, 90)]   // largest multiple of 30 below 100
+	[InlineData(50, 50)]
+	[InlineData(0, 0)]     // non-positive step is safe
+	public void MaxThreshold_LargestMultipleBelowHundred(int step, int expected)
 	{
-		var d = new ProgressDeferral();
-
-		// Crossing a threshold mid-sentence records it as pending; nothing is "taken" yet.
-		Assert.True(d.Observe(currentPercent: 25, stepPercent: 25));
-		Assert.Equal(25, d.PendingPercent);
-
-		// It is only released at the next sentence boundary.
-		Assert.Equal(25, d.TakeAtBoundary());
-		Assert.Equal(0, d.PendingPercent);
-	}
-
-	[Fact]
-	public void Deferral_NoThresholdReached_NothingPending()
-	{
-		var d = new ProgressDeferral();
-		Assert.False(d.Observe(currentPercent: 24, stepPercent: 25));
-		Assert.Equal(0, d.PendingPercent);
-		Assert.Equal(0, d.TakeAtBoundary());
-	}
-
-	[Fact]
-	public void Deferral_MultipleThresholdsBeforeBoundary_FlushesOnlyHighest()
-	{
-		var d = new ProgressDeferral();
-
-		// Several thresholds cross before the next boundary (25 -> 50 -> 75).
-		Assert.True(d.Observe(currentPercent: 25, stepPercent: 25));
-		Assert.True(d.Observe(currentPercent: 50, stepPercent: 25));
-		Assert.True(d.Observe(currentPercent: 75, stepPercent: 25));
-
-		// Only the highest is pending, so the boundary produces a single announcement.
-		Assert.Equal(75, d.TakeAtBoundary());
-
-		// The skipped lower thresholds never re-announce afterwards.
-		Assert.False(d.Observe(currentPercent: 76, stepPercent: 25));
-		Assert.Equal(0, d.TakeAtBoundary());
-	}
-
-	[Fact]
-	public void Deferral_FinalSentenceCompletesAtHundred_DropsPending()
-	{
-		var d = new ProgressDeferral();
-		d.Observe(currentPercent: 75, stepPercent: 25);
-
-		// Reaching the end (100%) is never announced as progress, so the pending 75 is dropped.
-		Assert.Equal(0, d.TakeOnCompletion(finalPercent: 100));
-		Assert.Equal(0, d.PendingPercent);
-	}
-
-	[Fact]
-	public void Deferral_CompletionBelowHundred_StillFlushesPending()
-	{
-		var d = new ProgressDeferral();
-		d.Observe(currentPercent: 50, stepPercent: 25);
-
-		// Defensive guard: a completion below 100% still speaks the held announcement.
-		Assert.Equal(50, d.TakeOnCompletion(finalPercent: 99));
-		Assert.Equal(0, d.PendingPercent);
-	}
-
-	[Fact]
-	public void Deferral_Reset_ClearsThresholdAndPending()
-	{
-		var d = new ProgressDeferral();
-		d.Observe(currentPercent: 50, stepPercent: 25);
-
-		d.Reset();
-
-		Assert.Equal(0, d.LastAnnouncedPercent);
-		Assert.Equal(0, d.PendingPercent);
-		// After a reset the same threshold can be crossed (and announced) again.
-		Assert.True(d.Observe(currentPercent: 25, stepPercent: 25));
+		Assert.Equal(expected, ReadingProgress.MaxThreshold(step));
 	}
 
 	// ---- ReadingAnnouncements: spoken phrasing ----
