@@ -191,6 +191,10 @@ public partial class App : Application
 			builder.Services.AddSingleton<UiStateManager>();
 			builder.Services.AddSingleton<MMDeviceEnumerator>(_ => new MMDeviceEnumerator(Guid.NewGuid()));
 			builder.Services.AddSingleton<AudioDeviceManager>();
+			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureLevelController>(sp =>
+				new Mutation.Ui.Core.CoreAudioCaptureLevelController(
+					() => sp.GetRequiredService<AudioDeviceManager>().Microphone));
+			builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelPinService>();
 			builder.Services.AddSingleton<IOcrService>(sp =>
 	 new OcrService(
 		  settings.AzureComputerVisionSettings?.ApiKey,

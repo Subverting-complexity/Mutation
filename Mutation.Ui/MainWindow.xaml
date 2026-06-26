@@ -242,6 +242,31 @@
                                     </Grid>
                                 </StackPanel>
                             </Grid>
+
+                            <StackPanel x:Name="MicLevelPinPanel" Spacing="8" Margin="0,12,0,0">
+                                <ToggleSwitch
+                                    x:Name="TglPinMicLevel"
+                                    Header="Pin input level"
+                                    OffContent="Off"
+                                    OnContent="On"
+                                    Toggled="TglPinMicLevel_Toggled"
+                                    AutomationProperties.Name="Pin microphone input level"
+                                    ToolTipService.ToolTip="Keep the Windows capture level fixed at the chosen value, re-asserting it on each recording, mic change, and app start" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Input level" />
+                                    <Slider
+                                        x:Name="SldMicLevel"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        StepFrequency="1"
+                                        TickFrequency="10"
+                                        TickPlacement="Outside"
+                                        SnapsTo="StepValues"
+                                        ValueChanged="SldMicLevel_ValueChanged"
+                                        AutomationProperties.Name="Microphone input level"
+                                        ToolTipService.ToolTip="Set the Windows capture level (0 to 100); the change applies immediately, even when not recording" />
+                                </StackPanel>
+                            </StackPanel>
                             </StackPanel>
                         </Grid>
                     </Border>
