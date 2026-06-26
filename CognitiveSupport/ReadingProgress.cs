@@ -18,14 +18,17 @@ public static class ReadingProgress
 		if (stepPercent <= 0) return 0;
 		if (currentPercent <= lastAnnouncedPercent) return 0;
 
-		// Largest step multiple that is still strictly below 100 (e.g. 75 for a step of
-		// 25, 90 for a step of 30) so we never announce completion as progress.
-		int maxThreshold = ((100 - 1) / stepPercent) * stepPercent;
-
-		// Highest step multiple at or below the current percentage.
+		// Highest step multiple at or below the current percentage, capped below 100.
 		int reached = (currentPercent / stepPercent) * stepPercent;
 
-		int highest = Math.Min(reached, maxThreshold);
+		int highest = Math.Min(reached, MaxThreshold(stepPercent));
 		return highest > lastAnnouncedPercent && highest > 0 ? highest : 0;
 	}
+
+	// Largest step multiple that is still strictly below 100 (e.g. 75 for a step of
+	// 25, 90 for a step of 30) so progress never announces completion. 0 for a
+	// non-positive step. Shared with the gapless weave planner so both agree on the
+	// set of valid progress thresholds.
+	public static int MaxThreshold(int stepPercent)
+		=> stepPercent <= 0 ? 0 : ((100 - 1) / stepPercent) * stepPercent;
 }
