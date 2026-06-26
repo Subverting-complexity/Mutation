@@ -30,6 +30,12 @@ public class AudioSettings
 	public string? MicrophoneToggleMuteHotKey { get; set; }
         // Allows users to disable microphone visualization to save CPU
         public bool EnableMicrophoneVisualization { get; set; } = true;
+
+        // User-pinned Windows capture level (0–100) for the active microphone. When set,
+        // Mutation re-asserts this level on record/dictate, mic selection, and app startup
+        // so it stays consistent regardless of what other apps do. null means pinning is
+        // disabled ("don't manage the level").
+        public int? PinnedCaptureLevel { get; set; }
 	public CustomBeepSettingsData? CustomBeepSettings { get => customBeepSettings; set => customBeepSettings = value; }
 
 	public AudioSettings() { }

@@ -38,6 +38,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly OcrManager _ocrManager;
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
+	private readonly Mutation.Ui.Core.MicrophoneLevelPinService _micLevelPinService;
+	private readonly Mutation.Ui.Core.ICaptureLevelController _captureLevelController;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
@@ -57,6 +59,13 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly DispatcherTimer _statusDismissTimer;
 	private bool _isDialogOpen;
 	private bool _ttsControlsReady;
+	private bool _micLevelControlsReady;
+	// True once the mic-level controls have been set up at least once, so the
+	// microphone-selection handler knows it is safe to re-sync them for a new device.
+	private bool _micLevelInitialized;
+	// Slider position used when pinning is toggled off and the device has no
+	// readable level to fall back to, so the control still shows a sensible value.
+	private const int DefaultMicLevel = 75;
 	private const string DefaultVoiceLabel = "(System default)";
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -104,7 +113,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		ISettingsManager settingsManager,
 		Settings settings,
-		Mutation.Ui.Core.AudioSessionManager audioSessionManager)
+		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
+		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
+		Mutation.Ui.Core.ICaptureLevelController captureLevelController)
 	{
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
@@ -118,6 +129,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		_settings = settings;
 
         _audioSessionManager = audioSessionManager;
+        _micLevelPinService = micLevelPinService;
+        _captureLevelController = captureLevelController;
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;
@@ -210,6 +223,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
 		InitializeTextToSpeechControls();
+		InitializeMicrophoneLevelControls();
 		InitializeHotkeyVisuals();
 
 		this.Closed += MainWindow_Closed;
@@ -1081,6 +1095,96 @@ public sealed partial class MainWindow : Window, IDisposable
 		PushTtsAnnouncementOptions();
 	}
 
+	// Sets up the "Pin input level" toggle and the input-level slider on the main
+	// window. On a device that doesn't support software level control, both are
+	// disabled with an explanatory tooltip and nothing is written. Otherwise the
+	// slider shows the pinned value (or the current hardware level), the toggle
+	// reflects whether pinning is enabled, and any pinned level is re-asserted now
+	// (app startup).
+	private void InitializeMicrophoneLevelControls()
+	{
+		_micLevelControlsReady = false;
+
+		bool supported = _micLevelPinService.IsLevelControlSupported;
+		TglPinMicLevel.IsEnabled = supported;
+		SldMicLevel.IsEnabled = supported;
+
+		if (!supported)
+		{
+			TglPinMicLevel.IsOn = false;
+			const string unsupported = "This microphone does not support software level control.";
+			ToolTipService.SetToolTip(TglPinMicLevel, unsupported);
+			ToolTipService.SetToolTip(SldMicLevel, unsupported);
+			_micLevelInitialized = true;
+			return;
+		}
+
+		int? pinned = _settings.AudioSettings?.PinnedCaptureLevel;
+		TglPinMicLevel.IsOn = pinned.HasValue;
+		SldMicLevel.Value = pinned ?? ReadCurrentMicLevelOrDefault();
+
+		_micLevelControlsReady = true;
+		_micLevelInitialized = true;
+
+		// Re-assert now (app startup, or after a mic change): correct the level if
+		// another app changed it.
+		_micLevelPinService.ReassertPinnedLevel(pinned);
+	}
+
+	// Current Windows capture level as a 0–100 value, or a sensible default when it
+	// cannot be read. Used to position the slider when no pinned value exists.
+	private int ReadCurrentMicLevelOrDefault()
+	{
+		float? scalar = _captureLevelController.GetLevelScalar();
+		if (scalar is float s)
+			return (int)Math.Round(Math.Clamp(s, 0f, 1f) * 100f);
+		return DefaultMicLevel;
+	}
+
+	// Toggle pinning on/off. Turning it on captures the slider's current value as the
+	// pinned target and applies it immediately; turning it off stops re-asserting but
+	// leaves the live level where it is. Persists the change.
+	private void TglPinMicLevel_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (!_micLevelControlsReady) return;
+
+		_settings.AudioSettings ??= new AudioSettings();
+
+		if (TglPinMicLevel.IsOn)
+		{
+			int level = (int)Math.Round(SldMicLevel.Value);
+			_settings.AudioSettings.PinnedCaptureLevel = level;
+			_micLevelPinService.ApplyLevel(level);
+		}
+		else
+		{
+			_settings.AudioSettings.PinnedCaptureLevel = null;
+		}
+
+		_settingsManager.SaveSettingsToFile(_settings);
+	}
+
+	// Dragging the slider sets the actual Windows capture level immediately (instant
+	// feedback, even when not recording). When pinning is enabled, the same value
+	// becomes the stored pinned target so it is re-asserted later.
+	private void SldMicLevel_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	{
+		if (!_micLevelControlsReady) return;
+
+		int level = (int)Math.Round(e.NewValue);
+		_micLevelPinService.ApplyLevel(level);
+
+		if (TglPinMicLevel.IsOn)
+		{
+			_settings.AudioSettings ??= new AudioSettings();
+			if (_settings.AudioSettings.PinnedCaptureLevel != level)
+			{
+				_settings.AudioSettings.PinnedCaptureLevel = level;
+				_settingsManager.SaveSettingsToFile(_settings);
+			}
+		}
+	}
+
 	// Mirror the on-screen toggle states from the current settings. Called after the
 	// settings dialog closes so a change made there shows on the main window too.
 	private void RefreshTtsAnnouncementToggles()
@@ -1601,6 +1705,11 @@ public sealed partial class MainWindow : Window, IDisposable
 				_settingsManager.SaveSettingsToFile(_settings);
 			}
 			_microphoneVisualization?.RestartCapture();
+
+			// Re-sync the level controls to the newly-selected device (support and
+			// current level may differ) and re-assert the pinned level on it.
+			if (_micLevelInitialized)
+				InitializeMicrophoneLevelControls();
 		}
 		else
 		{

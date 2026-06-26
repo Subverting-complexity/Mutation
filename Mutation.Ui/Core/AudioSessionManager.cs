@@ -24,6 +24,7 @@ public class AudioSessionManager : IDisposable
     private readonly AudioDeviceManager _audioDeviceManager;
     private readonly TranscriptFormatter _transcriptFormatter;
     private readonly Settings _settings;
+    private readonly MicrophoneLevelPinService _levelPinService;
     private readonly AudioPlayer _playbackPlayer;
     private SpeechSession? _playingSession;
     private SpeechSession? _selectedSession;
@@ -61,12 +62,14 @@ public class AudioSessionManager : IDisposable
         SpeechToTextManager speechManager,
         AudioDeviceManager audioDeviceManager,
         TranscriptFormatter transcriptFormatter,
-        Settings settings)
+        Settings settings,
+        MicrophoneLevelPinService levelPinService)
     {
         _speechManager = speechManager;
         _audioDeviceManager = audioDeviceManager;
         _transcriptFormatter = transcriptFormatter;
         _settings = settings;
+        _levelPinService = levelPinService;
 
         _playbackPlayer = new AudioPlayer();
         _playbackPlayer.PlaybackEnded += PlaybackPlayer_PlaybackEnded;
@@ -145,6 +148,10 @@ public class AudioSessionManager : IDisposable
             {
                 _currentRecordingUsesLlmProcessing = useLlmProcessing;
                 StopPlayback();
+
+                // Re-assert the pinned capture level right before recording so a level
+                // another app may have changed is corrected back to the user's choice.
+                _levelPinService.ReassertPinnedLevel(_settings.AudioSettings?.PinnedCaptureLevel);
 
                 StatusMessage?.Invoke(this, "Listening for audio...");
                 StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
