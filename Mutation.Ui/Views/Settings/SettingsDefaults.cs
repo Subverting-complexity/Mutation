@@ -1,3 +1,5 @@
+using CognitiveSupport;
+
 namespace Mutation.Ui.Views.SettingsUi;
 
 // Single source of truth for default values exposed by the Settings dialog and
@@ -38,6 +40,11 @@ internal static class SettingsDefaults
 		public const string SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 		public const string TempDirectory = @"C:\Temp\Mutation";
 		public const int FileTranscriptionTimeoutSeconds = 300;
+		// Retained-session count: default and UI bounds mirror the domain so the dialog,
+		// the load-time clamp, and cleanup all agree on one source of truth.
+		public const int MaxRetainedSessions = SpeechToTextSettings.DefaultMaxRetainedSessions;
+		public const int MinRetainedSessions = SpeechToTextSettings.MinRetainedSessions;
+		public const int MaxRetainedSessionsLimit = SpeechToTextSettings.MaxRetainedSessionsLimit;
 		public const int ServiceTimeoutSeconds = 10;
 		public const string DefaultServiceName = "OpenAI Whisper 1";
 		public const string DefaultServiceModelId = "whisper-1";

@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
 
 namespace CognitiveSupport;
 
@@ -144,6 +145,21 @@ public class SpeechToTextSettings
         public string? ActiveSpeechToTextService { get; set; }
 
         public int FileTranscriptionTimeoutSeconds { get; set; } = 300;
+
+        // Number of past speech-to-text recording sessions kept on disk. Once the count
+        // exceeds this, cleanup deletes the oldest first (never the active recording).
+        // Bounded to [MinRetainedSessions, MaxRetainedSessionsLimit]; a minimum of 1
+        // guarantees the most recent recording is never deleted.
+        public const int MinRetainedSessions = 1;
+        public const int MaxRetainedSessionsLimit = 500;
+        public const int DefaultMaxRetainedSessions = 10;
+
+        public int MaxRetainedSessions { get; set; } = DefaultMaxRetainedSessions;
+
+        // Clamp a retained-session count into the supported range. Applied on load and at
+        // cleanup time so a hand-edited JSON value outside the range cannot break cleanup.
+        public static int ClampRetainedSessions(int value) =>
+                Math.Clamp(value, MinRetainedSessions, MaxRetainedSessionsLimit);
 
         // Per-attempt timeout for the live record→transcribe path. Kept generous so the
         // first call after a reboot or app update can absorb cold-start latency (cold

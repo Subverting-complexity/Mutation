@@ -15,7 +15,6 @@ public class SpeechToTextManager : IDisposable
 {
 	private const string SessionFilePrefix = "session_";
 	private const string SessionTimestampFormat = "yyyy-MM-dd_HH-mm-ss";
-	private const int MaxSessions = AppConstants.MaxSpeechSessions;
 	private static readonly TimeSpan SessionRetryDelay = TimeSpan.FromSeconds(1);
 	private static readonly Regex SessionFilePattern = new(
 			  "^session_(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\.[A-Za-z0-9]+$",
@@ -358,24 +357,18 @@ public class SpeechToTextManager : IDisposable
 					sessions.Add(session);
 			}
 
-			sessions.Sort((left, right) => right.Timestamp.CompareTo(left.Timestamp));
+			// Read the retention cap at cleanup time (clamped defensively) so a changed
+			// setting takes effect without an app restart, and a hand-edited out-of-range
+			// JSON value cannot break cleanup.
+			int maxRetained = SpeechToTextSettings.ClampRetainedSessions(
+				_settings.SpeechToTextSettings?.MaxRetainedSessions
+				?? SpeechToTextSettings.DefaultMaxRetainedSessions);
 
-			int currentCount = sessions.Count;
-			if (currentCount <= MaxSessions)
-				return;
-
-			foreach (var session in sessions.OrderBy(s => s.Timestamp))
+			foreach (var session in SessionRetentionPlanner.SelectSessionsToDelete(sessions, exclusions, maxRetained))
 			{
-				if (currentCount <= MaxSessions)
-					break;
-
-				if (exclusions.Contains(session.FilePath))
-					continue;
-
 				try
 				{
 					File.Delete(session.FilePath);
-					currentCount--;
 				}
 				catch (DirectoryNotFoundException)
 				{

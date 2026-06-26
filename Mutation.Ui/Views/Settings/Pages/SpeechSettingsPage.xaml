@@ -154,6 +154,27 @@
 
 		<StackPanel Spacing="4">
 			<StackPanel Orientation="Horizontal" Spacing="6">
+				<TextBlock Text="Recording sessions to keep" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+				<controls:InfoHint Text="{StaticResource Help.Speech.MaxRetainedSessions}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<NumberBox x:Name="NbMaxRetainedSessions"
+						   AutomationProperties.Name="Recording sessions to keep"
+						   AutomationProperties.HelpText="{StaticResource Help.Speech.MaxRetainedSessions}"
+						   ToolTipService.ToolTip="{StaticResource Help.Speech.MaxRetainedSessions}"
+						   Minimum="1" Maximum="500"
+						   SmallChange="1" LargeChange="10"
+						   SpinButtonPlacementMode="Inline"
+						   Width="220"
+						   ValueChanged="NbMaxRetainedSessions_ValueChanged" />
+				<Button Click="BtnResetMaxRetainedSessions_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset recording sessions to keep">
+					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+				</Button>
+			</StackPanel>
+		</StackPanel>
+
+		<StackPanel Spacing="4">
+			<StackPanel Orientation="Horizontal" Spacing="6">
 				<TextBlock Text="Temp directory" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
 				<controls:InfoHint Text="{StaticResource Help.Speech.TempDir}" VerticalAlignment="Center" />
 			</StackPanel>
