@@ -1784,6 +1784,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			StatusInfoBar.IsOpen = true;
 			AutomationProperties.SetName(StatusInfoBar, $"{title} status");
 			AutomationProperties.SetHelpText(StatusInfoBar, message);
+			AnnounceStatus(title, message, severity);
 			_statusDismissTimer.Stop();
 			_statusDismissTimer.Start();
 		}
@@ -1792,6 +1793,25 @@ public sealed partial class MainWindow : Window, IDisposable
 			Update();
 		else
 			DispatcherQueue.TryEnqueue(Update);
+	}
+
+	private void AnnounceStatus(string title, string message, InfoBarSeverity severity)
+	{
+		// WinUI announces the InfoBar only on its closed→open transition; the
+		// bar stays open 6 s between updates, so raise an explicit UIA
+		// notification for every status change (issue #164).
+		string announcement = StatusAnnouncement.ComposeText(title, message);
+		if (announcement.Length == 0)
+			return;
+
+		// CreatePeerForElement (not FromElement) so the announcement also
+		// fires when no peer exists yet, e.g. the very first status.
+		var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(StatusInfoBar);
+		peer?.RaiseNotificationEvent(
+			StatusAnnouncement.GetKind(severity),
+			StatusAnnouncement.GetProcessing(severity),
+			announcement,
+			StatusAnnouncement.ActivityId);
 	}
 
 	private void StatusDismissTimer_Tick(object? sender, object e)
