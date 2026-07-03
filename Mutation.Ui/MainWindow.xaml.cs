@@ -2225,10 +2225,60 @@ public sealed partial class MainWindow : Window, IDisposable
             _promptLibrary?.OpenEditDialog(prompt);
     }
 
-    private void BtnDeletePrompt_Click(object sender, RoutedEventArgs e)
+    private async void BtnDeletePrompt_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is LlmSettings.LlmPrompt prompt)
-            _promptLibrary?.DeletePrompt(prompt);
+        if (sender is not Button btn || btn.Tag is not LlmSettings.LlmPrompt prompt || _promptLibrary is null)
+            return;
+
+        string name = prompt.Name;
+        string confirmation = PromptDeletionMessages.BuildConfirmation(name);
+
+        var dialog = new ContentDialog
+        {
+            Title = PromptDeletionMessages.ConfirmationTitle,
+            Content = new TextBlock { Text = confirmation, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            // Cancel is the safe default so a stray Enter never deletes a prompt.
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = (this.Content as FrameworkElement)?.XamlRoot,
+        };
+        AutomationProperties.SetName(dialog, PromptDeletionMessages.ConfirmationTitle);
+        AutomationProperties.SetHelpText(dialog, confirmation);
+
+        var result = await ShowDialogAsync(dialog);
+        if (result != ContentDialogResult.Primary)
+        {
+            // Covers an explicit Cancel and the guarded case where another
+            // dialog was already open (ShowDialogAsync returns None): nothing
+            // is deleted, and the outcome is announced for the screen reader.
+            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildCancelled(name), InfoBarSeverity.Informational);
+            return;
+        }
+
+        try
+        {
+            if (_promptLibrary.DeletePrompt(prompt))
+            {
+                ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildDeleted(name), InfoBarSeverity.Success);
+                BeepPlayer.Play(BeepType.Success);
+            }
+            else
+            {
+                // The prompt was already gone (removed elsewhere between the
+                // click and the confirmation). Announce it rather than stay
+                // silent after the user confirmed a deletion.
+                ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildFailed(name, "the prompt was no longer in the library"), InfoBarSeverity.Warning);
+                BeepPlayer.Play(BeepType.Failure);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Persisting the removal can fail (e.g. the settings file cannot be
+            // written). Fail loudly rather than let the async void swallow it.
+            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildFailed(name, ex.Message), InfoBarSeverity.Error);
+            BeepPlayer.Play(BeepType.Failure);
+        }
     }
 
     private void BtnRunPrompt_Click(object sender, RoutedEventArgs e)
