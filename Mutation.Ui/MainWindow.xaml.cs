@@ -39,7 +39,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
 	private readonly Mutation.Ui.Core.MicrophoneLevelPinService _micLevelPinService;
-	private readonly Mutation.Ui.Core.ICaptureLevelController _captureLevelController;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
@@ -115,8 +114,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		ISettingsManager settingsManager,
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
-		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
-		Mutation.Ui.Core.ICaptureLevelController captureLevelController)
+		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService)
 	{
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
@@ -131,7 +129,6 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _audioSessionManager = audioSessionManager;
         _micLevelPinService = micLevelPinService;
-        _captureLevelController = captureLevelController;
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;
@@ -229,6 +226,50 @@ public sealed partial class MainWindow : Window, IDisposable
 		InitializeHotkeyVisuals();
 
 		this.Closed += MainWindow_Closed;
+		this.Activated += MainWindow_Activated;
+	}
+
+	// When Mutation returns to the foreground, re-sync the mic input-level slider to
+	// the OS's real current level: another app (Windows Settings, Zoom, OBS, …) may
+	// have changed it while Mutation was in the background, leaving the slider showing
+	// a stale value. Deactivation is ignored — there is nothing to refresh on the way
+	// out.
+	private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+	{
+		if (args.WindowActivationState == WindowActivationState.Deactivated)
+			return;
+
+		RefreshMicLevelDisplayFromOs();
+	}
+
+	// Reads the microphone's actual current level from the OS and moves the slider to
+	// match. This is a display sync only: it never re-asserts the pin (that stays tied
+	// to recording start) and never writes the level back — the _micLevelControlsReady
+	// guard suppresses the SldMicLevel_ValueChanged side effect while the value is set
+	// programmatically. When the level is unreadable (hardware-fixed device or a
+	// transient failure) the slider is left as-is rather than reset to a misleading
+	// default. Setting SldMicLevel.Value still raises the slider's UIA ValueChanged
+	// automation event, so a screen-reader / ZoomText user is notified of the change.
+	private void RefreshMicLevelDisplayFromOs()
+	{
+		// _micLevelControlsReady is only true on a supported, initialized device; on a
+		// hardware-fixed device the control is disabled and there is nothing to sync.
+		if (!_micLevelControlsReady)
+			return;
+
+		if (_micLevelPinService.ReadCurrentLevel() is not int level)
+			return;
+
+		bool wasReady = _micLevelControlsReady;
+		_micLevelControlsReady = false;
+		try
+		{
+			SldMicLevel.Value = level;
+		}
+		finally
+		{
+			_micLevelControlsReady = wasReady;
+		}
 	}
 
 	private void ApplyMultiLineTextBoxPreferences()
@@ -1197,13 +1238,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	// Current Windows capture level as a 0–100 value, or a sensible default when it
 	// cannot be read. Used to position the slider when no pinned value exists.
-	private int ReadCurrentMicLevelOrDefault()
-	{
-		float? scalar = _captureLevelController.GetLevelScalar();
-		if (scalar is float s)
-			return (int)Math.Round(Math.Clamp(s, 0f, 1f) * 100f);
-		return DefaultMicLevel;
-	}
+	private int ReadCurrentMicLevelOrDefault() =>
+		_micLevelPinService.ReadCurrentLevel() ?? DefaultMicLevel;
 
 	// Toggle pinning on/off. Turning it on captures the slider's current value as the
 	// pinned target and applies it immediately; turning it off stops re-asserting but
