@@ -162,9 +162,18 @@ public class AudioSessionManager : IDisposable
 
                 // Re-assert the pinned capture level right before recording so a level
                 // another app may have changed is corrected back to the user's choice.
-                _levelPinService.ReassertPinnedLevel(_settings.AudioSettings?.PinnedCaptureLevel);
+                // If it cannot be applied and verified, tell the user rather than
+                // recording silently at the wrong gain — the recording still proceeds
+                // so no audio is lost, but the failure is signalled with a beep (played
+                // before capture starts, so it is not recorded) and a persistent status
+                // message that replaces the usual "Listening" line.
+                var levelResult = _levelPinService.ReassertPinnedLevel(_settings.AudioSettings?.PinnedCaptureLevel);
+                if (levelResult.Failed)
+                    BeepPlayer.Play(BeepType.Failure);
 
-                StatusMessage?.Invoke(this, "Listening for audio...");
+                StatusMessage?.Invoke(this, levelResult.Failed
+                    ? "Listening — but the pinned microphone level could not be applied; recording at the current level."
+                    : "Listening for audio...");
                 StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
 
                 var session = await _speechManager.StartRecordingAsync(_audioDeviceManager.MicrophoneDeviceIndex);

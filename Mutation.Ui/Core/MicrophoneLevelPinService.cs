@@ -5,42 +5,48 @@ namespace Mutation.Ui.Core;
 /// <summary>
 /// Applies a user-pinned capture level to the active microphone and re-asserts
 /// it on record/dictate, mic selection, and app startup, so the Windows capture
-/// level stays consistent regardless of what other apps do. All hardware access
-/// goes through <see cref="ICaptureLevelController"/>, keeping the rules here
+/// level stays consistent regardless of what other apps do. Every write is
+/// confirmed by reading the level back within <see cref="LevelEpsilon"/>; a
+/// thrown exception or a read-back mismatch is a failure, and the service then
+/// re-acquires fresh device references once and retries before declaring
+/// failure — the same stale-proxy recovery <see cref="MuteStateController"/>
+/// uses for mute. All hardware access goes through
+/// <see cref="ICaptureLevelEndpointProvider"/>, keeping the rules here
 /// unit-testable without audio hardware.
 /// </summary>
 public sealed class MicrophoneLevelPinService
 {
 	/// <summary>
 	/// Levels closer than this (on the 0–100 scale) count as already correct, so
-	/// no redundant write is issued. One unit of 100 equals a 0.01 scalar.
+	/// no redundant write is issued and a read-back this close counts as verified.
+	/// One unit of 100 equals a 0.01 scalar.
 	/// </summary>
 	public const int LevelEpsilon = 1;
 
 	public const int MinLevel = 0;
 	public const int MaxLevel = 100;
 
-	private readonly ICaptureLevelController _controller;
+	private readonly ICaptureLevelEndpointProvider _provider;
 
-	public MicrophoneLevelPinService(ICaptureLevelController controller)
+	public MicrophoneLevelPinService(ICaptureLevelEndpointProvider provider)
 	{
-		_controller = controller ?? throw new ArgumentNullException(nameof(controller));
+		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 	}
 
 	/// <summary>
 	/// True when the active device exposes a controllable software level. The UI
 	/// uses this to disable the control on hardware-fixed devices.
 	/// </summary>
-	public bool IsLevelControlSupported => _controller.IsLevelControlSupported;
+	public bool IsLevelControlSupported => _provider.GetEndpoint().IsLevelControlSupported;
 
 	/// <summary>
 	/// Re-asserts the pinned level. A <c>null</c> target means pinning is disabled,
-	/// which is a no-op. Returns true when the hardware level was actually changed.
+	/// which is <see cref="CaptureLevelOutcome.Unchanged"/> (nothing to assert).
 	/// </summary>
-	public bool ReassertPinnedLevel(int? pinnedLevel)
+	public CaptureLevelResult ReassertPinnedLevel(int? pinnedLevel)
 	{
 		if (pinnedLevel is null)
-			return false;
+			return new CaptureLevelResult(CaptureLevelOutcome.Unchanged);
 
 		return WriteLevel(pinnedLevel.Value);
 	}
@@ -48,10 +54,9 @@ public sealed class MicrophoneLevelPinService
 	/// <summary>
 	/// Applies a level the user is setting live (e.g. dragging the slider), giving
 	/// instant feedback even when not recording. Honors the same epsilon and
-	/// mute rules as <see cref="ReassertPinnedLevel"/>. Returns true when the
-	/// hardware level was changed.
+	/// verification rules as <see cref="ReassertPinnedLevel"/>.
 	/// </summary>
-	public bool ApplyLevel(int level) => WriteLevel(level);
+	public CaptureLevelResult ApplyLevel(int level) => WriteLevel(level);
 
 	/// <summary>
 	/// Reads the active device's current capture level as a 0–100 value for
@@ -63,31 +68,76 @@ public sealed class MicrophoneLevelPinService
 	/// </summary>
 	public int? ReadCurrentLevel()
 	{
-		if (!_controller.IsLevelControlSupported)
+		var endpoint = _provider.GetEndpoint();
+		if (!endpoint.IsLevelControlSupported)
 			return null;
 
-		if (_controller.GetLevelScalar() is not float scalar)
+		if (TryReadScalar(endpoint) is not float scalar)
 			return null;
 
 		float bounded = scalar < 0f ? 0f : scalar > 1f ? 1f : scalar;
 		return (int)Math.Round(bounded * 100f);
 	}
 
-	private bool WriteLevel(int level)
+	private CaptureLevelResult WriteLevel(int level)
 	{
-		if (!_controller.IsLevelControlSupported)
-			return false;
+		var endpoint = _provider.GetEndpoint();
+		if (!endpoint.IsLevelControlSupported)
+			return new CaptureLevelResult(CaptureLevelOutcome.Unsupported);
 
 		int target = Clamp(level);
-		float? current = _controller.GetLevelScalar();
 
 		// Skip redundant writes when the current level is already within epsilon.
-		if (current is float c && Math.Abs(c * 100f - target) <= LevelEpsilon)
-			return false;
+		if (TryReadScalar(endpoint) is float current && IsWithinEpsilon(current, target))
+			return new CaptureLevelResult(CaptureLevelOutcome.Unchanged);
 
-		_controller.SetLevelScalar(target / 100f);
-		return true;
+		if (TryApplyAndVerify(endpoint, target))
+			return new CaptureLevelResult(CaptureLevelOutcome.Applied);
+
+		// Stale-proxy recovery: obtain a fresh device reference and retry the write
+		// exactly once, verifying the read-back again, before declaring failure.
+		var fresh = _provider.RefreshEndpoint();
+		if (TryApplyAndVerify(fresh, target))
+			return new CaptureLevelResult(CaptureLevelOutcome.Applied);
+
+		return new CaptureLevelResult(CaptureLevelOutcome.Failed);
 	}
+
+	/// <summary>
+	/// Writes the target then confirms it by read-back within epsilon. A thrown
+	/// exception (stale proxy) or a read-back that does not match counts as a
+	/// failed write.
+	/// </summary>
+	private static bool TryApplyAndVerify(ICaptureLevelEndpoint endpoint, int target)
+	{
+		try
+		{
+			endpoint.SetLevelScalar(target / 100f);
+			return IsWithinEpsilon(endpoint.GetLevelScalar(), target);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	// Reads the level scalar, treating any failure (stale proxy) as unreadable so
+	// the redundant-write skip and the display read both degrade to "unknown"
+	// rather than throwing.
+	private static float? TryReadScalar(ICaptureLevelEndpoint endpoint)
+	{
+		try
+		{
+			return endpoint.GetLevelScalar();
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static bool IsWithinEpsilon(float scalar, int target) =>
+		Math.Abs(scalar * 100f - target) <= LevelEpsilon;
 
 	private static int Clamp(int level) =>
 		level < MinLevel ? MinLevel : level > MaxLevel ? MaxLevel : level;

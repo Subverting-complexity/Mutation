@@ -10,7 +10,7 @@ namespace Mutation.Ui;
 /// Manages enumeration and selection of audio capture devices as well as
 /// mute and unmute operations.  This keeps audio related responsibilities
 /// away from the WinForms logic in <see cref="MutationForm"/>.
-public class AudioDeviceManager : IMuteEndpointProvider
+public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointProvider
 {
         private readonly MMDeviceEnumerator _deviceEnumerator;
         private readonly MuteStateController _muteState;
@@ -157,6 +157,63 @@ public class AudioDeviceManager : IMuteEndpointProvider
                         RefreshCaptureDevices();
                         return BuildEndpoints();
                 }
+        }
+
+        // The active microphone's level endpoint, over the currently-held device
+        // reference. Serialized with the device-change handler so a hot-plug
+        // refresh cannot swap the selected device out mid-read.
+        ICaptureLevelEndpoint ICaptureLevelEndpointProvider.GetEndpoint()
+        {
+                lock (_sync)
+                {
+                        return new MmDeviceCaptureLevelEndpoint(_microphone);
+                }
+        }
+
+        // Re-resolves the selected microphone to a fresh reference, then returns its
+        // endpoint — so a level write that failed on a stale COM proxy can be
+        // retried against a live reference.
+        ICaptureLevelEndpoint ICaptureLevelEndpointProvider.RefreshEndpoint()
+        {
+                lock (_sync)
+                {
+                        RefreshActiveMicrophone();
+                        return new MmDeviceCaptureLevelEndpoint(_microphone);
+                }
+        }
+
+        // Re-enumerates the capture devices and re-points _microphone at the fresh
+        // instance carrying the same device ID, so its COM proxy is live again. This
+        // is the level-side mirror of RefreshEndpoints() for mute — both recover a
+        // stale proxy by re-acquiring from a fresh enumeration. A no-op when no mic
+        // is selected; if the previously-selected device is gone, the stale
+        // reference is left in place for the caller's retry to fail against.
+        private void RefreshActiveMicrophone()
+        {
+                if (_microphone is null)
+                        return;
+
+                string? id;
+                try { id = _microphone.ID; }
+                catch { id = null; }
+
+                RefreshCaptureDevices();
+
+                if (id is null)
+                        return;
+
+                var fresh = _captureDevices.FirstOrDefault(device => MatchesId(device, id));
+                if (fresh != null)
+                {
+                        _microphone = fresh;
+                        SelectCaptureDeviceForNAudio();
+                }
+        }
+
+        private static bool MatchesId(MMDevice? device, string id)
+        {
+                try { return device != null && string.Equals(device.ID, id, StringComparison.OrdinalIgnoreCase); }
+                catch { return false; }
         }
 
         // Callers hold _sync; the lock is reentrant so RefreshCaptureDevices'
