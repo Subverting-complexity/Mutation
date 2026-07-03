@@ -29,6 +29,7 @@ public static class BeepPlayer
 	private static SoundPlayer? _playerMute;
 	private static SoundPlayer? _playerUnmute;
 	private static SoundPlayer? _previewPlayer;
+	private static readonly Dictionary<BeepType, (SoundPlayer Player, MemoryStream Stream)> _defaultPlayers = new();
 	public static IReadOnlyList<string> LastInitializationIssues { get; private set; } = Array.Empty<string>();
 
 	public static void Initialize(Settings settings)
@@ -106,32 +107,37 @@ public static class BeepPlayer
 		return false;
 	}
 
+	// Default beeps are synthesized once into in-memory WAVs and played through
+	// SoundPlayer.Play (asynchronous), so they never block the calling thread the
+	// way Console.Beep did (issue #169).
 	private static void PlayDefault(BeepType type)
 	{
-		switch (type)
+		SoundPlayer player;
+		lock (SyncLock)
 		{
-			case BeepType.Start:
-				Console.Beep(DefaultStartFrequency, DefaultStartDuration);
-				break;
-			case BeepType.Success:
-				foreach (var (frequency, duration) in DefaultSuccessSequence)
-					Console.Beep(frequency, duration);
-				break;
-			case BeepType.Failure:
-				for (var i = 0; i < DefaultFailureRepeats; i++)
-					Console.Beep(DefaultFailureFrequency, DefaultFailureDuration);
-				break;
-			case BeepType.End:
-				Console.Beep(DefaultEndFrequency, DefaultEndDuration);
-				break;
-			case BeepType.Mute:
-				Console.Beep(DefaultMuteFrequency, DefaultMuteDuration);
-				break;
-			case BeepType.Unmute:
-				Console.Beep(DefaultUnmuteFrequency, DefaultUnmuteDuration);
-				break;
+			if (!_defaultPlayers.TryGetValue(type, out var cached))
+			{
+				var wav = BeepToneSynthesizer.SynthesizeWav(GetDefaultSequence(type));
+				var stream = new MemoryStream(wav, writable: false);
+				cached = (new SoundPlayer(stream), stream);
+				cached.Player.Load();
+				_defaultPlayers[type] = cached;
+			}
+			player = cached.Player;
 		}
+		player.Play();
 	}
+
+	public static IReadOnlyList<(int Frequency, int Duration)> GetDefaultSequence(BeepType type) => type switch
+	{
+		BeepType.Start => new[] { (DefaultStartFrequency, DefaultStartDuration) },
+		BeepType.Success => DefaultSuccessSequence,
+		BeepType.Failure => Enumerable.Repeat((DefaultFailureFrequency, DefaultFailureDuration), DefaultFailureRepeats).ToArray(),
+		BeepType.End => new[] { (DefaultEndFrequency, DefaultEndDuration) },
+		BeepType.Mute => new[] { (DefaultMuteFrequency, DefaultMuteDuration) },
+		BeepType.Unmute => new[] { (DefaultUnmuteFrequency, DefaultUnmuteDuration) },
+		_ => throw new ArgumentOutOfRangeException(nameof(type))
+	};
 
 	// Plays an arbitrary .wav file for previewing (e.g. from the settings dialog),
 	// independent of the UseCustomBeeps toggle and the cached per-type players.
@@ -177,5 +183,11 @@ public static class BeepPlayer
 		_playerEnd = null;
 		_playerMute = null;
 		_playerUnmute = null;
+		foreach (var (player, stream) in _defaultPlayers.Values)
+		{
+			player.Dispose();
+			stream.Dispose();
+		}
+		_defaultPlayers.Clear();
 	}
 }
