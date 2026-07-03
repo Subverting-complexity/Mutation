@@ -195,7 +195,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 _settingsManager,
                 _transcriptFormatter,
                 LstPrompts,
-                ExecutePrompt);
+                ExecutePrompt,
+                failures => _ = ShowHotkeyBindingFailuresAsync(failures));
             _promptLibrary.Initialize();
 
 		var tooltipManager = new TooltipManager(_settings);
@@ -305,29 +306,37 @@ public sealed partial class MainWindow : Window, IDisposable
 		yield return TxtOcr;
 	}
 
-	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
+	public IReadOnlyList<HotkeyManager.HotkeyBindingFailure> AttachHotkeyManager(HotkeyManager hotkeyManager)
 	{
 		_hotkeyManager = hotkeyManager;
-		_promptLibrary?.AttachHotkeyManager(hotkeyManager);
-		_hotkeyManager.RegisterRouterHotkeys();
+
+		var failures = new List<HotkeyManager.HotkeyBindingFailure>();
+		if (_promptLibrary is not null)
+			failures.AddRange(_promptLibrary.AttachHotkeyManager(hotkeyManager));
+
+		var routerResults = _hotkeyManager.RegisterRouterHotkeys();
+		failures.AddRange(HotkeyManager.ToBindingFailures(routerResults));
+		return failures;
 	}
 
-	internal void RegisterCoreHotkeys(HotkeyManager hk)
+	internal IReadOnlyList<HotkeyManager.HotkeyBindingFailure> RegisterCoreHotkeys(HotkeyManager hk)
 	{
 		var ocr = _settings.AzureComputerVisionSettings;
 		var stt = _settings.SpeechToTextSettings;
 		var tts = _settings.TextToSpeechSettings;
 		var aud = _settings.AudioSettings;
 
+		var failures = new List<HotkeyManager.HotkeyBindingFailure>();
+
 		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotHotKey))
-			TryRegister(hk, ocr.ScreenshotHotKey!, async () =>
+			TryRegister(hk, failures, "Screenshot to clipboard", ocr.ScreenshotHotKey!, async () =>
 			{
 				try { await _ocrManager.TakeScreenshotToClipboardAsync(); }
 				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
 			});
 
 		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotOcrHotKey))
-			TryRegister(hk, ocr.ScreenshotOcrHotKey!, async () =>
+			TryRegister(hk, failures, "Screenshot and OCR", ocr.ScreenshotOcrHotKey!, async () =>
 			{
 				try
 				{
@@ -340,7 +349,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			});
 
 		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotLeftToRightTopToBottomOcrHotKey))
-			TryRegister(hk, ocr.ScreenshotLeftToRightTopToBottomOcrHotKey!, async () =>
+			TryRegister(hk, failures, "Screenshot and OCR (left-to-right)", ocr.ScreenshotLeftToRightTopToBottomOcrHotKey!, async () =>
 			{
 				try
 				{
@@ -353,7 +362,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			});
 
 		if (!string.IsNullOrWhiteSpace(ocr?.OcrHotKey))
-			TryRegister(hk, ocr.OcrHotKey!, async () =>
+			TryRegister(hk, failures, "OCR clipboard image", ocr.OcrHotKey!, async () =>
 			{
 				try
 				{
@@ -366,7 +375,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			});
 
 		if (!string.IsNullOrWhiteSpace(ocr?.OcrLeftToRightTopToBottomHotKey))
-			TryRegister(hk, ocr.OcrLeftToRightTopToBottomHotKey!, async () =>
+			TryRegister(hk, failures, "OCR clipboard image (left-to-right)", ocr.OcrLeftToRightTopToBottomHotKey!, async () =>
 			{
 				try
 				{
@@ -379,54 +388,57 @@ public sealed partial class MainWindow : Window, IDisposable
 			});
 
 		if (!string.IsNullOrWhiteSpace(aud?.MicrophoneToggleMuteHotKey))
-			TryRegister(hk, aud.MicrophoneToggleMuteHotKey!, () =>
+			TryRegister(hk, failures, "Toggle microphone mute", aud.MicrophoneToggleMuteHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnToggleMic_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextHotKey))
-			TryRegister(hk, stt.SpeechToTextHotKey!, () =>
+			TryRegister(hk, failures, "Start/stop dictation", stt.SpeechToTextHotKey!, () =>
 				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(false)));
 
 		if (!string.IsNullOrWhiteSpace(stt?.SpeechToTextWithLlmProcessingHotKey))
-			TryRegister(hk, stt.SpeechToTextWithLlmProcessingHotKey!, () =>
+			TryRegister(hk, failures, "Start/stop dictation with LLM processing", stt.SpeechToTextWithLlmProcessingHotKey!, () =>
 				DispatcherQueue.TryEnqueue(async () => await StartStopSpeechToTextAsync(true)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakClipboard))
-			TryRegister(hk, tts.SpeakClipboard!, () =>
+			TryRegister(hk, failures, "Speak clipboard", tts.SpeakClipboard!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnTextToSpeech_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakSelectionHotKey))
-			TryRegister(hk, tts.SpeakSelectionHotKey!, () =>
+			TryRegister(hk, failures, "Speak selection", tts.SpeakSelectionHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => SpeakActiveSelectionAsync()));
 
 		if (!string.IsNullOrWhiteSpace(tts?.RestartFromBeginningHotKey))
-			TryRegister(hk, tts.RestartFromBeginningHotKey!, () =>
+			TryRegister(hk, failures, "Restart speech from beginning", tts.RestartFromBeginningHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnRestartTts_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceBackwardHotKey))
-			TryRegister(hk, tts.SkipSentenceBackwardHotKey!, () =>
+			TryRegister(hk, failures, "Skip to previous sentence", tts.SkipSentenceBackwardHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceBack_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SkipSentenceForwardHotKey))
-			TryRegister(hk, tts.SkipSentenceForwardHotKey!, () =>
+			TryRegister(hk, failures, "Skip to next sentence", tts.SkipSentenceForwardHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSkipSentenceForward_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakToFileHotKey))
-			TryRegister(hk, tts.SpeakToFileHotKey!, () =>
+			TryRegister(hk, failures, "Speak to file", tts.SpeakToFileHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSpeakToFile_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakPositionHotKey))
-			TryRegister(hk, tts.SpeakPositionHotKey!, () =>
+			TryRegister(hk, failures, "Announce speech position", tts.SpeakPositionHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnSpeakPosition_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.PauseResumeHotKey))
-			TryRegister(hk, tts.PauseResumeHotKey!, () =>
+			TryRegister(hk, failures, "Pause/resume speech", tts.PauseResumeHotKey!, () =>
 				DispatcherQueue.TryEnqueue(() => BtnPauseResume_Click(null!, null!)));
+
+		return failures;
 	}
 
-	private static void TryRegister(HotkeyManager hk, string hotkey, Action callback)
+	private static void TryRegister(HotkeyManager hk, List<HotkeyManager.HotkeyBindingFailure> failures, string description, string hotkey, Action callback)
 	{
-		try { hk.RegisterHotkey(Hotkey.Parse(hotkey), callback); }
-		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Hotkey '{hotkey}' parse/register failed: {ex.Message}"); }
+		var failure = hk.TryRegisterCore(description, hotkey, callback);
+		if (failure is not null)
+			failures.Add(failure);
 	}
 
 	private void RestorePersistedSpeechServiceSelection()
@@ -2099,17 +2111,17 @@ public sealed partial class MainWindow : Window, IDisposable
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (tts) failed: {ex.Message}");
 		}
 
-		IReadOnlyList<HotkeyManager.HotkeyRegistrationResult>? routerResults = null;
+		var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();
 		try
 		{
 			if (_hotkeyManager is not null)
 			{
 				_hotkeyManager.ClearAllForRebind();
-				RegisterCoreHotkeys(_hotkeyManager);
-				routerResults = _hotkeyManager.RegisterRouterHotkeys();
-				_hotkeyManager.RegisterPromptHotkeys(
+				hotkeyFailures.AddRange(RegisterCoreHotkeys(_hotkeyManager));
+				hotkeyFailures.AddRange(HotkeyManager.ToBindingFailures(_hotkeyManager.RegisterRouterHotkeys()));
+				hotkeyFailures.AddRange(_hotkeyManager.RegisterPromptHotkeys(
 					_settings.LlmSettings?.Prompts ?? Enumerable.Empty<LlmSettings.LlmPrompt>(),
-					ExecutePrompt);
+					ExecutePrompt));
 			}
 		}
 		catch (Exception ex)
@@ -2117,47 +2129,48 @@ public sealed partial class MainWindow : Window, IDisposable
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (hotkeys) failed: {ex.Message}");
 		}
 
-		if (routerResults is not null)
-		{
-			var failures = routerResults.Where(r => !r.Success).ToList();
-			if (failures.Count > 0)
-				_ = ShowRouterBindingFailuresAsync(failures);
-		}
+		if (hotkeyFailures.Count > 0)
+			_ = ShowHotkeyBindingFailuresAsync(hotkeyFailures);
 	}
 
-	private async Task ShowRouterBindingFailuresAsync(IReadOnlyList<HotkeyManager.HotkeyRegistrationResult> failures)
+	// Surfaces hotkey binding failures (core, router, and prompt) the same way: a failure beep
+	// plus an accessible dialog listing each unbound hotkey and why it could not be registered.
+	internal async Task ShowHotkeyBindingFailuresAsync(IReadOnlyList<HotkeyManager.HotkeyBindingFailure> failures)
 	{
+		if (failures is null || failures.Count == 0)
+			return;
+
+		try { BeepPlayer.Play(BeepType.Failure); }
+		catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Hotkey failure beep failed: {ex.Message}"); }
+
 		try
 		{
-			if (Content is not FrameworkElement rootElement)
+			if (Content is not FrameworkElement rootElement || rootElement.XamlRoot is null)
 				return;
 
-			var lines = failures.Select(f =>
-			{
-				var from = string.IsNullOrWhiteSpace(f.Map?.FromHotKey) ? "(empty)" : f.Map!.FromHotKey;
-				var to = string.IsNullOrWhiteSpace(f.Map?.ToHotKey) ? "(empty)" : f.Map!.ToHotKey;
-				var reason = string.IsNullOrWhiteSpace(f.ErrorMessage) ? "Unknown error." : f.ErrorMessage;
-				return $"• {from} → {to}: {reason}";
-			});
+			const string title = "Some hotkeys could not be registered";
+			string message = HotkeyManager.BuildFailureMessage(failures);
 
 			var dialog = new ContentDialog
 			{
-				Title = "Some hotkey router mappings could not be registered",
+				Title = title,
 				Content = new TextBlock
 				{
-					Text = string.Join(Environment.NewLine, lines),
+					Text = message,
 					TextWrapping = TextWrapping.Wrap,
 				},
 				CloseButtonText = "OK",
 				XamlRoot = rootElement.XamlRoot,
 				RequestedTheme = rootElement.ActualTheme,
 			};
+			Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dialog, title);
+			Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(dialog, message);
 
 			await ShowDialogAsync(dialog);
 		}
 		catch (Exception ex)
 		{
-			System.Diagnostics.Debug.WriteLine($"ShowRouterBindingFailures failed: {ex.Message}");
+			System.Diagnostics.Debug.WriteLine($"ShowHotkeyBindingFailures failed: {ex.Message}");
 		}
 	}
 

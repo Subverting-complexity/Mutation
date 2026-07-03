@@ -42,6 +42,61 @@ public class HotkeyManager : IDisposable
 
         public sealed record HotkeyRegistrationResult(HotKeyRouterSettings.HotKeyRouterMap Map, string NormalizedHotkey, bool Success, int Id, string? ErrorMessage);
 
+        // A single hotkey that could not be bound, described in user-facing terms so it can be
+        // shown in a dialog the same way router failures are. Description is a human label for
+        // the action (e.g. "Start/stop dictation") or the prompt name; Hotkey is the configured
+        // text; Reason explains why it failed (parse error or registration conflict).
+        public sealed record HotkeyBindingFailure(string Description, string Hotkey, string Reason);
+
+        // Pure classification of a configured hotkey string. Returns a failure when the text is
+        // absent (and not allowed) or cannot be parsed. Registration conflicts are detected later,
+        // during the actual RegisterHotKey call. Kept static and side-effect-free so it is unit
+        // testable without a window handle.
+        public static HotkeyBindingFailure? ClassifyConfiguredHotkey(string description, string? hotkeyText, bool allowEmpty)
+        {
+                if (string.IsNullOrWhiteSpace(hotkeyText))
+                        return allowEmpty ? null : new HotkeyBindingFailure(description, string.Empty, "Enter a hotkey.");
+
+                string? error = HotkeyValidator.Validate(hotkeyText, allowSendKeysSyntax: false);
+                return error is null ? null : new HotkeyBindingFailure(description, hotkeyText.Trim(), error);
+        }
+
+        // Builds the bulleted message body shown to the user for a set of binding failures.
+        public static string BuildFailureMessage(IReadOnlyList<HotkeyBindingFailure> failures)
+        {
+                if (failures is null || failures.Count == 0)
+                        return string.Empty;
+
+                var lines = failures.Select(f =>
+                {
+                        var reason = string.IsNullOrWhiteSpace(f.Reason) ? "Unknown error." : f.Reason;
+                        return string.IsNullOrWhiteSpace(f.Hotkey)
+                                ? $"• {f.Description}: {reason}"
+                                : $"• {f.Description} ({f.Hotkey}): {reason}";
+                });
+                return string.Join(Environment.NewLine, lines);
+        }
+
+        // Projects the failed entries of a router registration pass into the shared failure shape
+        // (Description = "from -> to") so router, core, and prompt failures render identically.
+        public static IReadOnlyList<HotkeyBindingFailure> ToBindingFailures(IReadOnlyList<HotkeyRegistrationResult> results)
+        {
+                if (results is null || results.Count == 0)
+                        return Array.Empty<HotkeyBindingFailure>();
+
+                var failures = new List<HotkeyBindingFailure>();
+                foreach (var r in results)
+                {
+                        if (r.Success)
+                                continue;
+                        var from = string.IsNullOrWhiteSpace(r.Map?.FromHotKey) ? "(empty)" : r.Map!.FromHotKey!;
+                        var to = string.IsNullOrWhiteSpace(r.Map?.ToHotKey) ? "(empty)" : r.Map!.ToHotKey!;
+                        var reason = string.IsNullOrWhiteSpace(r.ErrorMessage) ? "Unknown error." : r.ErrorMessage!;
+                        failures.Add(new HotkeyBindingFailure($"{from} → {to}", string.Empty, reason));
+                }
+                return failures;
+        }
+
         private readonly struct HotkeyRegistrationAttempt
         {
                 public HotkeyRegistrationAttempt(string normalizedHotkey, int id, bool success, string? errorMessage)
@@ -123,6 +178,27 @@ public class HotkeyManager : IDisposable
 	        {
 	                var attempt = RegisterHotkeyInternal(hotkey, callback, isRouter: false);
 	                return attempt.Id;
+	        }
+
+	        // Registers a core (non-router) hotkey and returns a failure description when the
+	        // configured text cannot be parsed or the shortcut cannot be bound. Returns null on
+	        // success. This replaces the old fire-and-forget TryRegister that swallowed both the
+	        // parse exception and the registration conflict to Debug output only.
+	        public HotkeyBindingFailure? TryRegisterCore(string description, string? hotkeyText, Action callback)
+	        {
+	                var parseFailure = ClassifyConfiguredHotkey(description, hotkeyText, allowEmpty: true);
+	                if (parseFailure is not null)
+	                {
+	                        Log($"Core hotkey '{hotkeyText}' ({description}) invalid: {parseFailure.Reason}");
+	                        return parseFailure;
+	                }
+
+	                var attempt = RegisterHotkeyInternal(Hotkey.Parse(hotkeyText!), callback, isRouter: false);
+	                if (attempt.Success)
+	                        return null;
+
+	                return new HotkeyBindingFailure(description, hotkeyText!.Trim(),
+	                        attempt.ErrorMessage ?? "The shortcut could not be registered.");
 	        }
 
 	        private HotkeyRegistrationAttempt RegisterHotkeyInternal(Hotkey hotkey, Action callback, bool isRouter)
@@ -279,37 +355,47 @@ public class HotkeyManager : IDisposable
                 _routerFailedRegistrations.Clear();
         }
 
-        public void RegisterPromptHotkeys(IEnumerable<LlmSettings.LlmPrompt> prompts, Action<LlmSettings.LlmPrompt> callback)
+        // Registers each prompt's optional hotkey and returns the ones that could not be bound,
+        // labelled by prompt name, so the caller can surface them the same way router and core
+        // failures are surfaced.
+        public IReadOnlyList<HotkeyBindingFailure> RegisterPromptHotkeys(IEnumerable<LlmSettings.LlmPrompt> prompts, Action<LlmSettings.LlmPrompt> callback)
         {
             ClearPromptHotkeys();
-            if (prompts == null) return;
+            var failures = new List<HotkeyBindingFailure>();
+            if (prompts == null) return failures;
 
             foreach (var prompt in prompts)
             {
                 if (string.IsNullOrWhiteSpace(prompt.Hotkey)) continue;
 
-                try
-                {
-                    var hotkey = Hotkey.Parse(prompt.Hotkey);
-                    var attempt = RegisterHotkeyInternal(hotkey, () => callback(prompt), isRouter: false); // Treat as core or unique type? 
-                    // reusing RegisterHotkeyInternal. 'isRouter' tracks failures separately. 
-                    // Let's treat prompts as core for failure tracking for now, or add a flag. 
-                    // The current method separates core vs router. 
-                    // If I pass isRouter=false, it adds to FailedRegistrations and _coreFailedRegistrations.
-                    // This seems acceptable.
+                string description = string.IsNullOrWhiteSpace(prompt.Name) ? "(unnamed prompt)" : prompt.Name;
 
-                    if (attempt.Success && attempt.Id > 0)
+                var parseFailure = ClassifyConfiguredHotkey(description, prompt.Hotkey, allowEmpty: true);
+                if (parseFailure is not null)
+                {
+                    Log($"Prompt hotkey invalid: {description} ({prompt.Hotkey}) - {parseFailure.Reason}");
+                    failures.Add(parseFailure);
+                    continue;
+                }
+
+                var attempt = RegisterHotkeyInternal(Hotkey.Parse(prompt.Hotkey), () => callback(prompt), isRouter: false);
+                if (attempt.Success)
+                {
+                    if (attempt.Id > 0)
                     {
                         _promptIds.Add(attempt.Id);
                         _promptNormalizedHotkeys[attempt.Id] = attempt.NormalizedHotkey;
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    Log($"Prompt hotkey failed: {prompt.Name} ({prompt.Hotkey}) - {ex.Message}");
-                    FailedRegistrations.Add(prompt.Hotkey);
+                    Log($"Prompt hotkey registration FAILED: {description} ({prompt.Hotkey}) - {attempt.ErrorMessage}");
+                    failures.Add(new HotkeyBindingFailure(description, prompt.Hotkey.Trim(),
+                        attempt.ErrorMessage ?? "The shortcut could not be registered."));
                 }
             }
+
+            return failures;
         }
 
         public void ClearPromptHotkeys()

@@ -319,46 +319,20 @@ public partial class App : Application
 			ocrMgr.InitializeWindow(_window);
 
                         var hkManager = _host.Services.GetRequiredService<HotkeyManager>();
+                        // Register core, prompt, and router hotkeys, then surface any that could not be
+                        // bound the same way (dialog + failure beep). AttachHotkeyManager registers the
+                        // prompt and router hotkeys and RegisterCoreHotkeys registers the core ones; both
+                        // return the failures they encountered.
+                        var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();
                         if (_window is MainWindow main)
                         {
-                                main.AttachHotkeyManager(hkManager);
-                                main.RegisterCoreHotkeys(hkManager);
+                                hotkeyFailures.AddRange(main.AttachHotkeyManager(hkManager));
+                                hotkeyFailures.AddRange(main.RegisterCoreHotkeys(hkManager));
                         }
                         var settingsSvc = _host.Services.GetRequiredService<Settings>();
 
-                        // Core hotkey registration is now performed by main.RegisterCoreHotkeys above.
-
-                        _ = hkManager.RegisterRouterHotkeys();
-
-			if (hkManager.FailedRegistrations.Count > 0)
-			{
-				const string title = "Hotkeys Not Registered";
-				string message = "The following hotkeys could not be registered and may be in use by another application:\n\n" +
-										  string.Join("\n", hkManager.FailedRegistrations);
-
-				if (_window.Content is FrameworkElement fe && fe.XamlRoot is not null)
-				{
-					var dialog = new ContentDialog
-					{
-						Title = title,
-						Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-						CloseButtonText = "OK",
-						XamlRoot = fe.XamlRoot
-					};
-					// Provide accessible name/help text for screen readers
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dialog, title);
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(dialog, message);
-					await dialog.ShowAsync();
-				}
-				else
-				{
-					System.Windows.Forms.MessageBox.Show(
-							  message,
-							  title,
-							  System.Windows.Forms.MessageBoxButtons.OK,
-							  System.Windows.Forms.MessageBoxIcon.Warning);
-				}
-			}
+			if (hotkeyFailures.Count > 0 && _window is MainWindow mainWindow)
+				await mainWindow.ShowHotkeyBindingFailuresAsync(hotkeyFailures);
 
 			_window.Closed += async (_, __) =>
 			{

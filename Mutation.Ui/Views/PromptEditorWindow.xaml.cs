@@ -1,6 +1,7 @@
 using CognitiveSupport;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,7 +65,7 @@ public sealed partial class PromptEditorWindow : Window
 
             // Populate fields
             TxtName.Text = Prompt.Name;
-            TxtHotkey.Text = Prompt.Hotkey;
+            HkPromptHotkey.Hotkey = Prompt.Hotkey ?? string.Empty;
             TxtContent.Text = Prompt.Content;
             ChkAutoRun.IsChecked = Prompt.AutoRun;
 
@@ -87,9 +88,21 @@ public sealed partial class PromptEditorWindow : Window
             return;
         }
 
+        // Reject an invalid hotkey before saving so a typo cannot silently fail to bind later.
+        string hotkey = (HkPromptHotkey.Hotkey ?? string.Empty).Trim();
+        if (!string.IsNullOrEmpty(hotkey))
+        {
+            string? hotkeyError = HotkeyValidator.Validate(hotkey, allowSendKeysSyntax: false);
+            if (hotkeyError is not null)
+            {
+                ShowError($"Hotkey is not valid: {hotkeyError}");
+                return;
+            }
+        }
+
         // Update object
         Prompt.Name = TxtName.Text;
-        Prompt.Hotkey = TxtHotkey.Text; // Basic text for now, could implement validation later
+        Prompt.Hotkey = hotkey;
         Prompt.Content = TxtContent.Text;
         Prompt.AutoRun = ChkAutoRun.IsChecked ?? false;
         Prompt.ModelName = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
