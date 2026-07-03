@@ -174,6 +174,49 @@ public class MicrophoneLevelPinServiceTests
 	}
 
 	[Fact]
+	public void ReadCurrentLevel_ReturnsScaledValue_WhenReadable()
+	{
+		var controller = new FakeCaptureLevelController { Level = 0.37f };
+		var service = NewService(controller);
+
+		int? level = service.ReadCurrentLevel();
+
+		Assert.Equal(37, level);
+		Assert.Equal(0, controller.SetCount); // a pure read, never a write
+	}
+
+	[Fact]
+	public void ReadCurrentLevel_ReturnsNull_OnUnsupportedDevice()
+	{
+		// Supported is false but a stale Level lingers — the support gate must win so
+		// callers get "unknown" rather than a misleading value.
+		var controller = new FakeCaptureLevelController { Supported = false, Level = 0.42f };
+		var service = NewService(controller);
+
+		Assert.Null(service.ReadCurrentLevel());
+	}
+
+	[Fact]
+	public void ReadCurrentLevel_ReturnsNull_WhenLevelUnreadable()
+	{
+		// Supported device whose current level can't be read (transient failure): the
+		// caller must be able to leave its display untouched rather than reset it.
+		var controller = new FakeCaptureLevelController { Supported = true, Level = null };
+		var service = NewService(controller);
+
+		Assert.Null(service.ReadCurrentLevel());
+	}
+
+	[Fact]
+	public void ReadCurrentLevel_ClampsOutOfRangeScalar()
+	{
+		var controller = new FakeCaptureLevelController { Level = 1.5f };
+		var service = NewService(controller);
+
+		Assert.Equal(100, service.ReadCurrentLevel());
+	}
+
+	[Fact]
 	public void Constructor_RejectsNullController()
 	{
 		Assert.Throws<ArgumentNullException>(() => new MicrophoneLevelPinService(null!));
