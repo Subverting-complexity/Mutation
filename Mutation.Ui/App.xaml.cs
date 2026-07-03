@@ -192,9 +192,10 @@ public partial class App : Application
 			builder.Services.AddSingleton<MMDeviceEnumerator>(_ => new MMDeviceEnumerator(Guid.NewGuid()));
 			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureDeviceChangeNotifier, Mutation.Ui.Core.MMDeviceCaptureDeviceChangeNotifier>();
 			builder.Services.AddSingleton<AudioDeviceManager>();
-			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureLevelController>(sp =>
-				new Mutation.Ui.Core.CoreAudioCaptureLevelController(
-					() => sp.GetRequiredService<AudioDeviceManager>().Microphone));
+			// AudioDeviceManager resolves the active mic's level endpoint and can
+			// re-acquire fresh device references, so it is the pin service's provider.
+			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureLevelEndpointProvider>(sp =>
+				sp.GetRequiredService<AudioDeviceManager>());
 			builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelPinService>();
 			builder.Services.AddSingleton<IOcrService>(sp =>
 	 new OcrService(

@@ -1254,7 +1254,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			int level = (int)Math.Round(SldMicLevel.Value);
 			_settings.AudioSettings.PinnedCaptureLevel = level;
-			_micLevelPinService.ApplyLevel(level);
+			ReportIfLevelWriteFailed(_micLevelPinService.ApplyLevel(level));
 		}
 		else
 		{
@@ -1272,7 +1272,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!_micLevelControlsReady) return;
 
 		int level = (int)Math.Round(e.NewValue);
-		_micLevelPinService.ApplyLevel(level);
+		ReportIfLevelWriteFailed(_micLevelPinService.ApplyLevel(level));
 
 		if (TglPinMicLevel.IsOn)
 		{
@@ -1283,6 +1283,21 @@ public sealed partial class MainWindow : Window, IDisposable
 				_settingsManager.SaveSettingsToFile(_settings);
 			}
 		}
+	}
+
+	// When a level write could not be applied and verified, warn the user with the
+	// failure beep and a status message rather than leaving the slider showing a
+	// value the hardware never accepted. Other outcomes (applied, unchanged, or an
+	// unsupported hardware-fixed device) need no signal.
+	private void ReportIfLevelWriteFailed(Mutation.Ui.Core.CaptureLevelResult result)
+	{
+		if (!result.Failed)
+			return;
+
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Microphone level",
+			"Could not set the microphone level — the device may be busy or disconnected. Please try again.",
+			InfoBarSeverity.Error);
 	}
 
 	// Mirror the on-screen toggle states from the current settings. Called after the
