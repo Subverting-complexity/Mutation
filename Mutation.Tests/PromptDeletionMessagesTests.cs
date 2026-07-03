@@ -55,4 +55,25 @@ public class PromptDeletionMessagesTests
 	{
 		Assert.Equal("Deletion of this prompt cancelled.", PromptDeletionMessages.BuildCancelled(null));
 	}
+
+	[Fact]
+	public void BuildFailed_WithReason_IncludesTrimmedReason()
+	{
+		Assert.Equal("Could not delete prompt 'Summarize': disk full", PromptDeletionMessages.BuildFailed("Summarize", "  disk full  "));
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	[InlineData("   ")]
+	public void BuildFailed_BlankReason_OmitsReasonSuffix(string? reason)
+	{
+		Assert.Equal("Could not delete prompt 'Summarize'.", PromptDeletionMessages.BuildFailed("Summarize", reason));
+	}
+
+	[Fact]
+	public void BuildFailed_BlankName_FallsBackToNeutralLabel()
+	{
+		Assert.Equal("Could not delete this prompt.", PromptDeletionMessages.BuildFailed(" ", null));
+	}
 }

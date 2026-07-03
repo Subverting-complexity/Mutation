@@ -27,6 +27,12 @@ internal static class PromptDeletionMessages
 	internal static string BuildCancelled(string? name) =>
 		$"Deletion of {Describe(name)} cancelled.";
 
+	/// <summary>Announcement when the deletion could not be completed.</summary>
+	internal static string BuildFailed(string? name, string? reason) =>
+		string.IsNullOrWhiteSpace(reason)
+			? $"Could not delete {Describe(name)}."
+			: $"Could not delete {Describe(name)}: {reason.Trim()}";
+
 	/// <summary>
 	/// Renders a prompt reference for a sentence: a quoted name when one is
 	/// present, or a neutral fallback when the name is missing or blank.

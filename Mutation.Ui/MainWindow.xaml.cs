@@ -2219,10 +2219,20 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        if (_promptLibrary.DeletePrompt(prompt))
+        try
         {
-            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildDeleted(name), InfoBarSeverity.Success);
-            BeepPlayer.Play(BeepType.Success);
+            if (_promptLibrary.DeletePrompt(prompt))
+            {
+                ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildDeleted(name), InfoBarSeverity.Success);
+                BeepPlayer.Play(BeepType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Persisting the removal can fail (e.g. the settings file cannot be
+            // written). Fail loudly rather than let the async void swallow it.
+            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildFailed(name, ex.Message), InfoBarSeverity.Error);
+            BeepPlayer.Play(BeepType.Failure);
         }
     }
 
