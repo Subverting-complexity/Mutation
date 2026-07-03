@@ -14,6 +14,7 @@ internal sealed class PromptLibraryController
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ListView _promptListView;
 	private readonly Action<LlmSettings.LlmPrompt> _executePrompt;
+	private readonly Action<IReadOnlyList<HotkeyManager.HotkeyBindingFailure>>? _reportHotkeyFailures;
 
 	private HotkeyManager? _hotkeyManager;
 
@@ -22,13 +23,15 @@ internal sealed class PromptLibraryController
 		ISettingsManager settingsManager,
 		TranscriptFormatter transcriptFormatter,
 		ListView promptListView,
-		Action<LlmSettings.LlmPrompt> executePrompt)
+		Action<LlmSettings.LlmPrompt> executePrompt,
+		Action<IReadOnlyList<HotkeyManager.HotkeyBindingFailure>>? reportHotkeyFailures = null)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
 		_transcriptFormatter = transcriptFormatter ?? throw new ArgumentNullException(nameof(transcriptFormatter));
 		_promptListView = promptListView ?? throw new ArgumentNullException(nameof(promptListView));
 		_executePrompt = executePrompt ?? throw new ArgumentNullException(nameof(executePrompt));
+		_reportHotkeyFailures = reportHotkeyFailures;
 	}
 
 	public void Initialize()
@@ -37,11 +40,12 @@ internal sealed class PromptLibraryController
 			_promptListView.ItemsSource = _settings.LlmSettings.Prompts;
 	}
 
-	public void AttachHotkeyManager(HotkeyManager hotkeyManager)
+	public IReadOnlyList<HotkeyManager.HotkeyBindingFailure> AttachHotkeyManager(HotkeyManager hotkeyManager)
 	{
 		_hotkeyManager = hotkeyManager ?? throw new ArgumentNullException(nameof(hotkeyManager));
 		if (_settings.LlmSettings?.Prompts != null)
-			_hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, _executePrompt);
+			return _hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, _executePrompt);
+		return Array.Empty<HotkeyManager.HotkeyBindingFailure>();
 	}
 
 	public LlmSettings.LlmPrompt? GetAutoRunPrompt()
@@ -128,6 +132,11 @@ internal sealed class PromptLibraryController
 		_promptListView.ItemsSource = null;
 		_promptListView.ItemsSource = _settings.LlmSettings.Prompts;
 
-		_hotkeyManager?.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, _executePrompt);
+		if (_hotkeyManager is null)
+			return;
+
+		var failures = _hotkeyManager.RegisterPromptHotkeys(_settings.LlmSettings.Prompts, _executePrompt);
+		if (failures.Count > 0)
+			_reportHotkeyFailures?.Invoke(failures);
 	}
 }

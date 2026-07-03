@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
     mc:Ignorable="d"
     Title="Edit Prompt">
 
@@ -30,7 +31,12 @@
             </Grid.RowDefinitions>
 
             <TextBox x:Name="TxtName" Header="Name" PlaceholderText="e.g. Summarize" Grid.Column="0" />
-            <TextBox x:Name="TxtHotkey" Header="Hotkey" PlaceholderText="e.g. CTRL+ALT+S" Grid.Column="1" />
+            <controls:HotkeyEditor x:Name="HkPromptHotkey"
+                                   Header="Hotkey"
+                                   HelpText="Optional global shortcut that runs this prompt."
+                                   AllowEmpty="True"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Bottom" />
 
             <ComboBox x:Name="CmbModel"
                       Header="Model"
