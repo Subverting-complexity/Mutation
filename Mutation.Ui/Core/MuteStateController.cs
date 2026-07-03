@@ -50,6 +50,18 @@ public sealed class MuteStateController
 	}
 
 	/// <summary>
+	/// Re-applies the current confirmed mute state to the current endpoint set.
+	/// This is how a capture device that appeared after the last toggle — a
+	/// hot-plugged microphone — adopts the same state, so a mic connected while
+	/// the app is muted is muted too. It is best-effort: the tracked
+	/// <see cref="IsMuted"/> is never changed here (a real toggle owns state
+	/// transitions and their verification), and a failure is reported but not
+	/// acted on. Returns true only when every current endpoint confirmed the
+	/// state; an empty endpoint set returns false.
+	/// </summary>
+	public bool SynchronizeDevices() => TryApplyAndVerify(_provider.GetEndpoints(), _isMuted);
+
+	/// <summary>
 	/// Writes <paramref name="desiredMute"/> to every endpoint and confirms it by
 	/// read-back. Returns true only if all endpoints ended in the desired state.
 	/// An empty endpoint set is a failure: with nothing to write, the mute cannot

@@ -190,6 +190,7 @@ public partial class App : Application
 			builder.Services.AddSingleton<ClipboardManager>();
 			builder.Services.AddSingleton<UiStateManager>();
 			builder.Services.AddSingleton<MMDeviceEnumerator>(_ => new MMDeviceEnumerator(Guid.NewGuid()));
+			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureDeviceChangeNotifier, Mutation.Ui.Core.MMDeviceCaptureDeviceChangeNotifier>();
 			builder.Services.AddSingleton<AudioDeviceManager>();
 			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureLevelController>(sp =>
 				new Mutation.Ui.Core.CoreAudioCaptureLevelController(

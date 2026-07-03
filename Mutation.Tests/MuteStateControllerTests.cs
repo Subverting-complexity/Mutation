@@ -199,4 +199,101 @@ public class MuteStateControllerTests
 	{
 		Assert.Throws<ArgumentNullException>(() => new MuteStateController(null!));
 	}
+
+	// A provider whose current endpoint set can grow, standing in for a
+	// microphone hot-plugged after the app started. GetEndpoints() reflects the
+	// latest set, exactly as AudioDeviceManager does after re-enumerating.
+	private sealed class MutableProvider : IMuteEndpointProvider
+	{
+		private IReadOnlyList<IMuteEndpoint> _current;
+
+		public int RefreshCount { get; private set; }
+
+		public MutableProvider(IReadOnlyList<IMuteEndpoint> initial) => _current = initial;
+
+		public void SetEndpoints(IReadOnlyList<IMuteEndpoint> endpoints) => _current = endpoints;
+
+		public IReadOnlyList<IMuteEndpoint> GetEndpoints() => _current;
+
+		public IReadOnlyList<IMuteEndpoint> RefreshEndpoints()
+		{
+			RefreshCount++;
+			return _current;
+		}
+	}
+
+	[Fact]
+	public void SynchronizeDevices_WhenMuted_AppliesMutedToNewlyAddedEndpoint()
+	{
+		var existing = new FakeMuteEndpoint();
+		var provider = new MutableProvider(new IMuteEndpoint[] { existing });
+		var controller = new MuteStateController(provider);
+
+		controller.Toggle(); // now muted; the existing mic is muted
+		Assert.True(controller.IsMuted);
+
+		// A mic is plugged in: it joins the current set, initially live.
+		var added = new FakeMuteEndpoint();
+		provider.SetEndpoints(new IMuteEndpoint[] { existing, added });
+
+		bool synced = controller.SynchronizeDevices();
+
+		Assert.True(synced);
+		Assert.True(added.CurrentMute);       // the new mic adopted the muted state
+		Assert.True(existing.CurrentMute);    // the existing mic stays muted
+		Assert.True(controller.IsMuted);      // tracked state is unchanged
+	}
+
+	[Fact]
+	public void SynchronizeDevices_WhenStartedMuted_MutesNewMic_WithoutAToggle()
+	{
+		var added = new FakeMuteEndpoint();
+		var provider = new MutableProvider(new IMuteEndpoint[] { added });
+		var controller = new MuteStateController(provider, initialMuted: true);
+
+		bool synced = controller.SynchronizeDevices();
+
+		Assert.True(synced);
+		Assert.True(added.CurrentMute);
+	}
+
+	[Fact]
+	public void SynchronizeDevices_WhenUnmuted_LeavesNewMicLive_AndDoesNotChangeState()
+	{
+		var added = new FakeMuteEndpoint(initial: true); // arrives muted at the OS level
+		var provider = new MutableProvider(new IMuteEndpoint[] { added });
+		var controller = new MuteStateController(provider); // unmuted
+
+		bool synced = controller.SynchronizeDevices();
+
+		Assert.True(synced);
+		Assert.False(added.CurrentMute);   // brought in line with the app's live state
+		Assert.False(controller.IsMuted);  // tracked state is unchanged
+	}
+
+	[Fact]
+	public void SynchronizeDevices_PartialFailure_ReportsFailure_DoesNotChangeState()
+	{
+		var good = new FakeMuteEndpoint();
+		var bad = new FakeMuteEndpoint { ThrowOnSet = true };
+		var provider = new MutableProvider(new IMuteEndpoint[] { good, bad });
+		var controller = new MuteStateController(provider, initialMuted: true);
+
+		bool synced = controller.SynchronizeDevices();
+
+		Assert.False(synced);
+		Assert.True(controller.IsMuted);           // state never advanced or flipped
+		Assert.Equal(0, provider.RefreshCount);    // synchronize does not re-enumerate itself
+	}
+
+	[Fact]
+	public void SynchronizeDevices_NoEndpoints_ReturnsFalse_WithoutThrowing()
+	{
+		var provider = new MutableProvider(Array.Empty<IMuteEndpoint>());
+		var controller = new MuteStateController(provider);
+
+		bool synced = controller.SynchronizeDevices();
+
+		Assert.False(synced);
+	}
 }

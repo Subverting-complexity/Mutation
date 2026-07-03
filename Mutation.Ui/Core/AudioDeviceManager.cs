@@ -14,18 +14,45 @@ public class AudioDeviceManager : IMuteEndpointProvider
 {
         private readonly MMDeviceEnumerator _deviceEnumerator;
         private readonly MuteStateController _muteState;
+        // Guards the capture-device list and the mute application against the
+        // background thread that OS device-change notifications arrive on: a
+        // hot-plug re-enumeration must not race the UI-thread mute toggle.
+        private readonly object _sync = new();
         private IList<MMDevice> _captureDevices = new List<MMDevice>();
         private MMDevice? _microphone;
         private int _microphoneDeviceIndex = -1;
 
-        public AudioDeviceManager(MMDeviceEnumerator deviceEnumerator)
+        public AudioDeviceManager(MMDeviceEnumerator deviceEnumerator, ICaptureDeviceChangeNotifier deviceChangeNotifier)
         {
                 _deviceEnumerator = deviceEnumerator ?? throw new ArgumentNullException(nameof(deviceEnumerator));
+                if (deviceChangeNotifier is null)
+                        throw new ArgumentNullException(nameof(deviceChangeNotifier));
                 RefreshCaptureDevices();
                 _muteState = new MuteStateController(this, ReadInitialMuteState());
+
+                // Subscribe only after _muteState exists, so a notification that
+                // arrives during construction cannot reach a half-built object.
+                deviceChangeNotifier.CaptureDevicesChanged += OnCaptureDevicesChanged;
         }
 
-        public IEnumerable<MMDevice> CaptureDevices => _captureDevices;
+        // When a microphone is added or removed at the OS level, re-enumerate so
+        // ToggleMute() acts on the current set, then re-apply the current mute
+        // state so a newly connected mic adopts it (muted stays muted).
+        private void OnCaptureDevicesChanged(object? sender, EventArgs e)
+        {
+                lock (_sync)
+                {
+                        RefreshCaptureDevices();
+                        _muteState.SynchronizeDevices();
+                }
+        }
+
+        public IEnumerable<MMDevice> CaptureDevices
+        {
+                // Return a snapshot: the backing list can be swapped out on a
+                // device-change notification thread while a caller enumerates.
+                get { lock (_sync) return _captureDevices.ToList(); }
+        }
 
         public MMDevice? Microphone => _microphone;
 
@@ -39,7 +66,10 @@ public class AudioDeviceManager : IMuteEndpointProvider
         public void RefreshCaptureDevices()
         {
                 var devices = _deviceEnumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
-                _captureDevices = devices.ToList();
+                lock (_sync)
+                {
+                        _captureDevices = devices.ToList();
+                }
         }
 
         public void SelectMicrophone(MMDevice device)
@@ -102,17 +132,35 @@ public class AudioDeviceManager : IMuteEndpointProvider
         /// reading it back, and retries once with fresh device references if the
         /// write fails. Returns whether the new state was confirmed and the mute
         /// state to report to the user.
-        public MuteToggleResult ToggleMute() => _muteState.Toggle();
+        public MuteToggleResult ToggleMute()
+        {
+                // Serialize with the device-change handler so a hot-plug refresh
+                // cannot swap the device list out from under an in-flight toggle.
+                lock (_sync)
+                {
+                        return _muteState.Toggle();
+                }
+        }
 
-        IReadOnlyList<IMuteEndpoint> IMuteEndpointProvider.GetEndpoints() =>
-                BuildEndpoints();
+        IReadOnlyList<IMuteEndpoint> IMuteEndpointProvider.GetEndpoints()
+        {
+                lock (_sync)
+                {
+                        return BuildEndpoints();
+                }
+        }
 
         IReadOnlyList<IMuteEndpoint> IMuteEndpointProvider.RefreshEndpoints()
         {
-                RefreshCaptureDevices();
-                return BuildEndpoints();
+                lock (_sync)
+                {
+                        RefreshCaptureDevices();
+                        return BuildEndpoints();
+                }
         }
 
+        // Callers hold _sync; the lock is reentrant so RefreshCaptureDevices'
+        // own lock nests harmlessly.
         private IReadOnlyList<IMuteEndpoint> BuildEndpoints() =>
                 _captureDevices
                         .Where(device => device != null)
