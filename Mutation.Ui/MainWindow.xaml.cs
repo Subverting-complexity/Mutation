@@ -1060,6 +1060,11 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
+		// Save whatever the user has on the clipboard before Ctrl+C destroys it.
+		ClipboardSnapshot? saved = null;
+		try { saved = await _clipboard.TryCaptureSnapshotAsync(); }
+		catch { /* snapshot is best-effort; reading the selection still works without it */ }
+
 		uint before = GetClipboardSequenceNumber();
 		try { await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+C")); }
 		catch { /* sending may fail if focus is on a non-input control */ }
@@ -1081,7 +1086,39 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		BtnTextToSpeech_Click(null, null);
+		// Read the copied selection now, so the clipboard can be restored
+		// before speaking rather than after.
+		var (kind, selectionText) = await _clipboard.InspectAsync();
+		string trimmed = (selectionText ?? string.Empty).Trim();
+
+		if (saved is not null)
+		{
+			bool restored = false;
+			try { restored = await _clipboard.TryRestoreSnapshotAsync(saved); }
+			catch { /* fall through to the failure announcement */ }
+
+			if (!restored)
+			{
+				BeepPlayer.Play(BeepType.Failure);
+				ShowStatus("Text to Speech",
+					"Could not restore your previous clipboard content; the clipboard now holds the copied selection.",
+					InfoBarSeverity.Warning);
+			}
+		}
+
+		if (kind != ClipboardKind.Text || trimmed.Length == 0)
+		{
+			AnnounceUnreadableClipboard(kind, tts);
+			return;
+		}
+
+		if (_textToSpeech.IsSpeaking)
+			_textToSpeech.Stop();
+
+		_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+			resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing,
+			options: SpeechPreprocessingOptions.FromSettings(tts));
+		ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
 	}
 
 	private void AnnounceSelectionUnavailable(string message, TextToSpeechSettings tts)
