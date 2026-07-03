@@ -2188,10 +2188,42 @@ public sealed partial class MainWindow : Window, IDisposable
             _promptLibrary?.OpenEditDialog(prompt);
     }
 
-    private void BtnDeletePrompt_Click(object sender, RoutedEventArgs e)
+    private async void BtnDeletePrompt_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is LlmSettings.LlmPrompt prompt)
-            _promptLibrary?.DeletePrompt(prompt);
+        if (sender is not Button btn || btn.Tag is not LlmSettings.LlmPrompt prompt || _promptLibrary is null)
+            return;
+
+        string name = prompt.Name;
+        string confirmation = PromptDeletionMessages.BuildConfirmation(name);
+
+        var dialog = new ContentDialog
+        {
+            Title = PromptDeletionMessages.ConfirmationTitle,
+            Content = new TextBlock { Text = confirmation, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            // Cancel is the safe default so a stray Enter never deletes a prompt.
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = (this.Content as FrameworkElement)?.XamlRoot,
+        };
+        AutomationProperties.SetName(dialog, PromptDeletionMessages.ConfirmationTitle);
+        AutomationProperties.SetHelpText(dialog, confirmation);
+
+        var result = await ShowDialogAsync(dialog);
+        if (result != ContentDialogResult.Primary)
+        {
+            // Covers an explicit Cancel and the guarded case where another
+            // dialog was already open (ShowDialogAsync returns None): nothing
+            // is deleted, and the outcome is announced for the screen reader.
+            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildCancelled(name), InfoBarSeverity.Informational);
+            return;
+        }
+
+        if (_promptLibrary.DeletePrompt(prompt))
+        {
+            ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildDeleted(name), InfoBarSeverity.Success);
+            BeepPlayer.Play(BeepType.Success);
+        }
     }
 
     private void BtnRunPrompt_Click(object sender, RoutedEventArgs e)

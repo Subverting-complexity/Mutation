@@ -95,13 +95,22 @@ internal sealed class PromptLibraryController
 		};
 	}
 
-	public void DeletePrompt(LlmSettings.LlmPrompt prompt)
+	/// <summary>
+	/// Removes the prompt, persists, and refreshes the list. Returns
+	/// <c>true</c> when a prompt was actually removed so the caller can
+	/// announce an accurate outcome; <c>false</c> when there was nothing to
+	/// remove (null prompt, no settings, or the prompt was already gone).
+	/// </summary>
+	public bool DeletePrompt(LlmSettings.LlmPrompt prompt)
 	{
 		if (prompt == null || _settings.LlmSettings == null)
-			return;
+			return false;
 
-		_settings.LlmSettings.Prompts.Remove(prompt);
+		if (!_settings.LlmSettings.Prompts.Remove(prompt))
+			return false;
+
 		SaveAndRefresh();
+		return true;
 	}
 
 	private IReadOnlyList<string> GetAvailableModelNames()
