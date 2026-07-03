@@ -1,4 +1,5 @@
 ﻿using CoreAudio;
+using Mutation.Ui.Core;
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
@@ -9,9 +10,10 @@ namespace Mutation.Ui;
 /// Manages enumeration and selection of audio capture devices as well as
 /// mute and unmute operations.  This keeps audio related responsibilities
 /// away from the WinForms logic in <see cref="MutationForm"/>.
-public class AudioDeviceManager
+public class AudioDeviceManager : IMuteEndpointProvider
 {
         private readonly MMDeviceEnumerator _deviceEnumerator;
+        private readonly MuteStateController _muteState;
         private IList<MMDevice> _captureDevices = new List<MMDevice>();
         private MMDevice? _microphone;
         private int _microphoneDeviceIndex = -1;
@@ -20,6 +22,7 @@ public class AudioDeviceManager
         {
                 _deviceEnumerator = deviceEnumerator ?? throw new ArgumentNullException(nameof(deviceEnumerator));
                 RefreshCaptureDevices();
+                _muteState = new MuteStateController(this, ReadInitialMuteState());
         }
 
         public IEnumerable<MMDevice> CaptureDevices => _captureDevices;
@@ -28,7 +31,10 @@ public class AudioDeviceManager
 
         public int MicrophoneDeviceIndex => _microphoneDeviceIndex;
 
-        public bool IsMuted => _microphone is { AudioEndpointVolume: { } volume } && volume.Mute;
+        // Reflects the aggregate mute state that was actually written to the
+        // capture devices and confirmed by read-back — not an optimistic guess
+        // and not a stale read of a single unrelated device instance.
+        public bool IsMuted => _muteState.IsMuted;
 
         public void RefreshCaptureDevices()
         {
@@ -92,19 +98,41 @@ public class AudioDeviceManager
                 _microphoneDeviceIndex = bestMatchIndex;
 	}
 
-        public void ToggleMute()
+        /// Flips the mute state on all capture devices, confirms the write by
+        /// reading it back, and retries once with fresh device references if the
+        /// write fails. Returns whether the new state was confirmed and the mute
+        /// state to report to the user.
+        public MuteToggleResult ToggleMute() => _muteState.Toggle();
+
+        IReadOnlyList<IMuteEndpoint> IMuteEndpointProvider.GetEndpoints() =>
+                BuildEndpoints();
+
+        IReadOnlyList<IMuteEndpoint> IMuteEndpointProvider.RefreshEndpoints()
         {
-                bool newMuteState = !IsMuted;
-                foreach (var mic in _captureDevices)
+                RefreshCaptureDevices();
+                return BuildEndpoints();
+        }
+
+        private IReadOnlyList<IMuteEndpoint> BuildEndpoints() =>
+                _captureDevices
+                        .Where(device => device != null)
+                        .Select(device => (IMuteEndpoint)new MmDeviceMuteEndpoint(device))
+                        .ToList();
+
+        // Best-effort read of the current device mute state at startup so the
+        // tracked state starts in sync with the hardware. Defaults to unmuted if
+        // no device can be read.
+        private bool ReadInitialMuteState()
+        {
+                foreach (var device in _captureDevices)
                 {
-                        if (mic == null)
-                                continue;
                         try
                         {
-                                if (mic.AudioEndpointVolume != null)
-                                        mic.AudioEndpointVolume.Mute = newMuteState;
+                                if (device?.AudioEndpointVolume is { } volume)
+                                        return volume.Mute;
                         }
                         catch { }
                 }
+                return false;
         }
 }

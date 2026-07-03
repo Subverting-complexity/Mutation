@@ -495,11 +495,26 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
 	{
-		_audioDeviceManager.ToggleMute();
+		var result = _audioDeviceManager.ToggleMute();
+		// Drives the graphic off the confirmed state, so a failed mute never
+		// shows the muted icon.
 		UpdateMicrophoneToggleVisuals();
-		ShowStatus("Microphone", _audioDeviceManager.IsMuted ? "Microphone muted." : "Microphone is live.",
-			_audioDeviceManager.IsMuted ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
-		BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
+
+		if (result.Success)
+		{
+			ShowStatus("Microphone", result.IsMuted ? "Microphone muted." : "Microphone is live.",
+				result.IsMuted ? InfoBarSeverity.Warning : InfoBarSeverity.Success);
+			BeepPlayer.Play(result.IsMuted ? BeepType.Mute : BeepType.Unmute);
+		}
+		else
+		{
+			// The write failed or could not be confirmed — do not claim the mic
+			// is muted. Warn the user with the failure beep and an error message.
+			ShowStatus("Microphone",
+				"Could not change the microphone mute state. The microphone may still be live — please try again.",
+				InfoBarSeverity.Error);
+			BeepPlayer.Play(BeepType.Failure);
+		}
 	}
 
 	private async void BtnScreenshot_Click(object sender, RoutedEventArgs e)
