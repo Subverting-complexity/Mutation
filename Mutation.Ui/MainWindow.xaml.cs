@@ -2226,6 +2226,14 @@ public sealed partial class MainWindow : Window, IDisposable
                 ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildDeleted(name), InfoBarSeverity.Success);
                 BeepPlayer.Play(BeepType.Success);
             }
+            else
+            {
+                // The prompt was already gone (removed elsewhere between the
+                // click and the confirmation). Announce it rather than stay
+                // silent after the user confirmed a deletion.
+                ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildFailed(name, "the prompt was no longer in the library"), InfoBarSeverity.Warning);
+                BeepPlayer.Play(BeepType.Failure);
+            }
         }
         catch (Exception ex)
         {
