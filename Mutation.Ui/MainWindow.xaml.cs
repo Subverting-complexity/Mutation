@@ -39,6 +39,10 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
 	private readonly Mutation.Ui.Core.MicrophoneLevelPinService _micLevelPinService;
+	// Runs the mute toggle's COM writes, read-back verification, and any device
+	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
+	// never freezes the UI (and the screen reader).
+	private readonly Mutation.Ui.Core.MicrophoneMuteToggleCoordinator _muteToggleCoordinator;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
@@ -131,6 +135,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _audioSessionManager = audioSessionManager;
         _micLevelPinService = micLevelPinService;
+        _muteToggleCoordinator = new Mutation.Ui.Core.MicrophoneMuteToggleCoordinator(_audioDeviceManager.ToggleMute);
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;
@@ -548,9 +553,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		Dispose();
 	}
 
-	public void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnToggleMic_Click(object? sender, RoutedEventArgs? e)
 	{
-		var result = _audioDeviceManager.ToggleMute();
+		// The toggle runs on a background thread; a null result means another
+		// toggle was already in flight and this press was coalesced away — leave
+		// the UI as-is rather than reporting a stale state.
+		MuteToggleResult? toggled = await _muteToggleCoordinator.ToggleAsync();
+		if (toggled is not MuteToggleResult result)
+			return;
+
+		// Back on the UI thread (the await resumes on the captured context).
 		// Drives the graphic off the confirmed state, so a failed mute never
 		// shows the muted icon.
 		UpdateMicrophoneToggleVisuals();
