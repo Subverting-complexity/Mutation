@@ -43,6 +43,11 @@ public sealed partial class MainWindow : Window, IDisposable
 	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
 	// never freezes the UI (and the screen reader).
 	private readonly Mutation.Ui.Core.MicrophoneMuteToggleCoordinator _muteToggleCoordinator;
+	// Serializes the mic-level slider and pin-toggle COM writes onto the shared
+	// background worker so a drag burst never runs the write (and its failure-path
+	// device re-enumeration) on the UI thread, and never overlaps the record-start
+	// re-assert on the same COM endpoint.
+	private readonly Mutation.Ui.Core.MicrophoneLevelWriteCoordinator _micLevelWriteCoordinator;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
@@ -131,7 +136,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		ISettingsManager settingsManager,
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
-		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService)
+		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
+		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator)
 	{
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
@@ -150,6 +156,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _audioSessionManager = audioSessionManager;
         _micLevelPinService = micLevelPinService;
+        _micLevelWriteCoordinator = micLevelWriteCoordinator;
         _muteToggleCoordinator = new Mutation.Ui.Core.MicrophoneMuteToggleCoordinator(_audioDeviceManager.ToggleMute);
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
@@ -1323,47 +1330,68 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Toggle pinning on/off. Turning it on captures the slider's current value as the
 	// pinned target and applies it immediately; turning it off stops re-asserting but
 	// leaves the live level where it is. Persists the change.
-	private void TglPinMicLevel_Toggled(object sender, RoutedEventArgs e)
+	private async void TglPinMicLevel_Toggled(object sender, RoutedEventArgs e)
 	{
 		if (!_micLevelControlsReady) return;
 
 		_settings.AudioSettings ??= new AudioSettings();
 
+		int? target = null;
 		if (TglPinMicLevel.IsOn)
 		{
-			int level = (int)Math.Round(SldMicLevel.Value);
-			_settings.AudioSettings.PinnedCaptureLevel = level;
-			ReportIfLevelWriteFailed(_micLevelPinService.ApplyLevel(level));
+			target = (int)Math.Round(SldMicLevel.Value);
+			_settings.AudioSettings.PinnedCaptureLevel = target;
 		}
 		else
 		{
 			_settings.AudioSettings.PinnedCaptureLevel = null;
 		}
 
+		// Persist the pin state synchronously; it must be saved regardless of the async
+		// write below.
 		_settingsManager.SaveSettingsToFile(_settings);
+
+		// Turning the pin on applies the current slider level through the shared
+		// off-thread worker, so it neither blocks the UI nor overlaps a trailing slider
+		// write on the same COM endpoint. Turning it off writes nothing.
+		if (target is int level)
+		{
+			var result = await _micLevelWriteCoordinator.RequestLatestAsync(level);
+			if (result is { } outcome)
+				ReportIfLevelWriteFailed(outcome);
+		}
 	}
 
 	// Dragging the slider sets the actual Windows capture level immediately (instant
 	// feedback, even when not recording). When pinning is enabled, the same value
 	// becomes the stored pinned target so it is re-asserted later.
-	private void SldMicLevel_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+	private async void SldMicLevel_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
 	{
 		if (!_micLevelControlsReady) return;
 
 		int level = (int)Math.Round(e.NewValue);
-		ReportIfLevelWriteFailed(_micLevelPinService.ApplyLevel(level));
 
+		// Record the intent first, synchronously on the UI thread. The COM write below is
+		// coalesced, so a tick that gets superseded never reaches the device — but its
+		// value must still become the stored pin. Only the file write is debounced, so a
+		// drag or held arrow key persists once it settles (issue #172).
 		if (TglPinMicLevel.IsOn)
 		{
 			_settings.AudioSettings ??= new AudioSettings();
 			if (_settings.AudioSettings.PinnedCaptureLevel != level)
 			{
 				_settings.AudioSettings.PinnedCaptureLevel = level;
-				// Keep the live COM level write per tick above; only coalesce the file
-				// write, so a drag or held arrow key persists once it settles (issue #172).
 				_settingsSaveDebouncer.Trigger();
 			}
 		}
+
+		// Coalesce-to-latest off-thread write: a burst from a drag or held arrow key
+		// collapses to its most recent value, so the write (and its failure-path device
+		// re-enumeration) never runs on the UI thread. Superseded ticks return null and
+		// are dropped, so only the write that reaches the device can raise a failure beep.
+		var result = await _micLevelWriteCoordinator.RequestLatestAsync(level);
+		if (result is { } outcome)
+			ReportIfLevelWriteFailed(outcome);
 	}
 
 	// When a level write could not be applied and verified, warn the user with the

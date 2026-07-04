@@ -197,6 +197,12 @@ public partial class App : Application
 			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureLevelEndpointProvider>(sp =>
 				sp.GetRequiredService<AudioDeviceManager>());
 			builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelPinService>();
+				// One shared instance serializes every capture-level write (slider, pin
+				// toggle, record-start re-assert) onto a single background worker, so the
+				// COM writes never run on the UI thread and never overlap each other.
+				builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelWriteCoordinator>(sp =>
+					new Mutation.Ui.Core.MicrophoneLevelWriteCoordinator(
+						sp.GetRequiredService<Mutation.Ui.Core.MicrophoneLevelPinService>().ApplyLevel));
 			builder.Services.AddSingleton<IOcrService>(sp =>
 	 new OcrService(
 		  settings.AzureComputerVisionSettings?.ApiKey,
