@@ -1166,6 +1166,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			ClipboardKind.Image => "The clipboard contains an image, not text. Use OCR to extract text first.",
 			ClipboardKind.Unsupported => "The clipboard does not contain readable text.",
+			ClipboardKind.Unavailable => "The clipboard is in use by another application. Try again in a moment.",
 			_ => "No text on the clipboard.",
 		};
 
@@ -1443,15 +1444,25 @@ public sealed partial class MainWindow : Window, IDisposable
 		_settingsManager.SaveSettingsToFile(_settings);
 	}
 
-	public void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)
 	{
 		string raw = TxtRawTranscript.Text;
 		string formatted = _transcriptFormatter.ApplyRules(raw, false);
 		TxtFormatTranscript.Text = formatted;
-		_clipboard.SetText(formatted);
-		InsertIntoActiveApplication(formatted);
-		BeepPlayer.Play(BeepType.Success);
-		ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
+		bool copied = await _clipboard.TrySetTextAsync(formatted);
+		bool inserted = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
+		if (copied && inserted)
+		{
+			BeepPlayer.Play(BeepType.Success);
+			ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
+		}
+		else
+		{
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus("Formatting",
+				"The clipboard is in use by another application; the formatted transcript could not be copied. It is available in the Mutation window.",
+				InfoBarSeverity.Error);
+		}
 	}
 
 	public async void BtnProcessLlm_Click(object? sender, RoutedEventArgs? e)
@@ -1505,11 +1516,21 @@ public sealed partial class MainWindow : Window, IDisposable
 			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName);
 
 			TxtFormatTranscript.Text = processed;
-			_clipboard.SetText(processed);
-			InsertIntoActiveApplication(processed);
-			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
+			bool copied = await _clipboard.TrySetTextAsync(processed);
+			bool inserted = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
+			if (copied && inserted)
+			{
+				BeepPlayer.Play(BeepType.Success);
+				ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
+				HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
+			}
+			else
+			{
+				BeepPlayer.Play(BeepType.Failure);
+				ShowStatus("Processing",
+					"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
+					InfoBarSeverity.Error);
+			}
         }
         catch (Exception ex)
         {
@@ -1642,25 +1663,35 @@ public sealed partial class MainWindow : Window, IDisposable
                 }, TaskScheduler.Default);
         }
 
-	private void FinalizeTranscript(string rawText, string successMessage, string? formattedText = null)
+	private async void FinalizeTranscript(string rawText, string successMessage, string? formattedText = null)
 	{
 		string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
 		TxtRawTranscript.Text = rawText;
 		TxtFormatTranscript.Text = formatted;
 
-		_clipboard.SetText(formatted);
-		InsertIntoActiveApplication(formatted);
+		bool copied = await _clipboard.TrySetTextAsync(formatted);
+		bool inserted = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
 
-                BeepPlayer.Play(BeepType.Success);
-                TxtRawTranscript.IsReadOnly = false;
-                _suppressAutoActions = false;
+		if (copied && inserted)
+		{
+			BeepPlayer.Play(BeepType.Success);
+			ShowStatus("Speech to Text", successMessage, InfoBarSeverity.Success);
+			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
+		}
+		else
+		{
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus("Speech to Text",
+				"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
+				InfoBarSeverity.Error);
+		}
 
-                ShowStatus("Speech to Text", successMessage, InfoBarSeverity.Success);
-                HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
-                UpdateRecordingActionAvailability();
-                ScheduleSessionCleanup();
-        }
+		TxtRawTranscript.IsReadOnly = false;
+		_suppressAutoActions = false;
+		UpdateRecordingActionAvailability();
+		ScheduleSessionCleanup();
+	}
 
     private void AudioSessionManager_StateChanged(object? sender, EventArgs e)
     {
@@ -1991,17 +2022,19 @@ public sealed partial class MainWindow : Window, IDisposable
 		ThirdPartyExplanationText.Text = explanation;
 	}
 
-	private void InsertIntoActiveApplication(string text)
+	// Returns false only when a paste-mode insert could not proceed because the
+	// clipboard stayed unavailable; every path that needs no insert returns true.
+	private async Task<bool> TryInsertIntoActiveApplicationAsync(string text, bool clipboardAvailable = true)
 	{
 		if (string.IsNullOrWhiteSpace(text))
-			return;
+			return true;
 
 		var windowHandle = WindowNative.GetWindowHandle(this);
 		if (windowHandle != IntPtr.Zero)
 		{
 			var foregroundWindow = GetForegroundWindow();
 			if (foregroundWindow == windowHandle)
-				return;
+				return true;
 		}
 
 		switch (_insertOption)
@@ -2011,14 +2044,19 @@ public sealed partial class MainWindow : Window, IDisposable
 				// Off the UI thread: SendInput can stall on the foreground app
 				// and must never block or pump messages mid-finalization.
 				_ = Task.Run(() => HotkeyManager.SendText(text));
-				break;
+				return true;
 			case DictationInsertOption.Paste:
-				_clipboard.SetText(text);
+				// Pasting sends Ctrl+V, so the text must actually be on the
+				// clipboard; retry the write here if the earlier copy failed.
+				if (!clipboardAvailable && !await _clipboard.TrySetTextAsync(text))
+					return false;
 				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
 				// literal would throw and drop to the SendKeys.SendWait fallback.
 				_ = Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
-				break;
+				return true;
 		}
+
+		return true;
 	}
 
 	private async void TxtSpeechToText_TextChanged(object sender, TextChangedEventArgs e)

@@ -13,45 +13,58 @@ public enum ClipboardKind
 	Text,
 	Image,
 	Unsupported,
+	Unavailable,
 }
 
 public class ClipboardManager
 {
-	public async Task<(ClipboardKind Kind, string Text)> InspectAsync()
+	public virtual async Task<(ClipboardKind Kind, string Text)> InspectAsync()
 	{
-		var content = Clipboard.GetContent();
-
-		if (content.Contains(StandardDataFormats.Text))
+		var (success, result) = await ClipboardRetry.TryAsync(async () =>
 		{
-			string text = await content.GetTextAsync();
-			if (!string.IsNullOrWhiteSpace(text))
-				return (ClipboardKind.Text, text);
-		}
+			var content = Clipboard.GetContent();
 
-		if (content.Contains(StandardDataFormats.Bitmap))
-			return (ClipboardKind.Image, string.Empty);
+			if (content.Contains(StandardDataFormats.Text))
+			{
+				string text = await content.GetTextAsync();
+				if (!string.IsNullOrWhiteSpace(text))
+					return (ClipboardKind.Text, text);
+			}
 
-		var formats = content.AvailableFormats;
-		if (formats == null || formats.Count == 0)
-			return (ClipboardKind.Empty, string.Empty);
+			if (content.Contains(StandardDataFormats.Bitmap))
+				return (ClipboardKind.Image, string.Empty);
 
-		return (ClipboardKind.Unsupported, string.Empty);
+			var formats = content.AvailableFormats;
+			if (formats == null || formats.Count == 0)
+				return (ClipboardKind.Empty, string.Empty);
+
+			return (ClipboardKind.Unsupported, string.Empty);
+		});
+
+		return success ? result : (ClipboardKind.Unavailable, string.Empty);
 	}
 
 	public async Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
 	{
 		while (attempts-- > 0)
 		{
-			var content = Clipboard.GetContent();
-			if (content.Contains(StandardDataFormats.Bitmap))
+			try
 			{
-				IRandomAccessStreamReference? streamRef = await content.GetBitmapAsync();
-				if (streamRef != null)
+				var content = Clipboard.GetContent();
+				if (content.Contains(StandardDataFormats.Bitmap))
 				{
-					using var stream = await streamRef.OpenReadAsync();
-					var decoder = await BitmapDecoder.CreateAsync(stream);
-					return await decoder.GetSoftwareBitmapAsync();
+					IRandomAccessStreamReference? streamRef = await content.GetBitmapAsync();
+					if (streamRef != null)
+					{
+						using var stream = await streamRef.OpenReadAsync();
+						var decoder = await BitmapDecoder.CreateAsync(stream);
+						return await decoder.GetSoftwareBitmapAsync();
+					}
 				}
+			}
+			catch
+			{
+				// Clipboard held by another process; fall through to the delay and retry.
 			}
 
 			await Task.Delay(delayMs);
@@ -69,10 +82,34 @@ public class ClipboardManager
 		Clipboard.SetContent(data);
 	}
 
-	public async Task<string> GetTextAsync()
+	/// <summary>
+	/// Puts <paramref name="text"/> on the clipboard, retrying while another
+	/// process holds the clipboard open. Returns false when it stayed
+	/// unavailable after retries (or the text was blank).
+	/// </summary>
+	public virtual Task<bool> TrySetTextAsync(string text)
 	{
-		var content = Clipboard.GetContent();
-		return content.Contains(StandardDataFormats.Text) ? await content.GetTextAsync() : string.Empty;
+		if (string.IsNullOrWhiteSpace(text))
+			return Task.FromResult(false);
+
+		return ClipboardRetry.TryAsync(() =>
+		{
+			var data = new DataPackage();
+			data.SetText(text);
+			Clipboard.SetContent(data);
+			return Task.CompletedTask;
+		});
+	}
+
+	public virtual async Task<string> GetTextAsync()
+	{
+		var (success, text) = await ClipboardRetry.TryAsync(async () =>
+		{
+			var content = Clipboard.GetContent();
+			return content.Contains(StandardDataFormats.Text) ? await content.GetTextAsync() : string.Empty;
+		});
+
+		return success ? text ?? string.Empty : string.Empty;
 	}
 
 	/// <summary>
