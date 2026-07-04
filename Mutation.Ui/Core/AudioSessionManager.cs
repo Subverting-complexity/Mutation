@@ -171,14 +171,16 @@ public class AudioSessionManager : IDisposable
                 if (levelResult.Failed)
                     BeepPlayer.Play(BeepType.Failure);
 
+                // Announce "Listening" only after the recorder has actually
+                // started; announcing earlier would tell a screen-reader user
+                // the microphone is live while a lingering transcription still
+                // holds the recorder lock and audio is being lost.
+                var session = await _speechManager.StartRecordingAsync(_audioDeviceManager.MicrophoneDeviceIndex);
                 StatusMessage?.Invoke(this, levelResult.Failed
                     ? "Listening — but the pinned microphone level could not be applied; recording at the current level."
                     : "Listening for audio...");
-                StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
-
-                var session = await _speechManager.StartRecordingAsync(_audioDeviceManager.MicrophoneDeviceIndex);
                 RefreshSessions(session);
-                StateChanged?.Invoke(this, EventArgs.Empty);
+                StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
             }
             else
             {
@@ -206,6 +208,12 @@ public class AudioSessionManager : IDisposable
                     StateChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
+        }
+        catch (RecorderBusyException)
+        {
+            BeepPlayer.Play(BeepType.Failure);
+            StatusMessage?.Invoke(this, "Still finishing the previous operation — try again shortly.");
+            StateChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {

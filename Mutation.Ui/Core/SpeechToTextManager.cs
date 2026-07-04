@@ -132,16 +132,31 @@ public class SpeechToTextManager : IDisposable
 		}
 	}
 
-	public async Task<SpeechSession> StartRecordingAsync(int microphoneDeviceIndex)
-	{
-		EnsureSessionsDirectory();
-		string path = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
-		if (!TryCreateSession(path, out var session))
-			throw new InvalidOperationException($"Generated session path '{Path.GetFileName(path)}' could not be parsed.");
+	/// <summary>
+	/// Bounded wait for the recorder lock when starting a recording. A previous
+	/// transcription can hold the lock across its whole network call, so an
+	/// unbounded wait would leave the app claiming to listen while capturing
+	/// nothing. Tests inject a shorter value via <see cref="StartRecordingAsync(int, TimeSpan?)"/>.
+	/// </summary>
+	private static readonly TimeSpan DefaultStartRecordingLockTimeout = TimeSpan.FromSeconds(5);
 
-		await _state.AudioRecorderLock.WaitAsync().ConfigureAwait(false);
+	public async Task<SpeechSession> StartRecordingAsync(int microphoneDeviceIndex, TimeSpan? lockTimeout = null)
+	{
+		bool acquired = await _state.AudioRecorderLock
+			.WaitAsync(lockTimeout ?? DefaultStartRecordingLockTimeout)
+			.ConfigureAwait(false);
+		if (!acquired)
+			throw new RecorderBusyException("The previous operation is still finishing; recording could not start.");
+
 		try
 		{
+			// Create the session file only after winning the lock so a busy
+			// timeout leaves no orphaned empty session in the history.
+			EnsureSessionsDirectory();
+			string path = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
+			if (!TryCreateSession(path, out var session))
+				throw new InvalidOperationException($"Generated session path '{Path.GetFileName(path)}' could not be parsed.");
+
 			lock (_sessionLock)
 			{
 				_currentRecordingSession = session;
@@ -149,13 +164,13 @@ public class SpeechToTextManager : IDisposable
 
 			_audioRecorder = new CognitiveSupport.AudioRecorder();
 			_audioRecorder.StartRecording(microphoneDeviceIndex, path, BuildSilenceOptions());
+
+			return session;
 		}
 		finally
 		{
 			_state.AudioRecorderLock.Release();
 		}
-
-		return session;
 	}
 
 	public async Task<string> StopRecordingAndTranscribeAsync(ISpeechToTextService service, string prompt, CancellationToken token)
