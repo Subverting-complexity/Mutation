@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -21,6 +22,29 @@ namespace CognitiveSupport;
 public static class ErrorLogger
 {
 	private const string ErrorLogFileName = "Mutation_Errors.log";
+
+	// Rotate a log file once it exceeds this size, mirroring HotkeyManager's
+	// 100 KB cap, so neither log file can grow without bound.
+	private const long MaxLogFileSizeBytes = 100 * 1024;
+
+	// Configured key values shorter than this are ignored by the exact-match
+	// redactor — a very short "secret" would redact common substrings and do
+	// more harm than good. Real provider keys are far longer than this.
+	private const int MinRedactableSecretLength = 8;
+
+	// The placeholder the settings layer writes for an unconfigured key. It is
+	// not a real secret, so it must never be registered for redaction.
+	private const string SettingsPlaceholderValue = "<placeholder>";
+
+	// Snapshot of configured secret values to redact by exact match, ordered
+	// longest-first so an overlapping shorter value cannot mask a longer one.
+	// Replaced wholesale under the lock; readers take a local reference (array
+	// reference reads are atomic) so redaction never sees a torn update.
+	private static string[] s_secretValues = Array.Empty<string>();
+
+	// Serialises both the secret-snapshot swap and each file rotate+append so a
+	// concurrent writer cannot race the rotation move.
+	private static readonly object s_gate = new();
 
 	/// <summary>
 	/// The user-writable log path (<c>%LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log</c>),
@@ -48,6 +72,43 @@ public static class ErrorLogger
 					return ErrorLogFileName;
 				}
 			}
+		}
+	}
+
+	/// <summary>
+	/// Registers the current set of configured provider key values so they are
+	/// redacted from every subsequent log entry by exact match, regardless of
+	/// their format. This catches keys (e.g. Deepgram/Azure) that no pattern
+	/// matches. Call it once after settings load and again whenever the keys
+	/// change (e.g. a settings save) — it replaces the previous snapshot, so a
+	/// removed key stops being tracked. Null/whitespace, the settings
+	/// placeholder, and values shorter than <see cref="MinRedactableSecretLength"/>
+	/// are ignored. Never throws.
+	/// </summary>
+	public static void RegisterSecretValues(IEnumerable<string?>? secrets)
+	{
+		string[] snapshot;
+		if (secrets is null)
+		{
+			snapshot = Array.Empty<string>();
+		}
+		else
+		{
+			snapshot = secrets
+				.Where(static s => !string.IsNullOrWhiteSpace(s))
+				.Select(static s => s!.Trim())
+				.Where(static s => s.Length >= MinRedactableSecretLength
+					&& !string.Equals(s, SettingsPlaceholderValue, StringComparison.Ordinal))
+				.Distinct(StringComparer.Ordinal)
+				// Longest first: redacting a longer key before a shorter one it
+				// contains prevents a partial, still-revealing replacement.
+				.OrderByDescending(static s => s.Length)
+				.ToArray();
+		}
+
+		lock (s_gate)
+		{
+			s_secretValues = snapshot;
 		}
 	}
 
@@ -80,7 +141,7 @@ public static class ErrorLogger
 			string logDir = Path.Combine(localAppData, "Mutation", "logs");
 			Directory.CreateDirectory(logDir);
 			string logPath = Path.Combine(logDir, ErrorLogFileName);
-			File.AppendAllText(logPath, entry, Encoding.UTF8);
+			AppendWithRotation(logPath, entry, MaxLogFileSizeBytes);
 		}
 		catch
 		{
@@ -92,11 +153,37 @@ public static class ErrorLogger
 		try
 		{
 			string logPath = Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
-			File.AppendAllText(logPath, entry, Encoding.UTF8);
+			AppendWithRotation(logPath, entry, MaxLogFileSizeBytes);
 		}
 		catch
 		{
 			// Never let logging throw — callers may already be in a failure path.
+		}
+	}
+
+	/// <summary>
+	/// Appends <paramref name="entry"/> to <paramref name="logPath"/>, first
+	/// rotating the file to <c>&lt;path&gt;.old</c> when it already exceeds
+	/// <paramref name="maxLogFileSizeBytes"/>, so the log cannot grow without
+	/// bound. Mirrors HotkeyManager's rotation. The rotate + append run under
+	/// the shared lock so two threads cannot both move the file at once.
+	/// </summary>
+	internal static void AppendWithRotation(string logPath, string entry, long maxLogFileSizeBytes)
+	{
+		lock (s_gate)
+		{
+			if (maxLogFileSizeBytes > 0 && File.Exists(logPath))
+			{
+				var fileInfo = new FileInfo(logPath);
+				if (fileInfo.Length > maxLogFileSizeBytes)
+				{
+					string backupPath = logPath + ".old";
+					if (File.Exists(backupPath))
+						File.Delete(backupPath);
+					File.Move(logPath, backupPath);
+				}
+			}
+			File.AppendAllText(logPath, entry, Encoding.UTF8);
 		}
 	}
 
@@ -117,7 +204,18 @@ public static class ErrorLogger
 			return text;
 		}
 
-		// Redact common secret patterns (API keys) so they never land in the log file.
+		// First, redact any registered key value by exact match. This is the
+		// reliable layer: it catches keys of any format (e.g. Deepgram's 40-char
+		// hex and Azure's 32-char hex) that the patterns below do not recognise,
+		// wherever they appear in the text.
+		string[] secrets = s_secretValues; // atomic reference read; snapshot is immutable
+		foreach (string secret in secrets)
+		{
+			text = text.Replace(secret, "***REDACTED***", StringComparison.Ordinal);
+		}
+
+		// Then redact common secret patterns (API keys) so a key that was never
+		// registered (e.g. logged before settings loaded) is still caught.
 		text = Regex.Replace(
 			text,
 			@"sk-[A-Za-z0-9_\-]{10,}",
@@ -127,6 +225,13 @@ public static class ErrorLogger
 			text,
 			@"Bearer\s+[A-Za-z0-9_\-\.]{10,}",
 			"Bearer ***REDACTED***");
+
+		// Deepgram keys are sent as `Authorization: Token <key>`; mirror the
+		// Bearer rule so the token never lands in the log even when unregistered.
+		text = Regex.Replace(
+			text,
+			@"Token\s+[A-Za-z0-9_\-\.]{10,}",
+			"Token ***REDACTED***");
 
 		return text;
 	}
