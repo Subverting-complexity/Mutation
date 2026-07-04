@@ -32,6 +32,10 @@ public class AnthropicLlmService : ILlmService
 
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+		// HttpClient's default 100 s Timeout would silently cap the escalating
+		// per-attempt timeouts below; the per-attempt CancellationTokenSource in
+		// CreateChatCompletion is the sole timeout authority.
+		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 		_retryCount = retryCount < 0 ? 0 : retryCount;
 		_modelConfigs = models.ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
