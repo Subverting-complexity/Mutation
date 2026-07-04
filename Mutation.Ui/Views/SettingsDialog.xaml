@@ -42,14 +42,20 @@
 			<ColumnDefinition Width="*" />
 		</Grid.ColumnDefinitions>
 
-		<TextBox x:Name="SearchBox"
-				 Grid.Row="0" Grid.Column="0"
-				 PlaceholderText="Search settings..."
-				 TextChanged="SearchBox_TextChanged">
-			<TextBox.Resources>
-				<Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}" />
-			</TextBox.Resources>
-		</TextBox>
+		<StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+			<TextBox x:Name="SearchBox"
+					 PlaceholderText="Search settings..."
+					 AutomationProperties.Name="Search settings"
+					 TextChanged="SearchBox_TextChanged">
+				<TextBox.Resources>
+					<Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}" />
+				</TextBox.Resources>
+			</TextBox>
+			<TextBlock x:Name="SearchStatusText"
+					   Style="{StaticResource CaptionTextBlockStyle}"
+					   AutomationProperties.LiveSetting="Polite"
+					   Visibility="Collapsed" />
+		</StackPanel>
 
 		<TextBlock x:Name="ActiveCategoryHeader"
 				   Grid.Row="0" Grid.Column="1"
@@ -109,6 +115,7 @@
 					HorizontalAlignment="Right"
 					VerticalAlignment="Center">
 			<ToggleSwitch x:Name="AdvancedToggle"
+						  AutomationProperties.Name="Advanced settings"
 						  OffContent="Advanced"
 						  OnContent="Advanced"
 						  Toggled="AdvancedToggle_Toggled" />
