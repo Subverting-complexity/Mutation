@@ -248,7 +248,7 @@ public class SpeechToTextManager : IDisposable
 			}
 			finally
 			{
-				_state.StopTranscription();
+				_state.EndTranscription();
 			}
 		}
 		finally
@@ -287,7 +287,7 @@ public class SpeechToTextManager : IDisposable
 			}
 			finally
 			{
-				_state.StopTranscription();
+				_state.EndTranscription();
 			}
 
 			return text;
@@ -300,7 +300,7 @@ public class SpeechToTextManager : IDisposable
 
 	public void CancelTranscription()
 	{
-		_state.StopTranscription();
+		_state.CancelTranscription();
 	}
 
 	public async Task StopRecordingAsync()

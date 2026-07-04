@@ -27,18 +27,43 @@ internal class SpeechToTextState : IDisposable
 
 	// Returns a token tied to BOTH the new internal CTS and `external`.
 	// Caller MUST use the returned token rather than re-reading state to avoid
-	// a race with StopTranscription on a different thread.
+	// a race with CancelTranscription on a different thread.
 	internal CancellationToken StartTranscription(CancellationToken external = default)
 	{
 		lock (_ctsLock)
 		{
-			_cts?.Dispose();
+			// A prior transcription should already have been ended, but if a stale
+			// source lingers, cancel it before disposing so any operation still tied
+			// to it unwinds as a cancellation rather than being abandoned mid-flight.
+			if (_cts is not null)
+			{
+				try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+				_cts.Dispose();
+			}
 			_cts = CancellationTokenSource.CreateLinkedTokenSource(external);
 			return _cts.Token;
 		}
 	}
 
-	internal void StopTranscription()
+	// Signals cancellation WITHOUT disposing the source. Called from the UI
+	// cancel path, which can run while the owning transcription is still
+	// retrying — a retry attempt links a fresh token to this source on every
+	// try, so disposing here would surface ObjectDisposedException instead of a
+	// clean cancellation. Disposal is deferred to EndTranscription.
+	internal void CancelTranscription()
+	{
+		lock (_ctsLock)
+		{
+			if (_cts is null)
+				return;
+			try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+		}
+	}
+
+	// Ends the current transcription and disposes its source. Called by the
+	// owning task once its awaited transcription (and every retry) has
+	// finished, so nothing can still link a token to the source. Idempotent.
+	internal void EndTranscription()
 	{
 		CancellationTokenSource? toDispose;
 		lock (_ctsLock)
@@ -54,7 +79,7 @@ internal class SpeechToTextState : IDisposable
 
 	public void Dispose()
 	{
-		StopTranscription();
+		EndTranscription();
 		AudioRecorderLock.Dispose();
 	}
 }
