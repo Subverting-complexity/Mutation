@@ -56,7 +56,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly CancellationTokenSource _shutdownCts = new();
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
-	private bool _isDialogOpen;
+	// Shows modal dialogs one at a time; a dialog requested while another
+	// is open is queued and shown when it closes, never dropped (issue #167).
+	private readonly DialogQueue<ContentDialogResult> _dialogQueue = new();
 	private bool _ttsControlsReady;
 	private bool _micLevelControlsReady;
 	private bool _playbackSpeedReady;
@@ -1884,18 +1886,27 @@ public sealed partial class MainWindow : Window, IDisposable
 		};
 		AutomationProperties.SetName(dialog, title);
 		AutomationProperties.SetHelpText(dialog, message);
+
+		// If a dialog is already open this error is queued behind it. Beep now
+		// so a screen-reader user hears the failure immediately rather than
+		// waiting in silence until the queued dialog surfaces (issue #167).
+		if (_dialogQueue.IsBusy)
+			BeepPlayer.Play(BeepType.Failure);
+
 		await ShowDialogAsync(dialog);
 	}
 
     private async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
     {
-        if (_isDialogOpen)
-            return ContentDialogResult.None;
+        // A dialog requested while another is open is announced now and queued;
+        // the queue shows it when the current dialog closes rather than
+        // dropping it (issue #167).
+        if (_dialogQueue.IsBusy)
+            AnnouncePendingDialog(dialog);
 
-        _isDialogOpen = true;
         try
         {
-            return await dialog.ShowAsync();
+            return await _dialogQueue.EnqueueAsync(async () => await dialog.ShowAsync());
         }
         catch (Exception ex)
         {
@@ -1903,10 +1914,32 @@ public sealed partial class MainWindow : Window, IDisposable
             ShowStatus("Dialog Error", $"Failed to show dialog: {ex.Message}", InfoBarSeverity.Error);
             return ContentDialogResult.None;
         }
-        finally
-        {
-            _isDialogOpen = false;
-        }
+    }
+
+    /// <summary>
+    /// Raises a UIA notification for a dialog that is being queued behind an
+    /// already-open one, so a screen-reader user learns about it immediately
+    /// instead of only when it eventually appears. The dialog is not on screen
+    /// yet, so the notification is raised on the always-present status bar
+    /// (the same channel as <see cref="AnnounceStatus"/>).
+    /// </summary>
+    private void AnnouncePendingDialog(ContentDialog dialog)
+    {
+        string title = AutomationProperties.GetName(dialog);
+        if (string.IsNullOrWhiteSpace(title))
+            title = dialog.Title?.ToString() ?? string.Empty;
+        string message = AutomationProperties.GetHelpText(dialog);
+
+        string announcement = StatusAnnouncement.ComposeText(title, message);
+        if (announcement.Length == 0)
+            return;
+
+        var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(StatusInfoBar);
+        peer?.RaiseNotificationEvent(
+            Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind.Other,
+            Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.ImportantMostRecent,
+            announcement,
+            StatusAnnouncement.ActivityId);
     }
 
 	private void CmbMicrophone_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2324,9 +2357,11 @@ public sealed partial class MainWindow : Window, IDisposable
         var result = await ShowDialogAsync(dialog);
         if (result != ContentDialogResult.Primary)
         {
-            // Covers an explicit Cancel and the guarded case where another
-            // dialog was already open (ShowDialogAsync returns None): nothing
+            // Covers an explicit Cancel or a dialog that failed to show: nothing
             // is deleted, and the outcome is announced for the screen reader.
+            // (A confirmation requested while another dialog is open is now
+            // queued and shown when that one closes, so deletion still requires
+            // an explicit Delete click.)
             ShowStatus(PromptDeletionMessages.ConfirmationTitle, PromptDeletionMessages.BuildCancelled(name), InfoBarSeverity.Informational);
             return;
         }
