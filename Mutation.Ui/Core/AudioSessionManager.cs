@@ -24,7 +24,7 @@ public class AudioSessionManager : IDisposable
     private readonly AudioDeviceManager _audioDeviceManager;
     private readonly TranscriptFormatter _transcriptFormatter;
     private readonly Settings _settings;
-    private readonly MicrophoneLevelPinService _levelPinService;
+    private readonly MicrophoneLevelWriteCoordinator _levelWriteCoordinator;
     private readonly AudioPlayer _playbackPlayer;
     private SpeechSession? _playingSession;
     private SpeechSession? _selectedSession;
@@ -74,13 +74,13 @@ public class AudioSessionManager : IDisposable
         AudioDeviceManager audioDeviceManager,
         TranscriptFormatter transcriptFormatter,
         Settings settings,
-        MicrophoneLevelPinService levelPinService)
+        MicrophoneLevelWriteCoordinator levelWriteCoordinator)
     {
         _speechManager = speechManager;
         _audioDeviceManager = audioDeviceManager;
         _transcriptFormatter = transcriptFormatter;
         _settings = settings;
-        _levelPinService = levelPinService;
+        _levelWriteCoordinator = levelWriteCoordinator;
 
         _playbackPlayer = new AudioPlayer();
         _playbackPlayer.PlaybackEnded += PlaybackPlayer_PlaybackEnded;
@@ -162,12 +162,16 @@ public class AudioSessionManager : IDisposable
 
                 // Re-assert the pinned capture level right before recording so a level
                 // another app may have changed is corrected back to the user's choice.
+                // The write runs on the shared level-write worker, off the UI thread, so
+                // the failure path's device re-enumeration cannot freeze the UI (and the
+                // screen reader) — the same off-thread guarantee #171 gave the mute
+                // toggle. We await it so the level is settled before capture starts.
                 // If it cannot be applied and verified, tell the user rather than
                 // recording silently at the wrong gain — the recording still proceeds
                 // so no audio is lost, but the failure is signalled with a beep (played
                 // before capture starts, so it is not recorded) and a persistent status
                 // message that replaces the usual "Listening" line.
-                var levelResult = _levelPinService.ReassertPinnedLevel(_settings.AudioSettings?.PinnedCaptureLevel);
+                var levelResult = await ReassertPinnedLevelOffThreadAsync();
                 if (levelResult.Failed)
                     BeepPlayer.Play(BeepType.Failure);
 
@@ -220,6 +224,21 @@ public class AudioSessionManager : IDisposable
             ErrorOccurred?.Invoke(this, ex.Message);
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    // Re-asserts the pinned capture level through the shared off-thread write worker.
+    // A null pin means pinning is disabled — nothing to write, so the level is
+    // Unchanged. A superseded write (the coordinator dropped this request because a
+    // newer level was requested and applied instead) is also Unchanged for signalling
+    // purposes: the device settled on the newer value, so there is nothing to warn the
+    // user about here.
+    private async Task<CaptureLevelResult> ReassertPinnedLevelOffThreadAsync()
+    {
+        if (_settings.AudioSettings?.PinnedCaptureLevel is not int pinned)
+            return new CaptureLevelResult(CaptureLevelOutcome.Unchanged);
+
+        return await _levelWriteCoordinator.RequestLatestAsync(pinned)
+            ?? new CaptureLevelResult(CaptureLevelOutcome.Unchanged);
     }
 
     public async Task RetryTranscriptionAsync(ISpeechToTextService activeService, string prompt, CancellationToken cancellationToken = default)

@@ -43,6 +43,11 @@ public sealed partial class MainWindow : Window, IDisposable
 	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
 	// never freezes the UI (and the screen reader).
 	private readonly Mutation.Ui.Core.MicrophoneMuteToggleCoordinator _muteToggleCoordinator;
+	// Serializes the mic-level slider and pin-toggle COM writes onto the shared
+	// background worker so a drag burst never runs the write (and its failure-path
+	// device re-enumeration) on the UI thread, and never overlaps the record-start
+	// re-assert on the same COM endpoint.
+	private readonly Mutation.Ui.Core.MicrophoneLevelWriteCoordinator _micLevelWriteCoordinator;
 	private readonly TranscriptFormatter _transcriptFormatter;
 	private readonly ITextToSpeechService _textToSpeech;
 	private readonly IWavFileSpeechExporter _wavFileSpeechExporter;
@@ -131,7 +136,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		ISettingsManager settingsManager,
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
-		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService)
+		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
+		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator)
 	{
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
@@ -150,6 +156,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _audioSessionManager = audioSessionManager;
         _micLevelPinService = micLevelPinService;
+        _micLevelWriteCoordinator = micLevelWriteCoordinator;
         _muteToggleCoordinator = new Mutation.Ui.Core.MicrophoneMuteToggleCoordinator(_audioDeviceManager.ToggleMute);
         _audioSessionManager.StateChanged += AudioSessionManager_StateChanged;
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
