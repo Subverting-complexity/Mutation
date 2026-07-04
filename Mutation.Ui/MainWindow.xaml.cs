@@ -57,6 +57,17 @@ public sealed partial class MainWindow : Window, IDisposable
 	private ISpeechToTextService? _activeSpeechService;
 	private CancellationTokenSource _formatDebounceCts = new();
 	private CancellationTokenSource _promptDebounceCts = new();
+	// Slider settings persistence is coalesced to this quiet period after the last
+	// change, mirroring the existing prompt TextBox debounce.
+	private static readonly TimeSpan SettingsSaveDebounceDelay = TimeSpan.FromMilliseconds(500);
+	// Coalesces per-tick settings saves from the main-window sliders. A drag or a
+	// held arrow key raises ValueChanged dozens of times per second, and saving on
+	// every tick serialized the whole settings object and atomically replaced the
+	// file (plus its .bak) on the UI thread — audible slider stutter and disk churn
+	// (issue #172). Each handler applies its value to _settings immediately; only the
+	// file write is deferred. The close handler saves _settings unconditionally, so a
+	// pending write is never lost on shutdown.
+	private readonly Debouncer _settingsSaveDebouncer;
 	private readonly CancellationTokenSource _shutdownCts = new();
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
@@ -132,6 +143,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		_wavFileSpeechExporter = wavFileSpeechExporter;
 		_transcriptFormatter = transcriptFormatter;
 		_settings = settings;
+
+        _settingsSaveDebouncer = new Debouncer(
+            SettingsSaveDebounceDelay,
+            () => _settingsManager.SaveSettingsToFile(_settings));
 
         _audioSessionManager = audioSessionManager;
         _micLevelPinService = micLevelPinService;
@@ -1344,7 +1359,9 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (_settings.AudioSettings.PinnedCaptureLevel != level)
 			{
 				_settings.AudioSettings.PinnedCaptureLevel = level;
-				_settingsManager.SaveSettingsToFile(_settings);
+				// Keep the live COM level write per tick above; only coalesce the file
+				// write, so a drag or held arrow key persists once it settles (issue #172).
+				_settingsSaveDebouncer.Trigger();
 			}
 		}
 	}
@@ -1443,7 +1460,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_settings.TextToSpeechSettings.Rate == rate) return;
 
 		_settings.TextToSpeechSettings.Rate = rate;
-		_settingsManager.SaveSettingsToFile(_settings);
+		_settingsSaveDebouncer.Trigger();
 	}
 
 	private void SldTtsVolume_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -1455,7 +1472,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_settings.TextToSpeechSettings.Volume == volume) return;
 
 		_settings.TextToSpeechSettings.Volume = volume;
-		_settingsManager.SaveSettingsToFile(_settings);
+		_settingsSaveDebouncer.Trigger();
 	}
 
 	public async void BtnFormatTranscript_Click(object? sender, RoutedEventArgs? e)
@@ -2415,6 +2432,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_microphoneVisualization?.Dispose();
 		_formatDebounceCts?.Dispose();
 		_promptDebounceCts?.Dispose();
+		_settingsSaveDebouncer?.Dispose();
 		_shutdownCts.Dispose();
 		_statusDismissTimer?.Stop();
 	}
