@@ -548,13 +548,13 @@ public partial class App : Application
 			{
 				baseDomain = baseDomain.TrimEnd('/') + "/v1/";
 			}
-			var options = new OpenAIClientOptions { Endpoint = new Uri(baseDomain) };
+			var options = OpenAiClientOptionsFactory.Create(new Uri(baseDomain));
 			var client = new OpenAIClient(new ApiKeyCredential(apiKey), options);
 			audioClient = client.GetAudioClient(modelId);
 		}
 		else
 		{
-			audioClient = new AudioClient(modelId, new ApiKeyCredential(apiKey));
+			audioClient = new AudioClient(modelId, new ApiKeyCredential(apiKey), OpenAiClientOptionsFactory.Create());
 		}
 
 		return new OpenAiSpeechToTextService(

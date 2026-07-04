@@ -33,7 +33,12 @@ public class LlmService : ILlmService
 
 		foreach (var model in modelList)
 		{
-			_chatClients[model.Name] = new ChatClient(model.Name, apiKey);
+			// Options disable the SDK's 100 s default network timeout so the
+			// escalating per-attempt timeouts below are the real authority.
+			_chatClients[model.Name] = new ChatClient(
+				model.Name,
+				new ApiKeyCredential(apiKey),
+				OpenAiClientOptionsFactory.Create());
 			_modelConfigs[model.Name] = model;
 		}
 	}
