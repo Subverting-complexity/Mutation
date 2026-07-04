@@ -7,16 +7,18 @@ using Microsoft.UI.Xaml.Media;
 namespace Mutation.Ui.Views.SettingsUi;
 
 // Walks the top-level children of a settings page's root Panel, gathers the
-// visible text underneath each child, and dims children whose text doesn't
-// contain the query. Empty query restores full opacity.
+// visible text underneath each child, and collapses children whose text doesn't
+// contain the query. Collapsing (rather than dimming) removes non-matching
+// sections from the tab order and the screen-reader tree, so search results are
+// perceivable without sight. Empty query restores all sections.
+// Returns the number of sections that match (all sections for an empty query).
 internal static class SettingsSearchHelper
 {
-	private const double DimmedOpacity = 0.35;
-
-	public static void ApplyFilter(Panel root, string query)
+	public static int ApplyFilter(Panel root, string query)
 	{
 		string q = (query ?? string.Empty).Trim().ToLowerInvariant();
 		bool noQuery = q.Length == 0;
+		int matches = 0;
 
 		foreach (UIElement child in root.Children)
 		{
@@ -25,13 +27,18 @@ internal static class SettingsSearchHelper
 
 			if (noQuery)
 			{
-				fe.Opacity = 1.0;
+				fe.Visibility = Visibility.Visible;
+				matches++;
 				continue;
 			}
 
-			string text = CollectText(fe).ToLowerInvariant();
-			fe.Opacity = text.Contains(q) ? 1.0 : DimmedOpacity;
+			bool isMatch = CollectText(fe).ToLowerInvariant().Contains(q);
+			fe.Visibility = isMatch ? Visibility.Visible : Visibility.Collapsed;
+			if (isMatch)
+				matches++;
 		}
+
+		return matches;
 	}
 
 	private static string CollectText(DependencyObject root)

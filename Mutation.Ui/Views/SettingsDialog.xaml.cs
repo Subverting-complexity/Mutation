@@ -172,13 +172,16 @@ public sealed partial class SettingsDialog : ContentDialog
 		PageHost.Content = _activePage;
 
 		// Re-apply any active search query against the freshly loaded page so a user
-		// who typed before switching tabs immediately sees matches highlighted on the new tab.
+		// who typed before switching tabs immediately sees matches on the new tab.
 		if (_activePage is UserControl uc && uc.Content is Panel rootPanel
 			&& !string.IsNullOrWhiteSpace(SearchBox?.Text))
 		{
 			// Defer until after the visual tree is populated — VisualTreeHelper requires a live tree.
 			DispatcherQueue.TryEnqueue(() =>
-				SettingsSearchHelper.ApplyFilter(rootPanel, SearchBox.Text));
+			{
+				int sectionMatches = SettingsSearchHelper.ApplyFilter(rootPanel, SearchBox.Text);
+				UpdateSearchStatus(sectionMatches);
+			});
 		}
 	}
 
@@ -198,13 +201,27 @@ public sealed partial class SettingsDialog : ContentDialog
 		ApplySearchFilter(SearchBox.Text);
 		if (FilteredCategories.Count > 0 && CategoryList.SelectedIndex < 0)
 			CategoryList.SelectedIndex = 0;
-		HighlightActivePage();
+		UpdateSearchStatus(FilterActivePage());
 	}
 
-	private void HighlightActivePage()
+	// Applies the current query to the active page, collapsing non-matching
+	// sections. Returns the section match count, or null when no page is loaded.
+	private int? FilterActivePage()
 	{
 		if (PageHost.Content is FrameworkElement page && page is UserControl uc && uc.Content is Panel rootPanel)
-			SettingsSearchHelper.ApplyFilter(rootPanel, SearchBox.Text ?? string.Empty);
+			return SettingsSearchHelper.ApplyFilter(rootPanel, SearchBox.Text ?? string.Empty);
+		return null;
+	}
+
+	// Reflects the current match state in the status line under the search box.
+	// The TextBlock is a polite live region, so updating its text announces the
+	// result to a screen reader without moving focus.
+	private void UpdateSearchStatus(int? sectionMatches)
+	{
+		string status = SettingsSearchStatus.Compose(
+			SearchBox.Text, FilteredCategories.Count, _allCategories.Count, sectionMatches);
+		SearchStatusText.Text = status;
+		SearchStatusText.Visibility = status.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
 	}
 
 	private void AdvancedToggle_Toggled(object sender, RoutedEventArgs e)
