@@ -216,13 +216,33 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <Grid x:Name="MicWaveArea" Grid.Column="0" PointerReleased="MicWaveArea_PointerReleased">
-                                    <ScottPlot:WinUIPlot
-                                        x:Name="MicWaveformPlot"
-                                        Height="120"
-                                        IsHitTestVisible="False" />
-                                    <TextBlock x:Name="MicWaveformOffLabel" Text="Off" FontSize="32" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
-                                </Grid>
+                                <ToggleButton x:Name="MicWaveToggle" Grid.Column="0"
+                                    Padding="0"
+                                    BorderThickness="0"
+                                    MinWidth="0"
+                                    MinHeight="0"
+                                    Background="Transparent"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch"
+                                    Click="MicWaveToggle_Click"
+                                    AutomationProperties.Name="Toggle microphone visualization"
+                                    ToolTipService.ToolTip="Toggle the microphone waveform visualization on or off">
+                                    <ToggleButton.Resources>
+                                        <!-- Keep the plot fully visible in the checked (on) state: suppress the accent tint the default template applies. -->
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="Transparent" />
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="Transparent" />
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="Transparent" />
+                                    </ToggleButton.Resources>
+                                    <Grid>
+                                        <ScottPlot:WinUIPlot
+                                            x:Name="MicWaveformPlot"
+                                            Height="120"
+                                            IsHitTestVisible="False" />
+                                        <TextBlock x:Name="MicWaveformOffLabel" Text="Off" FontSize="32" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" AutomationProperties.AccessibilityView="Raw" />
+                                    </Grid>
+                                </ToggleButton>
                                 <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="6" VerticalAlignment="Stretch">
                                     <Grid
                                         Width="16"
