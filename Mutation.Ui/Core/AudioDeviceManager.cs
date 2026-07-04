@@ -54,9 +54,11 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
                 get { lock (_sync) return _captureDevices.ToList(); }
         }
 
-        public MMDevice? Microphone => _microphone;
+        // Read under _sync: a hot-plug on the notification thread can re-point
+        // _microphone / _microphoneDeviceIndex while a caller reads them.
+        public MMDevice? Microphone { get { lock (_sync) return _microphone; } }
 
-        public int MicrophoneDeviceIndex => _microphoneDeviceIndex;
+        public int MicrophoneDeviceIndex { get { lock (_sync) return _microphoneDeviceIndex; } }
 
         // Reflects the aggregate mute state that was actually written to the
         // capture devices and confirmed by read-back — not an optimistic guess
@@ -68,32 +70,53 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
                 var devices = _deviceEnumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
                 lock (_sync)
                 {
+                        var superseded = _captureDevices;
                         _captureDevices = devices.ToList();
+                        // Dispose the COM wrappers from the previous enumeration so they do
+                        // not accumulate until finalization. The currently selected mic is
+                        // skipped: it stays live for recording and level/mute operations, and
+                        // RefreshActiveMicrophone swaps it for a fresh instance itself.
+                        DisposeSuperseded(superseded, _microphone);
                 }
         }
 
         public void SelectMicrophone(MMDevice device)
         {
-                _microphone = device ?? throw new ArgumentNullException(nameof(device));
-                SelectCaptureDeviceForNAudio();
+                if (device is null)
+                        throw new ArgumentNullException(nameof(device));
+
+                // Serialize with the device-change handler so a hot-plug re-enumeration
+                // cannot race the selection and leave _microphone and
+                // _microphoneDeviceIndex pointing at different devices.
+                lock (_sync)
+                {
+                        _microphone = device;
+                        SelectCaptureDeviceForNAudio();
+                }
         }
 
 	public void EnsureDefaultMicrophoneSelected()
 	{
-		if (_microphone != null)
-			return;
+		// The read of _microphone and the assignment that follows must be one
+		// atomic step relative to the device-change handler, so take the lock
+		// around the whole check-and-set rather than just the write.
+		lock (_sync)
+		{
+			if (_microphone != null)
+				return;
 
-                try
-                {
-                        var defaultMic = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
-                        if (defaultMic != null)
-                        {
-                                _microphone = defaultMic;
-                                SelectCaptureDeviceForNAudio();
-                        }
-                }
-                catch { }
-        }
+			try
+			{
+				var defaultMic = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+				if (defaultMic != null)
+				{
+					_microphone = defaultMic;
+					SelectCaptureDeviceForNAudio();
+				}
+			}
+			catch { }
+		}
+	}
 
 	private void SelectCaptureDeviceForNAudio()
 	{
@@ -197,6 +220,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
                 try { id = _microphone.ID; }
                 catch { id = null; }
 
+                // RefreshCaptureDevices deliberately preserves the selected wrapper, so
+                // hold onto it here to dispose once a fresh instance replaces it below.
+                var previous = _microphone;
                 RefreshCaptureDevices();
 
                 if (id is null)
@@ -207,6 +233,10 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
                 {
                         _microphone = fresh;
                         SelectCaptureDeviceForNAudio();
+                        // The previous wrapper survived the re-enumeration; now that a fresh
+                        // instance is selected, dispose it so it does not leak.
+                        try { previous.Dispose(); }
+                        catch { }
                 }
         }
 
@@ -214,6 +244,23 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
         {
                 try { return device != null && string.Equals(device.ID, id, StringComparison.OrdinalIgnoreCase); }
                 catch { return false; }
+        }
+
+        // Disposes the COM wrappers from a superseded enumeration, skipping the one
+        // that is still the selected microphone (it stays live for the caller) and
+        // swallowing a per-device failure so one bad wrapper cannot strand the rest.
+        // Generic and static so the "skip the selected one" rule is unit-testable
+        // without real CoreAudio devices.
+        internal static void DisposeSuperseded<T>(IEnumerable<T> superseded, T? selected)
+                where T : class, IDisposable
+        {
+                foreach (var device in superseded)
+                {
+                        if (device is null || ReferenceEquals(device, selected))
+                                continue;
+                        try { device.Dispose(); }
+                        catch { }
+                }
         }
 
         // Callers hold _sync; the lock is reentrant so RefreshCaptureDevices'
