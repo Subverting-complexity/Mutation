@@ -1,4 +1,6 @@
 using CognitiveSupport;
+using System;
+using System.IO;
 
 namespace Mutation.Ui.Views.SettingsUi;
 
@@ -38,7 +40,13 @@ internal static class SettingsDefaults
 	{
 		public const string SpeechToTextHotKey = "SHIFT+ALT+U";
 		public const string SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
-		public const string TempDirectory = @"C:\Temp\Mutation";
+		// Recordings hold dictated speech (often personal or sensitive), so the
+		// default lives under the user profile where ACLs block other local users.
+		// The pre-existing C:\Temp default was world-readable; EnsureSettings
+		// rewrites it and session files are migrated on first run.
+		public static readonly string TempDirectory = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mutation");
+		public const string LegacyTempDirectory = @"C:\Temp\Mutation";
 		public const int FileTranscriptionTimeoutSeconds = 300;
 		// Retained-session count: default and UI bounds mirror the domain so the dialog,
 		// the load-time clamp, and cleanup all agree on one source of truth.

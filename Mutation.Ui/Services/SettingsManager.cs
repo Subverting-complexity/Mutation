@@ -1,4 +1,5 @@
 ﻿using CognitiveSupport;
+using Mutation.Ui.Views.SettingsUi;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -346,7 +347,14 @@ internal class SettingsManager : ISettingsManager
 		}
 		if (string.IsNullOrWhiteSpace(speechToTextSettings.TempDirectory))
 		{
-			speechToTextSettings.TempDirectory = @"C:\Temp\Mutation";
+			speechToTextSettings.TempDirectory = SettingsDefaults.Speech.TempDirectory;
+			somethingWasMissing = true;
+		}
+		else if (IsLegacyTempDirectory(speechToTextSettings.TempDirectory))
+		{
+			// The old default under C:\ was readable by every local user; only an
+			// unchanged default is rewritten — an explicitly different path is kept.
+			speechToTextSettings.TempDirectory = SettingsDefaults.Speech.TempDirectory;
 			somethingWasMissing = true;
 		}
 
@@ -974,6 +982,14 @@ End of summary.
 		}
 	}
 
+	internal static bool IsLegacyTempDirectory(string? tempDirectory)
+	{
+		if (string.IsNullOrWhiteSpace(tempDirectory))
+			return false;
+		string normalized = tempDirectory.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+		return string.Equals(normalized, SettingsDefaults.Speech.LegacyTempDirectory, StringComparison.OrdinalIgnoreCase);
+	}
+
 	public void SaveSettingsToFile(Settings settings)
 	{
 		string json = JsonConvert.SerializeObject(settings, Formatting.Indented, _jsonSerializerSettings);
@@ -1009,9 +1025,18 @@ End of summary.
         string json = File.ReadAllText(SettingsFileFullPath);
         Settings settings = JsonConvert.DeserializeObject<Settings>(json, _jsonSerializerSettings) ?? new Settings();
 
+        bool hadLegacyTempDirectory = IsLegacyTempDirectory(settings.SpeechToTextSettings?.TempDirectory);
+
         if (EnsureSettings(settings, isNewFile: newFile))
         {
             SaveSettingsToFile(settings);
+        }
+
+        if (hadLegacyTempDirectory)
+        {
+            SessionRecordingsMigrator.MigrateSessions(
+                SettingsDefaults.Speech.LegacyTempDirectory,
+                settings.SpeechToTextSettings!.TempDirectory!);
         }
 
         return settings;
