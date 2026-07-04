@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using CognitiveSupport;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views.SettingsUi;
 using Mutation.Ui.Views.SettingsUi.Pages;
@@ -223,7 +224,28 @@ public sealed partial class SettingsDialog : ContentDialog
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine($"Failed to open settings JSON: {ex.Message}");
+			ShowFailure(SettingsFailureFeedback.OpenJsonTitle, SettingsFailureFeedback.ComposeOpenJsonMessage(ex));
 		}
+	}
+
+	// Surfaces a failure inside the dialog: error InfoBar for sighted users,
+	// an assertive UIA notification for screen readers, and the failure beep.
+	private void ShowFailure(string title, string message)
+	{
+		SaveErrorBar.Title = title;
+		SaveErrorBar.Message = message;
+		SaveErrorBar.IsOpen = true;
+		AutomationProperties.SetName(SaveErrorBar, $"{title} status");
+		AutomationProperties.SetHelpText(SaveErrorBar, message);
+
+		var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(SaveErrorBar);
+		peer?.RaiseNotificationEvent(
+			StatusAnnouncement.GetKind(InfoBarSeverity.Error),
+			StatusAnnouncement.GetProcessing(InfoBarSeverity.Error),
+			StatusAnnouncement.ComposeText(title, message),
+			StatusAnnouncement.ActivityId);
+
+		BeepPlayer.Play(BeepType.Failure);
 	}
 
 	private void SettingsDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
@@ -238,6 +260,7 @@ public sealed partial class SettingsDialog : ContentDialog
 		{
 			args.Cancel = true;
 			System.Diagnostics.Debug.WriteLine($"SettingsDialog save failed: {ex}");
+			ShowFailure(SettingsFailureFeedback.SaveTitle, SettingsFailureFeedback.ComposeMessage(ex));
 		}
 	}
 

@@ -36,6 +36,7 @@
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 		</Grid.RowDefinitions>
 		<Grid.ColumnDefinitions>
 			<ColumnDefinition Width="280" />
@@ -103,7 +104,13 @@
 			</ScrollViewer>
 		</Border>
 
-		<StackPanel Grid.Row="2" Grid.ColumnSpan="2"
+		<InfoBar x:Name="SaveErrorBar"
+				 Grid.Row="2" Grid.ColumnSpan="2"
+				 Severity="Error"
+				 IsOpen="False"
+				 IsClosable="True" />
+
+		<StackPanel Grid.Row="3" Grid.ColumnSpan="2"
 					Orientation="Horizontal"
 					Spacing="12"
 					HorizontalAlignment="Right"
