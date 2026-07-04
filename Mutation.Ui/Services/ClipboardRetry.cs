@@ -45,4 +45,37 @@ public static class ClipboardRetry
 
 		return false;
 	}
+
+	/// <summary>
+	/// Runs <paramref name="operation"/> until it succeeds, retrying up to
+	/// <paramref name="attempts"/> times with <paramref name="delayMs"/>
+	/// between tries. Returns the operation's result with Success true, or
+	/// <c>default</c> with Success false when every try threw.
+	/// </summary>
+	public static async Task<(bool Success, T? Value)> TryAsync<T>(
+		Func<Task<T>> operation, int attempts = DefaultAttempts, int delayMs = DefaultDelayMs)
+	{
+		if (operation is null)
+			throw new ArgumentNullException(nameof(operation));
+		if (attempts < 1)
+			throw new ArgumentOutOfRangeException(nameof(attempts));
+
+		for (int attempt = 1; attempt <= attempts; attempt++)
+		{
+			try
+			{
+				return (true, await operation().ConfigureAwait(false));
+			}
+			catch when (attempt < attempts)
+			{
+				await Task.Delay(delayMs).ConfigureAwait(false);
+			}
+			catch
+			{
+				return (false, default);
+			}
+		}
+
+		return (false, default);
+	}
 }
