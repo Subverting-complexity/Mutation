@@ -136,6 +136,29 @@ public class HotkeyTests
 		Assert.Throws<NotSupportedException>(() => Hotkey.Parse("Ctrl+Bogus"));
 	}
 
+	// ----- Paste chord (issue #170) -----
+
+	[Fact]
+	public void Parse_PasteChord_ParsesToControlV()
+	{
+		// The transcript-insertion paste path must use this exact chord so it
+		// takes the SendInput route instead of the SendKeys.SendWait fallback.
+		var hk = Hotkey.Parse("Ctrl+V");
+		Assert.True(hk.Control);
+		Assert.False(hk.Alt);
+		Assert.False(hk.Shift);
+		Assert.False(hk.Win);
+		Assert.Equal(VirtualKey.V, hk.Key);
+	}
+
+	[Fact]
+	public void Parse_CaretSyntax_IsNotSupported()
+	{
+		// "^v" is WinForms SendKeys syntax, not a parseable chord; sending it
+		// forced every paste through the exception-driven SendWait fallback.
+		Assert.Throws<NotSupportedException>(() => Hotkey.Parse("^v"));
+	}
+
 	// ----- ToString -----
 
 	[Fact]

@@ -2008,11 +2008,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			case DictationInsertOption.SendKeys:
 				BeepPlayer.Play(BeepType.Start);
-				HotkeyManager.SendText(text);
+				// Off the UI thread: SendInput can stall on the foreground app
+				// and must never block or pump messages mid-finalization.
+				_ = Task.Run(() => HotkeyManager.SendText(text));
 				break;
 			case DictationInsertOption.Paste:
 				_clipboard.SetText(text);
-				HotkeyManager.SendHotkey("^v");
+				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
+				// literal would throw and drop to the SendKeys.SendWait fallback.
+				_ = Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
 				break;
 		}
 	}
