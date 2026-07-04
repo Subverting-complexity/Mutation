@@ -11,7 +11,7 @@ internal class SpeechToTextState : IDisposable
 	private readonly object _ctsLock = new();
 	private CancellationTokenSource? _cts;
 
-	private Func<AudioRecorder?> GetAudioRecorder;
+	private Func<IAudioRecorder?> GetAudioRecorder;
 	internal bool RecordingAudio => GetAudioRecorder() != null;
 
 	internal bool TranscribingAudio
@@ -20,7 +20,7 @@ internal class SpeechToTextState : IDisposable
 	}
 
 	public SpeechToTextState(
-		Func<AudioRecorder?> getAudioRecorder)
+		Func<IAudioRecorder?> getAudioRecorder)
 	{
 		GetAudioRecorder = getAudioRecorder ?? throw new ArgumentNullException(nameof(getAudioRecorder));
 	}
