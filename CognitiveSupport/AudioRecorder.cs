@@ -6,7 +6,7 @@ using System.IO;
 
 namespace CognitiveSupport;
 
-public class AudioRecorder : IDisposable
+public class AudioRecorder : IAudioRecorder
 {
 	private WaveInEvent? _waveIn;
 	private OpusEncoder? _encoder;

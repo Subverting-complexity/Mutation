@@ -22,13 +22,22 @@ public class SpeechToTextManager : IDisposable
 
 	private readonly Settings _settings;
 	private readonly SpeechToTextState _state;
-	private CognitiveSupport.AudioRecorder? _audioRecorder;
+	private readonly Func<IAudioRecorder> _recorderFactory;
+	private IAudioRecorder? _audioRecorder;
 	private readonly object _sessionLock = new();
 	private SpeechSession? _currentRecordingSession;
 
 	public SpeechToTextManager(Settings settings)
+		: this(settings, () => new CognitiveSupport.AudioRecorder())
+	{
+	}
+
+	// Test seam: injects the recorder so a start can be made to fail on demand
+	// without real NAudio hardware.
+	internal SpeechToTextManager(Settings settings, Func<IAudioRecorder> recorderFactory)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
+		_recorderFactory = recorderFactory ?? throw new ArgumentNullException(nameof(recorderFactory));
 		_state = new SpeechToTextState(() => _audioRecorder);
 	}
 
@@ -150,6 +159,13 @@ public class SpeechToTextManager : IDisposable
 
 		try
 		{
+			// Reject a second start while a recorder is already live. Overwriting
+			// the field would orphan the running capture — its mic is never
+			// released and its .ogg never finalized. Guard before creating the
+			// session file so a rejected entry leaves nothing behind.
+			if (_audioRecorder != null)
+				throw new InvalidOperationException("A recording is already in progress.");
+
 			// Create the session file only after winning the lock so a busy
 			// timeout leaves no orphaned empty session in the history.
 			EnsureSessionsDirectory();
@@ -162,9 +178,26 @@ public class SpeechToTextManager : IDisposable
 				_currentRecordingSession = session;
 			}
 
-			_audioRecorder = new CognitiveSupport.AudioRecorder();
-			_audioRecorder.StartRecording(microphoneDeviceIndex, path, BuildSilenceOptions());
+			// Start into a local first; commit the field only once StartRecording
+			// succeeds. A failed start (device unplugged, NAudio error) must not
+			// leave the manager reporting "recording" with no active capture.
+			IAudioRecorder recorder = _recorderFactory();
+			try
+			{
+				recorder.StartRecording(microphoneDeviceIndex, path, BuildSilenceOptions());
+			}
+			catch
+			{
+				recorder.Dispose();
+				lock (_sessionLock)
+				{
+					_currentRecordingSession = null;
+				}
+				TryDeleteSessionFile(path);
+				throw;
+			}
 
+			_audioRecorder = recorder;
 			return session;
 		}
 		finally
@@ -466,6 +499,28 @@ public class SpeechToTextManager : IDisposable
 		}
 
 		throw new IOException("Failed to create a unique session file name.");
+	}
+
+	// Best-effort removal of a just-created session file whose recording never
+	// started, so a failed start leaves no empty session lingering in history.
+	private static void TryDeleteSessionFile(string path)
+	{
+		try
+		{
+			File.Delete(path);
+		}
+		catch (DirectoryNotFoundException)
+		{
+		}
+		catch (UnauthorizedAccessException)
+		{
+		}
+		catch (PathTooLongException)
+		{
+		}
+		catch (IOException)
+		{
+		}
 	}
 
 	private static async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken token)
