@@ -1319,8 +1319,31 @@ public sealed partial class MainWindow : Window, IDisposable
 		_micLevelInitialized = true;
 
 		// Re-assert now (app startup, or after a mic change): correct the level if
-		// another app changed it.
-		_micLevelPinService.ReassertPinnedLevel(pinned);
+		// another app changed it. Route it through the shared off-thread write worker
+		// rather than writing on the UI thread — the same guarantee the slider, pin
+		// toggle, and record-start paths already have. On the mic-change path this
+		// runs mid-session, where the write's failure path re-enumerates the device
+		// and would otherwise briefly freeze the window and the screen reader.
+		ReassertPinnedLevelOffThread(pinned);
+	}
+
+	// Nudges the pinned capture level back onto the active device through the shared
+	// off-thread write coordinator, without blocking the caller. Used by the startup
+	// and mic-change re-assert (InitializeMicrophoneLevelControls), where the write
+	// must not run on the UI thread — its failure path re-enumerates the device,
+	// which would freeze the UI and, with it, the screen reader. Routing through the
+	// coordinator also serializes this write with the slider and pin-toggle writes,
+	// so two threads never touch the same COM level endpoint at once, and a burst
+	// coalesces to the latest value. This is a fire-and-forget background correction:
+	// the re-assert only nudges the level back to the pinned value, so the outcome is
+	// not surfaced (matching the previous synchronous call, whose result was already
+	// discarded). A null pin means pinning is disabled — nothing to write.
+	private void ReassertPinnedLevelOffThread(int? pinnedLevel)
+	{
+		if (pinnedLevel is not int level)
+			return;
+
+		_ = _micLevelWriteCoordinator.RequestLatestAsync(level);
 	}
 
 	// Current Windows capture level as a 0–100 value, or a sensible default when it
