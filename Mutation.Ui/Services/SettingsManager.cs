@@ -994,6 +994,33 @@ End of summary.
 	{
 		string json = JsonConvert.SerializeObject(settings, Formatting.Indented, _jsonSerializerSettings);
 		AtomicWriteAllText(SettingsFilePath, json);
+
+		// Keep the error-log redactor current with the just-saved keys so a key
+		// entered via the Settings dialog is redacted without an app restart.
+		RegisterSecretsForRedaction(settings);
+	}
+
+	// Feeds every configured provider key into ErrorLogger's exact-match redactor
+	// so none of them can ever be written verbatim to the error log, regardless
+	// of the key's format. Placeholder/blank values are filtered by the redactor.
+	private static void RegisterSecretsForRedaction(Settings settings)
+	{
+		var secrets = new List<string?>
+		{
+			settings.ApiKeys?.OpenAiApiKey,
+			settings.ApiKeys?.AnthropicApiKey,
+			settings.ApiKeys?.DeepgramApiKey,
+			settings.AzureComputerVisionSettings?.ApiKey,
+		};
+
+		var services = settings.SpeechToTextSettings?.Services;
+		if (services is not null)
+		{
+			foreach (var service in services)
+				secrets.Add(service?.ApiKey);
+		}
+
+		ErrorLogger.RegisterSecretValues(secrets);
 	}
 
 	private static void AtomicWriteAllText(string targetPath, string contents)
@@ -1038,6 +1065,10 @@ End of summary.
                 SettingsDefaults.Speech.LegacyTempDirectory,
                 settings.SpeechToTextSettings!.TempDirectory!);
         }
+
+        // Register the loaded keys so any error logged during this run redacts
+        // them by exact match, covering formats no pattern recognises.
+        RegisterSecretsForRedaction(settings);
 
         return settings;
     }
