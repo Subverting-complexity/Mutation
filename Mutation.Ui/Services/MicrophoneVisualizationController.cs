@@ -30,6 +30,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	private readonly XamlRectangle? _pulseOverlay;
 	private readonly Action<string, string, InfoBarSeverity> _showStatus;
 
+	private readonly WaveformRenderGate _waveformRenderGate = new();
 	private WaveInEvent? _waveformCapture;
 	private DispatcherQueueTimer? _waveformTimer;
 	private Signal? _waveformSignal;
@@ -110,6 +111,9 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 			_waveformBufferIndex = 0;
 			_waveformBufferFilled = false;
 		}
+
+		// Render the reset-to-flat state once even before the first samples arrive.
+		_waveformRenderGate.MarkDataArrived();
 
 		int deviceIndex = _audioDeviceManager.MicrophoneDeviceIndex;
 		if (deviceIndex < 0)
@@ -230,6 +234,16 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		if (_offLabel != null && _offLabel.Visibility == Visibility.Visible)
 			_offLabel.Visibility = Visibility.Collapsed;
 
+		// Nothing new has been captured since the last frame — the plot, meter, and
+		// pulse overlay are all still showing the last rendered state, so there is
+		// nothing to redraw. Skip the buffer copy, RMS scan, ScottPlot refresh, and
+		// meter writes. This is the idle path whenever no capture is running (device
+		// not resolved, capture failed, or capture stopped) and it keeps that
+		// per-frame work — and the DispatcherQueue it shares with hotkey dispatch —
+		// free instead of spinning at ~30 FPS for the app's lifetime.
+		if (!_waveformRenderGate.ConsumeShouldRender())
+			return;
+
 		int validSamples = PopulateWaveformRenderBuffer();
 
 		double peak = 0;
@@ -342,5 +356,8 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 				}
 			}
 		}
+
+		// New samples are in the ring buffer — let the next render tick draw them.
+		_waveformRenderGate.MarkDataArrived();
 	}
 }
