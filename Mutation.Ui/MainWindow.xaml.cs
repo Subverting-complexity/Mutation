@@ -185,6 +185,7 @@ public sealed partial class MainWindow : Window, IDisposable
             MicPulseOverlay,
             ShowStatus);
         _microphoneVisualization.Initialize();
+        SyncMicWaveToggleState();
 
         _audioSessionManager.RefreshSessions();
                 UpdatePlaybackButtonVisuals("Play selected session", PlayGlyph);
@@ -2022,9 +2023,18 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
-	private void MicWaveArea_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+	private void MicWaveToggle_Click(object sender, RoutedEventArgs e)
 	{
-		_microphoneVisualization?.Toggle();
+		// The ToggleButton has already flipped IsChecked to the user's intended
+		// state; drive the setting to match so the control stays authoritative.
+		_microphoneVisualization?.SetEnabled(MicWaveToggle.IsChecked == true);
+	}
+
+	// Reflects the persisted visualization state on the in-place toggle. Setting
+	// IsChecked programmatically does not raise Click, so this never re-persists.
+	private void SyncMicWaveToggleState()
+	{
+		MicWaveToggle.IsChecked = _settings.AudioSettings?.EnableMicrophoneVisualization != false;
 	}
 
 	private string GetActivePrompt()
@@ -2274,6 +2284,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		try
 		{
 			_microphoneVisualization?.ApplyEnabledStateFromSettings();
+			SyncMicWaveToggleState();
 		}
 		catch (Exception ex)
 		{

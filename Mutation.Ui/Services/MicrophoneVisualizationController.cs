@@ -164,13 +164,19 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		_waveformCapture = null;
 	}
 
-	public void Toggle()
+	// Sets the visualization to a specific on/off state, persists it, and applies it.
+	// Driven by the in-place ToggleButton (IsChecked), whose two-state value is the
+	// authority — unlike a stateless flip, this keeps the setting in lockstep with
+	// the control even if the two ever diverged. No-ops when already in that state.
+	public void SetEnabled(bool enabled)
 	{
 		if (_settings.AudioSettings == null)
 			return;
 
-		bool newState = !_settings.AudioSettings.EnableMicrophoneVisualization;
-		_settings.AudioSettings.EnableMicrophoneVisualization = newState;
+		if (_settings.AudioSettings.EnableMicrophoneVisualization == enabled)
+			return;
+
+		_settings.AudioSettings.EnableMicrophoneVisualization = enabled;
 		_settingsManager.SaveSettingsToFile(_settings);
 		ApplyEnabledStateFromSettings();
 	}
