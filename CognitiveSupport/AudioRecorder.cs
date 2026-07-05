@@ -34,8 +34,9 @@ public class AudioRecorder : IAudioRecorder
 	private const int SamplesPerFrame = SampleRate * FrameSizeMs / 1000; // 960 samples
 	private const int Channels = 1;
 
-	// Buffer for incoming PCM data
-	private readonly List<short> _pcmBuffer = new();
+	// Splits incoming PCM bytes into fixed 960-sample frames. Created per recording in
+	// StartRecording so no partial-frame remainder bleeds from one recording into the next.
+	private PcmFrameSplitter? _pcmFrameSplitter;
 
 	public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)
 	{
@@ -44,6 +45,7 @@ public class AudioRecorder : IAudioRecorder
 			_silenceTrimmer = silenceOptions is null
 				? null
 				: new SilenceTrimmer(SampleRate, SamplesPerFrame, silenceOptions);
+			_pcmFrameSplitter = new PcmFrameSplitter(SamplesPerFrame);
 			TrimmedSpeechSeconds = null;
 			_captureException = null;
 
@@ -111,30 +113,12 @@ public class AudioRecorder : IAudioRecorder
 	{
 		lock (_writeLock)
 		{
-			if (_oggStream == null) return;
+			if (_oggStream == null || _pcmFrameSplitter is null) return;
 
 			try
 			{
-				// Convert bytes to shorts (16-bit PCM)
-				// e.BytesRecorded is count of bytes. 2 bytes per sample.
-				int incomingSamples = e.BytesRecorded / 2;
-				for (int i = 0; i < incomingSamples; i++)
-				{
-					short sample = (short)((e.Buffer[i * 2 + 1] << 8) | e.Buffer[i * 2]);
-					_pcmBuffer.Add(sample);
-				}
-
-				// Process complete frames
-				while (_pcmBuffer.Count >= SamplesPerFrame)
-				{
-					var frame = _pcmBuffer.GetRange(0, SamplesPerFrame).ToArray();
-					_pcmBuffer.RemoveRange(0, SamplesPerFrame);
-
-					if (_silenceTrimmer is null)
-						_oggStream.WriteSamples(frame, 0, SamplesPerFrame);
-					else
-						_silenceTrimmer.ProcessFrame(frame, WriteFrame);
-				}
+				// Split incoming 16-bit PCM bytes into whole 960-sample frames and write each.
+				_pcmFrameSplitter.Append(e.Buffer, e.BytesRecorded, EmitFrame);
 			}
 			catch (Exception ex)
 			{
@@ -142,10 +126,18 @@ public class AudioRecorder : IAudioRecorder
 				// unhandled exception that terminates the process. Capture the first
 				// failure and stop writing so StopRecording can surface it to the caller.
 				_captureException ??= ex;
-				_pcmBuffer.Clear();
+				_pcmFrameSplitter = null;
 				_oggStream = null;
 			}
 		}
+	}
+
+	private void EmitFrame(short[] frame)
+	{
+		if (_silenceTrimmer is null)
+			_oggStream?.WriteSamples(frame, 0, frame.Length);
+		else
+			_silenceTrimmer.ProcessFrame(frame, WriteFrame);
 	}
 
 	private void WriteFrame(short[] frame) => _oggStream?.WriteSamples(frame, 0, frame.Length);
@@ -182,6 +174,8 @@ public class AudioRecorder : IAudioRecorder
 				{
 					_oggStream = null;
 					_silenceTrimmer = null;
+					// Drop any buffered partial frame (< 20ms tail), as before.
+					_pcmFrameSplitter = null;
 				}
 			}
 		}

@@ -72,11 +72,10 @@ public static class AudioFileConverter
 		byte[] buffer = new byte[outFormat.AverageBytesPerSecond];
 		int bytesRead;
 
-		// Buffer for accumulation to feed fixed frame sizes to Opus (960 samples = 1920 bytes)
-		// Opus requires 2.5, 5, 10, 20, 40, or 60ms frames. We use 20ms (960 samples).
+		// Split the decoded byte stream into fixed frame sizes for Opus (960 samples = 1920
+		// bytes). Opus requires 2.5, 5, 10, 20, 40, or 60ms frames. We use 20ms (960 samples).
 		int samplesPerFrame = 960;
-		int bytesPerFrame = samplesPerFrame * 2;
-		List<byte> accumulationBuffer = new List<byte>();
+		var splitter = new PcmFrameSplitter(samplesPerFrame);
 
 		var trimmer = silenceOptions is null
 			? null
@@ -92,40 +91,12 @@ public static class AudioFileConverter
 
 		while ((bytesRead = resampler.Read(buffer, 0, buffer.Length)) > 0)
 		{
-			for (int i = 0; i < bytesRead; i++)
-			{
-				accumulationBuffer.Add(buffer[i]);
-			}
-
-			while (accumulationBuffer.Count >= bytesPerFrame)
-			{
-				byte[] frameBytes = accumulationBuffer.GetRange(0, bytesPerFrame).ToArray();
-				accumulationBuffer.RemoveRange(0, bytesPerFrame);
-
-				// Convert byte[] to short[]
-				short[] pcmSamples = new short[samplesPerFrame];
-				Buffer.BlockCopy(frameBytes, 0, pcmSamples, 0, bytesPerFrame);
-
-				WriteFrame(pcmSamples);
-			}
+			splitter.Append(buffer, bytesRead, WriteFrame);
 		}
 
-		// Handle remaining bytes (pad with silence if needed, or just finish)
-		// For speech, we can probably drop the last partial frame if it's very short,
-		// or pad it.
-		if (accumulationBuffer.Count > 0)
-		{
-			// Padding with silence to reach frame size
-			while (accumulationBuffer.Count < bytesPerFrame)
-			{
-				accumulationBuffer.Add(0);
-			}
-
-			byte[] frameBytes = accumulationBuffer.ToArray();
-			short[] pcmSamples = new short[samplesPerFrame];
-			Buffer.BlockCopy(frameBytes, 0, pcmSamples, 0, bytesPerFrame);
-			WriteFrame(pcmSamples);
-		}
+		// Pad the final partial frame with silence and emit it, matching the previous
+		// behavior of never dropping trailing audio on file conversion.
+		splitter.Flush(WriteFrame, padWithSilence: true);
 
 		trimmer?.Flush(f => oggStream.WriteSamples(f, 0, f.Length));
 
