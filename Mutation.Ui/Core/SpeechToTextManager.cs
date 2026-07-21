@@ -341,7 +341,7 @@ public class SpeechToTextManager : IDisposable
 		if (AudioFileConverter.IsVideoFile(sourcePath) || silenceOptions is not null)
 		{
 			string destinationPath = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
-			await Task.Run(() => AudioFileConverter.ConvertMp4ToOgg(sourcePath, destinationPath, silenceOptions), token).ConfigureAwait(false);
+			await Task.Run(() => AudioFileConverter.ConvertToOgg(sourcePath, destinationPath, silenceOptions), token).ConfigureAwait(false);
 
 			if (!TryCreateSession(destinationPath, out var convertedSession))
 				throw new InvalidOperationException($"Unable to parse converted session '{Path.GetFileName(destinationPath)}'.");

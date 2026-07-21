@@ -1,5 +1,3 @@
-using Concentus.Oggfile;
-using Concentus.Structs;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -18,7 +16,6 @@ namespace CognitiveSupport;
 public class AudioPlayer : IDisposable
 {
     private WaveOutEvent? _waveOut;
-    private OpusDecoder? _decoder;
     private MemoryStream? _pcmStream;
     private WaveStream? _sourceStream;
     private SoundTouchSampleProvider? _speedProvider;
@@ -88,26 +85,15 @@ public class AudioPlayer : IDisposable
     }
 
     /// <summary>
-    /// Plays an OGG/Opus file by decoding it with Concentus and playing via NAudio.
+    /// Plays an OGG/Opus file by decoding it with <see cref="OggOpusPcmDecoder"/> and playing
+    /// via NAudio. The decoder is shared with the import path so files this app did not record
+    /// itself — WhatsApp voice notes and the like — play back rather than hanging.
     /// </summary>
     private void PlayOgg(string filePath)
     {
         // Read and decode the entire OGG file to PCM
-        using var fileStream = File.OpenRead(filePath);
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusDecoder type, not IOpusDecoder from OpusCodecFactory.
-        var oggReader = new OpusOggReadStream(_decoder = new OpusDecoder(SampleRate, Channels), fileStream);
-#pragma warning restore CS0618
-
-        // Collect all decoded samples
         var allSamples = new List<short>();
-        while (oggReader.HasNextPacket)
-        {
-            var samples = oggReader.DecodeNextPacket();
-            if (samples != null && samples.Length > 0)
-            {
-                allSamples.AddRange(samples);
-            }
-        }
+        OggOpusPcmDecoder.DecodeToMonoPcm(filePath, samples => allSamples.AddRange(samples));
 
         if (allSamples.Count == 0)
         {
@@ -197,8 +183,6 @@ public class AudioPlayer : IDisposable
 
                 _pcmStream?.Dispose();
                 _pcmStream = null;
-
-                _decoder = null;
             }
             catch
             {

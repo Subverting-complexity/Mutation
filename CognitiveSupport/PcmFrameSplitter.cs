@@ -90,6 +90,24 @@ public sealed class PcmFrameSplitter
 	}
 
 	/// <summary>
+	/// Appends already-decoded 16-bit samples, emitting a fresh <c>short[]</c> for every
+	/// complete frame. Used by decoders that hand back <c>short[]</c> directly (Opus) rather
+	/// than a raw byte stream; framing and carry-over behave exactly as in <see cref="Append"/>.
+	/// Kept as a distinct name rather than an overload so a <c>null</c> literal argument stays
+	/// unambiguous at the call site.
+	/// </summary>
+	public void AppendSamples(short[] source, int count, Action<short[]> emit)
+	{
+		if (source is null) throw new ArgumentNullException(nameof(source));
+		if (count < 0 || count > source.Length)
+			throw new ArgumentOutOfRangeException(nameof(count));
+
+		var bytes = new byte[count * BytesPerSample];
+		Buffer.BlockCopy(source, 0, bytes, 0, bytes.Length);
+		Append(bytes, bytes.Length, emit);
+	}
+
+	/// <summary>
 	/// Emits any buffered partial frame. When <paramref name="padWithSilence"/> is true a
 	/// non-empty remainder is zero-padded to a full frame and emitted; otherwise it is
 	/// dropped. The carry buffer is cleared either way.
