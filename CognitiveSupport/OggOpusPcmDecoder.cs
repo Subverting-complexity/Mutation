@@ -42,10 +42,17 @@ public static class OggOpusPcmDecoder
 	// 120ms at 48kHz — the longest frame Opus can carry.
 	private const int MaxFrameSamples = 5760;
 
+	// Concentus decodes mono and stereo only; it rejects anything else outright. Surround
+	// Opus (RFC 7845 channel mapping family 1) therefore cannot be handled here.
+	private const int MaxDecodableChannels = 2;
+
 	/// <summary>
-	/// True when the file is an Ogg stream carrying Opus. Detection is by content rather than
-	/// extension so a mis-named file still decodes, and so Ogg/Vorbis — which Concentus cannot
-	/// decode — is correctly reported as not-Opus and left to the caller's fallback path.
+	/// True when the file is an Ogg stream carrying Opus that this decoder can actually handle.
+	/// Detection is by content rather than extension so a mis-named file still decodes, and so
+	/// Ogg/Vorbis — which Concentus cannot decode — is correctly reported as not-Opus and left
+	/// to the caller's fallback path. Surround Opus is reported as not-decodable for the same
+	/// reason: better to fall through to the caller's fallback, which explains what to do, than
+	/// to fail deep inside the codec with a bare "Number of channels must be 1 or 2".
 	/// </summary>
 	public static bool IsOggOpus(string filePath)
 	{
@@ -55,9 +62,13 @@ public static class OggOpusPcmDecoder
 		try
 		{
 			using var stream = File.OpenRead(filePath);
-			return TryReadOpusHead(stream, out _, out _);
+			return TryReadOpusHead(stream, out int channels, out _) && channels <= MaxDecodableChannels;
 		}
 		catch (IOException)
+		{
+			return false;
+		}
+		catch (UnauthorizedAccessException)
 		{
 			return false;
 		}
@@ -82,6 +93,8 @@ public static class OggOpusPcmDecoder
 	/// to the callback is freshly allocated per frame, so the callback may retain it.
 	/// </summary>
 	/// <exception cref="InvalidDataException">The file is not an Ogg/Opus stream.</exception>
+	/// <exception cref="NotSupportedException">The file is surround Opus, which Concentus
+	/// cannot decode.</exception>
 	public static void DecodeToMonoPcm(string filePath, Action<short[]> onSamples)
 	{
 		if (string.IsNullOrWhiteSpace(filePath))
@@ -96,6 +109,13 @@ public static class OggOpusPcmDecoder
 			if (!TryReadOpusHead(headerStream, out channels, out preSkipSamples))
 				throw new InvalidDataException($"'{Path.GetFileName(filePath)}' is not an Ogg/Opus stream.");
 		}
+
+		// Say so plainly rather than letting Concentus surface a bare "Number of channels must
+		// be 1 or 2" from somewhere inside the codec.
+		if (channels > MaxDecodableChannels)
+			throw new NotSupportedException(
+				$"'{Path.GetFileName(filePath)}' is {channels}-channel Ogg/Opus, which cannot be decoded. " +
+				"Convert it to mono or stereo first.");
 
 		var decoder = OpusCodecFactory.CreateDecoder(SampleRate, channels);
 		var buffer = new short[MaxFrameSamples * channels];

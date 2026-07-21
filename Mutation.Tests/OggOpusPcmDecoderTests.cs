@@ -127,6 +127,21 @@ public class OggOpusPcmDecoderTests : IDisposable
 	}
 
 	[Fact]
+	public void SurroundOpus_IsNotClaimedAndFailsWithAReadableMessage()
+	{
+		// Concentus decodes mono and stereo only. A 6-channel file must not be claimed by this
+		// decoder, so the caller falls through to its own fallback rather than the codec
+		// throwing a bare "Number of channels must be 1 or 2" at the user.
+		string path = WriteFixture("surround.ogg", channels: 6, preSkip: 0,
+			new[] { HybridSwb20MsMonoCode3, SixCbrFrames });
+
+		Assert.False(OggOpusPcmDecoder.IsOggOpus(path));
+
+		var error = Assert.Throws<NotSupportedException>(() => OggOpusPcmDecoder.DecodeToMonoPcm(path, _ => { }));
+		Assert.Contains("6-channel", error.Message);
+	}
+
+	[Fact]
 	public void NonOpusFile_ThrowsRatherThanReturningSilence()
 	{
 		string wav = Path.Combine(_workingDirectory, "throw.wav");
