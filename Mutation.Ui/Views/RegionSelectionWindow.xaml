@@ -7,7 +7,9 @@
     mc:Ignorable="d"
     Title="Select Region">
     <Grid Background="Transparent" UseLayoutRounding="True">
-        <Image x:Name="Img" Stretch="Fill">
+        <Image x:Name="Img" Stretch="Fill"
+            AutomationProperties.AccessibilityView="Raw"
+            AutomationProperties.Name="Screen capture preview">
             <Image.CacheMode>
                 <BitmapCache />
             </Image.CacheMode>
@@ -15,6 +17,8 @@
 
         <Canvas x:Name="Overlay" Background="Transparent"
             IsTabStop="True"
+            AutomationProperties.Name="Select screen region"
+            AutomationProperties.HelpText="Move with the arrow keys. Press Enter to set the first corner, move, then Enter again to capture. Control plus A selects the whole screen. Backspace clears the corner. Escape cancels. Hold Control for fine steps or Shift for large steps."
             PointerPressed="Overlay_PointerPressed"
             PointerMoved="Overlay_PointerMoved"
             PointerReleased="Overlay_PointerReleased"

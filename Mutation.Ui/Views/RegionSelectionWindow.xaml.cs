@@ -1,9 +1,11 @@
 ﻿using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Mutation.Ui.Core;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -26,6 +28,11 @@ public sealed partial class RegionSelectionWindow : Window
 	private bool _initialLayoutDone;
 	private IntPtr _previousForeground;
 	private readonly DispatcherQueue? _dispatcherQueue;
+
+	// Keyboard path for the overlay, so the four screenshot/OCR hotkeys are completable
+	// without sight of the crosshair (issue #215).
+	private readonly KeyboardRegionSelector _keyboard = new();
+	private const string AnnouncementActivityId = "RegionSelection";
 
 	// Cache XAML elements to avoid reliance on generated fields
 	private Microsoft.UI.Xaml.Controls.Image? _img;
@@ -228,6 +235,12 @@ public sealed partial class RegionSelectionWindow : Window
 		int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
 		int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 		SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOMOVE | SWP_NOSIZE);
+		ResetKeyboardSelection();
+		// The overlay is full-screen and topmost: without this the reader just lands on
+		// an unnamed canvas with no hint that anything is expected of it (issue #215).
+		Announce(
+			"Select screen region. Move with the arrow keys, press Enter to set the first corner, move, then Enter again to capture. Control plus A selects the whole screen. Escape cancels.",
+			AutomationNotificationKind.Other);
 		return _tcs.Task;
 	}
 
@@ -241,6 +254,7 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			_dragging = false;
 			_tcs?.TrySetResult(null);
+			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
 			ResetSelection();
 			HideAndRestore();
 			return;
@@ -253,6 +267,8 @@ public sealed partial class RegionSelectionWindow : Window
 		_start = pp.Position;
 		_dragging = true;
 		_lastPointerPos = _start;
+		// A mouse drag supersedes any half-finished keyboard selection.
+		_keyboard.Reset(_overlay.ActualWidth, _overlay.ActualHeight, _start.X, _start.Y);
 		// Capture the pointer so we still get the release even if cursor leaves the window/screen edge
 		try { _overlay.CapturePointer(e.Pointer); } catch { }
 		if (_selection is not null)
@@ -273,6 +289,9 @@ public sealed partial class RegionSelectionWindow : Window
 		var pos = e.GetCurrentPoint(_overlay).Position;
 		_lastPointerPos = pos;
 		UpdateCrosshair(pos);
+		// Keep the keyboard caret under the pointer so switching to the keys mid-drag
+		// picks up where the mouse left off.
+		_keyboard.SyncCaret(pos.X, pos.Y);
 		if (!_dragging) { return; }
 		double x = Math.Min(pos.X, _start.X);
 		double y = Math.Min(pos.Y, _start.Y);
@@ -297,6 +316,7 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			_dragging = false;
 			_tcs?.TrySetResult(null);
+			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
 			ResetSelection();
 			HideAndRestore();
 			return;
@@ -354,6 +374,9 @@ public sealed partial class RegionSelectionWindow : Window
 			Math.Max(0, x2 - x1),
 			Math.Max(0, y2 - y1)
 		);
+		Announce(
+			$"Region captured, {Math.Round(rectPx.Width)} by {Math.Round(rectPx.Height)} pixels.",
+			AutomationNotificationKind.ActionCompleted);
 		_tcs?.TrySetResult(rectPx);
 		ResetSelection();
 		HideAndRestore();
@@ -395,7 +418,155 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			_dragging = false;
 			_tcs?.TrySetResult(null);
+			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
 			HideAndRestore();
+			e.Handled = true;
+			return;
+		}
+
+		var key = MapKey(e.Key);
+		if (key == RegionSelectionKey.None)
+			return;
+
+		bool shift = IsModifierDown(Windows.System.VirtualKey.Shift);
+		bool control = IsModifierDown(Windows.System.VirtualKey.Control);
+
+		var result = _keyboard.HandleKey(key, shift, control);
+		if (result.Outcome == RegionKeyOutcome.Ignored)
+			return;
+
+		e.Handled = true;
+
+		if (result.Outcome == RegionKeyOutcome.Committed)
+		{
+			// FinishSelection announces the commit, for the mouse path too.
+			CommitKeyboardSelection();
+			return;
+		}
+
+		RenderKeyboardSelection();
+		Announce(result.Announcement, AutomationNotificationKind.Other);
+	}
+
+	private static RegionSelectionKey MapKey(Windows.System.VirtualKey key) => key switch
+	{
+		Windows.System.VirtualKey.Left => RegionSelectionKey.Left,
+		Windows.System.VirtualKey.Right => RegionSelectionKey.Right,
+		Windows.System.VirtualKey.Up => RegionSelectionKey.Up,
+		Windows.System.VirtualKey.Down => RegionSelectionKey.Down,
+		Windows.System.VirtualKey.Home => RegionSelectionKey.Home,
+		Windows.System.VirtualKey.End => RegionSelectionKey.End,
+		Windows.System.VirtualKey.PageUp => RegionSelectionKey.PageUp,
+		Windows.System.VirtualKey.PageDown => RegionSelectionKey.PageDown,
+		Windows.System.VirtualKey.Enter => RegionSelectionKey.Commit,
+		Windows.System.VirtualKey.Space => RegionSelectionKey.Commit,
+		Windows.System.VirtualKey.Back => RegionSelectionKey.Back,
+		Windows.System.VirtualKey.A => RegionSelectionKey.SelectAll,
+		_ => RegionSelectionKey.None
+	};
+
+	private static bool IsModifierDown(Windows.System.VirtualKey key)
+	{
+		try
+		{
+			var state = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key);
+			return (state & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	// Mirrors the keyboard model onto the same rectangle and crosshair the mouse path
+	// draws, so the overlay stays usable with either input and readable over someone's
+	// shoulder.
+	private void RenderKeyboardSelection()
+	{
+		EnsureElementRefs();
+		UpdateCrosshair(new Point(_keyboard.CaretX, _keyboard.CaretY));
+
+		if (_selection is null)
+			return;
+
+		if (!_keyboard.HasAnchor)
+		{
+			_selection.Visibility = Visibility.Collapsed;
+			return;
+		}
+
+		_selection.Visibility = Visibility.Visible;
+		Canvas.SetLeft(_selection, _keyboard.SelectionLeft);
+		Canvas.SetTop(_selection, _keyboard.SelectionTop);
+		_selection.Width = _keyboard.SelectionWidth;
+		_selection.Height = _keyboard.SelectionHeight;
+	}
+
+	private void CommitKeyboardSelection()
+	{
+		// FinishSelection maps overlay DIPs to bitmap pixels and clamps; feed it the
+		// anchor as the drag origin so both input paths crop identically.
+		_start = new Point(_keyboard.AnchorX, _keyboard.AnchorY);
+		FinishSelection(new Point(_keyboard.CaretX, _keyboard.CaretY));
+	}
+
+	private void ResetKeyboardSelection()
+	{
+		EnsureElementRefs();
+		double width = _overlay?.ActualWidth ?? 0;
+		double height = _overlay?.ActualHeight ?? 0;
+		// Start where the pointer already is so mouse and keyboard agree, and so the
+		// caret matches the crosshair the mouse path draws on open.
+		var caret = _lastPointerPos ?? CursorInOverlayCoordinates(width, height);
+		_keyboard.Reset(width, height, caret.X, caret.Y);
+	}
+
+	private Point CursorInOverlayCoordinates(double overlayWidth, double overlayHeight)
+	{
+		var fallback = new Point(overlayWidth / 2.0, overlayHeight / 2.0);
+		try
+		{
+			double scale = 1.0;
+			var dpi = GetDpiForWindow(_hwnd);
+			if (dpi > 0)
+				scale = dpi / 96.0;
+
+			if (!GetCursorPos(out POINT p))
+				return fallback;
+
+			int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+			int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+			return new Point((p.X - left) / scale, (p.Y - top) / scale);
+		}
+		catch
+		{
+			return fallback;
+		}
+	}
+
+	private void Announce(string message, AutomationNotificationKind kind)
+	{
+		if (string.IsNullOrWhiteSpace(message))
+			return;
+
+		try
+		{
+			EnsureElementRefs();
+			if (_overlay is null)
+				return;
+
+			// CreatePeerForElement rather than FromElement so the very first
+			// announcement fires even before a peer exists.
+			var peer = FrameworkElementAutomationPeer.CreatePeerForElement(_overlay);
+			peer?.RaiseNotificationEvent(
+				kind,
+				AutomationNotificationProcessing.MostRecent,
+				message,
+				AnnouncementActivityId);
+		}
+		catch
+		{
+			// An announcement that cannot be raised must not break the capture.
 		}
 	}
 
@@ -404,6 +575,7 @@ public sealed partial class RegionSelectionWindow : Window
 		// Keep crosshair stretched to current size and at last pointer position (or center)
 		var pos = _lastPointerPos ?? new Point(e.NewSize.Width / 2.0, e.NewSize.Height / 2.0);
 		UpdateCrosshair(pos);
+		_keyboard.Resize(e.NewSize.Width, e.NewSize.Height);
 	}
 
 	private void UpdateCrosshair(Point pos)
@@ -478,6 +650,7 @@ public sealed partial class RegionSelectionWindow : Window
 		var bounds = new System.Drawing.Rectangle(left, top, width, height);
 		
 		InitializeCrosshairAtCursor(bounds);
+		ResetKeyboardSelection();
 		TryFocusOverlay();
 	}
 
@@ -657,7 +830,11 @@ public sealed partial class RegionSelectionWindow : Window
 				_dragging = false;
 				_tcs?.TrySetResult(null);
 				// Use dispatcher to ensure UI operations happen on the correct thread
-				_dispatcherQueue?.TryEnqueue(() => HideAndRestore());
+				_dispatcherQueue?.TryEnqueue(() =>
+				{
+					Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
+					HideAndRestore();
+				});
 				return (IntPtr)1; // Suppress the key
 			}
 		}

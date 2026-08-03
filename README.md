@@ -13,19 +13,34 @@ Press one hotkey to mute or unmute every enabled microphone system-wide—indepe
 ### 2. Screen Capturing and OCR  
 Mutation supports two OCR reading orders via Azure **Computer Vision**:
 
-* **Natural layout** – reads top-to-bottom within each column, then left-to-right across columns. Best for newspapers, journals, brochures, or any multi-column PDF.  
-* **Basic layout** – reads strictly left-to-right, top-to-bottom. Best for tables, spreadsheets, forms, invoices, or any row-oriented content.
+* **Natural layout** – keeps the grouping Azure returns, which follows columns and sections rather than raw scan lines. Best for newspapers, journals, brochures, or any multi-column PDF.  
+* **Basic layout** – reads strictly left-to-right, top-to-bottom: recognised lines are regrouped onto visual rows that run straight across the page. Best for tables, spreadsheets, forms, invoices, or any row-oriented content.
 
 **Hotkeys:**
 
 | Hotkey | Description |
 |--------|-------------|
-| `ScreenshotHotKey` | Captures the full screen and lets you draw a rectangle with a crosshair cursor (press **Esc** to cancel); the selected region is copied to the clipboard. |
+| `ScreenshotHotKey` | Captures the full screen and lets you pick a rectangle with the mouse or the keyboard (see below; press **Esc** to cancel); the selected region is copied to the clipboard. |
 | `OcrHotKey` | OCR the clipboard image with **Natural** layout. |
 | `ScreenshotOcrHotKey` | Take a screenshot and OCR it with **Natural** layout in one step. |
 | `OcrLeftToRightTopToBottomHotKey` | OCR the clipboard image with **Basic** layout. |
 | `ScreenshotLeftToRightTopToBottomOcrHotKey` | Take a screenshot and OCR it with **Basic** layout in one step. |
 | `SendHotkeyAfterOcrOperation` | Sends a specified hotkey after OCR completes (e.g., to trigger screen reader). |
+
+**Selecting the region with the keyboard:**
+
+The region overlay is fully keyboard-driven, and announces the caret position, the
+selection size, and the outcome as you go.
+
+| Key | Action |
+|-----|--------|
+| Arrow keys | Move the caret (hold **Ctrl** for fine steps, **Shift** for large steps) |
+| **Home** / **End** | Jump the caret to the left / right edge |
+| **Page Up** / **Page Down** | Jump the caret to the top / bottom edge |
+| **Enter** or **Space** | First press pins one corner; second press captures the region |
+| **Ctrl+A** | Select the whole screen — then **Enter** to capture it |
+| **Backspace** | Clear the pinned corner and start the selection again |
+| **Esc** | Cancel |
 
 **Additional Options:**
 - `InvertScreenshot` – inverts screenshot colours (useful for accessibility)

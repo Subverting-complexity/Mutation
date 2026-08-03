@@ -59,8 +59,8 @@ public class OpenAiSpeechToTextService : ISpeechToTextService
 			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
-			if (attempt > 0)
-				this.Beep(attempt);
+			// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
+			this.Beep(attempt);
 
 			return await TranscribeViaWhisper(speechToTextPrompt, audioffilePath, linkedCts.Token).ConfigureAwait(false);
 		}, context, overallCancellationToken).ConfigureAwait(false);

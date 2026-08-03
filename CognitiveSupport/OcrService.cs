@@ -81,7 +81,8 @@ public class OcrService : IOcrService, IDisposable
 		CancellationToken overallCancellationToken)
 	{
 		int attempt = (int)context["Attempt"];
-		if (attempt > 0) this.Beep(attempt);
+		// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
+		this.Beep(attempt);
 
 		imageStream.Seek(0, SeekOrigin.Begin);
 
@@ -190,12 +191,20 @@ public class OcrService : IOcrService, IDisposable
 			cancellationToken: requestCts.Token)
 			.ConfigureAwait(false);
 
-		return ExtractTextFromResults(result);
+		return ExtractTextFromResults(result, ocrReadingOrder);
 	}
 
-        private static string ExtractTextFromResults(ImageAnalysisResult result)
+        // Azure Image Analysis 4.0 exposes no reading-order request option, so the order is
+        // applied here to the recognised lines. See OcrReadingOrderSorter (issue #217).
+        private static string ExtractTextFromResults(ImageAnalysisResult result, OcrReadingOrder ocrReadingOrder)
         {
-                var sb = new StringBuilder();
+                var lines = FlattenLines(result);
+                return OcrReadingOrderSorter.ToText(OcrReadingOrderSorter.Sort(lines, ocrReadingOrder));
+        }
+
+        private static IReadOnlyList<OcrTextLine> FlattenLines(ImageAnalysisResult result)
+        {
+                var lines = new List<OcrTextLine>();
 
                 if (result.Read?.Blocks != null)
                 {
@@ -203,12 +212,25 @@ public class OcrService : IOcrService, IDisposable
                         {
                                 foreach (var line in block.Lines)
                                 {
-                                        sb.AppendLine(line.Text);
+                                        lines.Add(ToTextLine(line));
                                 }
                         }
                 }
 
-                return sb.ToString();
+                return lines;
+        }
+
+        private static OcrTextLine ToTextLine(DetectedTextLine line)
+        {
+                var polygon = line.BoundingPolygon;
+                if (polygon is null || polygon.Count == 0)
+                        return new OcrTextLine(line.Text, 0, 0, 0, 0);
+
+                double left = polygon.Min(p => (double)p.X);
+                double top = polygon.Min(p => (double)p.Y);
+                double right = polygon.Max(p => (double)p.X);
+                double bottom = polygon.Max(p => (double)p.Y);
+                return new OcrTextLine(line.Text, left, top, right, bottom);
         }
 
         public void Dispose()

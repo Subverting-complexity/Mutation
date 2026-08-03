@@ -60,12 +60,18 @@ public class OcrManager
         try { _cachedOverlay = new RegionSelectionWindow(); _cachedOverlay.PrepareWindowForReuse(); } catch { _cachedOverlay = null; }
     }
 
-    public async Task TakeScreenshotToClipboardAsync()
+    /// <summary>
+    /// Returns true when an image reached the clipboard; false when the user cancelled
+    /// the region overlay or no region was selected. Callers must not announce success
+    /// unconditionally — for a blind user, "Screenshot copied to the clipboard" after a
+    /// cancelled capture is worse than silence.
+    /// </summary>
+    public async Task<bool> TakeScreenshotToClipboardAsync()
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
             try { _activeOverlay?.BringToFront(); } catch { }
-            return;
+            return false;
         }
         try
         {
@@ -74,11 +80,11 @@ public class OcrManager
             {
                 await _clipboard.SetImageAsync(bitmap);
                 await PlayBeepSafeAsync(BeepType.Success);
+                return true;
             }
-            else
-            {
-                await PlayBeepSafeAsync(BeepType.Failure);
-            }
+
+            await PlayBeepSafeAsync(BeepType.Failure);
+            return false;
         }
         finally
         {
