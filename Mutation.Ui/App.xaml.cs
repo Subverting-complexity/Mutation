@@ -209,7 +209,7 @@ public partial class App : Application
 					var pinService = sp.GetRequiredService<Mutation.Ui.Core.MicrophoneLevelPinService>();
 					return new Mutation.Ui.Core.MicrophoneLevelWriteCoordinator(
 						pinService.ApplyLevel,
-						pinService.ReadCurrentLevel);
+						pinService.ReadLevelState);
 				});
 			builder.Services.AddSingleton<IOcrService>(sp =>
 	 new OcrService(

@@ -34,10 +34,21 @@ public sealed class MicrophoneLevelPinService
 	}
 
 	/// <summary>
-	/// True when the active device exposes a controllable software level. The UI
-	/// uses this to disable the control on hardware-fixed devices.
+	/// Probes the active device once for both facts the UI needs to set its level
+	/// controls up: whether the device exposes a controllable software level, and what
+	/// that level currently is. Both are COM reads, so they are taken together — asking
+	/// separately doubles the exposure to a stalled device and can straddle a device
+	/// change. Callers on the UI thread must route this through
+	/// <see cref="MicrophoneLevelWriteCoordinator"/> rather than calling it directly.
 	/// </summary>
-	public bool IsLevelControlSupported => _provider.GetEndpoint().IsLevelControlSupported;
+	public CaptureLevelState ReadLevelState()
+	{
+		var endpoint = _provider.GetEndpoint();
+		if (!endpoint.IsLevelControlSupported)
+			return new CaptureLevelState(IsSupported: false, Level: null);
+
+		return new CaptureLevelState(IsSupported: true, Level: ToLevel(TryReadScalar(endpoint)));
+	}
 
 	/// <summary>
 	/// Re-asserts the pinned level. A <c>null</c> target means pinning is disabled,
@@ -66,16 +77,16 @@ public sealed class MicrophoneLevelPinService
 	/// real OS level; the deliberate <c>null</c> (rather than a default) lets them
 	/// leave the display unchanged instead of showing a misleading value.
 	/// </summary>
-	public int? ReadCurrentLevel()
+	public int? ReadCurrentLevel() => ReadLevelState().Level;
+
+	// Converts a raw level scalar to the 0–100 display scale, propagating "unreadable"
+	// as null rather than inventing a value.
+	private static int? ToLevel(float? scalar)
 	{
-		var endpoint = _provider.GetEndpoint();
-		if (!endpoint.IsLevelControlSupported)
+		if (scalar is not float value)
 			return null;
 
-		if (TryReadScalar(endpoint) is not float scalar)
-			return null;
-
-		float bounded = scalar < 0f ? 0f : scalar > 1f ? 1f : scalar;
+		float bounded = value < 0f ? 0f : value > 1f ? 1f : value;
 		return (int)Math.Round(bounded * 100f);
 	}
 

@@ -151,7 +151,50 @@ public class MicrophoneLevelPinServiceTests
 		Assert.Equal(CaptureLevelOutcome.Unsupported, result.Outcome);
 		Assert.False(result.Failed);
 		Assert.Equal(0, endpoint.SetCount);
-		Assert.False(service.IsLevelControlSupported);
+		Assert.False(service.ReadLevelState().IsSupported);
+	}
+
+	// ----- Combined level probe (issue #263) -----
+
+	[Fact]
+	public void ReadLevelState_ReportsSupportAndLevelTogether()
+	{
+		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.42f };
+		var service = NewService(endpoint);
+
+		Assert.Equal(new CaptureLevelState(IsSupported: true, Level: 42), service.ReadLevelState());
+	}
+
+	[Fact]
+	public void ReadLevelState_ReportsUnsupported_WithNoLevel_OnHardwareFixedDevice()
+	{
+		var endpoint = new FakeCaptureLevelEndpoint { Supported = false, Level = 0.20f };
+		var service = NewService(endpoint);
+
+		Assert.Equal(new CaptureLevelState(IsSupported: false, Level: null), service.ReadLevelState());
+	}
+
+	[Fact]
+	public void ReadLevelState_ReportsSupported_WithUnknownLevel_WhenTheReadFails()
+	{
+		// A supported device whose level cannot be read right now is not the same as an
+		// unsupported one: the controls stay enabled, the display is left alone.
+		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.30f, ThrowOnGet = true };
+		var service = NewService(endpoint);
+
+		Assert.Equal(new CaptureLevelState(IsSupported: true, Level: null), service.ReadLevelState());
+	}
+
+	[Fact]
+	public void ReadLevelState_DoesNotWriteTheLevelOrTouchMute()
+	{
+		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.30f, Mute = true };
+		var service = NewService(endpoint);
+
+		service.ReadLevelState();
+
+		Assert.Equal(0, endpoint.SetCount);
+		Assert.True(endpoint.Mute);
 	}
 
 	[Fact]

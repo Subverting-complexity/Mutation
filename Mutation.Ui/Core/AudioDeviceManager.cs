@@ -14,8 +14,8 @@ namespace Mutation.Ui;
 /// Two locks, with a strict rule about which threads may take them:
 ///
 /// <c>_sync</c> guards the device fields and is only ever held for a field read or
-/// swap — never across a COM call. The UI thread takes it (the Microphone,
-/// MicrophoneDeviceIndex and CaptureDevices properties, SelectMicrophone,
+/// swap — never across a COM call. The UI thread takes it (the CaptureDeviceInfos,
+/// SelectedMicrophone and MicrophoneDeviceIndex properties, SelectMicrophoneById,
 /// GetEndpoint), so anything that can block on hardware must stay outside it or the
 /// window and the screen reader freeze with it.
 ///
@@ -37,9 +37,33 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// Serializes device COM work. Reentrant by design: ToggleMute holds it while
 	// MuteStateController calls back into RefreshEndpoints.
 	private readonly object _comGate = new();
-	private IList<MMDevice> _captureDevices = new List<MMDevice>();
+	private IReadOnlyList<CaptureDeviceEntry> _captureDevices = Array.Empty<CaptureDeviceEntry>();
+	// The describable subset of _captureDevices, cached so a UI read is a field read
+	// rather than a projection. Rebuilt with the list it is derived from.
+	private IReadOnlyList<CaptureDeviceInfo> _captureDeviceInfos = Array.Empty<CaptureDeviceInfo>();
 	private MMDevice? _microphone;
+	private CaptureDeviceInfo? _microphoneInfo;
 	private int _microphoneDeviceIndex = -1;
+
+	/// <summary>
+	/// Raised after a re-enumeration that actually changed which devices exist, so the
+	/// UI can rebuild a list whose entries would otherwise name devices that are gone
+	/// and omit ones that have appeared. Not raised for a re-enumeration that returns
+	/// the same set — those happen on every mute and level retry, and re-raising there
+	/// would churn the UI for nothing.
+	///
+	/// Raised on whichever thread performed the enumeration — the OS device-notification
+	/// thread, or a coordinator worker — never the UI thread, and with <c>_comGate</c>
+	/// still held. Handlers must marshal to their own thread and return promptly.
+	/// </summary>
+	public event EventHandler? CaptureDeviceListChanged;
+
+	// Pairs an enumerated device with the COM-free description taken at the same
+	// moment, so the two cannot drift apart across a re-enumeration. Info is null for a
+	// device whose ID could not be read: it still participates in mute (which tolerates
+	// a throwing endpoint) but is not offered to the user, because nothing could
+	// re-resolve it later.
+	private sealed record CaptureDeviceEntry(MMDevice Device, CaptureDeviceInfo? Info);
 
 	public AudioDeviceManager(MMDeviceEnumerator deviceEnumerator, ICaptureDeviceChangeNotifier deviceChangeNotifier)
 	{
@@ -67,17 +91,24 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		}
 	}
 
-	public IEnumerable<MMDevice> CaptureDevices
+	/// <summary>
+	/// The current capture devices, as immutable descriptions. This is what the UI
+	/// binds: the list itself is replaced wholesale on each enumeration, so the
+	/// reference handed out here never mutates and never needs copying.
+	/// </summary>
+	public IReadOnlyList<CaptureDeviceInfo> CaptureDeviceInfos
 	{
-		// Return a snapshot: the backing list can be swapped out on a
-		// device-change notification thread while a caller enumerates.
-		get { lock (_sync) return _captureDevices.ToList(); }
+		get { lock (_sync) return _captureDeviceInfos; }
 	}
+
+	/// <summary>
+	/// The selected microphone's description, or <c>null</c> when none is selected.
+	/// COM-free, so the UI can read it without risking a stall.
+	/// </summary>
+	public CaptureDeviceInfo? SelectedMicrophone { get { lock (_sync) return _microphoneInfo; } }
 
 	// Read under _sync: a hot-plug on the notification thread can re-point
 	// _microphone / _microphoneDeviceIndex while a caller reads them.
-	public MMDevice? Microphone { get { lock (_sync) return _microphone; } }
-
 	public int MicrophoneDeviceIndex { get { lock (_sync) return _microphoneDeviceIndex; } }
 
 	// Reflects the aggregate mute state that was actually written to the
@@ -90,17 +121,28 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// callers guarantee no such batch is running.
 	private void RefreshCaptureDevices()
 	{
-		// Enumerate before taking _sync: EnumerateAudioEndPoints is a COM call and can
-		// stall on a slow or failing device.
+		// Enumerate and describe before taking _sync: both are COM calls and can stall
+		// on a slow or failing device. Describing here — once, on the enumerating
+		// thread — is what lets every later read of a device's name and ID be a plain
+		// field read (issue #264).
 		var devices = _deviceEnumerator
 			.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+			.Select(device => new CaptureDeviceEntry(device, Describe(device)))
 			.ToList();
 
-		IEnumerable<MMDevice> superseded;
+		var infos = devices
+			.Where(entry => entry.Info is not null)
+			.Select(entry => entry.Info!)
+			.ToList();
+
+		IReadOnlyList<CaptureDeviceEntry> superseded;
+		bool listChanged;
 		lock (_sync)
 		{
 			superseded = _captureDevices;
+			listChanged = !SameDeviceIds(_captureDeviceInfos, infos);
 			_captureDevices = devices;
+			_captureDeviceInfos = infos;
 		}
 
 		// Dispose the COM wrappers from the previous enumeration so they do not
@@ -110,10 +152,63 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		// RefreshActiveMicrophone swaps it for a fresh instance itself.
 		//
 		// The selection is re-read per device rather than sampled once above: this loop
-		// runs without _sync, so SelectMicrophone on the UI thread can adopt one of
-		// these superseded wrappers while it is in progress, and disposing the device
-		// the user just chose would leave the selected mic dead until restart.
-		DisposeSuperseded(superseded, IsSelectedMicrophone);
+		// runs without _sync, so a selection on the UI thread can adopt one of these
+		// superseded wrappers while it is in progress, and disposing the device the
+		// user just chose would leave the selected mic dead until restart.
+		DisposeSuperseded(superseded.Select(entry => entry.Device), IsSelectedMicrophone);
+
+		if (listChanged)
+			CaptureDeviceListChanged?.Invoke(this, EventArgs.Empty);
+	}
+
+	// The COM-free description of a device, or null when its identity cannot be read —
+	// a device nothing could re-resolve later is not one to offer the user.
+	private static CaptureDeviceInfo? Describe(MMDevice? device)
+	{
+		if (device is null)
+			return null;
+
+		try
+		{
+			string id = device.ID;
+			if (string.IsNullOrEmpty(id))
+				return null;
+
+			return new CaptureDeviceInfo(id, ReadFriendlyName(device));
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static string ReadFriendlyName(MMDevice device)
+	{
+#pragma warning disable CS0618 // Fall back when DeviceFriendlyName is not populated.
+		string? name = device.DeviceFriendlyName;
+		if (string.IsNullOrWhiteSpace(name))
+			name = device.FriendlyName;
+#pragma warning restore CS0618
+		return string.IsNullOrWhiteSpace(name) ? "Unknown microphone" : name;
+	}
+
+	// Whether two enumerations describe the same devices. This is what keeps the
+	// CaptureDeviceListChanged event — and with it a UI rebuild and its screen-reader
+	// announcement — to genuine hot-plugs: the mute and level retry paths re-enumerate
+	// routinely and return the same set.
+	// Internal so the rule is unit-testable without CoreAudio devices.
+	internal static bool SameDeviceIds(IReadOnlyList<CaptureDeviceInfo> left, IReadOnlyList<CaptureDeviceInfo> right)
+	{
+		if (left.Count != right.Count)
+			return false;
+
+		for (int i = 0; i < left.Count; i++)
+		{
+			if (!string.Equals(left[i].Id, right[i].Id, StringComparison.OrdinalIgnoreCase))
+				return false;
+		}
+
+		return true;
 	}
 
 	private bool IsSelectedMicrophone(MMDevice device)
@@ -124,23 +219,49 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		}
 	}
 
-	public void SelectMicrophone(MMDevice device)
+	/// <summary>
+	/// Selects the microphone with the given endpoint ID, resolving the live device out
+	/// of the current enumeration. Returns false when no such device exists any more.
+	///
+	/// Takes an ID rather than an <c>MMDevice</c> deliberately: a caller's device
+	/// reference can predate a re-enumeration, and such a wrapper is a disposed COM
+	/// proxy that throws on the first property read (issue #264). An ID cannot go stale
+	/// — it either matches a live device or it does not.
+	/// </summary>
+	public bool SelectMicrophoneById(string deviceId)
 	{
-		if (device is null)
-			throw new ArgumentNullException(nameof(device));
+		if (string.IsNullOrEmpty(deviceId))
+			throw new ArgumentException("A device ID is required.", nameof(deviceId));
 
-		// Resolve the NAudio index before taking the lock: the lookup reads the
-		// device's friendly name over COM and enumerates the WaveIn devices, and this
-		// runs on the UI thread.
-		int deviceIndex = ResolveNAudioDeviceIndex(device);
+		MMDevice device;
+		string friendlyName;
+		CaptureDeviceInfo info;
+		lock (_sync)
+		{
+			var entry = _captureDevices.FirstOrDefault(
+				e => e.Info is not null && string.Equals(e.Info.Id, deviceId, StringComparison.OrdinalIgnoreCase));
+			if (entry is null)
+				return false;
 
-		// The device and its index are published together so a concurrent reader never
-		// sees one without the other.
+			device = entry.Device;
+			info = entry.Info!;
+			friendlyName = info.FriendlyName;
+		}
+
+		// Resolved outside the lock, and from the cached name rather than the device, so
+		// this costs no COM call at all.
+		int deviceIndex = ResolveNAudioDeviceIndex(friendlyName);
+
+		// The device, its description and its index are published together so a
+		// concurrent reader never sees one without the others.
 		lock (_sync)
 		{
 			_microphone = device;
+			_microphoneInfo = info;
 			_microphoneDeviceIndex = deviceIndex;
 		}
+
+		return true;
 	}
 
 	public void EnsureDefaultMicrophoneSelected()
@@ -152,11 +273,12 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		}
 
 		MMDevice? defaultMic = null;
+		CaptureDeviceInfo? info;
 		int deviceIndex;
 		try
 		{
 			// COM: resolved outside _sync so a stalled enumerator cannot block the
-			// property readers on the UI thread. Both calls stay inside the guard —
+			// property readers on the UI thread. Every call stays inside the guard —
 			// this runs from the window constructor, where a throw from a flaky device
 			// would surface as a fatal startup error instead of simply leaving no
 			// microphone selected.
@@ -164,7 +286,8 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			if (defaultMic is null)
 				return;
 
-			deviceIndex = ResolveNAudioDeviceIndex(defaultMic);
+			info = Describe(defaultMic);
+			deviceIndex = ResolveNAudioDeviceIndex(info?.FriendlyName);
 		}
 		catch
 		{
@@ -180,6 +303,7 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			if (_microphone is null)
 			{
 				_microphone = defaultMic;
+				_microphoneInfo = info;
 				_microphoneDeviceIndex = deviceIndex;
 				adopted = true;
 			}
@@ -196,16 +320,16 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// the friendly name before comparison, preventing any matches and leaving the device
 	// index at -1 (so no waveform capture would occur). Use more flexible matching.
 	//
-	// Static and lock-free: it reads the device's friendly name over COM and walks the
-	// WaveIn device list, so callers resolve the index first and publish it under _sync
-	// afterwards.
-	private static int ResolveNAudioDeviceIndex(MMDevice? microphone)
+	// Takes the name rather than the device: the name was already captured when the
+	// device was enumerated, so resolving an index costs no COM call and cannot throw on
+	// a superseded wrapper.
+	private static int ResolveNAudioDeviceIndex(string? friendlyName)
 	{
-		if (microphone is null)
+		if (string.IsNullOrEmpty(friendlyName))
 			return -1;
 
 		int deviceCount = WaveIn.DeviceCount;
-		string friendly = microphone.DeviceFriendlyName;
+		string friendly = friendlyName;
 		int bestMatchIndex = -1;
 		for (int i = 0; i < deviceCount; i++)
 		{
@@ -248,7 +372,7 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		List<MMDevice> devices;
 		lock (_sync)
 		{
-			devices = _captureDevices.ToList();
+			devices = _captureDevices.Select(entry => entry.Device).ToList();
 		}
 
 		return BuildEndpoints(devices);
@@ -265,7 +389,7 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			List<MMDevice> devices;
 			lock (_sync)
 			{
-				devices = _captureDevices.ToList();
+				devices = _captureDevices.Select(entry => entry.Device).ToList();
 			}
 
 			return BuildEndpoints(devices);
@@ -317,48 +441,44 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	private void RefreshActiveMicrophone()
 	{
 		MMDevice? previous;
+		string? id;
 		lock (_sync)
 		{
 			previous = _microphone;
+			// The ID was captured when the device was enumerated, so recovering from a
+			// stale proxy does not depend on that proxy still answering.
+			id = _microphoneInfo?.Id;
 		}
 
-		if (previous is null)
+		if (previous is null || id is null)
 			return;
-
-		string? id;
-		try { id = previous.ID; }
-		catch { id = null; }
 
 		// RefreshCaptureDevices deliberately preserves the selected wrapper, so
 		// `previous` is still live here; it is disposed once a fresh instance
 		// replaces it below.
 		RefreshCaptureDevices();
 
-		if (id is null)
-			return;
-
-		List<MMDevice> devices;
+		CaptureDeviceEntry? fresh;
 		lock (_sync)
 		{
-			devices = _captureDevices.ToList();
+			fresh = _captureDevices.FirstOrDefault(
+				e => e.Info is not null && string.Equals(e.Info.Id, id, StringComparison.OrdinalIgnoreCase));
 		}
 
-		// MatchesId reads device.ID over COM, so the search runs on the snapshot
-		// rather than under _sync.
-		var fresh = devices.FirstOrDefault(device => MatchesId(device, id));
 		if (fresh is null)
 			return;
 
-		int deviceIndex = ResolveNAudioDeviceIndex(fresh);
+		int deviceIndex = ResolveNAudioDeviceIndex(fresh.Info!.FriendlyName);
 
 		lock (_sync)
 		{
 			// Only take over the selection if it still points at the stale wrapper: a
-			// SelectMicrophone on the UI thread may have chosen a different device
-			// while this refresh was resolving, and that explicit choice wins.
+			// selection on the UI thread may have chosen a different device while this
+			// refresh was resolving, and that explicit choice wins.
 			if (ReferenceEquals(_microphone, previous))
 			{
-				_microphone = fresh;
+				_microphone = fresh.Device;
+				_microphoneInfo = fresh.Info;
 				_microphoneDeviceIndex = deviceIndex;
 			}
 		}
@@ -375,12 +495,6 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	{
 		try { disposable?.Dispose(); }
 		catch { }
-	}
-
-	private static bool MatchesId(MMDevice? device, string id)
-	{
-		try { return device != null && string.Equals(device.ID, id, StringComparison.OrdinalIgnoreCase); }
-		catch { return false; }
 	}
 
 	// Disposes the COM wrappers from a superseded enumeration, skipping the one
@@ -426,7 +540,7 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		List<MMDevice> devices;
 		lock (_sync)
 		{
-			devices = _captureDevices.ToList();
+			devices = _captureDevices.Select(entry => entry.Device).ToList();
 		}
 
 		foreach (var device in devices)
