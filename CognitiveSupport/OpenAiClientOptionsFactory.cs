@@ -1,4 +1,5 @@
 using OpenAI;
+using System.ClientModel.Primitives;
 
 namespace CognitiveSupport;
 
@@ -11,7 +12,12 @@ namespace CognitiveSupport;
 /// </summary>
 public static class OpenAiClientOptionsFactory
 {
-	public static OpenAIClientOptions Create(Uri? endpoint = null)
+	/// <param name="transport">
+	/// Replaces the HTTP transport. Left null in production; a test supplies a fake so
+	/// the exact request the SDK puts on the wire can be asserted, the way
+	/// <see cref="AnthropicLlmService"/>'s injected HttpClient already allows.
+	/// </param>
+	public static OpenAIClientOptions Create(Uri? endpoint = null, PipelineTransport? transport = null)
 	{
 		var options = new OpenAIClientOptions
 		{
@@ -19,6 +25,8 @@ public static class OpenAiClientOptionsFactory
 		};
 		if (endpoint is not null)
 			options.Endpoint = endpoint;
+		if (transport is not null)
+			options.Transport = transport;
 		return options;
 	}
 }

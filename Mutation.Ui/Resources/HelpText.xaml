@@ -72,6 +72,7 @@
 	<x:String x:Key="Help.Llm.RequestTimeout">How long to wait for the language model to respond before giving up.</x:String>
 	<x:String x:Key="Help.Llm.RetryCount">How many times to retry a failed language-model request before giving up. Retries help the first request after a reboot succeed while the network warms up. Default 3.</x:String>
 	<x:String x:Key="Help.Llm.Temperature">Controls how random responses are; leave empty to use the provider default.</x:String>
+	<x:String x:Key="Help.Llm.FastMode">Runs the same model faster. The model, and the quality of its answers, are unchanged; only the speed and the price differ. Fast mode is billed at roughly twice the standard input and output token price, so turn it on only for prompts where waiting actually costs you something. Not every model offers it, and on Anthropic (Claude) models it also needs research-preview access on your account. When Fast mode can't be used, the prompt still runs at standard speed and Mutation tells you why. Switching this on or off makes the next run miss Anthropic's prompt cache.</x:String>
 
 	<!-- Transcript formatting -->
 	<x:String x:Key="Help.Transcript.MatchType">How the Find text is interpreted. Plain replaces the literal text wherever it appears. RegEx treats Find as a regular-expression pattern (and Replace with as its substitution). Smart matches the word with surrounding spaces and punctuation tidied up, useful for replacing a spoken word or phrase cleanly.</x:String>

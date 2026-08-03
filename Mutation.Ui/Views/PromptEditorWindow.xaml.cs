@@ -68,6 +68,7 @@ public sealed partial class PromptEditorWindow : Window
             HkPromptHotkey.Hotkey = Prompt.Hotkey ?? string.Empty;
             TxtContent.Text = Prompt.Content;
             ChkAutoRun.IsChecked = Prompt.AutoRun;
+            ChkFastMode.IsChecked = Prompt.FastMode;
 
             string desiredModel = !string.IsNullOrWhiteSpace(Prompt.ModelName) ? Prompt.ModelName : LlmSettings.DefaultModel;
             if (!modelList.Contains(desiredModel))
@@ -106,6 +107,7 @@ public sealed partial class PromptEditorWindow : Window
         Prompt.Content = TxtContent.Text;
         Prompt.AutoRun = ChkAutoRun.IsChecked ?? false;
         Prompt.ModelName = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
+        Prompt.FastMode = ChkFastMode.IsChecked ?? false;
 
         IsSaved = true;
 
@@ -138,19 +140,34 @@ public sealed partial class PromptEditorWindow : Window
                 string text = await dataPackageView.GetTextAsync();
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    // Use the CURRENT text in the content box, not the saved one
+                    // Use the CURRENT values in the editor, not the saved ones, so the
+                    // test run reflects exactly what saving would produce.
                     string currentContent = TxtContent.Text;
                     string testModel = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
-                    string result = await _formatter.ProcessWithLlmAsync(text, currentContent, testModel);
-                    
+
+                    // The user asked for this run and is waiting on its dialog, so a Fast
+                    // mode fallback is reported in the result they already opened rather
+                    // than through the once-per-session announcement channel.
+                    FastModeFallback? fallback = null;
+                    var requestOptions = new LlmRequestOptions
+                    {
+                        FastMode = ChkFastMode.IsChecked ?? false,
+                        OnFastModeFallback = f => fallback = f,
+                    };
+                    string result = await _formatter.ProcessWithLlmAsync(text, currentContent, testModel, requestOptions);
+
                     // Show result in a dialog or just a message box?
                     // WinUI 3 MessageDialog or ContentDialog requires XamlRoot.
                     // This is a Window, so we have a root.
-                    
+
+                    string body = fallback is null
+                        ? result
+                        : $"{FastModeMessages.Describe(fallback.Reason)}{Environment.NewLine}{Environment.NewLine}{result}";
+
                     var dialog = new ContentDialog
                     {
                         Title = "Test Result",
-                        Content = new ScrollViewer { Content = new TextBlock { Text = result, TextWrapping = TextWrapping.Wrap } },
+                        Content = new ScrollViewer { Content = new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap } },
                         CloseButtonText = "Close",
                         XamlRoot = this.Content.XamlRoot
                     };

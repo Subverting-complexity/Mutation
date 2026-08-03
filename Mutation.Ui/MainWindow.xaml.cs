@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly OcrManager _ocrManager;
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
+	private readonly Mutation.Ui.Services.FastModeNoticeTracker _fastModeNotices;
 	private readonly Mutation.Ui.Core.MicrophoneLevelPinService _micLevelPinService;
 	// Runs the mute toggle's COM writes, read-back verification, and any device
 	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
@@ -137,8 +138,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
 		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
-		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator)
+		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator,
+		Mutation.Ui.Services.FastModeNoticeTracker fastModeNotices)
 	{
+		_fastModeNotices = fastModeNotices;
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
 		_settingsManager = settingsManager;
@@ -1596,22 +1599,39 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
-			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName);
+			FastModeFallback? fastModeFallback = null;
+			var requestOptions = new LlmRequestOptions
+			{
+				FastMode = prompt.FastMode,
+				OnFastModeFallback = f => fastModeFallback = f,
+			};
+			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions);
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
 			bool inserted = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
+
+			// Claimed after everything that can throw and just before the announcement,
+			// so a failure on the delivery path cannot burn the one notice the user gets
+			// this session. Resolved once, outside the branch, so it is spent exactly
+			// once however the delivery turns out.
+			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
+
 			if (copied && inserted)
 			{
 				BeepPlayer.Play(BeepType.Success);
-				ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
+				ShowStatus("Processing",
+					FastModeMessages.AppendTo($"Applied prompt '{prompt.Name}' with the language model.", fastModeNotice),
+					InfoBarSeverity.Success);
 				HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
 			}
 			else
 			{
 				BeepPlayer.Play(BeepType.Failure);
 				ShowStatus("Processing",
-					"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
+					FastModeMessages.AppendTo(
+						"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
+						fastModeNotice),
 					InfoBarSeverity.Error);
 			}
         }
@@ -1622,6 +1642,22 @@ public sealed partial class MainWindow : Window, IDisposable
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }
+
+	/// <summary>
+	/// Whether this Fast mode fallback should be told to the user, given they may
+	/// already have heard it this session. The notice itself rides along on the run's
+	/// outcome status — the ordinary announcement channel, not a modal, which would
+	/// steal focus from whatever they were dictating into. Their Fast mode setting is
+	/// never touched.
+	/// </summary>
+	private FastModeFallbackReason? ClaimFastModeNotice(int promptId, FastModeFallback? fallback)
+	{
+		if (fallback is null)
+			return null;
+		return _fastModeNotices.ShouldAnnounce(promptId, fallback.Reason)
+			? fallback.Reason
+			: null;
+	}
 
 	private void UpdateMicrophoneToggleVisuals()
 	{
@@ -1746,7 +1782,17 @@ public sealed partial class MainWindow : Window, IDisposable
                 }, TaskScheduler.Default);
         }
 
-	private async void FinalizeTranscript(string rawText, string successMessage, string? formattedText = null)
+	/// <param name="fastModeNotice">
+	/// Folded into whichever status this method ends on. This is the last status a
+	/// transcript run raises, so carrying the notice here is what keeps it from being
+	/// superseded — and folding it in rather than adding a second announcement is what
+	/// keeps the confirmation that the text landed.
+	/// </param>
+	private async void FinalizeTranscript(
+		string rawText,
+		string successMessage,
+		string? formattedText = null,
+		FastModeFallbackReason? fastModeNotice = null)
 	{
 		string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
@@ -1759,14 +1805,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (copied && inserted)
 		{
 			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Speech to Text", successMessage, InfoBarSeverity.Success);
+			ShowStatus("Speech to Text", FastModeMessages.AppendTo(successMessage, fastModeNotice), InfoBarSeverity.Success);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
 		}
 		else
 		{
 			BeepPlayer.Play(BeepType.Failure);
 			ShowStatus("Speech to Text",
-				"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
+				FastModeMessages.AppendTo(
+					"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
+					fastModeNotice),
 				InfoBarSeverity.Error);
 		}
 
@@ -1806,7 +1854,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText);
+            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText, result.FastModeNotice);
         });
     }
 

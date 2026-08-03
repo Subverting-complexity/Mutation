@@ -28,6 +28,36 @@ public class CompositeLlmServiceTests
 		Assert.Equal("claude-sonnet-4-6", anthropic.LastModel);
 	}
 
+	[Theory]
+	[InlineData("claude-sonnet-4-6", LlmProvider.Anthropic)]
+	[InlineData("gpt-4.1", LlmProvider.OpenAI)]
+	public async Task CreateChatCompletion_RoutesRequestOptionsThroughUnchanged(string model, LlmProvider provider)
+	{
+		var openAi = new StubLlmService("from-openai");
+		var anthropic = new StubLlmService("from-anthropic");
+		var composite = new CompositeLlmService(openAi, anthropic, Providers((model, provider)));
+		var options = new LlmRequestOptions { FastMode = true };
+
+		await composite.CreateChatCompletion(
+			new List<LlmChatMessage> { new(LlmChatRole.User, "hi") }, model, options);
+
+		var routed = provider == LlmProvider.Anthropic ? anthropic : openAi;
+		Assert.Same(options, routed.LastOptions);
+		Assert.True(routed.LastOptions!.FastMode);
+	}
+
+	[Fact]
+	public async Task CreateChatCompletion_WithoutOptions_PassesNullThrough()
+	{
+		var openAi = new StubLlmService("from-openai");
+		var composite = new CompositeLlmService(openAi, null, Providers(("gpt-4.1", LlmProvider.OpenAI)));
+
+		await composite.CreateChatCompletion(
+			new List<LlmChatMessage> { new(LlmChatRole.User, "hi") }, "gpt-4.1");
+
+		Assert.Null(openAi.LastOptions);
+	}
+
 	[Fact]
 	public async Task CreateChatCompletion_OpenAiModel_RoutesToOpenAiService()
 	{
@@ -132,12 +162,17 @@ public class CompositeLlmServiceTests
 		public int CallCount { get; private set; }
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
+		public LlmRequestOptions? LastOptions { get; private set; }
 
-		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName)
+		public Task<string> CreateChatCompletion(
+			IList<LlmChatMessage> messages,
+			string llmModelName,
+			LlmRequestOptions? options = null)
 		{
 			CallCount++;
 			LastMessages = messages;
 			LastModel = llmModelName;
+			LastOptions = options;
 			return Task.FromResult(_response);
 		}
 	}

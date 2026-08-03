@@ -16,7 +16,17 @@ namespace Mutation.Ui.Core;
 /// Carries the raw transcript and optional pre-formatted text so that
 /// downstream handlers can avoid re-applying rules to LLM output.
 /// </summary>
-public record TranscriptResult(string RawText, string? FormattedText = null);
+/// <param name="FastModeNotice">
+/// Set when this transcript's prompt asked for Fast mode, could not have it, and the
+/// user has not already been told why this session. It travels with the transcript
+/// rather than on the status channel because the handler that delivers the transcript
+/// is what announces last — the status channel supersedes rather than queues, so a
+/// separate announcement would be talked over by "Transcript ready."
+/// </param>
+public record TranscriptResult(
+	string RawText,
+	string? FormattedText = null,
+	FastModeFallbackReason? FastModeNotice = null);
 
 public class AudioSessionManager : IDisposable
 {
@@ -25,6 +35,7 @@ public class AudioSessionManager : IDisposable
     private readonly TranscriptFormatter _transcriptFormatter;
     private readonly Settings _settings;
     private readonly MicrophoneLevelWriteCoordinator _levelWriteCoordinator;
+    private readonly FastModeNoticeTracker _fastModeNotices;
     private readonly AudioPlayer _playbackPlayer;
     private SpeechSession? _playingSession;
     private SpeechSession? _selectedSession;
@@ -74,13 +85,15 @@ public class AudioSessionManager : IDisposable
         AudioDeviceManager audioDeviceManager,
         TranscriptFormatter transcriptFormatter,
         Settings settings,
-        MicrophoneLevelWriteCoordinator levelWriteCoordinator)
+        MicrophoneLevelWriteCoordinator levelWriteCoordinator,
+        FastModeNoticeTracker fastModeNotices)
     {
         _speechManager = speechManager;
         _audioDeviceManager = audioDeviceManager;
         _transcriptFormatter = transcriptFormatter;
         _settings = settings;
         _levelWriteCoordinator = levelWriteCoordinator;
+        _fastModeNotices = fastModeNotices;
 
         _playbackPlayer = new AudioPlayer();
         _playbackPlayer.PlaybackEnded += PlaybackPlayer_PlaybackEnded;
@@ -321,6 +334,7 @@ public class AudioSessionManager : IDisposable
         // Always run rules-based formatting first
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
         string? llmProcessedText = null;
+        FastModeFallback? fastModeFallback = null;
 
         if (_currentRecordingUsesLlmProcessing && llmPrompt != null)
         {
@@ -328,9 +342,14 @@ public class AudioSessionManager : IDisposable
             {
                 StatusMessage?.Invoke(this, "Processing with LLM...");
                 string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
-                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}).");
+                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}, fastMode={llmPrompt.FastMode}).");
+                var requestOptions = new LlmRequestOptions
+                {
+                    FastMode = llmPrompt.FastMode,
+                    OnFastModeFallback = f => fastModeFallback = f,
+                };
                 // Pass the rules-formatted text to the LLM
-                llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName);
+                llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName, requestOptions);
             }
             catch (Exception ex)
             {
@@ -340,9 +359,18 @@ public class AudioSessionManager : IDisposable
             }
         }
 
+        // Claimed here because this is the only side that knows which prompt ran; the
+        // notice then rides on the transcript so it is announced with the delivery
+        // outcome instead of competing with it.
+        FastModeFallbackReason? fastModeNotice =
+            fastModeFallback is not null && llmPrompt is not null
+            && _fastModeNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason)
+                ? fastModeFallback.Reason
+                : null;
+
         // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output.
-        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText));
+        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText, fastModeNotice));
         StatusMessage?.Invoke(this, "Transcript ready and copied.");
     }
 

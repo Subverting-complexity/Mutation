@@ -18,7 +18,8 @@ public class CompositeLlmService : ILlmService
 
 	public Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
-		string llmModelName)
+		string llmModelName,
+		LlmRequestOptions? options = null)
 	{
 		if (!_modelProviders.TryGetValue(llmModelName, out var provider))
 			throw new InvalidOperationException(
@@ -32,14 +33,14 @@ public class CompositeLlmService : ILlmService
 					throw new InvalidOperationException(
 						$"Model '{llmModelName}' is an Anthropic model but no Anthropic API key is configured. " +
 						"Please set AnthropicApiKey in the ApiKeys section of Mutation.json and restart.");
-				return _anthropicService.CreateChatCompletion(messages, llmModelName);
+				return _anthropicService.CreateChatCompletion(messages, llmModelName, options);
 
 			case LlmProvider.OpenAI:
 				if (_openAiService == null)
 					throw new InvalidOperationException(
 						$"Model '{llmModelName}' is an OpenAI model but no OpenAI API key is configured. " +
 						"Please set OpenAiApiKey in the ApiKeys section of Mutation.json and restart.");
-				return _openAiService.CreateChatCompletion(messages, llmModelName);
+				return _openAiService.CreateChatCompletion(messages, llmModelName, options);
 
 			default:
 				throw new InvalidOperationException(
