@@ -27,6 +27,9 @@ public partial class App : Application
 	private const string OpenAiHttpClientName = "openai-http-client";
 	private const string AnthropicHttpClientName = "anthropic-http-client";
 	private bool _isShuttingDown = false;
+	// Upper bound on how long the app waits for MainWindow's close sequence (stopping a
+	// live recording) before tearing the process down anyway.
+	private static readonly TimeSpan CloseSequenceTimeout = TimeSpan.FromSeconds(10);
 
         public App()
         {
@@ -198,11 +201,16 @@ public partial class App : Application
 				sp.GetRequiredService<AudioDeviceManager>());
 			builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelPinService>();
 				// One shared instance serializes every capture-level write (slider, pin
-				// toggle, record-start re-assert) onto a single background worker, so the
-				// COM writes never run on the UI thread and never overlap each other.
+				// toggle, record-start re-assert) and the display read onto background
+				// threads, so the COM calls never run on the UI thread and never overlap
+				// each other.
 				builder.Services.AddSingleton<Mutation.Ui.Core.MicrophoneLevelWriteCoordinator>(sp =>
-					new Mutation.Ui.Core.MicrophoneLevelWriteCoordinator(
-						sp.GetRequiredService<Mutation.Ui.Core.MicrophoneLevelPinService>().ApplyLevel));
+				{
+					var pinService = sp.GetRequiredService<Mutation.Ui.Core.MicrophoneLevelPinService>();
+					return new Mutation.Ui.Core.MicrophoneLevelWriteCoordinator(
+						pinService.ApplyLevel,
+						pinService.ReadCurrentLevel);
+				});
 			builder.Services.AddSingleton<IOcrService>(sp =>
 	 new OcrService(
 		  settings.AzureComputerVisionSettings?.ApiKey,
@@ -347,6 +355,15 @@ public partial class App : Application
 			{
 				// Ensure global hooks are released promptly
 				try { hkManager.Dispose(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"HotkeyManager dispose failed: {ex.Message}"); }
+
+				// MainWindow's own Closed handler runs first, but it yields while it
+				// stops a live recording — and ShutdownAsync ends in
+				// Environment.Exit(0), which would kill the process mid-teardown. Wait
+				// for its close sequence to finish first. Bounded, so a wedged recorder
+				// cannot leave the process running indefinitely (issue #223).
+				if (_window is MainWindow closingWindow)
+					await Task.WhenAny(closingWindow.ClosedCompletion, Task.Delay(CloseSequenceTimeout));
+
 				// Stop background host services and exit the app
 				await ShutdownAsync();
 			};

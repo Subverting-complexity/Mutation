@@ -74,6 +74,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	// file write is deferred. The close handler saves _settings unconditionally, so a
 	// pending write is never lost on shutdown.
 	private readonly Debouncer _settingsSaveDebouncer;
+	// Runs the close steps in an order that cannot lose user data, and exposes the
+	// completion signal App's shutdown handler waits on before ending the process.
+	private readonly Mutation.Ui.Core.ApplicationCloseSequence _closeSequence;
 	private readonly CancellationTokenSource _shutdownCts = new();
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
@@ -259,9 +262,23 @@ public sealed partial class MainWindow : Window, IDisposable
 		InitializeMicrophoneLevelControls();
 		InitializeHotkeyVisuals();
 
+		_closeSequence = new Mutation.Ui.Core.ApplicationCloseSequence(
+			PersistClosingState,
+			_audioSessionManager.EnsureStoppedAsync,
+			ReleaseClosingResources,
+			(step, ex) => ErrorLogger.LogError($"Window close: {step} failed", ex));
+
 		this.Closed += MainWindow_Closed;
 		this.Activated += MainWindow_Activated;
 	}
+
+	/// <summary>
+	/// Completes once the close sequence has persisted settings and window state and
+	/// released the window's resources. App's <c>Window.Closed</c> handler waits on
+	/// this before shutting the process down, so <c>Environment.Exit</c> cannot fire
+	/// while a save is still in flight (issue #223).
+	/// </summary>
+	public Task ClosedCompletion => _closeSequence.Completion;
 
 	// When Mutation returns to the foreground, re-sync the mic input-level slider to
 	// the OS's real current level: another app (Windows Settings, Zoom, OBS, …) may
@@ -284,25 +301,41 @@ public sealed partial class MainWindow : Window, IDisposable
 	// transient failure) the slider is left as-is rather than reset to a misleading
 	// default. Setting SldMicLevel.Value still raises the slider's UIA ValueChanged
 	// automation event, so a screen-reader / ZoomText user is notified of the change.
-	private void RefreshMicLevelDisplayFromOs()
+	//
+	// The read itself is a COM call that can stall on a slow or failing device, so it
+	// goes through the shared off-thread coordinator rather than running inline —
+	// activation must never freeze the window and the screen reader with it. The await
+	// resumes on the UI thread, where the slider is then set.
+	private async void RefreshMicLevelDisplayFromOs()
 	{
 		// _micLevelControlsReady is only true on a supported, initialized device; on a
 		// hardware-fixed device the control is disabled and there is nothing to sync.
 		if (!_micLevelControlsReady)
 			return;
 
-		if (_micLevelPinService.ReadCurrentLevel() is not int level)
+		if (await _micLevelWriteCoordinator.ReadCurrentLevelAsync() is not int level)
 			return;
 
-		bool wasReady = _micLevelControlsReady;
+		// Re-check after the await: the device may have been swapped, or the window
+		// closed, while the read was in flight. MainWindow_Closed clears the flag, so a
+		// read still running at close does not resume onto a torn-down window.
+		if (!_micLevelControlsReady)
+			return;
+
 		_micLevelControlsReady = false;
 		try
 		{
 			SldMicLevel.Value = level;
 		}
+		catch (Exception ex)
+		{
+			// This is an async void continuation, so an escaping exception would have no
+			// handler to reach.
+			ErrorLogger.LogError("Refreshing the microphone level display failed", ex);
+		}
 		finally
 		{
-			_micLevelControlsReady = wasReady;
+			_micLevelControlsReady = true;
 		}
 	}
 
@@ -550,15 +583,37 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		// Prevent auto actions during shutdown
 		_suppressAutoActions = true;
+		// Stop the mic-level controls responding too: an activation-time level read may
+		// still be in flight, and its continuation must not touch the slider once the
+		// window is torn down.
+		_micLevelControlsReady = false;
 		// Signal shutdown to any in-flight transcription HTTP requests so they
 		// observe cancellation rather than running until their server timeout.
 		try { _shutdownCts.Cancel(); } catch (ObjectDisposedException) { }
+
+		// The sequence persists everything before its first await; stopping a live
+		// recording only happens afterwards. See ApplicationCloseSequence for why the
+		// order matters.
+		await _closeSequence.RunAsync();
+	}
+
+	// Writes what the user would otherwise lose on close: window position and size, the
+	// active service's edited prompt, and any slider change still sitting in the save
+	// debouncer (SaveSettingsToFile writes the whole settings object, so a pending
+	// debounced write is subsumed rather than lost). Runs as the close sequence's first
+	// step, synchronously, before anything that can yield.
+	private void PersistClosingState()
+	{
 		try
 		{
-            await _audioSessionManager.EnsureStoppedAsync();
+			_uiStateManager.Save(this);
 		}
-		catch { }
-		_uiStateManager.Save(this);
+		catch (Exception ex)
+		{
+			// A window-state failure must not also cost the user their settings, so the
+			// save below still runs.
+			ErrorLogger.LogError("Window close: saving UI state failed", ex);
+		}
 
 		if (_activeSpeechService != null)
 		{
@@ -572,10 +627,25 @@ public sealed partial class MainWindow : Window, IDisposable
 		// _settings.LlmSettings!.FormatTranscriptPrompt = TxtFormatPrompt.Text;
 
 		_settingsManager.SaveSettingsToFile(_settings);
+	}
 
-        _audioSessionManager.Dispose();
+	// Final teardown, run by the close sequence even when stopping the recorder threw,
+	// so the audio session is never left undisposed. Dispose() releases the audio
+	// session manager along with the window's other disposables.
+	private void ReleaseClosingResources()
+	{
+		// Guarded separately: a failure releasing the beep players must not cost us
+		// Dispose(), which is what actually releases the audio session manager — the
+		// leak issue #223 was filed for.
+		try
+		{
+			BeepPlayer.DisposePlayers();
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError("Window close: disposing the beep players failed", ex);
+		}
 
-		BeepPlayer.DisposePlayers();
 		Dispose();
 	}
 

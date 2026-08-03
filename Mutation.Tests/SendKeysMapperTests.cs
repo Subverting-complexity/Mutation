@@ -108,6 +108,76 @@ public class SendKeysMapperTests
 		Assert.Equal("^+(ab)", SendKeysMapper.Map("Ctrl+Shift+A+B"));
 	}
 
+	// A human-written chord may spell the group out with parentheses. The '+' before
+	// '(' is the separator, not the SendKeys Shift modifier, so the chord must be
+	// translated rather than passed through (issue #225).
+	[Theory]
+	[InlineData("Ctrl+(AB)", "^(ab)")]
+	[InlineData("Ctrl+Shift+(AB)", "^+(ab)")]
+	[InlineData("Shift+(AB)", "+(ab)")]
+	[InlineData("Alt+(ab)", "%(ab)")]
+	[InlineData("(AB)", "(ab)")]
+	public void Parenthesised_Group_In_Human_Chord_Is_Mapped(string input, string expected)
+	{
+		Assert.Equal(expected, SendKeysMapper.Map(input));
+	}
+
+	[Fact]
+	public void Parenthesised_Group_Matches_Plus_Separated_Equivalent()
+	{
+		Assert.Equal(SendKeysMapper.Map("Ctrl+A+B"), SendKeysMapper.Map("Ctrl+(AB)"));
+	}
+
+	// A group may also spell its keys by name, so "Ctrl+(Enter)" means Ctrl+Enter
+	// rather than the five letters e-n-t-e-r typed into the user's target app.
+	[Theory]
+	[InlineData("Ctrl+(Enter)", "^{ENTER}")]
+	[InlineData("Ctrl+(F5)", "^{F5}")]
+	[InlineData("Ctrl+(Enter Tab)", "^({ENTER}{TAB})")]
+	[InlineData("Ctrl+(A B)", "^(ab)")]
+	[InlineData("Ctrl+(\"a\")", "^a")]
+	public void Named_Keys_Inside_A_Group_Resolve_By_Name(string input, string expected)
+	{
+		Assert.Equal(expected, SendKeysMapper.Map(input));
+	}
+
+	[Fact]
+	public void Unsupported_Key_Inside_A_Group_Throws()
+	{
+		Assert.Throws<NotSupportedException>(() => SendKeysMapper.Map("Ctrl+(Win)"));
+	}
+
+	// Rejected rather than guessed at: there is no unambiguous per-character reading of
+	// a symbol run, and inventing one would emit keystrokes the user never asked for.
+	[Theory]
+	[InlineData("Ctrl+(A(B)")]
+	[InlineData("Ctrl+(A-B)")]
+	[InlineData("Ctrl+(A+)")]
+	public void Malformed_Or_Unreadable_Group_Is_Rejected(string input)
+	{
+		Assert.Throws<FormatException>(() => SendKeysMapper.Map(input));
+	}
+
+	// The compact form is one key per character by definition, so an unrecognised run
+	// of letters expands rather than resolving as a name. Pinned so the rule is a
+	// decision rather than an accident: separate the keys ("Ctrl+(Foo Key)") or name
+	// them individually to get anything else.
+	[Fact]
+	public void Compact_Group_Expands_Per_Character_Even_For_Word_Like_Runs()
+	{
+		Assert.Equal("^(fookey)", SendKeysMapper.Map("Ctrl+(FooKey)"));
+	}
+
+	// The '+' in "a+(bc)" is not preceded by a modifier name, so it is SendKeys' Shift
+	// modifier and the string must still pass through with the Shift intact.
+	[Theory]
+	[InlineData("a+(bc)")]
+	[InlineData("{ENTER}+(ab)")]
+	public void Plus_Group_Not_Following_A_Modifier_Name_Still_Passes_Through(string input)
+	{
+		Assert.Equal(input, SendKeysMapper.Map(input));
+	}
+
 	// ----- Alternative modifier names -----
 
 	[Theory]
@@ -132,13 +202,15 @@ public class SendKeysMapperTests
 
 	// ----- SendKeys passthrough -----
 
+	// Only genuine SendKeys syntax passes through untouched. "^+(ab)" qualifies: its
+	// leading '^' and the '+' that directly precedes '(' are both modifiers.
 	[Theory]
 	[InlineData("^a")]
 	[InlineData("%{F4}")]
 	[InlineData("~")]
 	[InlineData("{ENTER}")]
 	[InlineData("^+(ab)")]
-	[InlineData("Ctrl+(AB)")]
+	[InlineData("+(ab)")]
 	public void Passthrough_When_Already_SendKeys_Syntax(string input)
 	{
 		Assert.Equal(input, SendKeysMapper.Map(input));
