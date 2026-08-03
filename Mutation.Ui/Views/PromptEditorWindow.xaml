@@ -30,7 +30,12 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBox x:Name="TxtName" Header="Name" PlaceholderText="e.g. Summarize" Grid.Column="0" />
+            <TextBox x:Name="TxtName"
+                     Header="Name"
+                     PlaceholderText="e.g. Summarize"
+                     AutomationProperties.Name="Name"
+                     AutomationProperties.HelpText="Name shown for this prompt in the prompt list."
+                     Grid.Column="0" />
             <controls:HotkeyEditor x:Name="HkPromptHotkey"
                                    Header="Hotkey"
                                    HelpText="Optional global shortcut that runs this prompt."
@@ -42,22 +47,50 @@
                       Header="Model"
                       PlaceholderText="Select a model"
                       HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Model"
+                      AutomationProperties.HelpText="Language model used to run this prompt."
                       Grid.Row="1"
                       Grid.Column="0" />
 
-            <CheckBox x:Name="ChkAutoRun" Content="Run automatically after transcription" Grid.Row="2" Grid.ColumnSpan="2" />
+            <!-- Tab order runs Name, Hotkey, Model, Fast mode, Auto run: the info hint
+                 sits after the check box so reaching Auto run does not require tabbing
+                 past it. Its tooltip and the check box's HelpText share one resource so
+                 the visual and screen-reader copy cannot drift apart. -->
+            <StackPanel Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Bottom"
+                        Grid.Row="1"
+                        Grid.Column="1">
+                <CheckBox x:Name="ChkFastMode"
+                          Content="Fast mode"
+                          VerticalAlignment="Center"
+                          AutomationProperties.Name="Fast mode"
+                          AutomationProperties.HelpText="{StaticResource Help.Llm.FastMode}" />
+                <controls:InfoHint Text="{StaticResource Help.Llm.FastMode}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <CheckBox x:Name="ChkAutoRun"
+                      Content="Run automatically after transcription"
+                      AutomationProperties.Name="Run automatically after transcription"
+                      AutomationProperties.HelpText="Runs this prompt on the transcript as soon as a recording is transcribed, without a separate hotkey."
+                      Grid.Row="2" Grid.ColumnSpan="2" />
         </Grid>
 
-        <TextBox x:Name="TxtContent" 
-                 Grid.Row="2" 
-                 Header="Prompt Instructions" 
-                 PlaceholderText="Enter system instructions for the LLM..." 
-                 AcceptsReturn="True" 
-                 TextWrapping="Wrap" 
+        <TextBox x:Name="TxtContent"
+                 Grid.Row="2"
+                 Header="Prompt Instructions"
+                 PlaceholderText="Enter system instructions for the LLM..."
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Prompt instructions"
+                 AutomationProperties.HelpText="System instructions sent to the language model ahead of the text being processed."
                  ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
         <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="12" HorizontalAlignment="Right">
-            <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click" ToolTipService.ToolTip="Run the prompt against current clipboard content" />
+            <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click"
+                    AutomationProperties.Name="Test run"
+                    AutomationProperties.HelpText="Runs this prompt against the current clipboard content, using the settings above, without saving."
+                    ToolTipService.ToolTip="Run the prompt against current clipboard content" />
             <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="BtnSave_Click" />
             <Button x:Name="BtnCancel" Content="Cancel" Click="BtnCancel_Click" />
         </StackPanel>

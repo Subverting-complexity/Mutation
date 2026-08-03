@@ -14,6 +14,12 @@ public class AnthropicLlmService : ILlmService
 	private const string AnthropicVersion = "2023-06-01";
 	private const int DefaultMaxTokens = 4096;
 
+	/// <summary>Opt-in header for the Fast mode research preview.</summary>
+	internal const string FastModeBeta = "fast-mode-2026-02-01";
+
+	/// <summary>Value of the request body's <c>speed</c> parameter when Fast mode is on.</summary>
+	internal const string FastSpeed = "fast";
+
 	private readonly string _apiKey;
 	private readonly HttpClient _httpClient;
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
@@ -43,8 +49,11 @@ public class AnthropicLlmService : ILlmService
 
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
-		string llmModelName)
+		string llmModelName,
+		LlmRequestOptions? options = null)
 	{
+		options ??= LlmRequestOptions.Default;
+
 		if (!_modelConfigs.TryGetValue(llmModelName, out var config))
 			throw new ArgumentException(
 				$"{llmModelName} is not one of the configured Anthropic models. Available: {string.Join(",", _modelConfigs.Keys)}",
@@ -77,10 +86,56 @@ public class AnthropicLlmService : ILlmService
 			Messages = conversationMessages
 		};
 
+		string responseBody = options.FastMode
+			? await SendWithFastModeFallbackAsync(request, options).ConfigureAwait(false)
+			: await SendAsync(request, fastMode: false).ConfigureAwait(false);
+
+		return ExtractText(responseBody);
+	}
+
+	/// <summary>
+	/// Runs the request in Fast mode and, if Fast mode itself is what failed, retries the
+	/// identical request once at standard speed rather than losing the user's text. The
+	/// fallback direction is always cheaper, never more expensive, so it can never produce
+	/// a billing surprise — which is what makes recovering without a prompt safe here.
+	/// The user's Fast mode setting is never rewritten; access may be granted later.
+	/// </summary>
+	private async Task<string> SendWithFastModeFallbackAsync(AnthropicRequest request, LlmRequestOptions options)
+	{
+		FastModeFallback fallback;
+		try
+		{
+			return await SendAsync(request, fastMode: true).ConfigureAwait(false);
+		}
+		catch (NonTransientLlmException ex) when (FastModeFailure.IsUnavailable(ex.StatusCode, ex.Message))
+		{
+			fallback = new FastModeFallback(FastModeFallbackReason.Unavailable, ex.Message);
+		}
+		catch (HttpRequestException ex) when (FastModeFailure.IsCapacity((int?)ex.StatusCode))
+		{
+			// Reached only once the retry policy has exhausted its attempts on Fast mode's
+			// dedicated 429 rate limit or a 529 capacity rejection.
+			fallback = new FastModeFallback(FastModeFallbackReason.Busy, ex.Message);
+		}
+
+		ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fallback));
+		string body = await SendAsync(request, fastMode: false).ConfigureAwait(false);
+
+		// Announced only after the standard-speed retry succeeded, so the user is never
+		// told "it ran at standard speed" for a request that then failed outright.
+		options.OnFastModeFallback?.Invoke(fallback);
+		return body;
+	}
+
+	private async Task<string> SendAsync(AnthropicRequest request, bool fastMode)
+	{
 		var jsonOptions = new JsonSerializerOptions
 		{
 			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 		};
+		// WhenWritingNull drops "speed" entirely when Fast mode is off, so a standard
+		// request is byte-for-byte what it was before this feature existed.
+		request.Speed = fastMode ? FastSpeed : null;
 		string jsonBody = JsonSerializer.Serialize(request, jsonOptions);
 
 		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
@@ -119,6 +174,9 @@ public class AnthropicLlmService : ILlmService
 			using var httpRequest = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
 			httpRequest.Headers.Add("x-api-key", _apiKey);
 			httpRequest.Headers.Add("anthropic-version", AnthropicVersion);
+			// The header block is rebuilt per attempt, so gating it here covers every retry.
+			if (fastMode)
+				httpRequest.Headers.Add("anthropic-beta", FastModeBeta);
 			httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
 			using var httpResponse = await _httpClient.SendAsync(httpRequest, timeoutCts.Token).ConfigureAwait(false);
@@ -144,14 +202,21 @@ public class AnthropicLlmService : ILlmService
 
 				// Retry only transient failures (429, 5xx); fail fast on permanent
 				// 4xx errors like 401 Unauthorized so a bad API key is reported at once.
+				// The status travels on the exception so an exhausted Fast mode 429/529
+				// can be told apart from an ordinary server error by the fallback path.
 				if (LlmHttpStatus.IsTransient(statusCode))
-					throw new HttpRequestException(errorMessage);
+					throw new HttpRequestException(errorMessage, inner: null, httpResponse.StatusCode);
 				throw new NonTransientLlmException(errorMessage, statusCode);
 			}
 
 			return body;
 		}, pollyContext).ConfigureAwait(false);
 
+		return responseBody;
+	}
+
+	private static string ExtractText(string responseBody)
+	{
 		var response = JsonSerializer.Deserialize<AnthropicResponse>(responseBody);
 		if (response?.Content != null && response.Content.Length > 0)
 		{
@@ -174,6 +239,8 @@ public class AnthropicLlmService : ILlmService
 		[JsonPropertyName("temperature")] public double? Temperature { get; set; }
 		[JsonPropertyName("system")] public string? System { get; set; }
 		[JsonPropertyName("messages")] public AnthropicMessage[] Messages { get; set; } = [];
+		/// <summary>Null (and therefore omitted) unless Fast mode is on for this request.</summary>
+		[JsonPropertyName("speed")] public string? Speed { get; set; }
 	}
 
 	private class AnthropicMessage

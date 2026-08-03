@@ -10,9 +10,10 @@ public class LlmHttpStatusTests
 	[Theory]
 	[InlineData(0)]    // connection failure / no response
 	[InlineData(408)]  // request timeout
-	[InlineData(429)]  // rate limited
+	[InlineData(429)]  // rate limited (Fast mode has its own dedicated limit)
 	[InlineData(500)]  // server error
 	[InlineData(503)]  // service unavailable
+	[InlineData(529)]  // Anthropic overloaded / Fast mode at capacity
 	public void Transient_StatusCodes_AreRetryable(int statusCode)
 	{
 		Assert.True(LlmHttpStatus.IsTransient(statusCode));

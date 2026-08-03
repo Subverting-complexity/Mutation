@@ -161,6 +161,30 @@ public class TranscriptFormatterTests
 	}
 
 	[Fact]
+	public async Task ProcessWithLlmAsync_ForwardsRequestOptionsUnchanged()
+	{
+		var stub = new StubLlmService("out");
+		var formatter = new TranscriptFormatter(BuildSettings(), stub);
+		var options = new LlmRequestOptions { FastMode = true };
+
+		await formatter.ProcessWithLlmAsync("hello", "system", "claude-opus-5", options);
+
+		Assert.Same(options, stub.LastOptions);
+		Assert.True(stub.LastOptions!.FastMode);
+	}
+
+	[Fact]
+	public async Task ProcessWithLlmAsync_WithoutOptions_LeavesThemNullSoTheServiceDefaultsToStandardSpeed()
+	{
+		var stub = new StubLlmService("out");
+		var formatter = new TranscriptFormatter(BuildSettings(), stub);
+
+		await formatter.ProcessWithLlmAsync("hello", "system", "gpt-4");
+
+		Assert.Null(stub.LastOptions);
+	}
+
+	[Fact]
 	public async Task ProcessWithLlmAsync_RunsFixNewLinesOnResult()
 	{
 		var stub = new StubLlmService("line1\r\nline2\rline3\nline4");
@@ -184,12 +208,17 @@ public class TranscriptFormatterTests
 		public int CallCount { get; private set; }
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
+		public LlmRequestOptions? LastOptions { get; private set; }
 
-		public Task<string> CreateChatCompletion(IList<LlmChatMessage> messages, string llmModelName)
+		public Task<string> CreateChatCompletion(
+			IList<LlmChatMessage> messages,
+			string llmModelName,
+			LlmRequestOptions? options = null)
 		{
 			CallCount++;
 			LastMessages = messages;
 			LastModel = llmModelName;
+			LastOptions = options;
 			return Task.FromResult(_response);
 		}
 	}

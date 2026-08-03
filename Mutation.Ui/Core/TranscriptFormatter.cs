@@ -35,7 +35,15 @@ public class TranscriptFormatter
 		return text;
 	}
 
-	public async Task<string> ProcessWithLlmAsync(string transcript, string systemPrompt, string modelName)
+	/// <param name="options">
+	/// Per-request knobs (Fast mode, and the callback that reports a fall back to
+	/// standard speed) forwarded to the language-model service unchanged.
+	/// </param>
+	public async Task<string> ProcessWithLlmAsync(
+		string transcript,
+		string systemPrompt,
+		string modelName,
+		LlmRequestOptions? options = null)
 	{
 		if (string.IsNullOrWhiteSpace(transcript))
 			return transcript;
@@ -46,7 +54,7 @@ public class TranscriptFormatter
 				new LlmChatMessage(LlmChatRole.User, transcript)
 		  };
 
-		string formattedText = await _llmService.CreateChatCompletion(messages, modelName);
+		string formattedText = await _llmService.CreateChatCompletion(messages, modelName, options);
 		return formattedText.FixNewLines();
 	}
 }

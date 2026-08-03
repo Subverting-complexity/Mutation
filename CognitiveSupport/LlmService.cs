@@ -45,7 +45,8 @@ public class LlmService : ILlmService
 
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
-		string llmModelName)
+		string llmModelName,
+		LlmRequestOptions? requestOptions = null)
 	{
 		if (!_chatClients.ContainsKey(llmModelName))
 			throw new ArgumentException($"{llmModelName} is not one of the configured models. The following are the available, configured models: {string.Join(",", _chatClients.Keys)}", nameof(llmModelName));
@@ -55,7 +56,8 @@ public class LlmService : ILlmService
 
 		var openAiMessages = messages.Select(ToOpenAiMessage).ToList();
 
-		ChatCompletionOptions options = BuildChatOptions(config);
+		bool fastMode = (requestOptions ?? LlmRequestOptions.Default).FastMode;
+		ChatCompletionOptions options = BuildChatOptions(config, fastMode);
 
 		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
 		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
@@ -91,6 +93,9 @@ public class LlmService : ILlmService
 			return await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token).ConfigureAwait(false);
 		}, pollyContext).ConfigureAwait(false);
 
+		if (fastMode)
+			LogServedTier(result.Value);
+
 		if (result.Value.Content.Count > 0)
 		{
 			return result.Value.Content[0].Text;
@@ -98,14 +103,50 @@ public class LlmService : ILlmService
 		return string.Empty;
 	}
 
-	internal static ChatCompletionOptions BuildChatOptions(LlmModelConfig config)
+	/// <summary>
+	/// The single place chat request options are constructed.
+	/// </summary>
+	/// <param name="fastMode">
+	/// Premium inference speed on the same model, at roughly twice the token price.
+	/// Requested via the service tier; nothing is set when off, so the account default
+	/// applies exactly as before.
+	/// </param>
+	internal static ChatCompletionOptions BuildChatOptions(LlmModelConfig config, bool fastMode = false)
 	{
 		var options = new ChatCompletionOptions();
 		if (config.CustomTemperature.HasValue)
 		{
 			options.Temperature = (float)config.CustomTemperature.Value;
 		}
+		if (fastMode)
+		{
+			// ChatServiceTier is an extensible enum-like struct with no named "fast"
+			// member; the raw string is the documented way to request Fast mode.
+			// OPENAI001: ServiceTier is marked evaluation-only by the SDK. It is the only
+			// way to request Fast mode, and the single line here is all that has to move
+			// if the SDK renames it.
+#pragma warning disable OPENAI001
+			options.ServiceTier = FastServiceTier;
+#pragma warning restore OPENAI001
+		}
 		return options;
+	}
+
+	internal const string FastServiceTier = "fast";
+
+	/// <summary>
+	/// OpenAI echoes back the tier it actually served — often "priority" (documented as
+	/// behaviourally identical to fast) and "default" when it downgrades under load.
+	/// Neither is an error, and a downgrade bills at standard rates, so there is nothing
+	/// to warn the user about; record it for diagnosis and move on.
+	/// </summary>
+	private static void LogServedTier(ChatCompletion completion)
+	{
+#pragma warning disable OPENAI001 // Evaluation-only SDK surface; see BuildChatOptions.
+		string? served = completion.ServiceTier?.ToString();
+#pragma warning restore OPENAI001
+		if (!string.IsNullOrEmpty(served) && served != FastServiceTier)
+			ErrorLogger.LogInfo("LLM", $"OpenAI served service tier '{served}' for a Fast mode request.");
 	}
 
 	private static ChatMessage ToOpenAiMessage(LlmChatMessage msg)

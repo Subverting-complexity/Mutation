@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly OcrManager _ocrManager;
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
+	private readonly Mutation.Ui.Services.FastModeNoticeTracker _fastModeNotices;
 	private readonly Mutation.Ui.Core.MicrophoneLevelPinService _micLevelPinService;
 	// Runs the mute toggle's COM writes, read-back verification, and any device
 	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
@@ -137,8 +138,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
 		Mutation.Ui.Core.MicrophoneLevelPinService micLevelPinService,
-		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator)
+		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator,
+		Mutation.Ui.Services.FastModeNoticeTracker fastModeNotices)
 	{
+		_fastModeNotices = fastModeNotices;
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
 		_settingsManager = settingsManager;
@@ -162,6 +165,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;
         _audioSessionManager.StatusMessage += AudioSessionManager_StatusMessage;
+        _audioSessionManager.FastModeFellBack += AudioSessionManager_FastModeFellBack;
         _audioSessionManager.SelectedSessionChanged += AudioSessionManager_SelectedSessionChanged;
         _audioSessionManager.PlaybackStarted += AudioSessionManager_PlaybackStarted;
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
@@ -1596,7 +1600,13 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
-			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName);
+			FastModeFallback? fastModeFallback = null;
+			var requestOptions = new LlmRequestOptions
+			{
+				FastMode = prompt.FastMode,
+				OnFastModeFallback = f => fastModeFallback = f,
+			};
+			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions);
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
@@ -1614,6 +1624,10 @@ public sealed partial class MainWindow : Window, IDisposable
 					"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
 					InfoBarSeverity.Error);
 			}
+
+			// Announced after the outcome status, because the status channel supersedes
+			// rather than queues and the success message would otherwise talk over it.
+			AnnounceFastModeFallback(prompt.Id, fastModeFallback);
         }
         catch (Exception ex)
         {
@@ -1622,6 +1636,29 @@ public sealed partial class MainWindow : Window, IDisposable
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }
+
+	/// <summary>
+	/// Tells the user, through the ordinary status announcement channel rather than a
+	/// modal, that a Fast mode prompt ran at standard speed. A modal would steal focus
+	/// from whatever they were dictating into. Repeats at most once per prompt per
+	/// reason per app session, and never touches their Fast mode setting.
+	/// </summary>
+	private void AnnounceFastModeFallback(int promptId, FastModeFallback? fallback)
+	{
+		if (fallback is null)
+			return;
+		if (!_fastModeNotices.ShouldAnnounce(promptId, fallback.Reason))
+			return;
+
+		ShowStatus(FastModeMessages.Title, FastModeMessages.Describe(fallback.Reason), InfoBarSeverity.Warning);
+	}
+
+	private void AudioSessionManager_FastModeFellBack(object? sender, FastModeFallback fallback)
+	{
+		// AudioSessionManager has already applied the once-per-session rule, since it is
+		// the side that knows which prompt ran.
+		ShowStatus(FastModeMessages.Title, FastModeMessages.Describe(fallback.Reason), InfoBarSeverity.Warning);
+	}
 
 	private void UpdateMicrophoneToggleVisuals()
 	{

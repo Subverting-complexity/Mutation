@@ -242,6 +242,13 @@ public class LlmSettings
 		public bool AutoRun { get; set; }
 		public string? ModelName { get; set; }
 
+		/// <summary>
+		/// Run this prompt's model at premium inference speed. Same model and same
+		/// output quality, roughly twice the token price, so it is off by default and
+		/// settings files written before this existed load as false.
+		/// </summary>
+		public bool FastMode { get; set; }
+
 		public LlmPrompt() { }
 	}
 }
