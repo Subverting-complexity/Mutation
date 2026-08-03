@@ -13,8 +13,8 @@ Press one hotkey to mute or unmute every enabled microphone system-wide—indepe
 ### 2. Screen Capturing and OCR  
 Mutation supports two OCR reading orders via Azure **Computer Vision**:
 
-* **Natural layout** – reads top-to-bottom within each column, then left-to-right across columns. Best for newspapers, journals, brochures, or any multi-column PDF.  
-* **Basic layout** – reads strictly left-to-right, top-to-bottom. Best for tables, spreadsheets, forms, invoices, or any row-oriented content.
+* **Natural layout** – keeps the grouping Azure returns, which follows columns and sections rather than raw scan lines. Best for newspapers, journals, brochures, or any multi-column PDF.  
+* **Basic layout** – reads strictly left-to-right, top-to-bottom: recognised lines are regrouped onto visual rows that run straight across the page. Best for tables, spreadsheets, forms, invoices, or any row-oriented content.
 
 **Hotkeys:**
 
@@ -34,7 +34,7 @@ selection size, and the outcome as you go.
 
 | Key | Action |
 |-----|--------|
-| Arrow keys | Move the caret (hold **Ctrl** for 1-pixel steps, **Shift** for 100-pixel steps) |
+| Arrow keys | Move the caret (hold **Ctrl** for fine steps, **Shift** for large steps) |
 | **Home** / **End** | Jump the caret to the left / right edge |
 | **Page Up** / **Page Down** | Jump the caret to the top / bottom edge |
 | **Enter** or **Space** | First press pins one corner; second press captures the region |

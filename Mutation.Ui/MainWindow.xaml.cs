@@ -364,7 +364,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!string.IsNullOrWhiteSpace(ocr?.ScreenshotHotKey))
 			TryRegister(hk, failures, "Screenshot to clipboard", ocr.ScreenshotHotKey!, async () =>
 			{
-				try { await _ocrManager.TakeScreenshotToClipboardAsync(); }
+				// The hotkey path announced nothing at all, leaving only a beep to
+				// distinguish a captured region from a cancelled one.
+				try
+				{
+					if (await _ocrManager.TakeScreenshotToClipboardAsync())
+						ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
+					else
+						ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
 			});
 
@@ -617,8 +625,11 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		try
 		{
-			await _ocrManager.TakeScreenshotToClipboardAsync();
-			ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
+			// Cancelling the region overlay used to be announced as a success.
+			if (await _ocrManager.TakeScreenshotToClipboardAsync())
+				ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
+			else
+				ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
 		}
 		catch (Exception ex)
 		{
@@ -1901,11 +1912,10 @@ public sealed partial class MainWindow : Window, IDisposable
         });
     }
 
-	// The accessible label each hotkey button currently carries, without the hotkey
-	// suffix. State transitions push the new label in here; hotkey-only refreshes read
-	// it back so they re-compose from the current state rather than resurrecting the
-	// name the button had at startup (issue #214).
-	private readonly Dictionary<Button, string> _buttonAccessibleLabels = new();
+	// State transitions push their label into this cache; hotkey-only refreshes read it
+	// back, so they re-compose from the current state rather than resurrecting the name
+	// the button had at startup (issue #214).
+	private readonly HotkeyButtonLabelCache _buttonAccessibleLabels = new();
 
 	/// <param name="accessibleLabel">
 	/// The button's label in its current state. Pass this from anywhere the button
@@ -1925,31 +1935,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		UpdateHotkeyText(hotkeyTextBlock, hotkey);
 	}
 
-	private string ResolveAccessibleLabel(Button button, string baseTooltip, string? accessibleLabel)
-	{
-		if (!string.IsNullOrWhiteSpace(accessibleLabel))
-		{
-			_buttonAccessibleLabels[button] = accessibleLabel;
-			return accessibleLabel;
-		}
-
-		if (_buttonAccessibleLabels.TryGetValue(button, out var known))
-			return known;
-
-		// First sight of this button: its XAML name is still the bare label.
-		var fromXaml = AutomationProperties.GetName(button);
-		if (string.IsNullOrWhiteSpace(fromXaml))
-			fromXaml = baseTooltip;
-		_buttonAccessibleLabels[button] = fromXaml;
-		return fromXaml;
-	}
+	private string ResolveAccessibleLabel(Button button, string baseTooltip, string? accessibleLabel) =>
+		_buttonAccessibleLabels.Resolve(button, AutomationProperties.GetName(button), baseTooltip, accessibleLabel);
 
 	// Sets a state label on a button whose hotkey affordances are not being touched
 	// (e.g. the disabled "Transcribing…" state), keeping the label cache in step so a
 	// later hotkey refresh does not undo it.
 	private void SetButtonAccessibleLabel(Button button, string label)
 	{
-		_buttonAccessibleLabels[button] = label;
+		_buttonAccessibleLabels.Set(button, label);
 		AutomationProperties.SetName(button, label);
 	}
 

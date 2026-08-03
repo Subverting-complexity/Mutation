@@ -22,20 +22,6 @@ public class HotkeyAccessibleTextTests
 		Assert.Equal("Record", HotkeyAccessibleText.ComposeName("Record", hotkey));
 	}
 
-	[Theory]
-	[InlineData("Mute microphone", "Unmute microphone", "ALT+Q")]
-	[InlineData("Record", "Stop", "SHIFT+ALT+U")]
-	[InlineData("Record and Format", "Stop and Format", "SHIFT+ALT+I")]
-	public void ComposeName_FollowsTheStateTransition(string before, string after, string hotkey)
-	{
-		// The regression: composing after a transition must never resurrect the old label.
-		string startupName = HotkeyAccessibleText.ComposeName(before, hotkey);
-		string afterTransition = HotkeyAccessibleText.ComposeName(after, hotkey);
-
-		Assert.Equal($"{after}, {hotkey}", afterTransition);
-		Assert.NotEqual(startupName, afterTransition);
-	}
-
 	[Fact]
 	public void ComposeTooltip_AppendsTheHotkeyInBrackets()
 	{

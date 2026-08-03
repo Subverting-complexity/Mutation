@@ -28,6 +28,25 @@ public class SettingsWorkingCopyCommitTests
 		settings.LlmSettings.Prompts.Add(new LlmSettings.LlmPrompt { Id = 2, Name = "Summarise", Content = "summarise this" });
 		settings.LlmSettings.Models.Add(new LlmModelConfig { Name = "gpt-4.1" });
 		settings.TranscriptFormatRules.Add(new TranscriptFormatRule("a", "b", false, TranscriptFormatRule.MatchTypeEnum.Plain));
+
+		// Every branch of the committer needs a populated example, or a dropped property
+		// compares empty-to-empty and the drift guard waves it through: an array-valued
+		// section, a list of objects behind a constructor-only type, and non-default
+		// struct values.
+		settings.SpeechToTextSettings.Services =
+		[
+			new SpeechToTextServiceSettings
+			{
+				Name = "Whisper",
+				Provider = SpeechToTextProviders.OpenAi,
+				ApiKey = "sk-fixture",
+				BaseDomain = "api.openai.com",
+				ModelId = "whisper-1",
+			},
+		];
+		settings.HotKeyRouterSettings.Mappings.Add(new HotKeyRouterSettings.HotKeyRouterMap("CTRL+1", "CTRL+2"));
+		settings.MainWindowUiSettings.WindowLocation = new System.Drawing.Point(120, 240);
+		settings.MainWindowUiSettings.WindowSize = new System.Drawing.Size(1024, 768);
 		return settings;
 	}
 
@@ -98,6 +117,11 @@ public class SettingsWorkingCopyCommitTests
 		promptTheUiIsBoundTo.Content = "edited after save";
 
 		Assert.Equal("edited after save", live.LlmSettings.Prompts[0].Content);
+
+		// And it has to still be there after the write-and-reload the app does next:
+		// the original bug only showed itself on restart.
+		var reloaded = SettingsWorkingCopy.Clone(live);
+		Assert.Equal("edited after save", reloaded.LlmSettings!.Prompts[0].Content);
 	}
 
 	[Fact]
@@ -178,8 +202,16 @@ public class SettingsWorkingCopyCommitTests
 		var working = SettingsWorkingCopy.Clone(live);
 
 		var mutated = new List<string>();
-		MutateEveryValueProperty(working, "Settings", mutated);
+		var skipped = new List<string>();
+		MutateEveryValueProperty(working, "Settings", mutated, skipped);
 		Assert.True(mutated.Count > 50, $"Expected the settings graph to expose many properties, saw {mutated.Count}.");
+
+		// A property the mutator cannot give a distinct value to is invisible to the
+		// comparison below — both sides would already be equal — so it would sail
+		// through even if CommitInto dropped it. Fail loudly instead of silently
+		// shrinking the guard as the settings model grows.
+		Assert.True(skipped.Count == 0,
+			"The drift guard could not mutate, and therefore does not cover: " + string.Join(", ", skipped));
 
 		SettingsWorkingCopy.CommitInto(live, working);
 
@@ -190,8 +222,10 @@ public class SettingsWorkingCopyCommitTests
 	}
 
 	// Walks the graph and gives every simple property a value distinct from its current
-	// one, so a property CommitInto forgets shows up as a mismatch afterwards.
-	private static void MutateEveryValueProperty(object target, string path, List<string> mutated)
+	// one, so a property CommitInto forgets shows up as a mismatch afterwards. Anything
+	// it cannot give a distinct value to is reported in <paramref name="skipped"/>,
+	// because such a property is outside the guard's reach.
+	private static void MutateEveryValueProperty(object target, string path, List<string> mutated, List<string> skipped)
 	{
 		foreach (var property in target.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
 		{
@@ -201,28 +235,42 @@ public class SettingsWorkingCopyCommitTests
 			object? value = property.GetValue(target);
 			string childPath = $"{path}.{property.Name}";
 
+			// Arrays are IList too, so this covers both the list and array branches of
+			// the committer.
 			if (value is IList list)
 			{
+				if (list.Count == 0)
+					skipped.Add($"{childPath} (empty collection)");
 				foreach (var item in list)
 				{
 					if (item is not null && !IsSimple(item.GetType()))
-						MutateEveryValueProperty(item, childPath, mutated);
+						MutateEveryValueProperty(item, childPath, mutated, skipped);
 				}
 				continue;
 			}
 
 			if (value is not null && !IsSimple(property.PropertyType))
 			{
-				MutateEveryValueProperty(value, childPath, mutated);
+				MutateEveryValueProperty(value, childPath, mutated, skipped);
 				continue;
 			}
 
 			if (!property.CanWrite || property.SetMethod is null || !property.SetMethod.IsPublic)
 				continue;
 
-			object? mutatedValue = NextValue(property.PropertyType, value);
-			if (mutatedValue is null && value is null)
+			if (value is null && !IsSimple(property.PropertyType))
+			{
+				// A null sub-object has nothing to compare, so nothing is guarded.
+				skipped.Add($"{childPath} (null)");
 				continue;
+			}
+
+			object? mutatedValue = NextValue(property.PropertyType, value);
+			if (Equals(mutatedValue, value))
+			{
+				skipped.Add($"{childPath} ({property.PropertyType.Name})");
+				continue;
+			}
 
 			property.SetValue(target, mutatedValue);
 			mutated.Add(childPath);
@@ -303,18 +351,27 @@ public class SettingsWorkingCopyCommitTests
 			return (current as double? ?? 0d) + 1.5d;
 		if (underlying == typeof(decimal))
 			return (current as decimal? ?? 0m) + 3m;
+		if (underlying == typeof(System.Drawing.Point))
+		{
+			var point = (System.Drawing.Point)(current ?? new System.Drawing.Point());
+			return new System.Drawing.Point(point.X + 3, point.Y + 5);
+		}
+		if (underlying == typeof(System.Drawing.Size))
+		{
+			var size = (System.Drawing.Size)(current ?? new System.Drawing.Size());
+			return new System.Drawing.Size(size.Width + 3, size.Height + 5);
+		}
 		if (underlying.IsEnum)
 		{
-			var values = Enum.GetValues(underlying);
-			foreach (var candidate in values)
+			foreach (var candidate in Enum.GetValues(underlying))
 			{
 				if (!Equals(candidate, current))
 					return candidate;
 			}
 			return current;
 		}
-		// Structs without a natural "next" (Point, Size) and arrays are left alone;
-		// the comparison pass still checks that they were carried over unchanged.
+		// Unchanged: the caller reports this property as outside the guard's reach
+		// rather than counting it as covered.
 		return current;
 	}
 }

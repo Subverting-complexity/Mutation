@@ -191,9 +191,9 @@ internal sealed class KeyboardRegionSelector
 				"Region is empty. Move with the arrow keys to size it, then press Enter to capture.");
 		}
 
-		return new RegionKeyResult(
-			RegionKeyOutcome.Committed,
-			$"Capturing {Describe(SelectionWidth)} by {Describe(SelectionHeight)} region.");
+		// No announcement: only the caller knows the region's size in bitmap pixels, and
+		// it announces the capture for the mouse path too.
+		return new RegionKeyResult(RegionKeyOutcome.Committed, string.Empty);
 	}
 
 	private RegionKeyResult ClearAnchor()
@@ -207,8 +207,11 @@ internal sealed class KeyboardRegionSelector
 		return new RegionKeyResult(RegionKeyOutcome.AnchorCleared, "Region corner cleared.");
 	}
 
+	// Once a corner is pinned, size alone is not enough: without the origin there is no
+	// way to tell where on the screen the rectangle sits, and no way to recover it short
+	// of clearing the corner and starting again.
 	private string DescribePosition() => HasAnchor
-		? $"{Describe(SelectionWidth)} by {Describe(SelectionHeight)}"
+		? $"{Describe(SelectionWidth)} by {Describe(SelectionHeight)}, from {Describe(SelectionLeft)}, {Describe(SelectionTop)}"
 		: $"{Describe(CaretX)}, {Describe(CaretY)}";
 
 	private static string Describe(double value) =>
