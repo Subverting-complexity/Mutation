@@ -64,12 +64,16 @@ internal sealed class PromptLibraryController
 		{
 			if (dialog.IsSaved && dialog.Prompt != null && !string.IsNullOrWhiteSpace(dialog.Prompt.Name))
 			{
-				dialog.Prompt.Id = (_settings.LlmSettings.Prompts.Max(p => (int?)p.Id) ?? 0) + 1;
-
 				if (dialog.Prompt.AutoRun)
 					foreach (var p in _settings.LlmSettings.Prompts) p.AutoRun = false;
 
 				_settings.LlmSettings.Prompts.Add(dialog.Prompt);
+
+				// One rule for handing out prompt Ids, shared with settings loading.
+				// Highest-plus-one would overflow to int.MinValue against a hand-written
+				// Id of int.MaxValue, and then hand every later prompt that same value.
+				PromptIdBackfill.Apply(_settings.LlmSettings.Prompts);
+
 				SaveAndRefresh();
 			}
 		};

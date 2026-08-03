@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using CognitiveSupport;
 using Mutation.Ui.Services;
+using Newtonsoft.Json.Linq;
 
 namespace Mutation.Tests;
 
@@ -50,7 +51,7 @@ public class SettingsManagerPromptIdTests : IDisposable
 	}
 
 	[Fact]
-	public void BackfilledIdsArePersisted_SoTheySurviveARestart()
+	public void BackfilledIdsAreWrittenBackToTheFile()
 	{
 		File.WriteAllText(_tempPath, """
 			{
@@ -63,10 +64,43 @@ public class SettingsManagerPromptIdTests : IDisposable
 			}
 			""");
 
-		var first = Load().LlmSettings!.Prompts.ToDictionary(p => p.Name, p => p.Id);
-		var second = Load().LlmSettings!.Prompts.ToDictionary(p => p.Name, p => p.Id);
+		var loaded = Load().LlmSettings!.Prompts.ToDictionary(p => p.Name!, p => p.Id);
 
-		Assert.Equal(first, second);
+		// Asserted against the file, not against a second load: assignment is
+		// deterministic on list order, so comparing two loads would pass even if
+		// nothing were ever persisted.
+		var written = JObject.Parse(File.ReadAllText(_tempPath));
+		var prompts = (JArray)written["LlmSettings"]!["Prompts"]!;
+		foreach (var prompt in prompts)
+		{
+			string name = prompt["Name"]!.Value<string>()!;
+			Assert.Equal(loaded[name], prompt["Id"]!.Value<int>());
+		}
+		Assert.Equal(2, prompts.Select(p => p["Id"]!.Value<int>()).Distinct().Count());
+	}
+
+	[Fact]
+	public void ASettledFileIsNotRewrittenOnTheNextStart()
+	{
+		// The backfill must be idempotent end-to-end, not just in the helper: a settings
+		// file rewritten on every launch would be a regression in its own right.
+		File.WriteAllText(_tempPath, """
+			{
+				"LlmSettings": {
+					"Prompts": [
+						{ "Name": "Fix grammar", "Content": "a", "ModelName": "gpt-4.1" },
+						{ "Name": "Summarize",   "Content": "b", "ModelName": "gpt-4.1" }
+					]
+				}
+			}
+			""");
+
+		Load(); // First start fills in the Ids (and any other defaults) and saves.
+		byte[] settled = File.ReadAllBytes(_tempPath);
+
+		Load();
+
+		Assert.Equal(settled, File.ReadAllBytes(_tempPath));
 	}
 
 	[Fact]

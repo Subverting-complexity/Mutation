@@ -21,6 +21,9 @@ internal static class PromptIdBackfill
 	/// an earlier prompt already claimed. Prompts whose Id is already valid and unique
 	/// keep it, so a user's hand-chosen numbering survives and Ids stay stable across
 	/// loads. Returns true when anything was assigned, so the caller knows to persist.
+	///
+	/// Assigns from the lowest free number rather than above the highest in use, so a
+	/// hand-written Id near <see cref="int.MaxValue"/> cannot push the next one past it.
 	/// </summary>
 	internal static bool Apply(IReadOnlyList<LlmSettings.LlmPrompt>? prompts)
 	{
@@ -32,17 +35,21 @@ internal static class PromptIdBackfill
 		var reserved = new HashSet<int>();
 		foreach (var prompt in prompts)
 		{
-			if (prompt is not null && prompt.Id > 0)
+			if (prompt.Id > 0)
 				reserved.Add(prompt.Id);
 		}
 
 		var taken = new HashSet<int>();
+		// Newtonsoft honours $id/$ref by default, so a hand-written file can put one
+		// prompt object in two slots. Assigning to it twice would move both slots
+		// together and never converge, rewriting the settings file on every startup.
+		var seen = new HashSet<LlmSettings.LlmPrompt>(ReferenceEqualityComparer.Instance);
 		bool changed = false;
 		int candidate = 1;
 
 		foreach (var prompt in prompts)
 		{
-			if (prompt is null)
+			if (!seen.Add(prompt))
 				continue;
 
 			// First prompt to claim a given valid Id keeps it; a repeat is treated as

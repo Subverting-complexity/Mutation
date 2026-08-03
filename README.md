@@ -248,7 +248,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 
 > **Note on transcript formatting rules:** `TranscriptFormatRules` is a top-level setting. Rules run as a pre-processing pass on the transcript before any LLM processing is applied.
 
-> **Note on prompt `Id`:** it identifies the prompt to the rest of the app and must be unique. If you add prompts by hand and leave `Id` out (or repeat one), Mutation fills in the missing values on the next start and saves them back, so you do not have to keep track of them yourself.
+> **Note on prompt `Id`:** it identifies the prompt to the rest of the app and must be a unique positive number. If you add prompts by hand, you can leave `Id` out entirely — anything missing, zero, negative, or repeated is renumbered on the next start and saved back, so you do not have to keep track of them yourself. Ids that are already unique and positive are left exactly as you wrote them.
 
 > **Note on `FastMode`:** per-prompt, off by default, and also available as a **Fast mode** check box in the prompt editor. It runs the same model faster — same weights, same answer quality — but is billed at roughly **twice** the standard input and output token price, so turn it on only where latency actually costs you something. Not every model offers Fast mode, and on Anthropic (Claude) models it additionally needs research-preview access on your account. Whenever Fast mode can't be used, the prompt still returns a result at standard speed and Mutation announces why — whether you need to request access, pick a different model, or just try again later.
 

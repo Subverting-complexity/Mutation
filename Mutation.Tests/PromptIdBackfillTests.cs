@@ -87,6 +87,32 @@ public class PromptIdBackfillTests
 	}
 
 	[Fact]
+	public void Apply_HugeExistingId_DoesNotPushTheNextIdTowardsOverflow()
+	{
+		// Highest-plus-one would wrap to int.MinValue here. Assigning from the lowest
+		// free number instead keeps every Id positive.
+		var prompts = Prompts(int.MaxValue, 0, 0);
+
+		Assert.True(PromptIdBackfill.Apply(prompts));
+		Assert.Equal(int.MaxValue, prompts[0].Id);
+		Assert.Equal(new[] { 1, 2 }, prompts.Skip(1).Select(p => p.Id));
+	}
+
+	[Fact]
+	public void Apply_SamePromptObjectInTwoSlots_ConvergesInsteadOfRenumberingForever()
+	{
+		// Newtonsoft honours $id/$ref, so a hand-written file can alias one prompt into
+		// two slots. Assigning to it twice would move both slots together, leaving the
+		// list permanently "duplicated" and rewriting the settings file on every start.
+		var shared = new LlmSettings.LlmPrompt { Id = 0, Name = "Shared" };
+		var prompts = new List<LlmSettings.LlmPrompt> { shared, shared };
+
+		Assert.True(PromptIdBackfill.Apply(prompts));
+		Assert.True(shared.Id > 0);
+		Assert.False(PromptIdBackfill.Apply(prompts));
+	}
+
+	[Fact]
 	public void Apply_EmptyOrNull_ReportsNoChange()
 	{
 		Assert.False(PromptIdBackfill.Apply(new List<LlmSettings.LlmPrompt>()));
