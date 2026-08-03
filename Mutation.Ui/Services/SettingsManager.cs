@@ -522,6 +522,12 @@ End of summary.
 			}
 		}
 
+		// Hand-written prompts have no Id and all default to 0, which makes them
+		// indistinguishable to anything keyed on prompt identity. Backfilling here means
+		// the Ids are also written back, so they stay put across restarts.
+		if (PromptIdBackfill.Apply(llmSettings.Prompts))
+			somethingWasMissing = true;
+
 		if (settings.TranscriptFormatRules == null || !settings.TranscriptFormatRules.Any())
 		{
 			settings.TranscriptFormatRules = new List<TranscriptFormatRule>
