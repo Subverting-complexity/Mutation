@@ -100,9 +100,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Set as soon as the window starts closing, so async continuations that resume
 	// afterwards do not touch torn-down controls.
 	private bool _isClosing;
-	// Slider position used when pinning is toggled off and the device has no
-	// readable level to fall back to, so the control still shows a sensible value.
-	private const int DefaultMicLevel = 75;
 	private const string DefaultVoiceLabel = "(System default)";
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -276,7 +273,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		// slow, so it runs off the UI thread and the controls settle a moment later.
 		// The synchronous part — disabling the controls and claiming the initialization
 		// generation — has already run by the time this returns.
-		_ = InitializeMicrophoneLevelControlsAsync();
+		InitializeMicrophoneLevelControls();
 		InitializeHotkeyVisuals();
 
 		_closeSequence = new Mutation.Ui.Core.ApplicationCloseSequence(
@@ -330,13 +327,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (!_micLevelControlsReady)
 			return;
 
+		int generation = _micLevelInitGeneration;
+
 		if (await _micLevelWriteCoordinator.ReadCurrentLevelAsync() is not int level)
 			return;
 
-		// Re-check after the await: the device may have been swapped, or the window
-		// closed, while the read was in flight. MainWindow_Closed clears the flag, so a
-		// read still running at close does not resume onto a torn-down window.
-		if (!_micLevelControlsReady)
+		// Re-check after the await: the window may have closed (MainWindow_Closed clears
+		// the flag, so a read still running then does not resume onto a torn-down
+		// window), and a microphone change may have started a newer probe — painting
+		// this level would then show one device's level against another device.
+		if (!_micLevelControlsReady || generation != _micLevelInitGeneration)
 			return;
 
 		_micLevelControlsReady = false;
@@ -588,8 +588,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	// selection. The rebuild is silent by design: swapping ItemsSource re-raises
 	// SelectionChanged, and re-running the whole selection pipeline (settings save,
 	// capture restart, level re-probe) for a device that did not actually change would
-	// interrupt the user and talk over their screen reader. Only a genuine change —
-	// the selected microphone disappearing — is announced and acted on.
+	// interrupt the user and talk over their screen reader. A hot-plug elsewhere in the
+	// list — a headset connecting, a dock, a webcam — changes nothing about the user's
+	// audio, so it is not announced at all. Only losing the selected microphone is.
 	private void RefreshMicrophoneList()
 	{
 		if (_isClosing)
@@ -618,18 +619,23 @@ public sealed partial class MainWindow : Window, IDisposable
 		switch (update.Outcome)
 		{
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionPreserved:
-				ShowStatus("Microphone",
-					$"Microphone list updated — {DescribeDeviceCount(devices.Count)} available.",
-					InfoBarSeverity.Informational);
+				// Nothing about the user's audio changed. Say nothing.
 				break;
 
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionReplaced:
+			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionAdopted:
+				// Announced before the assignment: selecting runs the handler, which
+				// reports its own failure if the device turns out to be unusable, and
+				// that more specific message should be the one left standing.
+				ShowStatus("Microphone",
+					update.Outcome == Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionReplaced
+						? $"The selected microphone was disconnected. Now using {update.Device!.FriendlyName}."
+						: $"Microphone connected. Now using {update.Device!.FriendlyName}.",
+					InfoBarSeverity.Warning);
+
 				// Assigned outside the suppression so the normal selection path runs and
 				// capture and the level controls follow the device that is actually live.
 				CmbMicrophone.SelectedIndex = 0;
-				ShowStatus("Microphone",
-					$"The selected microphone was disconnected. Now using {update.Device!.FriendlyName}.",
-					InfoBarSeverity.Warning);
 				break;
 
 			default:
@@ -638,9 +644,6 @@ public sealed partial class MainWindow : Window, IDisposable
 				break;
 		}
 	}
-
-	private static string DescribeDeviceCount(int count) =>
-		count == 1 ? "1 microphone" : $"{count} microphones";
 
 	private void InitializeHotkeyVisuals()
 	{
@@ -670,6 +673,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		// controls once the window is torn down.
 		_isClosing = true;
 		_micLevelControlsReady = false;
+		// Unsubscribed here rather than in Dispose(): Dispose only runs after the close
+		// sequence has stopped the recorder, and a device change arriving in that window
+		// would reach for this window's DispatcherQueue after it has been closed.
+		_audioDeviceManager.CaptureDeviceListChanged -= AudioDeviceManager_CaptureDeviceListChanged;
 		// Signal shutdown to any in-flight transcription HTTP requests so they
 		// observe cancellation rather than running until their server timeout.
 		try { _shutdownCts.Cancel(); } catch (ObjectDisposedException) { }
@@ -1455,47 +1462,69 @@ public sealed partial class MainWindow : Window, IDisposable
 	// running inline. The mic-change path is the one most likely to meet a slow or
 	// failing device, because one was just swapped in, and a stall there would freeze
 	// the window and the screen reader with it (issue #263).
-	private async Task InitializeMicrophoneLevelControlsAsync()
+	private async void InitializeMicrophoneLevelControls()
 	{
-		// Everything up to the first await happens synchronously, so the controls are
-		// never left interactive against a device that has not been probed, and a mic
-		// change during startup re-enters here rather than being skipped by the
-		// _micLevelInitialized gate.
+		// Everything up to the first await happens synchronously, so a mic change during
+		// startup re-enters here rather than being skipped by the _micLevelInitialized
+		// gate, and no stale probe can win a race against a newer one.
 		_micLevelInitialized = true;
 		_micLevelControlsReady = false;
 		int generation = ++_micLevelInitGeneration;
 
-		TglPinMicLevel.IsEnabled = false;
-		SldMicLevel.IsEnabled = false;
-		const string probing = "Checking whether this microphone supports software level control…";
-		ToolTipService.SetToolTip(TglPinMicLevel, probing);
-		ToolTipService.SetToolTip(SldMicLevel, probing);
+		// The controls stay enabled while the probe runs. Disabling them takes them out
+		// of the keyboard tab order, so a screen-reader user tabbing through simply does
+		// not meet them and then finds them reappear — and a disabled control cannot take
+		// focus, so any explanation attached to it is announced to nobody.
+		// _micLevelControlsReady already makes them inert, which is the part that
+		// matters; HelpText is what carries the reason, because a screen reader reads it
+		// on focus.
+		SetMicLevelHelpText("Checking whether this microphone supports software level control.");
 
-		var state = await _micLevelWriteCoordinator.ReadLevelStateAsync();
+		try
+		{
+			var state = await _micLevelWriteCoordinator.ReadLevelStateAsync();
 
-		// A newer probe (another mic change) or the window closing supersedes this one;
-		// applying a stale result would pair one device's controls with another's level.
-		if (generation != _micLevelInitGeneration || _isClosing)
-			return;
+			// A newer probe (another mic change) or the window closing supersedes this
+			// one; applying a stale result would pair one device's controls with
+			// another's level.
+			if (generation != _micLevelInitGeneration || _isClosing)
+				return;
 
+			ApplyMicrophoneLevelState(state);
+		}
+		catch (Exception ex)
+		{
+			// async void: nothing downstream can observe this, and leaving the controls
+			// mid-probe would strand them inert with a stale explanation.
+			ErrorLogger.LogError("Setting up the microphone level controls failed", ex);
+			if (generation == _micLevelInitGeneration && !_isClosing)
+				ApplyMicrophoneLevelState(new Mutation.Ui.Core.CaptureLevelState(IsSupported: false, Level: null));
+		}
+	}
+
+	// Settles the level controls on what the probe found.
+	private void ApplyMicrophoneLevelState(Mutation.Ui.Core.CaptureLevelState state)
+	{
 		TglPinMicLevel.IsEnabled = state.IsSupported;
 		SldMicLevel.IsEnabled = state.IsSupported;
 
 		if (!state.IsSupported)
 		{
 			TglPinMicLevel.IsOn = false;
-			const string unsupported = "This microphone does not support software level control.";
-			ToolTipService.SetToolTip(TglPinMicLevel, unsupported);
-			ToolTipService.SetToolTip(SldMicLevel, unsupported);
+			SetMicLevelHelpText("This microphone does not support software level control.");
 			return;
 		}
 
-		ToolTipService.SetToolTip(TglPinMicLevel, "Keep this microphone's input level pinned to the slider value.");
-		ToolTipService.SetToolTip(SldMicLevel, "Windows input level for this microphone.");
+		SetMicLevelHelpText(null);
 
 		int? pinned = _settings.AudioSettings?.PinnedCaptureLevel;
 		TglPinMicLevel.IsOn = pinned.HasValue;
-		SldMicLevel.Value = pinned ?? state.Level ?? DefaultMicLevel;
+
+		// A supported device whose level could not be read right now leaves the slider
+		// where it is. Snapping it to a default would report a level the device is not
+		// actually at — the very symptom this work is meant to remove.
+		if ((pinned ?? state.Level) is int level)
+			SldMicLevel.Value = level;
 
 		_micLevelControlsReady = true;
 
@@ -1506,6 +1535,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		// runs mid-session, where the write's failure path re-enumerates the device
 		// and would otherwise briefly freeze the window and the screen reader.
 		ReassertPinnedLevelOffThread(pinned);
+	}
+
+	// Explains the level controls' current state where a screen reader will actually
+	// read it: HelpText is announced on focus, unlike a tooltip. Null restores the
+	// descriptions the XAML already carries in its tooltips.
+	private void SetMicLevelHelpText(string? helpText)
+	{
+		AutomationProperties.SetHelpText(TglPinMicLevel, helpText ?? string.Empty);
+		AutomationProperties.SetHelpText(SldMicLevel, helpText ?? string.Empty);
 	}
 
 	// Nudges the pinned capture level back onto the active device through the shared
@@ -2256,6 +2294,14 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
+		// Backstop for the flag above: if WinUI ever defers the SelectionChanged raised
+		// by an ItemsSource swap, it lands after the flag has been cleared. Re-running
+		// the pipeline for the device already selected would save settings, drop and
+		// reopen capture, and re-probe the level controls — an audible glitch and a
+		// screen-reader interruption for a selection that did not change.
+		if (string.Equals(device.Id, _audioDeviceManager.SelectedMicrophone?.Id, StringComparison.OrdinalIgnoreCase))
+			return;
+
 		try
 		{
 			// Selected by ID: the manager re-resolves the live device out of its current
@@ -2279,7 +2325,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Re-sync the level controls to the newly-selected device (support and
 			// current level may differ) and re-assert the pinned level on it.
 			if (_micLevelInitialized)
-				_ = InitializeMicrophoneLevelControlsAsync();
+				InitializeMicrophoneLevelControls();
 		}
 		catch (Exception ex)
 		{
@@ -2736,8 +2782,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public void Dispose()
 	{
-		// Unsubscribe first: a device-change notification arriving mid-teardown would
-		// otherwise enqueue a combo rebuild onto a window that is going away.
+		// Already unsubscribed by MainWindow_Closed on the normal path; repeated here so
+		// a Dispose that did not come through it still detaches the handler.
 		_audioDeviceManager.CaptureDeviceListChanged -= AudioDeviceManager_CaptureDeviceListChanged;
 		_audioSessionManager?.Dispose();
 		_microphoneVisualization?.Dispose();

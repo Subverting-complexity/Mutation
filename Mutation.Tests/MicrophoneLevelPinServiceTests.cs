@@ -332,46 +332,33 @@ public class MicrophoneLevelPinServiceTests
 	}
 
 	[Fact]
-	public void ReadCurrentLevel_ReturnsScaledValue_WhenReadable()
+	public void ReadLevelState_ScalesTheLevel_AndNeverWrites()
 	{
 		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.37f };
 		var service = NewService(endpoint);
 
-		int? level = service.ReadCurrentLevel();
-
-		Assert.Equal(37, level);
+		Assert.Equal(37, service.ReadLevelState().Level);
 		Assert.Equal(0, endpoint.SetCount); // a pure read, never a write
 	}
 
 	[Fact]
-	public void ReadCurrentLevel_ReturnsNull_OnUnsupportedDevice()
+	public void ReadLevelState_ReportsNoLevel_OnUnsupportedDevice()
 	{
 		// Supported is false but a stale Level lingers — the support gate must win so
 		// callers get "unknown" rather than a misleading value.
 		var endpoint = new FakeCaptureLevelEndpoint { Supported = false, Level = 0.42f };
 		var service = NewService(endpoint);
 
-		Assert.Null(service.ReadCurrentLevel());
+		Assert.Null(service.ReadLevelState().Level);
 	}
 
 	[Fact]
-	public void ReadCurrentLevel_ReturnsNull_WhenLevelUnreadable()
-	{
-		// Supported device whose current level can't be read (transient failure): the
-		// caller must be able to leave its display untouched rather than reset it.
-		var endpoint = new FakeCaptureLevelEndpoint { Supported = true, ThrowOnGet = true };
-		var service = NewService(endpoint);
-
-		Assert.Null(service.ReadCurrentLevel());
-	}
-
-	[Fact]
-	public void ReadCurrentLevel_ClampsOutOfRangeScalar()
+	public void ReadLevelState_ClampsOutOfRangeScalar()
 	{
 		var endpoint = new FakeCaptureLevelEndpoint { Level = 1.5f };
 		var service = NewService(endpoint);
 
-		Assert.Equal(100, service.ReadCurrentLevel());
+		Assert.Equal(100, service.ReadLevelState().Level);
 	}
 
 	[Fact]

@@ -1,9 +1,11 @@
+using CognitiveSupport;
 using CoreAudio;
 using Mutation.Ui.Core;
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace Mutation.Ui;
 
@@ -52,9 +54,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	/// the same set — those happen on every mute and level retry, and re-raising there
 	/// would churn the UI for nothing.
 	///
-	/// Raised on whichever thread performed the enumeration — the OS device-notification
-	/// thread, or a coordinator worker — never the UI thread, and with <c>_comGate</c>
-	/// still held. Handlers must marshal to their own thread and return promptly.
+	/// Raised on a thread-pool thread, never the UI thread and never under either lock,
+	/// so a slow or throwing handler cannot stall the enumeration it followed. Handlers
+	/// must still marshal to their own thread.
 	/// </summary>
 	public event EventHandler? CaptureDeviceListChanged;
 
@@ -158,7 +160,29 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		DisposeSuperseded(superseded.Select(entry => entry.Device), IsSelectedMicrophone);
 
 		if (listChanged)
-			CaptureDeviceListChanged?.Invoke(this, EventArgs.Empty);
+			RaiseCaptureDeviceListChanged();
+	}
+
+	// Notifies subscribers off the enumerating thread, so no handler code runs under
+	// _comGate, and a handler that throws cannot abort the caller — which still has the
+	// mute state to re-synchronize onto the new device set.
+	private void RaiseCaptureDeviceListChanged()
+	{
+		var handler = CaptureDeviceListChanged;
+		if (handler is null)
+			return;
+
+		ThreadPool.QueueUserWorkItem(_ =>
+		{
+			try
+			{
+				handler(this, EventArgs.Empty);
+			}
+			catch (Exception ex)
+			{
+				ErrorLogger.LogError("Capture device list change notification failed", ex);
+			}
+		});
 	}
 
 	// The COM-free description of a device, or null when its identity cannot be read —
@@ -233,36 +257,45 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		if (string.IsNullOrEmpty(deviceId))
 			throw new ArgumentException("A device ID is required.", nameof(deviceId));
 
-		MMDevice device;
 		string friendlyName;
-		CaptureDeviceInfo info;
 		lock (_sync)
 		{
-			var entry = _captureDevices.FirstOrDefault(
-				e => e.Info is not null && string.Equals(e.Info.Id, deviceId, StringComparison.OrdinalIgnoreCase));
-			if (entry is null)
+			if (FindEntry(deviceId) is not { } entry)
 				return false;
 
-			device = entry.Device;
-			info = entry.Info!;
-			friendlyName = info.FriendlyName;
+			friendlyName = entry.Info!.FriendlyName;
 		}
 
-		// Resolved outside the lock, and from the cached name rather than the device, so
-		// this costs no COM call at all.
+		// Resolved outside the lock, from the cached name rather than the device, so no
+		// COM call is involved. It still walks the WaveIn device table, so it must not
+		// run under _sync.
 		int deviceIndex = ResolveNAudioDeviceIndex(friendlyName);
 
-		// The device, its description and its index are published together so a
-		// concurrent reader never sees one without the others.
 		lock (_sync)
 		{
-			_microphone = device;
-			_microphoneInfo = info;
+			// Re-resolved inside the publishing lock rather than carried across from the
+			// lookup above: a re-enumeration during the index resolution disposes the
+			// wrapper we found (it is not the selection yet, so the disposal pass does
+			// not skip it), and publishing it would make the selected microphone a dead
+			// COM proxy.
+			if (FindEntry(deviceId) is not { } current)
+				return false;
+
+			// The device, its description and its index are published together so a
+			// concurrent reader never sees one without the others.
+			_microphone = current.Device;
+			_microphoneInfo = current.Info;
 			_microphoneDeviceIndex = deviceIndex;
 		}
 
 		return true;
 	}
+
+	// Callers hold _sync. Matches on the cached description, so no COM is involved.
+	private CaptureDeviceEntry? FindEntry(string deviceId) =>
+		_captureDevices.FirstOrDefault(
+			entry => entry.Info is not null
+				&& string.Equals(entry.Info.Id, deviceId, StringComparison.OrdinalIgnoreCase));
 
 	public void EnsureDefaultMicrophoneSelected()
 	{
@@ -321,8 +354,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// index at -1 (so no waveform capture would occur). Use more flexible matching.
 	//
 	// Takes the name rather than the device: the name was already captured when the
-	// device was enumerated, so resolving an index costs no COM call and cannot throw on
-	// a superseded wrapper.
+	// device was enumerated, so this cannot throw on a superseded wrapper and involves
+	// no COM. It does still walk the WaveIn device table over winmm, so it is not free
+	// and must stay outside _sync.
 	private static int ResolveNAudioDeviceIndex(string? friendlyName)
 	{
 		if (string.IsNullOrEmpty(friendlyName))

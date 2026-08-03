@@ -69,18 +69,9 @@ public sealed class MicrophoneLevelPinService
 	/// </summary>
 	public CaptureLevelResult ApplyLevel(int level) => WriteLevel(level);
 
-	/// <summary>
-	/// Reads the active device's current capture level as a 0–100 value for
-	/// display, or <c>null</c> when it cannot be read — an unsupported /
-	/// hardware-fixed device or a transient failure. This is a pure read: it never
-	/// writes the level or touches mute. Callers use it to sync a UI display to the
-	/// real OS level; the deliberate <c>null</c> (rather than a default) lets them
-	/// leave the display unchanged instead of showing a misleading value.
-	/// </summary>
-	public int? ReadCurrentLevel() => ReadLevelState().Level;
-
 	// Converts a raw level scalar to the 0–100 display scale, propagating "unreadable"
-	// as null rather than inventing a value.
+	// as null rather than inventing a value: a caller can then leave its display
+	// unchanged instead of showing a level the device is not actually at.
 	private static int? ToLevel(float? scalar)
 	{
 		if (scalar is not float value)

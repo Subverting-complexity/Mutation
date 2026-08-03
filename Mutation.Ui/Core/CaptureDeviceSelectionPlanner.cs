@@ -31,9 +31,14 @@ public static class CaptureDeviceSelectionPlanner
 		if (devices.Count == 0)
 			return new CaptureDeviceListUpdate(CaptureDeviceListOutcome.NoDevices, null);
 
-		// Nothing was selected before, or what was selected is gone: the first device
-		// takes over. Both cases need the full selection path to run, so the capture and
-		// the level controls follow the device that is actually live.
-		return new CaptureDeviceListUpdate(CaptureDeviceListOutcome.SelectionReplaced, devices[0]);
+		// Either way the first device takes over and the full selection path runs, so
+		// capture and the level controls follow the device that is actually live. The
+		// two are kept apart only because they mean opposite things to the user: one
+		// lost the microphone they chose, the other never had one.
+		var outcome = selectedId is null
+			? CaptureDeviceListOutcome.SelectionAdopted
+			: CaptureDeviceListOutcome.SelectionReplaced;
+
+		return new CaptureDeviceListUpdate(outcome, devices[0]);
 	}
 }

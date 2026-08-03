@@ -9,9 +9,16 @@ public enum CaptureDeviceListOutcome
 	/// announcement beyond the list itself having changed.</summary>
 	SelectionPreserved,
 
-	/// <summary>The selected microphone is gone. Another one takes over, which the
-	/// user must be told about: their audio is now coming from a different device.</summary>
+	/// <summary>The selected microphone is gone and another one takes over. The user
+	/// must be told: their audio is now coming from a different device than the one
+	/// they chose.</summary>
 	SelectionReplaced,
+
+	/// <summary>Nothing was selected and a device is now available, so it is adopted.
+	/// Distinct from <see cref="SelectionReplaced"/> because nothing was lost — telling
+	/// the user a microphone "was disconnected" here would be the opposite of what
+	/// happened.</summary>
+	SelectionAdopted,
 
 	/// <summary>Nothing is left to select.</summary>
 	NoDevices,
