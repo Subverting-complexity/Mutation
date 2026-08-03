@@ -201,6 +201,15 @@ public static class SendKeysMapper
 				continue;
 			}
 
+			// A parenthesised run like "(AB)" is how a human writes the group form of
+			// "A+B" — expand it into its individual keys so the chord's modifiers apply
+			// to the whole group, exactly as they do for "Ctrl+A+B".
+			if (TryExpandKeyGroup(token, out var groupedKeys))
+			{
+				keys.AddRange(groupedKeys);
+				continue;
+			}
+
 			if (TrySingleCharLiteral(token, out var literal))
 			{
 				keys.Add(EscapeIfReserved(literal));
@@ -237,17 +246,59 @@ public static class SendKeysMapper
 	private static bool LooksLikeSendKeys(string s)
 	{
 		// Heuristic: any of these strongly implies SendKeys syntax
-		// '^', '%', '~', braces, or grouping parentheses following a modifier.
+		// '^', '%', '~', braces, or grouping parentheses opened by a modifier.
 		for (int i = 0; i < s.Length; i++)
 		{
 			var c = s[i];
 			if (c == '^' || c == '%' || c == '~' || c == '{' || c == '}')
 				return true;
 
-			if ((c == '+' || c == '^' || c == '%') && i + 1 < s.Length && s[i + 1] == '(')
+			// '+(' opens a SendKeys group only when that '+' is the Shift modifier,
+			// which can only sit at the start of the string or directly after another
+			// modifier character — "+(ab)", "^+(ab)". In a human-written chord like
+			// "Ctrl+(AB)" the '+' is the separator after a key name, so treating it as
+			// SendKeys would pass the string through untranslated and type the literal
+			// text "Ctrl" into the user's target application.
+			if (IsModifierChar(c) && i + 1 < s.Length && s[i + 1] == '('
+				&& (i == 0 || IsModifierChar(s[i - 1])))
 				return true;
 		}
 		return false;
+	}
+
+	private static bool IsModifierChar(char c) =>
+		c == CtrlMod || c == ShiftMod || c == AltMod;
+
+	// Expands "(AB)" into the individual keys 'a' and 'b'. Only a fully parenthesised
+	// token qualifies, and every character inside must be a plain single-key literal —
+	// a nested parenthesis is malformed and is rejected so the caller reports it as an
+	// unknown key rather than emitting garbage keystrokes.
+	private static bool TryExpandKeyGroup(string token, out List<string> keys)
+	{
+		keys = new List<string>();
+
+		var t = token.Trim();
+		if (t.Length < 3 || t[0] != '(' || t[^1] != ')')
+			return false;
+
+		foreach (char c in t[1..^1])
+		{
+			if (char.IsWhiteSpace(c))
+				continue;
+
+			if (c == '(' || c == ')' || !TrySingleCharLiteral(c.ToString(), out var literal))
+			{
+				keys.Clear();
+				return false;
+			}
+
+			keys.Add(EscapeIfReserved(literal));
+		}
+
+		if (keys.Count == 0)
+			return false;
+
+		return true;
 	}
 
 	private static List<string> SplitByComma(string input)

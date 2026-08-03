@@ -22,11 +22,21 @@ namespace Mutation.Ui.Core;
 /// Because a single instance is shared by every level writer (the slider, the pin
 /// toggle, and the record-start re-assert), it is also the one serialization point
 /// for the level endpoint: two threads never write the same COM object at once.
+/// <see cref="ReadCurrentLevelAsync"/> joins the same serialization — a display read
+/// is a COM read of the very endpoint the writes target, so it runs on a background
+/// thread and never overlaps a write.
 /// </summary>
 public sealed class MicrophoneLevelWriteCoordinator
 {
 	private readonly Func<int, CaptureLevelResult> _write;
+	private readonly Func<int?> _readLevel;
 	private readonly object _gate = new();
+
+	// Held across the actual device access, by both the drain worker's write and a
+	// display read, so the two never touch the endpoint concurrently. Only background
+	// threads take it — blocking on it from the UI thread is exactly the freeze this
+	// coordinator exists to prevent.
+	private readonly object _endpointGate = new();
 
 	// The most recent level requested but not yet being written, and the awaiter tied
 	// to it. Both are cleared the moment the worker picks the request up. Guarded by
@@ -38,9 +48,10 @@ public sealed class MicrophoneLevelWriteCoordinator
 	// queued). Guarded by _gate.
 	private bool _workerRunning;
 
-	public MicrophoneLevelWriteCoordinator(Func<int, CaptureLevelResult> write)
+	public MicrophoneLevelWriteCoordinator(Func<int, CaptureLevelResult> write, Func<int?> readLevel)
 	{
 		_write = write ?? throw new ArgumentNullException(nameof(write));
+		_readLevel = readLevel ?? throw new ArgumentNullException(nameof(readLevel));
 	}
 
 	/// <summary>
@@ -93,6 +104,32 @@ public sealed class MicrophoneLevelWriteCoordinator
 		return mine.Task;
 	}
 
+	/// <summary>
+	/// Reads the device's current capture level (0–100, or <c>null</c> when it cannot
+	/// be read) on a background thread, serialized against the level writes. Callers on
+	/// the UI thread — the window-activation display re-sync — use this instead of
+	/// reading the endpoint directly: the read is a COM call that can stall on a slow
+	/// or failing device, which would freeze the window and, with it, the screen
+	/// reader. The continuation resumes on the caller's synchronization context, so the
+	/// UI can be updated directly with the result.
+	/// </summary>
+	public Task<int?> ReadCurrentLevelAsync() => Task.Run(() =>
+	{
+		lock (_endpointGate)
+		{
+			try
+			{
+				return _readLevel();
+			}
+			catch
+			{
+				// A device fault makes the level unknown, which is what null means. The
+				// caller leaves its display unchanged rather than showing a wrong value.
+				return null;
+			}
+		}
+	});
+
 	// Applies queued level requests one at a time until none remain. Only the request
 	// currently held in _pendingLevel is applied each pass, so a burst that arrives
 	// during a write collapses to its most recent value.
@@ -120,7 +157,12 @@ public sealed class MicrophoneLevelWriteCoordinator
 			CaptureLevelResult result;
 			try
 			{
-				result = _write(level);
+				// Serialized with ReadCurrentLevelAsync: the write and the display read
+				// target the same COM endpoint.
+				lock (_endpointGate)
+				{
+					result = _write(level);
+				}
 			}
 			catch
 			{

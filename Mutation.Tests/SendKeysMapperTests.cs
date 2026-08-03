@@ -108,6 +108,32 @@ public class SendKeysMapperTests
 		Assert.Equal("^+(ab)", SendKeysMapper.Map("Ctrl+Shift+A+B"));
 	}
 
+	// A human-written chord may spell the group out with parentheses. The '+' before
+	// '(' is the separator, not the SendKeys Shift modifier, so the chord must be
+	// translated rather than passed through (issue #225).
+	[Theory]
+	[InlineData("Ctrl+(AB)", "^(ab)")]
+	[InlineData("Ctrl+Shift+(AB)", "^+(ab)")]
+	[InlineData("Shift+(AB)", "+(ab)")]
+	[InlineData("Alt+(ab)", "%(ab)")]
+	[InlineData("(AB)", "(ab)")]
+	public void Parenthesised_Group_In_Human_Chord_Is_Mapped(string input, string expected)
+	{
+		Assert.Equal(expected, SendKeysMapper.Map(input));
+	}
+
+	[Fact]
+	public void Parenthesised_Group_Matches_Plus_Separated_Equivalent()
+	{
+		Assert.Equal(SendKeysMapper.Map("Ctrl+A+B"), SendKeysMapper.Map("Ctrl+(AB)"));
+	}
+
+	[Fact]
+	public void Malformed_Nested_Group_Is_Rejected()
+	{
+		Assert.Throws<FormatException>(() => SendKeysMapper.Map("Ctrl+(A(B)"));
+	}
+
 	// ----- Alternative modifier names -----
 
 	[Theory]
@@ -132,13 +158,15 @@ public class SendKeysMapperTests
 
 	// ----- SendKeys passthrough -----
 
+	// Only genuine SendKeys syntax passes through untouched. "^+(ab)" qualifies: its
+	// leading '^' and the '+' that directly precedes '(' are both modifiers.
 	[Theory]
 	[InlineData("^a")]
 	[InlineData("%{F4}")]
 	[InlineData("~")]
 	[InlineData("{ENTER}")]
 	[InlineData("^+(ab)")]
-	[InlineData("Ctrl+(AB)")]
+	[InlineData("+(ab)")]
 	public void Passthrough_When_Already_SendKeys_Syntax(string input)
 	{
 		Assert.Equal(input, SendKeysMapper.Map(input));
