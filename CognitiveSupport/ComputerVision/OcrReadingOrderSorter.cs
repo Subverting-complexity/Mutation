@@ -66,6 +66,11 @@ public static class OcrReadingOrderSorter
 
 		var rows = new List<List<OcrTextLine>>();
 		var current = new List<OcrTextLine> { byVerticalPosition[0] };
+		// The band stays pinned to the line that opened the row and is deliberately
+		// never widened to the union of its members. Growing it let one abnormally tall
+		// line — a sidebar, a logo caption, a merged multi-line cell — dilate the band
+		// far enough to swallow several genuinely separate table rows, which then got
+		// re-sorted by Left into one interleaved line of nonsense.
 		double rowTop = byVerticalPosition[0].Top;
 		double rowBottom = byVerticalPosition[0].Bottom;
 
@@ -74,8 +79,6 @@ public static class OcrReadingOrderSorter
 			if (SharesRow(rowTop, rowBottom, line))
 			{
 				current.Add(line);
-				rowTop = Math.Min(rowTop, line.Top);
-				rowBottom = Math.Max(rowBottom, line.Bottom);
 				continue;
 			}
 

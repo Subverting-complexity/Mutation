@@ -107,6 +107,52 @@ public class OcrReadingOrderSorterTests
 	}
 
 	[Fact]
+	public void LeftToRightTopToBottom_ATallLineDoesNotSwallowTheRowsBesideIt()
+	{
+		// An invoice with a full-height sidebar, logo caption, or merged multi-line cell
+		// next to normal rows. A row band that grew to the union of its members let the
+		// tall line glue every row it touched into one interleaved line.
+		var lines = new[]
+		{
+			new OcrTextLine("sidebar", 0, 0, 40, 100),
+			Line("row one left", left: 60, top: 10, height: 10),
+			Line("row one right", left: 200, top: 10, height: 10),
+			Line("row two left", left: 60, top: 40, height: 10),
+			Line("row two right", left: 200, top: 40, height: 10),
+			Line("row three left", left: 60, top: 70, height: 10),
+			Line("row three right", left: 200, top: 70, height: 10),
+		};
+
+		var text = Sorted(lines, OcrReadingOrder.LeftToRightTopToBottom);
+		var rows = text.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+		// Each row's two cells must stay adjacent and in left-to-right order.
+		Assert.Equal("row one left", rows[Array.IndexOf(rows, "row one right") - 1]);
+		Assert.Equal("row two left", rows[Array.IndexOf(rows, "row two right") - 1]);
+		Assert.Equal("row three left", rows[Array.IndexOf(rows, "row three right") - 1]);
+
+		// And the rows must stay in top-to-bottom order relative to one another.
+		Assert.True(Array.IndexOf(rows, "row one left") < Array.IndexOf(rows, "row two left"));
+		Assert.True(Array.IndexOf(rows, "row two left") < Array.IndexOf(rows, "row three left"));
+	}
+
+	[Fact]
+	public void LeftToRightTopToBottom_ATallCellDoesNotMergeTheFollowingRow()
+	{
+		// A double-height cell in the first row must not pull the second row up into it.
+		var lines = new[]
+		{
+			Line("a", left: 0, top: 0, height: 20),
+			Line("tall b", left: 100, top: 0, height: 40),
+			Line("c", left: 0, top: 25, height: 20),
+		};
+
+		var text = Sorted(lines, OcrReadingOrder.LeftToRightTopToBottom);
+
+		Assert.Equal(string.Join(Environment.NewLine, "a", "tall b", "c") + Environment.NewLine, text);
+	}
+
+	[Fact]
 	public void Sort_LeavesASingleLineAlone()
 	{
 		var lines = new[] { Line("only", left: 5, top: 5) };

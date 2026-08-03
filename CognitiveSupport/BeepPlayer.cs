@@ -33,6 +33,9 @@ public static class BeepPlayer
 	private static SoundPlayer? _playerMute;
 	private static SoundPlayer? _playerUnmute;
 	private static SoundPlayer? _previewPlayer;
+	// Bumped whenever the per-type players are torn down, so an in-flight repeat loop
+	// can tell that the SoundPlayer it captured is no longer the live one.
+	private static int _playerGeneration;
 	private static readonly Dictionary<(BeepType Type, int RepeatCount), (SoundPlayer Player, MemoryStream Stream)> _defaultPlayers = new();
 	public static IReadOnlyList<string> LastInitializationIssues { get; private set; } = Array.Empty<string>();
 
@@ -143,19 +146,28 @@ public static class BeepPlayer
 			return true;
 		}
 
-		// PlaySync blocks, so it runs off the caller's thread; a shared SoundPlayer is
-		// only ever driven by one of these loops at a time in practice, and a torn
-		// repeat is preferable to blocking a transcription retry.
+		// PlaySync blocks, so the repeat runs off the caller's thread rather than
+		// stalling the transcription retry it is reporting on. That leaves the loop
+		// running while Initialize/DisposePlayers may replace these players (a Settings
+		// save, or shutdown), so it bails out the moment its generation is superseded
+		// instead of hammering a disposed SoundPlayer.
+		int generation = Volatile.Read(ref _playerGeneration);
 		Task.Run(() =>
 		{
-			try
+			for (var i = 0; i < repeatCount; i++)
 			{
-				for (var i = 0; i < repeatCount; i++)
+				if (Volatile.Read(ref _playerGeneration) != generation)
+					return;
+
+				try
+				{
 					player.PlaySync();
-			}
-			catch
-			{
-				// A failed beep must never take down the operation it is reporting on.
+				}
+				catch
+				{
+					// A failed beep must never take down the operation it reports on.
+					return;
+				}
 			}
 		});
 		return true;
@@ -246,6 +258,8 @@ public static class BeepPlayer
 
 	public static void DisposePlayers()
 	{
+		// Signal before disposing, so a repeat loop stops rather than racing the tear-down.
+		Interlocked.Increment(ref _playerGeneration);
 		_previewPlayer?.Dispose();
 		_previewPlayer = null;
 		_playerStart?.Dispose();
