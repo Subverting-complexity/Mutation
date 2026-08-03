@@ -12,6 +12,10 @@ public static class SendKeysMapper
 	private const char ShiftMod = '+';
 	private const char AltMod = '%';
 
+	// Separators accepted inside a parenthesised group: "(Enter Tab)". Commas are not
+	// included — SplitByComma has already divided the input into chords by then.
+	private static readonly char[] GroupSeparators = { ' ', '\t' };
+
 	// Unsupported keys in WinForms SendKeys
 	private static readonly HashSet<string> UnsupportedKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
@@ -189,18 +193,6 @@ public static class SendKeysMapper
 				continue;
 			}
 
-			if (TryMapFunctionKey(norm, out var fKey))
-			{
-				keys.Add(fKey);
-				continue;
-			}
-
-			if (KeyMap.TryGetValue(norm, out var mapped))
-			{
-				keys.Add(EscapeIfReserved(mapped));
-				continue;
-			}
-
 			// A parenthesised run like "(AB)" is how a human writes the group form of
 			// "A+B" — expand it into its individual keys so the chord's modifiers apply
 			// to the whole group, exactly as they do for "Ctrl+A+B".
@@ -210,9 +202,9 @@ public static class SendKeysMapper
 				continue;
 			}
 
-			if (TrySingleCharLiteral(token, out var literal))
+			if (TryResolveKey(token, out var key))
 			{
-				keys.Add(EscapeIfReserved(literal));
+				keys.Add(key);
 				continue;
 			}
 
@@ -246,33 +238,49 @@ public static class SendKeysMapper
 	private static bool LooksLikeSendKeys(string s)
 	{
 		// Heuristic: any of these strongly implies SendKeys syntax
-		// '^', '%', '~', braces, or grouping parentheses opened by a modifier.
+		// '^', '%', '~', braces, or a group opened by SendKeys' Shift modifier.
 		for (int i = 0; i < s.Length; i++)
 		{
 			var c = s[i];
 			if (c == '^' || c == '%' || c == '~' || c == '{' || c == '}')
 				return true;
 
-			// '+(' opens a SendKeys group only when that '+' is the Shift modifier,
-			// which can only sit at the start of the string or directly after another
-			// modifier character — "+(ab)", "^+(ab)". In a human-written chord like
-			// "Ctrl+(AB)" the '+' is the separator after a key name, so treating it as
-			// SendKeys would pass the string through untranslated and type the literal
-			// text "Ctrl" into the user's target application.
-			if (IsModifierChar(c) && i + 1 < s.Length && s[i + 1] == '('
-				&& (i == 0 || IsModifierChar(s[i - 1])))
+			// '+(' is ambiguous: in SendKeys the '+' is the Shift modifier opening a
+			// group, but in a human-written chord like "Ctrl+(AB)" it is the separator
+			// between the modifier name and the group. Reading the latter as SendKeys
+			// passed the string through untranslated and typed the literal text "Ctrl"
+			// into the user's target application (issue #225). What tells them apart is
+			// what precedes the '+': a modifier *name* means the user wrote a chord.
+			if (c == ShiftMod && i + 1 < s.Length && s[i + 1] == '('
+				&& !FollowsModifierName(s, i))
 				return true;
 		}
 		return false;
 	}
 
-	private static bool IsModifierChar(char c) =>
-		c == CtrlMod || c == ShiftMod || c == AltMod;
+	// True when the run of characters immediately before <paramref name="plusIndex"/>
+	// spells a modifier ("Ctrl", "Shift", "Alt", "AltGr", …) — i.e. that '+' is a
+	// human chord separator. Anything else (a key name, a literal, the start of the
+	// string) leaves the '+' as SendKeys' Shift modifier.
+	private static bool FollowsModifierName(string s, int plusIndex)
+	{
+		int start = plusIndex;
+		while (start > 0 && s[start - 1] != '+' && s[start - 1] != ',')
+			start--;
 
-	// Expands "(AB)" into the individual keys 'a' and 'b'. Only a fully parenthesised
-	// token qualifies, and every character inside must be a plain single-key literal —
-	// a nested parenthesis is malformed and is rejected so the caller reports it as an
-	// unknown key rather than emitting garbage keystrokes.
+		var norm = Normalize(s[start..plusIndex]);
+		return IsCtrl(norm) || IsShift(norm) || IsAlt(norm) || IsAltGr(norm);
+	}
+
+	// Expands a fully parenthesised token into the keys the group applies to:
+	//
+	//   "(Enter)"     → {ENTER}       a single named key spelled inside the group
+	//   "(Enter Tab)" → {ENTER}{TAB}  names written out, space separated
+	//   "(AB)"        → a, b          the compact form: one key per character
+	//
+	// Anything that does not fit — a nested parenthesis, an unrecognised name, a
+	// symbol run in the compact form — is rejected so the caller reports it as an
+	// unknown key rather than typing garbage into the user's target application.
 	private static bool TryExpandKeyGroup(string token, out List<string> keys)
 	{
 		keys = new List<string>();
@@ -281,12 +289,47 @@ public static class SendKeysMapper
 		if (t.Length < 3 || t[0] != '(' || t[^1] != ')')
 			return false;
 
-		foreach (char c in t[1..^1])
-		{
-			if (char.IsWhiteSpace(c))
-				continue;
+		var body = t[1..^1];
+		if (body.Contains('(') || body.Contains(')'))
+			return false;
 
-			if (c == '(' || c == ')' || !TrySingleCharLiteral(c.ToString(), out var literal))
+		var pieces = body.Split(GroupSeparators,
+			StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		if (pieces.Length == 0)
+			return false;
+
+		// A lone piece that is not itself a key name is the compact form, where each
+		// character is its own key. Checked first so "(AB)" expands rather than being
+		// rejected, while "(Enter)" and "(F5)" resolve as the keys they name.
+		if (pieces.Length == 1 && !TryResolveKey(pieces[0], out _))
+			return TryExpandCompactGroup(pieces[0], keys);
+
+		foreach (var piece in pieces)
+		{
+			ThrowIfUnsupported(piece);
+
+			if (!TryResolveKey(piece, out var key))
+			{
+				keys.Clear();
+				return false;
+			}
+
+			keys.Add(key);
+		}
+
+		return true;
+	}
+
+	// The compact "(AB)" form. Restricted to letters and digits: a symbol run has no
+	// unambiguous per-character reading, and guessing one would emit keystrokes the
+	// user did not ask for.
+	private static bool TryExpandCompactGroup(string body, List<string> keys)
+	{
+		ThrowIfUnsupported(body);
+
+		foreach (char c in body)
+		{
+			if (!char.IsLetterOrDigit(c) || !TrySingleCharLiteral(c.ToString(), out var literal))
 			{
 				keys.Clear();
 				return false;
@@ -295,10 +338,42 @@ public static class SendKeysMapper
 			keys.Add(EscapeIfReserved(literal));
 		}
 
-		if (keys.Count == 0)
-			return false;
+		return keys.Count > 0;
+	}
 
-		return true;
+	// Resolves one token to its SendKeys form: a function key, a named key from
+	// KeyMap, or a single-character literal. Shared by the plain chord path and the
+	// group expansion so both spell keys identically.
+	private static bool TryResolveKey(string token, out string key)
+	{
+		key = "";
+		var norm = Normalize(token);
+
+		if (TryMapFunctionKey(norm, out var fKey))
+		{
+			key = fKey;
+			return true;
+		}
+
+		if (KeyMap.TryGetValue(norm, out var mapped))
+		{
+			key = EscapeIfReserved(mapped);
+			return true;
+		}
+
+		if (TrySingleCharLiteral(token, out var literal))
+		{
+			key = EscapeIfReserved(literal);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static void ThrowIfUnsupported(string token)
+	{
+		if (UnsupportedKeys.Contains(Normalize(token)))
+			throw new NotSupportedException($"'{token}' is not supported by Windows Forms SendKeys.");
 	}
 
 	private static List<string> SplitByComma(string input)

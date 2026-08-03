@@ -69,4 +69,41 @@ public class AudioDeviceDisposalTests
 
 		Assert.Equal(1, real.DisposeCount);
 	}
+
+	// The disposal loop runs without the field lock, so the selection is re-read per
+	// device: another thread can adopt one of these wrappers as the new microphone part
+	// way through, and disposing the device the user just chose would leave the
+	// selected mic dead until restart.
+	[Fact]
+	public void Re_reads_the_selection_for_every_device()
+	{
+		var first = new FakeDisposable();
+		var adoptedMidway = new FakeDisposable();
+		FakeDisposable? selected = null;
+
+		bool IsSelected(FakeDisposable device)
+		{
+			bool result = ReferenceEquals(device, selected);
+			// Stands in for a concurrent SelectMicrophone landing between two devices.
+			selected = adoptedMidway;
+			return result;
+		}
+
+		AudioDeviceManager.DisposeSuperseded(new[] { first, adoptedMidway }, IsSelected);
+
+		Assert.Equal(1, first.DisposeCount);
+		Assert.Equal(0, adoptedMidway.DisposeCount);
+	}
+
+	[Fact]
+	public void A_failing_dispose_does_not_strand_the_remaining_devices_with_a_predicate()
+	{
+		var bad = new FakeDisposable { ThrowOnDispose = true };
+		var good = new FakeDisposable();
+
+		AudioDeviceManager.DisposeSuperseded(new[] { bad, good }, _ => false);
+
+		Assert.Equal(1, bad.DisposeCount);
+		Assert.Equal(1, good.DisposeCount);
+	}
 }

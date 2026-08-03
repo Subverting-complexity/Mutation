@@ -33,10 +33,12 @@ public sealed class MicrophoneLevelWriteCoordinator
 	private readonly object _gate = new();
 
 	// Held across the actual device access, by both the drain worker's write and a
-	// display read, so the two never touch the endpoint concurrently. Only background
-	// threads take it — blocking on it from the UI thread is exactly the freeze this
-	// coordinator exists to prevent.
-	private readonly object _endpointGate = new();
+	// display read, so the two never touch the endpoint concurrently. A semaphore
+	// rather than a lock so a read can wait for it asynchronously instead of parking a
+	// thread-pool thread for the length of a stalled write. Never waited on from the
+	// UI thread — blocking there is exactly the freeze this coordinator exists to
+	// prevent.
+	private readonly SemaphoreSlim _endpointGate = new(1, 1);
 
 	// The most recent level requested but not yet being written, and the awaiter tied
 	// to it. Both are cleared the moment the worker picks the request up. Guarded by
@@ -113,22 +115,29 @@ public sealed class MicrophoneLevelWriteCoordinator
 	/// reader. The continuation resumes on the caller's synchronization context, so the
 	/// UI can be updated directly with the result.
 	/// </summary>
-	public Task<int?> ReadCurrentLevelAsync() => Task.Run(() =>
+	public async Task<int?> ReadCurrentLevelAsync()
 	{
-		lock (_endpointGate)
+		// Waited on asynchronously: a queued read holds no thread while a slow write is
+		// in flight.
+		await _endpointGate.WaitAsync().ConfigureAwait(false);
+		try
 		{
-			try
-			{
-				return _readLevel();
-			}
-			catch
-			{
-				// A device fault makes the level unknown, which is what null means. The
-				// caller leaves its display unchanged rather than showing a wrong value.
-				return null;
-			}
+			return await Task.Run(_readLevel).ConfigureAwait(false);
 		}
-	});
+		catch
+		{
+			// The injected read already degrades a stale COM proxy to null on its own,
+			// so nothing routine reaches here; this is the backstop that keeps an
+			// unexpected fault from faulting the awaiter. Null means "level unknown",
+			// and the caller leaves its display unchanged rather than showing a wrong
+			// value.
+			return null;
+		}
+		finally
+		{
+			_endpointGate.Release();
+		}
+	}
 
 	// Applies queued level requests one at a time until none remain. Only the request
 	// currently held in _pendingLevel is applied each pass, so a burst that arrives
@@ -158,10 +167,16 @@ public sealed class MicrophoneLevelWriteCoordinator
 			try
 			{
 				// Serialized with ReadCurrentLevelAsync: the write and the display read
-				// target the same COM endpoint.
-				lock (_endpointGate)
+				// target the same COM endpoint. Waited on synchronously — this is the
+				// coordinator's own worker, whose whole job is to block on the device.
+				_endpointGate.Wait();
+				try
 				{
 					result = _write(level);
+				}
+				finally
+				{
+					_endpointGate.Release();
 				}
 			}
 			catch

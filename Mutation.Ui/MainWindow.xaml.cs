@@ -317,19 +317,25 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 
 		// Re-check after the await: the device may have been swapped, or the window
-		// closed, while the read was in flight.
+		// closed, while the read was in flight. MainWindow_Closed clears the flag, so a
+		// read still running at close does not resume onto a torn-down window.
 		if (!_micLevelControlsReady)
 			return;
 
-		bool wasReady = _micLevelControlsReady;
 		_micLevelControlsReady = false;
 		try
 		{
 			SldMicLevel.Value = level;
 		}
+		catch (Exception ex)
+		{
+			// This is an async void continuation, so an escaping exception would have no
+			// handler to reach.
+			ErrorLogger.LogError("Refreshing the microphone level display failed", ex);
+		}
 		finally
 		{
-			_micLevelControlsReady = wasReady;
+			_micLevelControlsReady = true;
 		}
 	}
 
@@ -577,6 +583,10 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		// Prevent auto actions during shutdown
 		_suppressAutoActions = true;
+		// Stop the mic-level controls responding too: an activation-time level read may
+		// still be in flight, and its continuation must not touch the slider once the
+		// window is torn down.
+		_micLevelControlsReady = false;
 		// Signal shutdown to any in-flight transcription HTTP requests so they
 		// observe cancellation rather than running until their server timeout.
 		try { _shutdownCts.Cancel(); } catch (ObjectDisposedException) { }
@@ -624,7 +634,18 @@ public sealed partial class MainWindow : Window, IDisposable
 	// session manager along with the window's other disposables.
 	private void ReleaseClosingResources()
 	{
-		BeepPlayer.DisposePlayers();
+		// Guarded separately: a failure releasing the beep players must not cost us
+		// Dispose(), which is what actually releases the audio session manager — the
+		// leak issue #223 was filed for.
+		try
+		{
+			BeepPlayer.DisposePlayers();
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError("Window close: disposing the beep players failed", ex);
+		}
+
 		Dispose();
 	}
 

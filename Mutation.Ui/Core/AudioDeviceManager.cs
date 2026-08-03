@@ -85,7 +85,10 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// and not a stale read of a single unrelated device instance.
 	public bool IsMuted => _muteState.IsMuted;
 
-	public void RefreshCaptureDevices()
+	// Private because it is only safe under _comGate: it disposes wrappers that an
+	// in-flight endpoint batch may still be driving, and only the COM-serialized
+	// callers guarantee no such batch is running.
+	private void RefreshCaptureDevices()
 	{
 		// Enumerate before taking _sync: EnumerateAudioEndPoints is a COM call and can
 		// stall on a slow or failing device.
@@ -94,20 +97,31 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			.ToList();
 
 		IEnumerable<MMDevice> superseded;
-		MMDevice? selected;
 		lock (_sync)
 		{
 			superseded = _captureDevices;
 			_captureDevices = devices;
-			selected = _microphone;
 		}
 
 		// Dispose the COM wrappers from the previous enumeration so they do not
 		// accumulate until finalization — outside _sync, because releasing a COM
-		// wrapper is itself a call into the device. The currently selected mic is
-		// skipped: it stays live for recording and level/mute operations, and
+		// wrapper is itself a call into the device. The selected mic is skipped: it
+		// stays live for recording and level/mute operations, and
 		// RefreshActiveMicrophone swaps it for a fresh instance itself.
-		DisposeSuperseded(superseded, selected);
+		//
+		// The selection is re-read per device rather than sampled once above: this loop
+		// runs without _sync, so SelectMicrophone on the UI thread can adopt one of
+		// these superseded wrappers while it is in progress, and disposing the device
+		// the user just chose would leave the selected mic dead until restart.
+		DisposeSuperseded(superseded, IsSelectedMicrophone);
+	}
+
+	private bool IsSelectedMicrophone(MMDevice device)
+	{
+		lock (_sync)
+		{
+			return ReferenceEquals(device, _microphone);
+		}
 	}
 
 	public void SelectMicrophone(MMDevice device)
@@ -137,30 +151,44 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 				return;
 		}
 
-		MMDevice? defaultMic;
+		MMDevice? defaultMic = null;
+		int deviceIndex;
 		try
 		{
 			// COM: resolved outside _sync so a stalled enumerator cannot block the
-			// property readers on the UI thread.
+			// property readers on the UI thread. Both calls stay inside the guard —
+			// this runs from the window constructor, where a throw from a flaky device
+			// would surface as a fatal startup error instead of simply leaving no
+			// microphone selected.
 			defaultMic = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+			if (defaultMic is null)
+				return;
+
+			deviceIndex = ResolveNAudioDeviceIndex(defaultMic);
 		}
-		catch { return; }
-
-		if (defaultMic is null)
+		catch
+		{
+			DisposeQuietly(defaultMic);
 			return;
+		}
 
-		int deviceIndex = ResolveNAudioDeviceIndex(defaultMic);
-
+		bool adopted = false;
 		lock (_sync)
 		{
 			// Re-check: a selection may have landed while the default was being
 			// resolved, and an explicit choice must not be overwritten by the default.
-			if (_microphone != null)
-				return;
-
-			_microphone = defaultMic;
-			_microphoneDeviceIndex = deviceIndex;
+			if (_microphone is null)
+			{
+				_microphone = defaultMic;
+				_microphoneDeviceIndex = deviceIndex;
+				adopted = true;
+			}
 		}
+
+		// Not adopted, and not part of any enumeration this type owns — release it here
+		// rather than leaving it to finalization.
+		if (!adopted)
+			DisposeQuietly(defaultMic);
 	}
 
 	// NAudio's WaveIn device ProductName often matches the CoreAudio friendly name exactly
@@ -245,8 +273,10 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	}
 
 	// The active microphone's level endpoint, over the currently-held device
-	// reference. A pure field read — no COM — so the UI thread can call it for the
-	// level display without risking a stall.
+	// reference. Resolving the endpoint is a pure field read — no COM — so this call
+	// cannot stall behind another thread's device work. Driving the returned endpoint
+	// does touch COM, so a UI-thread caller must still do that off-thread (see
+	// MicrophoneLevelWriteCoordinator).
 	ICaptureLevelEndpoint ICaptureLevelEndpointProvider.GetEndpoint()
 	{
 		MMDevice? microphone;
@@ -321,7 +351,6 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 
 		int deviceIndex = ResolveNAudioDeviceIndex(fresh);
 
-		bool replaced = false;
 		lock (_sync)
 		{
 			// Only take over the selection if it still points at the stale wrapper: a
@@ -331,15 +360,21 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			{
 				_microphone = fresh;
 				_microphoneDeviceIndex = deviceIndex;
-				replaced = true;
 			}
 		}
 
-		if (replaced)
-		{
-			try { previous.Dispose(); }
-			catch { }
-		}
+		// Either way `previous` is finished with: it was deliberately skipped by the
+		// re-enumeration's disposal pass because it was the selection at that moment,
+		// so nothing else will release it.
+		DisposeQuietly(previous);
+	}
+
+	// Releases a COM wrapper, treating a failure as nothing to act on — the wrapper is
+	// being abandoned either way.
+	private static void DisposeQuietly(IDisposable? disposable)
+	{
+		try { disposable?.Dispose(); }
+		catch { }
 	}
 
 	private static bool MatchesId(MMDevice? device, string id)
@@ -353,17 +388,27 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// swallowing a per-device failure so one bad wrapper cannot strand the rest.
 	// Generic and static so the "skip the selected one" rule is unit-testable
 	// without real CoreAudio devices.
-	internal static void DisposeSuperseded<T>(IEnumerable<T> superseded, T? selected)
+	//
+	// The selection is supplied as a predicate, not a value, because it is evaluated
+	// per device as the loop runs: another thread may take one of these wrappers as
+	// the new selection partway through, and disposing it would strand the microphone.
+	internal static void DisposeSuperseded<T>(IEnumerable<T> superseded, Func<T, bool> isStillSelected)
 		where T : class, IDisposable
 	{
 		foreach (var device in superseded)
 		{
-			if (device is null || ReferenceEquals(device, selected))
+			if (device is null || isStillSelected(device))
 				continue;
 			try { device.Dispose(); }
 			catch { }
 		}
 	}
+
+	// Fixed-selection overload, for callers whose selection cannot change underneath
+	// them.
+	internal static void DisposeSuperseded<T>(IEnumerable<T> superseded, T? selected)
+		where T : class, IDisposable
+		=> DisposeSuperseded(superseded, device => ReferenceEquals(device, selected));
 
 	// Built from a snapshot taken under _sync, never from the live list — the
 	// wrappers themselves touch COM once the caller uses them.
