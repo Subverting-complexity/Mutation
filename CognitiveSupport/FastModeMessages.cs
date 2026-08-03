@@ -26,16 +26,43 @@ public static class FastModeMessages
 	/// Deliberately worded as a wait-and-retry, not as a missing entitlement.
 	/// </summary>
 	public const string Busy =
-		"Fast mode is busy or at capacity, so this prompt ran at standard speed. "
+		"Fast mode was rate limited or at capacity, so this prompt ran at standard speed. "
 		+ "Try again in a moment, or turn Fast mode off for this prompt in the prompt editor.";
+
+	/// <summary>
+	/// The model itself does not offer Fast mode. Deliberately says nothing about account
+	/// access: the account may already have it, and sending the user off to the waitlist
+	/// would waste their time on a problem they do not have.
+	/// </summary>
+	public const string UnsupportedModel =
+		"This model doesn't support Fast mode, so this prompt ran at standard speed. "
+		+ "Choose a model that supports Fast mode, or turn Fast mode off for this prompt "
+		+ "in the prompt editor.";
 
 	/// <summary>Announcement text for a fallback.</summary>
 	public static string Describe(FastModeFallbackReason reason) =>
 		reason switch
 		{
 			FastModeFallbackReason.Busy => Busy,
+			FastModeFallbackReason.UnsupportedModel => UnsupportedModel,
 			_ => Unavailable,
 		};
+
+	/// <summary>
+	/// Folds the notice into the message announcing the run's outcome. The status
+	/// channel supersedes rather than queues, so announcing the two separately would
+	/// lose one of them — and the one that would be lost is the confirmation that the
+	/// user's text actually landed, which matters more than the notice.
+	/// </summary>
+	/// <param name="reason">Null when there is nothing to report, leaving the outcome untouched.</param>
+	public static string AppendTo(string outcome, FastModeFallbackReason? reason)
+	{
+		if (reason is null)
+			return outcome;
+		return string.IsNullOrWhiteSpace(outcome)
+			? Describe(reason.Value)
+			: $"{outcome.TrimEnd()} {Describe(reason.Value)}";
+	}
 
 	/// <summary>
 	/// The line written to the error log, keeping the provider's original message

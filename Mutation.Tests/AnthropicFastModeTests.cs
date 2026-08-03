@@ -100,7 +100,36 @@ public class AnthropicFastModeTests
 
 		Assert.NotNull(reported);
 		Assert.Equal(FastModeFallbackReason.Unavailable, reported!.Reason);
-		Assert.Contains("not", reported.ProviderMessage, StringComparison.OrdinalIgnoreCase);
+		// The provider's own words are kept intact for the log, not paraphrased.
+		Assert.Contains(
+			status == HttpStatusCode.Forbidden
+				? "Your account is not approved for the fast-mode-2026-02-01 beta."
+				: "The speed parameter is not available for this account.",
+			reported.ProviderMessage);
+	}
+
+	[Fact]
+	public async Task ModelDoesNotSupportFastMode_ReportsThatRatherThanMissingAccess()
+	{
+		// Opus 4.7 errors on Fast mode. Telling this user to go request research-preview
+		// access would send them after a problem they do not have.
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.BadRequest, """{"error":{"type":"invalid_request_error","message":"speed is not supported for model claude-opus-4-7"}}""")
+			.Respond(HttpStatusCode.OK, SuccessBody);
+		var service = CreateService(handler);
+
+		FastModeFallback? reported = null;
+		string result = await service.CreateChatCompletion(
+			Messages(),
+			Model,
+			new LlmRequestOptions { FastMode = true, OnFastModeFallback = f => reported = f });
+
+		Assert.Equal("done", result);
+		Assert.Equal(FastModeFallbackReason.UnsupportedModel, reported!.Reason);
+
+		string announced = FastModeMessages.Describe(reported.Reason);
+		Assert.Contains("Choose a model that supports Fast mode", announced);
+		Assert.DoesNotContain("research-preview access", announced);
 	}
 
 	[Fact]

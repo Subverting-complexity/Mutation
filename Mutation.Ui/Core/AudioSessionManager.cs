@@ -16,7 +16,17 @@ namespace Mutation.Ui.Core;
 /// Carries the raw transcript and optional pre-formatted text so that
 /// downstream handlers can avoid re-applying rules to LLM output.
 /// </summary>
-public record TranscriptResult(string RawText, string? FormattedText = null);
+/// <param name="FastModeNotice">
+/// Set when this transcript's prompt asked for Fast mode, could not have it, and the
+/// user has not already been told why this session. It travels with the transcript
+/// rather than on the status channel because the handler that delivers the transcript
+/// is what announces last — the status channel supersedes rather than queues, so a
+/// separate announcement would be talked over by "Transcript ready."
+/// </param>
+public record TranscriptResult(
+	string RawText,
+	string? FormattedText = null,
+	FastModeFallbackReason? FastModeNotice = null);
 
 public class AudioSessionManager : IDisposable
 {
@@ -69,12 +79,6 @@ public class AudioSessionManager : IDisposable
     public event EventHandler<TranscriptResult>? TranscriptReady;
     public event EventHandler<string>? ErrorOccurred;
     public event EventHandler<string>? StatusMessage;
-
-    /// <summary>
-    /// Raised when a Fast mode prompt had to run at standard speed and the user has not
-    /// already been told about that reason for that prompt in this session.
-    /// </summary>
-    public event EventHandler<FastModeFallback>? FastModeFellBack;
 
     public AudioSessionManager(
         SpeechToTextManager speechManager,
@@ -355,19 +359,19 @@ public class AudioSessionManager : IDisposable
             }
         }
 
+        // Claimed here because this is the only side that knows which prompt ran; the
+        // notice then rides on the transcript so it is announced with the delivery
+        // outcome instead of competing with it.
+        FastModeFallbackReason? fastModeNotice =
+            fastModeFallback is not null && llmPrompt is not null
+            && _fastModeNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason)
+                ? fastModeFallback.Reason
+                : null;
+
         // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output.
-        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText));
+        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText, fastModeNotice));
         StatusMessage?.Invoke(this, "Transcript ready and copied.");
-
-        // Raised last so the notice is the final thing announced; the status channel
-        // supersedes rather than queues, and the transcript-ready message would
-        // otherwise talk over it.
-        if (fastModeFallback is not null && llmPrompt is not null
-            && _fastModeNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason))
-        {
-            FastModeFellBack?.Invoke(this, fastModeFallback);
-        }
     }
 
     public Task PlaySelectedSessionAsync()

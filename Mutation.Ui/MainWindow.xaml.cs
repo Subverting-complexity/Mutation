@@ -165,7 +165,6 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.TranscriptReady += AudioSessionManager_TranscriptReady;
         _audioSessionManager.ErrorOccurred += AudioSessionManager_ErrorOccurred;
         _audioSessionManager.StatusMessage += AudioSessionManager_StatusMessage;
-        _audioSessionManager.FastModeFellBack += AudioSessionManager_FastModeFellBack;
         _audioSessionManager.SelectedSessionChanged += AudioSessionManager_SelectedSessionChanged;
         _audioSessionManager.PlaybackStarted += AudioSessionManager_PlaybackStarted;
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
@@ -1611,23 +1610,30 @@ public sealed partial class MainWindow : Window, IDisposable
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
 			bool inserted = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
+
+			// Claimed after everything that can throw and just before the announcement,
+			// so a failure on the delivery path cannot burn the one notice the user gets
+			// this session. Resolved once, outside the branch, so it is spent exactly
+			// once however the delivery turns out.
+			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
+
 			if (copied && inserted)
 			{
 				BeepPlayer.Play(BeepType.Success);
-				ShowStatus("Processing", $"Applied prompt '{prompt.Name}' with the language model.", InfoBarSeverity.Success);
+				ShowStatus("Processing",
+					FastModeMessages.AppendTo($"Applied prompt '{prompt.Name}' with the language model.", fastModeNotice),
+					InfoBarSeverity.Success);
 				HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
 			}
 			else
 			{
 				BeepPlayer.Play(BeepType.Failure);
 				ShowStatus("Processing",
-					"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
+					FastModeMessages.AppendTo(
+						"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
+						fastModeNotice),
 					InfoBarSeverity.Error);
 			}
-
-			// Announced after the outcome status, because the status channel supersedes
-			// rather than queues and the success message would otherwise talk over it.
-			AnnounceFastModeFallback(prompt.Id, fastModeFallback);
         }
         catch (Exception ex)
         {
@@ -1638,26 +1644,19 @@ public sealed partial class MainWindow : Window, IDisposable
     }
 
 	/// <summary>
-	/// Tells the user, through the ordinary status announcement channel rather than a
-	/// modal, that a Fast mode prompt ran at standard speed. A modal would steal focus
-	/// from whatever they were dictating into. Repeats at most once per prompt per
-	/// reason per app session, and never touches their Fast mode setting.
+	/// Whether this Fast mode fallback should be told to the user, given they may
+	/// already have heard it this session. The notice itself rides along on the run's
+	/// outcome status — the ordinary announcement channel, not a modal, which would
+	/// steal focus from whatever they were dictating into. Their Fast mode setting is
+	/// never touched.
 	/// </summary>
-	private void AnnounceFastModeFallback(int promptId, FastModeFallback? fallback)
+	private FastModeFallbackReason? ClaimFastModeNotice(int promptId, FastModeFallback? fallback)
 	{
 		if (fallback is null)
-			return;
-		if (!_fastModeNotices.ShouldAnnounce(promptId, fallback.Reason))
-			return;
-
-		ShowStatus(FastModeMessages.Title, FastModeMessages.Describe(fallback.Reason), InfoBarSeverity.Warning);
-	}
-
-	private void AudioSessionManager_FastModeFellBack(object? sender, FastModeFallback fallback)
-	{
-		// AudioSessionManager has already applied the once-per-session rule, since it is
-		// the side that knows which prompt ran.
-		ShowStatus(FastModeMessages.Title, FastModeMessages.Describe(fallback.Reason), InfoBarSeverity.Warning);
+			return null;
+		return _fastModeNotices.ShouldAnnounce(promptId, fallback.Reason)
+			? fallback.Reason
+			: null;
 	}
 
 	private void UpdateMicrophoneToggleVisuals()
@@ -1783,7 +1782,17 @@ public sealed partial class MainWindow : Window, IDisposable
                 }, TaskScheduler.Default);
         }
 
-	private async void FinalizeTranscript(string rawText, string successMessage, string? formattedText = null)
+	/// <param name="fastModeNotice">
+	/// Folded into whichever status this method ends on. This is the last status a
+	/// transcript run raises, so carrying the notice here is what keeps it from being
+	/// superseded — and folding it in rather than adding a second announcement is what
+	/// keeps the confirmation that the text landed.
+	/// </param>
+	private async void FinalizeTranscript(
+		string rawText,
+		string successMessage,
+		string? formattedText = null,
+		FastModeFallbackReason? fastModeNotice = null)
 	{
 		string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
@@ -1796,14 +1805,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (copied && inserted)
 		{
 			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Speech to Text", successMessage, InfoBarSeverity.Success);
+			ShowStatus("Speech to Text", FastModeMessages.AppendTo(successMessage, fastModeNotice), InfoBarSeverity.Success);
 			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
 		}
 		else
 		{
 			BeepPlayer.Play(BeepType.Failure);
 			ShowStatus("Speech to Text",
-				"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
+				FastModeMessages.AppendTo(
+					"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
+					fastModeNotice),
 				InfoBarSeverity.Error);
 		}
 
@@ -1843,7 +1854,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText);
+            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText, result.FastModeNotice);
         });
     }
 

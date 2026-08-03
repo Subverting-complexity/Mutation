@@ -33,13 +33,4 @@ public sealed class FastModeNoticeTracker
 			return _announced.Add((promptId, reason));
 		}
 	}
-
-	/// <summary>Forgets every announcement, as if the session had just started.</summary>
-	public void Reset()
-	{
-		lock (_gate)
-		{
-			_announced.Clear();
-		}
-	}
 }

@@ -52,10 +52,12 @@
                       Grid.Row="1"
                       Grid.Column="0" />
 
-            <!-- Tab order runs Name, Hotkey, Model, Fast mode, Auto run: the info hint
-                 sits after the check box so reaching Auto run does not require tabbing
-                 past it. Its tooltip and the check box's HelpText share one resource so
-                 the visual and screen-reader copy cannot drift apart. -->
+            <!-- Declaration order is the tab order: Name, Hotkey, Model, Fast mode,
+                 info hint, Auto run. The hint is itself a tab stop (by design — it has
+                 to be reachable without a mouse), so it costs one Tab on the way to
+                 Auto run; placing it after the check box keeps it next to what it
+                 explains. Its tooltip and the check box's HelpText read from one
+                 resource so the visual and screen-reader copy cannot drift apart. -->
             <StackPanel Orientation="Horizontal"
                         Spacing="6"
                         VerticalAlignment="Bottom"

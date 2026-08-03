@@ -248,7 +248,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 
 > **Note on transcript formatting rules:** `TranscriptFormatRules` is a top-level setting. Rules run as a pre-processing pass on the transcript before any LLM processing is applied.
 
-> **Note on `FastMode`:** per-prompt, off by default, and also available as a **Fast mode** check box in the prompt editor. It runs the same model faster — same weights, same answer quality — but is billed at roughly **twice** the standard input and output token price, so turn it on only where latency actually costs you something. On Anthropic (Claude) models it additionally needs research-preview access on your account; without it the prompt still returns a result at standard speed and Mutation announces why.
+> **Note on `FastMode`:** per-prompt, off by default, and also available as a **Fast mode** check box in the prompt editor. It runs the same model faster — same weights, same answer quality — but is billed at roughly **twice** the standard input and output token price, so turn it on only where latency actually costs you something. Not every model offers Fast mode, and on Anthropic (Claude) models it additionally needs research-preview access on your account. Whenever Fast mode can't be used, the prompt still returns a result at standard speed and Mutation announces why — whether you need to request access, pick a different model, or just try again later.
 
 ### Provisioning Azure Computer Vision
 

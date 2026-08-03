@@ -25,22 +25,3 @@ public sealed class LlmRequestOptions
 	/// </summary>
 	public Action<FastModeFallback>? OnFastModeFallback { get; init; }
 }
-
-/// <summary>Why a Fast mode request had to fall back to standard speed.</summary>
-public enum FastModeFallbackReason
-{
-	/// <summary>The account lacks Fast mode access — the user must request it.</summary>
-	Unavailable = 1,
-
-	/// <summary>Fast mode is rate limited or out of capacity — the user should retry later.</summary>
-	Busy = 2,
-}
-
-/// <summary>
-/// A Fast mode request that was retried at standard speed, carrying both the reason
-/// (which drives the user-facing wording) and the provider's original message (kept
-/// for the error log, never shown raw).
-/// </summary>
-/// <param name="Reason">Why Fast mode could not be used.</param>
-/// <param name="ProviderMessage">The provider's own error text, for diagnosis.</param>
-public sealed record FastModeFallback(FastModeFallbackReason Reason, string ProviderMessage);

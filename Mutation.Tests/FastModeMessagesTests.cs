@@ -32,6 +32,29 @@ public class FastModeMessagesTests
 	}
 
 	[Fact]
+	public void AppendTo_NoReason_LeavesTheOutcomeExactlyAsItWas()
+	{
+		Assert.Equal("Transcript ready and copied.", FastModeMessages.AppendTo("Transcript ready and copied.", null));
+	}
+
+	[Fact]
+	public void AppendTo_KeepsTheOutcomeAndAddsTheNotice()
+	{
+		// The confirmation that the text landed must survive; announcing the notice
+		// separately would supersede it on the status channel.
+		string composed = FastModeMessages.AppendTo("Transcript ready and copied.", FastModeFallbackReason.Unavailable);
+
+		Assert.StartsWith("Transcript ready and copied.", composed);
+		Assert.Contains(FastModeMessages.Unavailable, composed);
+	}
+
+	[Fact]
+	public void AppendTo_EmptyOutcome_YieldsTheNoticeAlone()
+	{
+		Assert.Equal(FastModeMessages.Busy, FastModeMessages.AppendTo("  ", FastModeFallbackReason.Busy));
+	}
+
+	[Fact]
 	public void DescribeForLog_KeepsTheProvidersOwnText()
 	{
 		var fallback = new FastModeFallback(FastModeFallbackReason.Unavailable, "  speed is not permitted  ");

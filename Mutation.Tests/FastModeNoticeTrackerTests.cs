@@ -38,14 +38,14 @@ public class FastModeNoticeTrackerTests
 	}
 
 	[Fact]
-	public void Reset_MakesTheNoticeAnnounceableAgain()
+	public void ShouldAnnounce_ANewTrackerStartsClear_AsAtSessionStart()
 	{
-		var tracker = new FastModeNoticeTracker();
-		tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable);
+		var previousSession = new FastModeNoticeTracker();
+		previousSession.ShouldAnnounce(1, FastModeFallbackReason.Unavailable);
 
-		tracker.Reset();
-
-		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
+		// Suppression is per app session and never persisted: access can be granted
+		// server-side at any time, so a restart must tell the user again.
+		Assert.True(new FastModeNoticeTracker().ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
 	}
 
 	[Fact]

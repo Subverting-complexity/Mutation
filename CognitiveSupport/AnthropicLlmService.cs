@@ -107,9 +107,12 @@ public class AnthropicLlmService : ILlmService
 		{
 			return await SendAsync(request, fastMode: true).ConfigureAwait(false);
 		}
-		catch (NonTransientLlmException ex) when (FastModeFailure.IsUnavailable(ex.StatusCode, ex.Message))
+		catch (NonTransientLlmException ex)
 		{
-			fallback = new FastModeFallback(FastModeFallbackReason.Unavailable, ex.Message);
+			var reason = FastModeFailure.Classify(ex.StatusCode, ex.Message);
+			if (reason is null)
+				throw; // Nothing to do with Fast mode; report it as-is.
+			fallback = new FastModeFallback(reason.Value, ex.Message);
 		}
 		catch (HttpRequestException ex) when (FastModeFailure.IsCapacity((int?)ex.StatusCode))
 		{
@@ -129,14 +132,7 @@ public class AnthropicLlmService : ILlmService
 
 	private async Task<string> SendAsync(AnthropicRequest request, bool fastMode)
 	{
-		var jsonOptions = new JsonSerializerOptions
-		{
-			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-		};
-		// WhenWritingNull drops "speed" entirely when Fast mode is off, so a standard
-		// request is byte-for-byte what it was before this feature existed.
-		request.Speed = fastMode ? FastSpeed : null;
-		string jsonBody = JsonSerializer.Serialize(request, jsonOptions);
+		string jsonBody = Serialize(request, fastMode);
 
 		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
 		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
@@ -214,6 +210,31 @@ public class AnthropicLlmService : ILlmService
 
 		return responseBody;
 	}
+
+	private static readonly JsonSerializerOptions JsonOptions = new()
+	{
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+	};
+
+	/// <summary>
+	/// Renders the body for one attempt. Builds a fresh DTO rather than setting
+	/// <c>Speed</c> on the caller's request, so the fast attempt and the standard-speed
+	/// retry can never observe each other's value. WhenWritingNull drops <c>speed</c>
+	/// entirely when Fast mode is off, leaving a standard request byte-for-byte what it
+	/// was before this feature existed.
+	/// </summary>
+	private static string Serialize(AnthropicRequest request, bool fastMode) =>
+		JsonSerializer.Serialize(
+			new AnthropicRequest
+			{
+				Model = request.Model,
+				MaxTokens = request.MaxTokens,
+				Temperature = request.Temperature,
+				System = request.System,
+				Messages = request.Messages,
+				Speed = fastMode ? FastSpeed : null,
+			},
+			JsonOptions);
 
 	private static string ExtractText(string responseBody)
 	{
