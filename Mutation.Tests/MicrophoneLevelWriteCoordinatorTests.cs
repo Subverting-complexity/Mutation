@@ -9,10 +9,14 @@ namespace Mutation.Tests;
 
 public class MicrophoneLevelWriteCoordinatorTests
 {
+	// Stands in for a device with no software level control, for the tests that only
+	// exercise the write side and never look at the probe's result.
+	private static readonly CaptureLevelState Unsupported = new(IsSupported: false, Level: null);
+
 	[Fact]
 	public void Constructor_NullWrite_Throws()
 	{
-		Assert.Throws<ArgumentNullException>(() => new MicrophoneLevelWriteCoordinator(null!, () => null));
+		Assert.Throws<ArgumentNullException>(() => new MicrophoneLevelWriteCoordinator(null!, () => Unsupported));
 	}
 
 	[Fact]
@@ -26,7 +30,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 	public async Task RequestLatestAsync_ReturnsTheWriteResult()
 	{
 		var coordinator = new MicrophoneLevelWriteCoordinator(
-			_ => new CaptureLevelResult(CaptureLevelOutcome.Failed), () => null);
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Failed), () => Unsupported);
 
 		var result = await coordinator.RequestLatestAsync(30);
 
@@ -47,7 +51,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 			started.Set();
 			release.Wait();
 			return new CaptureLevelResult(CaptureLevelOutcome.Applied);
-		}, () => null);
+		}, () => Unsupported);
 
 		var task = coordinator.RequestLatestAsync(50);
 
@@ -90,7 +94,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 			return new CaptureLevelResult(CaptureLevelOutcome.Applied);
 		}
 
-		var coordinator = new MicrophoneLevelWriteCoordinator(Write, () => null);
+		var coordinator = new MicrophoneLevelWriteCoordinator(Write, () => Unsupported);
 
 		var first = coordinator.RequestLatestAsync(10);
 		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "first write did not start");
@@ -123,7 +127,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 	public async Task RequestLatestAsync_TreatsAThrowingWriteAsFailed()
 	{
 		var coordinator = new MicrophoneLevelWriteCoordinator(
-			_ => throw new InvalidOperationException("device fault"), () => null);
+			_ => throw new InvalidOperationException("device fault"), () => Unsupported);
 
 		var result = await coordinator.RequestLatestAsync(10);
 
@@ -139,7 +143,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 		{
 			lock (applied) applied.Add(level);
 			return new CaptureLevelResult(CaptureLevelOutcome.Applied);
-		}, () => null);
+		}, () => Unsupported);
 
 		Assert.NotNull(await coordinator.RequestLatestAsync(10));
 		Assert.NotNull(await coordinator.RequestLatestAsync(20));
@@ -148,13 +152,81 @@ public class MicrophoneLevelWriteCoordinatorTests
 		AssertEventually(() => !coordinator.IsWriting, "worker did not settle");
 	}
 
-	// ----- Display reads (issue #224) -----
+	// ----- Level probes (issues #224, #263) -----
+
+	[Fact]
+	public async Task ReadLevelStateAsync_ReturnsSupportAndLevelTogether()
+	{
+		var coordinator = new MicrophoneLevelWriteCoordinator(
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied),
+			() => new CaptureLevelState(IsSupported: true, Level: 35));
+
+		Assert.Equal(new CaptureLevelState(true, 35), await coordinator.ReadLevelStateAsync());
+	}
+
+	[Fact]
+	public async Task ReadLevelStateAsync_ProbesTheDeviceExactlyOnce()
+	{
+		// The UI needs both facts to set its controls up; asking separately would double
+		// the exposure to a stalled device and could straddle a device change.
+		int probes = 0;
+		var coordinator = new MicrophoneLevelWriteCoordinator(
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied),
+			() =>
+			{
+				Interlocked.Increment(ref probes);
+				return new CaptureLevelState(IsSupported: true, Level: 35);
+			});
+
+		await coordinator.ReadLevelStateAsync();
+
+		Assert.Equal(1, probes);
+	}
+
+	[Fact]
+	public async Task ReadLevelStateAsync_TreatsAThrowingProbeAsUnsupported()
+	{
+		// Leaves the controls disabled rather than pretending a level.
+		var coordinator = new MicrophoneLevelWriteCoordinator(
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied),
+			() => throw new InvalidOperationException("stale proxy"));
+
+		var state = await coordinator.ReadLevelStateAsync();
+
+		Assert.False(state.IsSupported);
+		Assert.Null(state.Level);
+	}
+
+	[Fact]
+	public async Task ReadLevelStateAsync_RunsTheProbeOffTheCallingThread()
+	{
+		// The mic-change path calls this from the UI thread; a probe that ran inline
+		// would freeze the window, and the screen reader with it (issue #263).
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var coordinator = new MicrophoneLevelWriteCoordinator(
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied),
+			() =>
+			{
+				started.Set();
+				release.Wait();
+				return new CaptureLevelState(IsSupported: true, Level: 20);
+			});
+
+		var task = coordinator.ReadLevelStateAsync();
+
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "probe did not start on a background thread");
+		Assert.False(task.IsCompleted);
+
+		release.Set();
+		Assert.Equal(new CaptureLevelState(true, 20), await task);
+	}
 
 	[Fact]
 	public async Task ReadCurrentLevelAsync_ReturnsTheReadValue()
 	{
 		var coordinator = new MicrophoneLevelWriteCoordinator(
-			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied), () => 42);
+			_ => new CaptureLevelResult(CaptureLevelOutcome.Applied), () => new CaptureLevelState(true, 42));
 
 		Assert.Equal(42, await coordinator.ReadCurrentLevelAsync());
 	}
@@ -184,7 +256,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 			{
 				started.Set();
 				release.Wait();
-				return 60;
+				return new CaptureLevelState(true, 60);
 			});
 
 		var task = coordinator.ReadCurrentLevelAsync();
@@ -218,7 +290,7 @@ public class MicrophoneLevelWriteCoordinatorTests
 			{
 				if (writing)
 					overlapped = true;
-				return 15;
+				return new CaptureLevelState(true, 15);
 			});
 
 		var write = coordinator.RequestLatestAsync(80);

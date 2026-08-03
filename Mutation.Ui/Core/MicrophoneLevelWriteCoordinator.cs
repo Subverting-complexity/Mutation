@@ -29,7 +29,7 @@ namespace Mutation.Ui.Core;
 public sealed class MicrophoneLevelWriteCoordinator
 {
 	private readonly Func<int, CaptureLevelResult> _write;
-	private readonly Func<int?> _readLevel;
+	private readonly Func<CaptureLevelState> _readState;
 	private readonly object _gate = new();
 
 	// Held across the actual device access, by both the drain worker's write and a
@@ -50,10 +50,10 @@ public sealed class MicrophoneLevelWriteCoordinator
 	// queued). Guarded by _gate.
 	private bool _workerRunning;
 
-	public MicrophoneLevelWriteCoordinator(Func<int, CaptureLevelResult> write, Func<int?> readLevel)
+	public MicrophoneLevelWriteCoordinator(Func<int, CaptureLevelResult> write, Func<CaptureLevelState> readState)
 	{
 		_write = write ?? throw new ArgumentNullException(nameof(write));
-		_readLevel = readLevel ?? throw new ArgumentNullException(nameof(readLevel));
+		_readState = readState ?? throw new ArgumentNullException(nameof(readState));
 	}
 
 	/// <summary>
@@ -115,23 +115,34 @@ public sealed class MicrophoneLevelWriteCoordinator
 	/// reader. The continuation resumes on the caller's synchronization context, so the
 	/// UI can be updated directly with the result.
 	/// </summary>
-	public async Task<int?> ReadCurrentLevelAsync()
+	public async Task<int?> ReadCurrentLevelAsync() => (await ReadLevelStateAsync()).Level;
+
+	/// <summary>
+	/// Probes the device for level support and its current level in one background
+	/// round trip, serialized against the level writes. This is what the UI uses to set
+	/// up its level controls at startup and after a microphone change — both facts are
+	/// COM reads, and the mic-change path is the one most likely to meet a slow or
+	/// failing device, because one was just swapped in (issue #263). The continuation
+	/// resumes on the caller's synchronization context, so the UI can be updated
+	/// directly with the result.
+	/// </summary>
+	public async Task<CaptureLevelState> ReadLevelStateAsync()
 	{
 		// Waited on asynchronously: a queued read holds no thread while a slow write is
 		// in flight.
 		await _endpointGate.WaitAsync().ConfigureAwait(false);
 		try
 		{
-			return await Task.Run(_readLevel).ConfigureAwait(false);
+			return await Task.Run(_readState).ConfigureAwait(false);
 		}
 		catch
 		{
-			// The injected read already degrades a stale COM proxy to null on its own,
-			// so nothing routine reaches here; this is the backstop that keeps an
-			// unexpected fault from faulting the awaiter. Null means "level unknown",
-			// and the caller leaves its display unchanged rather than showing a wrong
-			// value.
-			return null;
+			// The injected read already degrades a stale COM proxy on its own, so
+			// nothing routine reaches here; this is the backstop that keeps an
+			// unexpected fault from faulting the awaiter. Reported as unsupported with
+			// an unknown level, which leaves the controls disabled rather than
+			// pretending a value.
+			return new CaptureLevelState(IsSupported: false, Level: null);
 		}
 		finally
 		{
