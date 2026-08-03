@@ -1,6 +1,7 @@
 using CognitiveSupport;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using System;
 using System.Collections.Generic;
 
 namespace Mutation.Ui.Views.SettingsUi;
@@ -24,123 +25,42 @@ internal static class SettingsWorkingCopy
 
 	// Copy values from the working copy into the live Settings instance, preserving
 	// the existing top-level reference so other parts of the app keep observing the
-	// same object. Sub-object references are also preserved where possible.
+	// same object. Sub-object and list instances are preserved too, which is what keeps
+	// the prompt ListView bound to the same objects the app later edits (issue #219).
+	//
+	// The copy is reflective on purpose. The hand-maintained field list this replaced
+	// silently dropped whatever nobody remembered to add to it, and it had already
+	// drifted twice (issues #218 and #219).
 	public static void CommitInto(Settings live, Settings workingCopy)
 	{
-		live.AudioSettings ??= new AudioSettings();
-		if (workingCopy.AudioSettings is not null)
-		{
-			live.AudioSettings.ActiveCaptureDeviceFullName = workingCopy.AudioSettings.ActiveCaptureDeviceFullName;
-			live.AudioSettings.MicrophoneToggleMuteHotKey = workingCopy.AudioSettings.MicrophoneToggleMuteHotKey;
-			live.AudioSettings.EnableMicrophoneVisualization = workingCopy.AudioSettings.EnableMicrophoneVisualization;
-			live.AudioSettings.CustomBeepSettings = workingCopy.AudioSettings.CustomBeepSettings;
-		}
+		ArgumentNullException.ThrowIfNull(live);
+		ArgumentNullException.ThrowIfNull(workingCopy);
 
-		live.AzureComputerVisionSettings ??= new AzureComputerVisionSettings();
-		if (workingCopy.AzureComputerVisionSettings is not null)
-		{
-			var src = workingCopy.AzureComputerVisionSettings;
-			var dst = live.AzureComputerVisionSettings;
-			dst.InvertScreenshot = src.InvertScreenshot;
-			dst.ScreenshotHotKey = src.ScreenshotHotKey;
-			dst.ScreenshotOcrHotKey = src.ScreenshotOcrHotKey;
-			dst.ScreenshotLeftToRightTopToBottomOcrHotKey = src.ScreenshotLeftToRightTopToBottomOcrHotKey;
-			dst.OcrHotKey = src.OcrHotKey;
-			dst.OcrLeftToRightTopToBottomHotKey = src.OcrLeftToRightTopToBottomHotKey;
-			dst.SendHotkeyAfterOcrOperation = src.SendHotkeyAfterOcrOperation;
-			dst.ApiKey = src.ApiKey;
-			dst.Endpoint = src.Endpoint;
-			dst.TimeoutSeconds = src.TimeoutSeconds;
-			dst.UseFreeTier = src.UseFreeTier;
-			dst.FreeTierPageLimit = src.FreeTierPageLimit;
-			dst.MaxParallelDocuments = src.MaxParallelDocuments;
-			dst.MaxParallelRequests = src.MaxParallelRequests;
-			dst.MaxDocumentBytes = src.MaxDocumentBytes;
-		}
+		EnsureSections(live);
+		EnsureSections(workingCopy);
 
-		live.SpeechToTextSettings ??= new SpeechToTextSettings();
-		if (workingCopy.SpeechToTextSettings is not null)
-		{
-			var src = workingCopy.SpeechToTextSettings;
-			var dst = live.SpeechToTextSettings;
-			dst.TempDirectory = src.TempDirectory;
-			dst.SpeechToTextHotKey = src.SpeechToTextHotKey;
-			dst.SpeechToTextWithLlmProcessingHotKey = src.SpeechToTextWithLlmProcessingHotKey;
-			dst.SendHotkeyAfterTranscriptionOperation = src.SendHotkeyAfterTranscriptionOperation;
-			dst.Services = src.Services;
-			dst.ActiveSpeechToTextService = src.ActiveSpeechToTextService;
-			dst.FileTranscriptionTimeoutSeconds = src.FileTranscriptionTimeoutSeconds;
-			dst.MaxRetainedSessions = src.MaxRetainedSessions;
-			dst.EnableSilenceStripping = src.EnableSilenceStripping;
-			dst.SilenceThresholdDbFs = src.SilenceThresholdDbFs;
-			dst.MinSilenceSeconds = src.MinSilenceSeconds;
-			dst.SilenceGuardMilliseconds = src.SilenceGuardMilliseconds;
-		}
+		SettingsGraphCommitter.Commit(live, workingCopy);
+	}
 
-		live.ApiKeys ??= new ApiKeys();
-		if (workingCopy.ApiKeys is not null)
-		{
-			var src = workingCopy.ApiKeys;
-			var dst = live.ApiKeys;
-			dst.OpenAiApiKey = src.OpenAiApiKey;
-			dst.AnthropicApiKey = src.AnthropicApiKey;
-			dst.DeepgramApiKey = src.DeepgramApiKey;
-		}
+	// Both sides need every section present: the committer copies null over non-null,
+	// so a missing section on either side would otherwise leave the live graph with a
+	// null the rest of the app does not expect.
+	private static void EnsureSections(Settings settings)
+	{
+		settings.AudioSettings ??= new AudioSettings();
+		settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings();
+		settings.SpeechToTextSettings ??= new SpeechToTextSettings();
+		settings.ApiKeys ??= new ApiKeys();
+		settings.LlmSettings ??= new LlmSettings();
+		settings.TextToSpeechSettings ??= new TextToSpeechSettings();
+		settings.MainWindowUiSettings ??= new MainWindowUiSettings();
+		settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
+		settings.TranscriptFormatRules ??= new List<TranscriptFormatRule>();
 
-		live.LlmSettings ??= new LlmSettings();
-		if (workingCopy.LlmSettings is not null)
-		{
-			var src = workingCopy.LlmSettings;
-			var dst = live.LlmSettings;
-			dst.Models = src.Models;
-			dst.Prompts = src.Prompts;
-			dst.TimeoutSeconds = src.TimeoutSeconds;
-			dst.RetryCount = src.RetryCount;
-		}
-
-		live.TranscriptFormatRules = workingCopy.TranscriptFormatRules ?? new List<TranscriptFormatRule>();
-
-		live.TextToSpeechSettings ??= new TextToSpeechSettings();
-		if (workingCopy.TextToSpeechSettings is not null)
-		{
-			var src = workingCopy.TextToSpeechSettings;
-			var dst = live.TextToSpeechSettings;
-			dst.SpeakClipboard = src.SpeakClipboard;
-			dst.SpeakSelectionHotKey = src.SpeakSelectionHotKey;
-			dst.RestartFromBeginningHotKey = src.RestartFromBeginningHotKey;
-			dst.SkipSentenceBackwardHotKey = src.SkipSentenceBackwardHotKey;
-			dst.SkipSentenceForwardHotKey = src.SkipSentenceForwardHotKey;
-			dst.SpeakPositionHotKey = src.SpeakPositionHotKey;
-			dst.PauseResumeHotKey = src.PauseResumeHotKey;
-			dst.Rate = src.Rate;
-			dst.Volume = src.Volume;
-			dst.EnableSpeechPreprocessing = src.EnableSpeechPreprocessing;
-			dst.VoiceName = src.VoiceName;
-			dst.SkipSentenceGraceWindowMs = src.SkipSentenceGraceWindowMs;
-			dst.ResumeRewindWordCount = src.ResumeRewindWordCount;
-			dst.ResumeRewindAfterPauseSeconds = src.ResumeRewindAfterPauseSeconds;
-			dst.AnnounceReadingTimeAtStart = src.AnnounceReadingTimeAtStart;
-			dst.AnnounceReadingTimeMinimumMinutes = src.AnnounceReadingTimeMinimumMinutes;
-			dst.AnnounceProgressEnabled = src.AnnounceProgressEnabled;
-			dst.AnnounceProgressEveryPercent = src.AnnounceProgressEveryPercent;
-			dst.AnnounceProgressMinimumMinutes = src.AnnounceProgressMinimumMinutes;
-		}
-
-		live.MainWindowUiSettings ??= new MainWindowUiSettings();
-		if (workingCopy.MainWindowUiSettings is not null)
-		{
-			var src = workingCopy.MainWindowUiSettings;
-			var dst = live.MainWindowUiSettings;
-			dst.WindowLocation = src.WindowLocation;
-			dst.WindowSize = src.WindowSize;
-			dst.MaxTextBoxLineCount = src.MaxTextBoxLineCount;
-			dst.DictationInsertPreference = src.DictationInsertPreference;
-		}
-
-		live.HotKeyRouterSettings ??= new HotKeyRouterSettings();
-		if (workingCopy.HotKeyRouterSettings is not null)
-		{
-			live.HotKeyRouterSettings.Mappings = workingCopy.HotKeyRouterSettings.Mappings;
-		}
+		// A settings file with an explicit null for one of these lists deserializes to
+		// null, and the committer would then propagate that null onto the live graph.
+		settings.LlmSettings.Models ??= new List<LlmModelConfig>();
+		settings.LlmSettings.Prompts ??= new List<LlmSettings.LlmPrompt>();
+		settings.HotKeyRouterSettings.Mappings ??= new List<HotKeyRouterSettings.HotKeyRouterMap>();
 	}
 }

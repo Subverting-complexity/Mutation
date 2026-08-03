@@ -1665,8 +1665,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		string labelText = muted ? "Unmute microphone" : "Mute microphone";
 		BtnToggleMicIcon.Glyph = MicOnGlyph;
 		BtnToggleMicSlash.Visibility = muted ? Visibility.Visible : Visibility.Collapsed;
-		AutomationProperties.SetName(BtnToggleMic, labelText);
-		ConfigureButtonHotkey(BtnToggleMic, null, _settings.AudioSettings?.MicrophoneToggleMuteHotKey, labelText);
+		ConfigureButtonHotkey(BtnToggleMic, null, _settings.AudioSettings?.MicrophoneToggleMuteHotKey, labelText, labelText);
 		MicStatusIcon.Glyph = MicOnGlyph;
 		MicStatusIconSlash.Visibility = muted ? Visibility.Visible : Visibility.Collapsed;
 		MicStatusIcon.Foreground = ResolveBrush(muted ? "TextFillColorSecondaryBrush" : "TextFillColorPrimaryBrush");
@@ -1691,37 +1690,33 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Idle state
 			BtnSpeechToTextIcon.Glyph = RecordGlyph;
 			BtnSpeechToText.IsEnabled = true;
-			AutomationProperties.SetName(BtnSpeechToText, "Record");
-			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Record");
+			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Record", "Record");
 
 			BtnSpeechToTextWithFormatIcon.Glyph = MagicGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
-			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Record and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Record and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Record and Format", "Record and Format");
 		}
 		else if (label == "Stop")
 		{
 			// Recording state
 			BtnSpeechToTextIcon.Glyph = StopGlyph;
 			BtnSpeechToText.IsEnabled = true;
-			AutomationProperties.SetName(BtnSpeechToText, "Stop");
-			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Stop");
+			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Stop", "Stop");
 
 			BtnSpeechToTextWithFormatIcon.Glyph = StopGlyph;
 			BtnSpeechToTextWithFormat.IsEnabled = true;
-			AutomationProperties.SetName(BtnSpeechToTextWithFormat, "Stop and Format");
-			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Stop and Format");
+			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Stop and Format", "Stop and Format");
 		}
 		else
 		{
 			// Transcribing / Processing
 			BtnSpeechToTextIcon.Glyph = glyph;
 			BtnSpeechToText.IsEnabled = isEnabled;
-			AutomationProperties.SetName(BtnSpeechToText, label);
+			SetButtonAccessibleLabel(BtnSpeechToText, label);
 
 			BtnSpeechToTextWithFormatIcon.Glyph = glyph;
 			BtnSpeechToTextWithFormat.IsEnabled = isEnabled;
-			AutomationProperties.SetName(BtnSpeechToTextWithFormat, label);
+			SetButtonAccessibleLabel(BtnSpeechToTextWithFormat, label);
 		}
 	}
 
@@ -1903,28 +1898,56 @@ public sealed partial class MainWindow : Window, IDisposable
         });
     }
 
-	private readonly Dictionary<Button, string> _buttonBaseNames = new();
+	// The accessible label each hotkey button currently carries, without the hotkey
+	// suffix. State transitions push the new label in here; hotkey-only refreshes read
+	// it back so they re-compose from the current state rather than resurrecting the
+	// name the button had at startup (issue #214).
+	private readonly Dictionary<Button, string> _buttonAccessibleLabels = new();
 
-	private void ConfigureButtonHotkey(Button button, TextBlock? hotkeyTextBlock, string? hotkey, string baseTooltip)
+	/// <param name="accessibleLabel">
+	/// The button's label in its current state. Pass this from anywhere the button
+	/// changes state; omit it for a hotkey-only refresh, which then keeps whatever
+	/// label the button already has.
+	/// </param>
+	private void ConfigureButtonHotkey(Button button, TextBlock? hotkeyTextBlock, string? hotkey, string baseTooltip, string? accessibleLabel = null)
 	{
-		if (!_buttonBaseNames.TryGetValue(button, out var baseName))
-		{
-			baseName = AutomationProperties.GetName(button);
-			if (string.IsNullOrWhiteSpace(baseName))
-				baseName = baseTooltip;
-			_buttonBaseNames[button] = baseName;
-		}
+		string label = ResolveAccessibleLabel(button, baseTooltip, accessibleLabel);
 
-		string composedName = string.IsNullOrWhiteSpace(hotkey)
-			? baseName
-			: $"{baseName}, {hotkey}";
-		AutomationProperties.SetName(button, composedName);
+		AutomationProperties.SetName(button, HotkeyAccessibleText.ComposeName(label, hotkey));
 
-		string tooltip = ComposeTooltip(baseTooltip, hotkey);
+		string tooltip = HotkeyAccessibleText.ComposeTooltip(baseTooltip, hotkey);
 		ToolTipService.SetToolTip(button, tooltip);
 		AutomationProperties.SetHelpText(button, tooltip);
 		AutomationProperties.SetAcceleratorKey(button, string.IsNullOrWhiteSpace(hotkey) ? string.Empty : hotkey);
 		UpdateHotkeyText(hotkeyTextBlock, hotkey);
+	}
+
+	private string ResolveAccessibleLabel(Button button, string baseTooltip, string? accessibleLabel)
+	{
+		if (!string.IsNullOrWhiteSpace(accessibleLabel))
+		{
+			_buttonAccessibleLabels[button] = accessibleLabel;
+			return accessibleLabel;
+		}
+
+		if (_buttonAccessibleLabels.TryGetValue(button, out var known))
+			return known;
+
+		// First sight of this button: its XAML name is still the bare label.
+		var fromXaml = AutomationProperties.GetName(button);
+		if (string.IsNullOrWhiteSpace(fromXaml))
+			fromXaml = baseTooltip;
+		_buttonAccessibleLabels[button] = fromXaml;
+		return fromXaml;
+	}
+
+	// Sets a state label on a button whose hotkey affordances are not being touched
+	// (e.g. the disabled "Transcribing…" state), keeping the label cache in step so a
+	// later hotkey refresh does not undo it.
+	private void SetButtonAccessibleLabel(Button button, string label)
+	{
+		_buttonAccessibleLabels[button] = label;
+		AutomationProperties.SetName(button, label);
 	}
 
 	private static void UpdateHotkeyText(TextBlock? hotkeyTextBlock, string? hotkey)
@@ -1938,13 +1961,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		else
 		{
-			hotkeyTextBlock.Text = $"Hotkey: {hotkey}";
+			hotkeyTextBlock.Text = HotkeyAccessibleText.ComposeHotkeyText(hotkey);
 			hotkeyTextBlock.Visibility = Visibility.Visible;
 		}
 	}
-
-        private static string ComposeTooltip(string baseTooltip, string? hotkey) =>
-                          string.IsNullOrWhiteSpace(hotkey) ? baseTooltip : $"{baseTooltip} (Hotkey: {hotkey})";
 
 
 
@@ -2380,6 +2400,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (tts) failed: {ex.Message}");
+		}
+
+		try
+		{
+			// A save rewrites the prompts in place; the ListView needs re-pointing at
+			// them or it keeps rendering pre-save content (issue #219).
+			_promptLibrary?.RebindPromptList();
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (prompts) failed: {ex.Message}");
 		}
 
 		var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();

@@ -19,6 +19,10 @@ public static class BeepPlayer
 	public const int DefaultUnmuteFrequency = 1300;
 	public const int DefaultUnmuteDuration = 50;
 
+	// Upper bound on how many times a beep is repeated in one PlayRepeated call. Keeps a
+	// runaway retry count from synthesizing a multi-second WAV the user has to sit through.
+	public const int MaxRepeatCount = 10;
+
 	private static readonly object SyncLock = new();
 	private static readonly TimeSpan DuplicateSuppressWindow = TimeSpan.FromMilliseconds(500);
 	private static readonly Dictionary<BeepType, DateTime> _lastPlayed = new();
@@ -29,7 +33,7 @@ public static class BeepPlayer
 	private static SoundPlayer? _playerMute;
 	private static SoundPlayer? _playerUnmute;
 	private static SoundPlayer? _previewPlayer;
-	private static readonly Dictionary<BeepType, (SoundPlayer Player, MemoryStream Stream)> _defaultPlayers = new();
+	private static readonly Dictionary<(BeepType Type, int RepeatCount), (SoundPlayer Player, MemoryStream Stream)> _defaultPlayers = new();
 	public static IReadOnlyList<string> LastInitializationIssues { get; private set; } = Array.Empty<string>();
 
 	public static void Initialize(Settings settings)
@@ -84,21 +88,82 @@ public static class BeepPlayer
 		}
 		if (TryPlayCustom(type))
 			return;
-		PlayDefault(type);
+		PlayDefault(type, repeatCount: 1);
+	}
+
+	// Plays <paramref name="repeatCount"/> copies of a beep as a single sound so the
+	// listener can actually count them. Playing Play() in a loop does not work: the
+	// duplicate-suppression window above swallows every call after the first (issue
+	// #216), and even without it SoundPlayer.Play restarts rather than queues. The
+	// default beeps are therefore synthesized as one N-tone WAV, and custom beep files
+	// are played back-to-back synchronously off the calling thread.
+	public static void PlayRepeated(BeepType type, int repeatCount)
+	{
+		repeatCount = ClampRepeatCount(repeatCount);
+
+		lock (SyncLock)
+		{
+			// Deliberately not consulting the suppression window: this call *is* the
+			// repeat, so it must never be collapsed. Still stamped so a stray single
+			// Play right behind it stays suppressed.
+			_lastPlayed[type] = DateTime.UtcNow;
+		}
+
+		if (TryPlayCustomRepeated(type, repeatCount))
+			return;
+		PlayDefault(type, repeatCount);
+	}
+
+	private static int ClampRepeatCount(int repeatCount) => Math.Clamp(repeatCount, 1, MaxRepeatCount);
+
+	// The tone sequence for a beep played <paramref name="repeatCount"/> times in a row.
+	// Exposed so the repeat behaviour is verifiable without an audio device.
+	public static IReadOnlyList<(int Frequency, int Duration)> GetRepeatedSequence(BeepType type, int repeatCount)
+	{
+		var single = GetDefaultSequence(type);
+		repeatCount = ClampRepeatCount(repeatCount);
+		if (repeatCount == 1)
+			return single;
+
+		var sequence = new List<(int Frequency, int Duration)>(single.Count * repeatCount);
+		for (var i = 0; i < repeatCount; i++)
+			sequence.AddRange(single);
+		return sequence;
+	}
+
+	private static bool TryPlayCustomRepeated(BeepType type, int repeatCount)
+	{
+		var player = GetCustomPlayer(type);
+		if (player is null)
+			return false;
+
+		if (repeatCount == 1)
+		{
+			player.Play();
+			return true;
+		}
+
+		// PlaySync blocks, so it runs off the caller's thread; a shared SoundPlayer is
+		// only ever driven by one of these loops at a time in practice, and a torn
+		// repeat is preferable to blocking a transcription retry.
+		Task.Run(() =>
+		{
+			try
+			{
+				for (var i = 0; i < repeatCount; i++)
+					player.PlaySync();
+			}
+			catch
+			{
+				// A failed beep must never take down the operation it is reporting on.
+			}
+		});
+		return true;
 	}
 
 	private static bool TryPlayCustom(BeepType type)
 	{
-		var player = type switch
-		{
-			BeepType.Start => _playerStart,
-			BeepType.Success => _playerSuccess,
-			BeepType.Failure => _playerFailure,
-			BeepType.End => _playerEnd,
-			BeepType.Mute => _playerMute,
-			BeepType.Unmute => _playerUnmute,
-			_ => null
-		};
+		var player = GetCustomPlayer(type);
 		if (player != null)
 		{
 			player.Play();
@@ -107,21 +172,33 @@ public static class BeepPlayer
 		return false;
 	}
 
+	private static SoundPlayer? GetCustomPlayer(BeepType type) => type switch
+	{
+		BeepType.Start => _playerStart,
+		BeepType.Success => _playerSuccess,
+		BeepType.Failure => _playerFailure,
+		BeepType.End => _playerEnd,
+		BeepType.Mute => _playerMute,
+		BeepType.Unmute => _playerUnmute,
+		_ => null
+	};
+
 	// Default beeps are synthesized once into in-memory WAVs and played through
 	// SoundPlayer.Play (asynchronous), so they never block the calling thread the
 	// way Console.Beep did (issue #169).
-	private static void PlayDefault(BeepType type)
+	private static void PlayDefault(BeepType type, int repeatCount)
 	{
 		SoundPlayer player;
+		var key = (type, ClampRepeatCount(repeatCount));
 		lock (SyncLock)
 		{
-			if (!_defaultPlayers.TryGetValue(type, out var cached))
+			if (!_defaultPlayers.TryGetValue(key, out var cached))
 			{
-				var wav = BeepToneSynthesizer.SynthesizeWav(GetDefaultSequence(type));
+				var wav = BeepToneSynthesizer.SynthesizeWav(GetRepeatedSequence(key.Item1, key.Item2));
 				var stream = new MemoryStream(wav, writable: false);
 				cached = (new SoundPlayer(stream), stream);
 				cached.Player.Load();
-				_defaultPlayers[type] = cached;
+				_defaultPlayers[key] = cached;
 			}
 			player = cached.Player;
 		}

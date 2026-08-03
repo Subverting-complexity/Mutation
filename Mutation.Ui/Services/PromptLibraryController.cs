@@ -36,8 +36,22 @@ internal sealed class PromptLibraryController
 
 	public void Initialize()
 	{
-		if (_settings.LlmSettings != null)
-			_promptListView.ItemsSource = _settings.LlmSettings.Prompts;
+		RebindPromptList();
+	}
+
+	/// <summary>
+	/// Re-points the ListView at the current prompt collection. Needed after a Settings
+	/// save, which rewrites the prompts in place: a plain List raises no change
+	/// notifications, so the rows would otherwise keep rendering pre-save content
+	/// (issue #219).
+	/// </summary>
+	public void RebindPromptList()
+	{
+		if (_settings.LlmSettings == null)
+			return;
+
+		_promptListView.ItemsSource = null;
+		_promptListView.ItemsSource = _settings.LlmSettings.Prompts;
 	}
 
 	public IReadOnlyList<HotkeyManager.HotkeyBindingFailure> AttachHotkeyManager(HotkeyManager hotkeyManager)
@@ -133,8 +147,7 @@ internal sealed class PromptLibraryController
 
 		_settingsManager.SaveSettingsToFile(_settings);
 
-		_promptListView.ItemsSource = null;
-		_promptListView.ItemsSource = _settings.LlmSettings.Prompts;
+		RebindPromptList();
 
 		if (_hotkeyManager is null)
 			return;
