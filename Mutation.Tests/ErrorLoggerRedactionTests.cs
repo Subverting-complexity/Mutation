@@ -5,7 +5,10 @@ namespace Mutation.Tests;
 
 // All tests in this class mutate ErrorLogger's static secret registry. xUnit
 // runs tests within a single class sequentially, so each test sets the registry
-// to a known state at the top and the tests stay order-independent.
+// to a known state at the top and the tests stay order-independent. The collection
+// extends that serialisation to ErrorLoggerRedirectTests, which drives the same
+// registry — separate classes otherwise run in parallel.
+[Collection(ErrorLoggerCollection.Name)]
 public class ErrorLoggerRedactionTests
 {
 	[Fact]

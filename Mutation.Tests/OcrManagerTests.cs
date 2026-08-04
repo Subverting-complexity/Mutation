@@ -9,6 +9,7 @@ using CognitiveSupport;
 using Mutation.Ui.Services;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
+using Windows.Graphics.Imaging;
 
 namespace Mutation.Tests;
 
@@ -747,6 +748,90 @@ public class OcrManagerTests
 		}
 	};
 
+	// Issue #268: the end beep used to sound here as a side effect of OcrService's retry
+	// signal firing on attempt 1. #216 silenced that first attempt, which left OCR with
+	// no end beep at all, and #269 restored it only for dictation.
+	//
+	// This is the clipboard path: no region overlay, so no start beep — the user hears
+	// end (image sent) then success. The screenshot path adds a start beep in front,
+	// from the overlay.
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_BeepsEndWhenTheRequestGoesOut_ThenSuccess()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService("recognised text"), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.True(result.Success);
+		WaitForBeep(manager, 2);
+		Assert.Equal(new[] { BeepType.End, BeepType.Success }, manager.Beeps.ToArray());
+	}
+
+	// The end beep says "the request went out", so a request that never went out must
+	// not claim one — the user would be told the image was sent when it was not.
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_NoEndBeep_WhenOcrIsNotConfigured()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var manager = new TestableOcrManager(new Settings(), new StubOcrService(), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		WaitForBeep(manager, 1);
+		Assert.Equal(new[] { BeepType.Failure }, manager.Beeps.ToArray());
+	}
+
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_NoEndBeep_WhenThereIsNoImage()
+	{
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), new TestClipboard());
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		WaitForBeep(manager, 1);
+		Assert.Equal(new[] { BeepType.Failure }, manager.Beeps.ToArray());
+	}
+
+	// A failing request still ended in the image being sent, so the end beep stands and
+	// the failure beep follows it.
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_BeepsEndThenFailure_WhenTheRequestFails()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var service = new StubOcrService(new InvalidOperationException("service unavailable"));
+		var manager = new TestableOcrManager(CreateValidSettings(), service, clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		WaitForBeep(manager, 2);
+		Assert.Equal(new[] { BeepType.End, BeepType.Failure }, manager.Beeps.ToArray());
+	}
+
+	// The batch path issues one request per segment; a beep each would be a burst, and
+	// it reports progress of its own.
+	[Fact]
+	public async Task ExtractTextFromFilesAsync_DoesNotBeepEndPerRequest()
+	{
+		using var first = new TempFile(".png");
+		using var second = new TempFile(".jpg");
+		var manager = new TestableOcrManager(
+			CreateValidSettings(), new StubOcrService("first", "second"), new TestClipboard());
+
+		var result = await manager.ExtractTextFromFilesAsync(
+			new[] { first.Path, second.Path }, DefaultOrder, CancellationToken.None);
+
+		Assert.True(result.Success);
+		WaitForBeep(manager, 1);
+		Assert.DoesNotContain(BeepType.End, manager.Beeps);
+	}
+
 	private static void WaitForBeep(TestableOcrManager manager, int expectedCount)
 	{
 		var reached = SpinWait.SpinUntil(() => manager.BeepCount >= expectedCount, TimeSpan.FromSeconds(1));
@@ -795,11 +880,18 @@ public class OcrManagerTests
 		public string? LastText { get; private set; }
 		public int SetTextCalls { get; private set; }
 
+		// The image ExtractTextFromClipboardImageAsync will find. Null means "no image
+		// on the clipboard", which is the path that beeps failure.
+		public SoftwareBitmap? Image { get; set; }
+
 		public override void SetText(string text)
 		{
 			SetTextCalls++;
 			LastText = text;
 		}
+
+		public override Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
+			=> Task.FromResult(Image);
 	}
 
 	private sealed class StubOcrService : IOcrService

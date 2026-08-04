@@ -46,31 +46,58 @@ public static class ErrorLogger
 	// concurrent writer cannot race the rotation move.
 	private static readonly object s_gate = new();
 
+	// When set, the only place entries are written. See RedirectTo.
+	private static volatile string? s_logDirectoryOverride;
+
+	/// <summary>
+	/// Sends every subsequent entry to <paramref name="directory"/> alone, instead of
+	/// the two default locations, and points <see cref="PrimaryLogPath"/> there. Pass
+	/// <c>null</c> to restore the defaults.
+	///
+	/// The app itself never calls this. It exists for hosts that must not append to the
+	/// user's real log — above all the test suite, whose fixtures ("no audio device",
+	/// "your account is not approved for the fast-mode beta") are indistinguishable from
+	/// genuine runtime failures once they are sitting in the same file the user is asked
+	/// to read when something goes wrong.
+	/// </summary>
+	public static void RedirectTo(string? directory)
+	{
+		s_logDirectoryOverride = string.IsNullOrWhiteSpace(directory) ? null : directory;
+	}
+
 	/// <summary>
 	/// The user-writable log path (<c>%LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log</c>),
 	/// suitable for surfacing in dialogs so the user knows where to find the log.
 	/// Never throws; falls back to the EXE-folder path if the local-app-data path
-	/// cannot be computed.
+	/// cannot be computed. Follows <see cref="RedirectTo"/> when one is in effect.
 	/// </summary>
-	public static string PrimaryLogPath
+	public static string PrimaryLogPath => ResolveLogPath(s_logDirectoryOverride);
+
+	// Split out so the path rules can be tested without touching the process-wide
+	// override — reading the default path by switching the redirect off would let
+	// concurrent tests log into the user's real file, which is the thing being avoided.
+	internal static string ResolveLogPath(string? overrideDirectory)
 	{
-		get
+		if (!string.IsNullOrWhiteSpace(overrideDirectory))
+		{
+			try { return Path.Combine(overrideDirectory, ErrorLogFileName); }
+			catch { return ErrorLogFileName; }
+		}
+
+		try
+		{
+			string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+			return Path.Combine(localAppData, "Mutation", "logs", ErrorLogFileName);
+		}
+		catch
 		{
 			try
 			{
-				string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-				return Path.Combine(localAppData, "Mutation", "logs", ErrorLogFileName);
+				return Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
 			}
 			catch
 			{
-				try
-				{
-					return Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
-				}
-				catch
-				{
-					return ErrorLogFileName;
-				}
+				return ErrorLogFileName;
 			}
 		}
 	}
@@ -134,14 +161,22 @@ public static class ErrorLogger
 		string timestamp = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff zzz");
 		string entry = $"[{timestamp}] [{source}]{Environment.NewLine}{body}{Environment.NewLine}{Environment.NewLine}";
 
+		// A redirect replaces both default locations rather than adding a third: its
+		// whole purpose is that nothing lands in the user's log.
+		string? redirected = s_logDirectoryOverride;
+		if (redirected is not null)
+		{
+			// A redirect replaces both default locations rather than adding a third: its
+			// whole purpose is that nothing lands in the user's log.
+			AppendQuietly(redirected, entry, createDirectory: true);
+			return;
+		}
+
 		// (a) User-writable location: %LOCALAPPDATA%\Mutation\logs. Created if missing.
 		try
 		{
 			string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-			string logDir = Path.Combine(localAppData, "Mutation", "logs");
-			Directory.CreateDirectory(logDir);
-			string logPath = Path.Combine(logDir, ErrorLogFileName);
-			AppendWithRotation(logPath, entry, MaxLogFileSizeBytes);
+			AppendQuietly(Path.Combine(localAppData, "Mutation", "logs"), entry, createDirectory: true);
 		}
 		catch
 		{
@@ -149,15 +184,25 @@ public static class ErrorLogger
 		}
 
 		// (b) EXE folder. May fail if installed under a non-writable directory
-		// (e.g. Program Files); that must not stop the user-writable write above.
+		// (e.g. Program Files); that must not stop the user-writable write above. It
+		// already exists by definition, so it is not created — that would put a
+		// filesystem call on every entry for nothing.
+		AppendQuietly(AppContext.BaseDirectory, entry, createDirectory: false);
+	}
+
+	// Appends to <directory>\Mutation_Errors.log, swallowing every failure — a caller of
+	// the logger is usually already in a failure path and must not acquire a second one.
+	private static void AppendQuietly(string directory, string entry, bool createDirectory)
+	{
 		try
 		{
-			string logPath = Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
-			AppendWithRotation(logPath, entry, MaxLogFileSizeBytes);
+			if (createDirectory)
+				Directory.CreateDirectory(directory);
+			AppendWithRotation(Path.Combine(directory, ErrorLogFileName), entry, MaxLogFileSizeBytes);
 		}
 		catch
 		{
-			// Never let logging throw — callers may already be in a failure path.
+			// Never let logging throw.
 		}
 	}
 

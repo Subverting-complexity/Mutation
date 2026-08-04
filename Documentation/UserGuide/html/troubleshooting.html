@@ -321,6 +321,29 @@ it tries, and tells you when the test fails, with the technical detail included.
 department and Mutation cannot work around it — ask them. Otherwise, check for privacy
 or screen-recording-blocker software, and make sure the window you are capturing is not
 playing protected video.</p>
+<h3 id="your-own-beep-sounds-stopped-playing">Your own beep sounds stopped playing</h3>
+<p><strong>What's happening.</strong> At startup Mutation checks every sound file you picked for the
+custom beeps. Rather than leave you with a silent cue, it falls back to its built-in
+beeps and shows a message titled &quot;Custom Beep Settings Issues&quot;, naming each file and
+what is wrong with it. The message also tells you how far the fallback went, because
+that depends on the problem:</p>
+<ul>
+<li>If a file has been moved, renamed, deleted, or is not a <code>.wav</code> file, Mutation turns
+<strong>Use custom beeps</strong> off altogether. All six sounds go back to the built-in ones.</li>
+<li>If a file is there and is a <code>.wav</code> but still cannot be played — a truncated or
+damaged file, say — only that one sound falls back. Your other custom sounds carry
+on, and <strong>Use custom beeps</strong> stays on.</li>
+</ul>
+<p><strong>What to do.</strong></p>
+<ol>
+<li>Read the list — it names each sound and the file it could not use.</li>
+<li>Put the file back, or pick a new one: open <strong>Settings</strong> with <strong>Ctrl+Comma</strong>, go to
+<strong>Audio</strong>, and browse for a <code>.wav</code> file for that cue. The small play button lets you
+hear it before you commit.</li>
+<li>If the message told you <strong>Use custom beeps</strong> was turned off, turn it back on.</li>
+<li>Save.</li>
+</ol>
+<p>Until you do, everything still works — you just hear Mutation's own beeps.</p>
 <h2 id="finding-the-log-file">Finding the log file</h2>
 <p>When something goes wrong, Mutation writes a timestamped entry to a log file called
 <code>Mutation_Errors.log</code>. It lives here:</p>
@@ -357,7 +380,7 @@ and the keyboard-driven capture overlay.</li>
 
 <footer>
 <p><a href="index.html">Back to the contents page</a></p>
-<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
+<p>Generated from the Markdown source on 5 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
 </footer>
 </main>
 </div>

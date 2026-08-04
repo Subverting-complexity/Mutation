@@ -342,12 +342,30 @@ public partial class App : Application
 					NoticeSeverity.Warning);
 			}
 
-			if (BeepPlayer.LastInitializationIssues.Count > 0 && _window is MainWindow beepWindow)
+			// One notice for both checks, which catch different things. The settings layer
+			// rejects a path that is not a .wav or does not exist, and switches custom
+			// beeps off wholesale. The player then finds a file that survived that and
+			// still will not load (truncated, or not really a PCM wav) — it falls back
+			// for that one sound only and leaves the toggle on. The closing advice
+			// differs accordingly: telling someone to re-enable a toggle that is still
+			// enabled sends them looking for a setting that is not the problem.
+			bool customBeepsSwitchedOff = settingsManager.CustomBeepIssues.Count > 0;
+			// The two lists never overlap — the settings check runs first and switches
+			// custom beeps off, which is what stops the player from looking at all.
+			var beepIssues = settingsManager.CustomBeepIssues
+				.Concat(BeepPlayer.LastInitializationIssues)
+				.ToList();
+			if (beepIssues.Count > 0 && _window is MainWindow beepWindow)
 			{
 				await beepWindow.ShowNoticeAsync(
 					"Custom Beep Settings Issues",
 					"The following issues were found with the custom beep settings:\n\n" +
-						string.Join("\n", BeepPlayer.LastInitializationIssues),
+						string.Join("\n", beepIssues) +
+						(customBeepsSwitchedOff
+							? "\n\nMutation has switched back to its built-in beeps. Fix the files above, then turn " +
+								"Use custom beeps back on under Audio in Settings."
+							: "\n\nMutation will use its built-in beep for each sound listed above. Your other " +
+								"custom sounds still play. Replace the files above under Audio in Settings."),
 					"OK",
 					NoticeSeverity.Warning);
 			}

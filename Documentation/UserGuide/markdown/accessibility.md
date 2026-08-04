@@ -32,8 +32,8 @@ explanation, or the other way around. What you hear is what is there.
 Mutation uses short beeps so you know an action landed without having to check the
 screen. There are distinct sounds for:
 
-- **Start** — a recording has begun.
-- **End** — a recording has stopped.
+- **Start** — a recording has begun, or the screenshot overlay is ready for you to pick a region.
+- **End** — a recording has stopped, or your screenshot has been captured and sent off to be read.
 - **Success** — a two-note rising chirp when something completed.
 - **Failure** — a low tone, repeated, when something went wrong.
 - **Mute** — a low tone when microphones are muted.
