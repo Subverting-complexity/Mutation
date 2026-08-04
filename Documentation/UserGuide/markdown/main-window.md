@@ -21,6 +21,15 @@ Top left is a single **Menu** button (the three-line "hamburger" icon). Press **
 
 See [The Settings window](settings.md) for what is inside Settings.
 
+## The User guide button
+
+Top right, opposite the menu, is a **User guide** button with the subtext "Read the
+documentation". Click it — or press **Alt** then **G** — and this guide opens in your
+usual web browser, at the contents page.
+
+The guide is installed along with Mutation and lives on your own computer, so it works
+with no internet connection.
+
 ---
 
 ## The Microphone card
