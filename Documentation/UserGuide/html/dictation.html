@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dictation: turning speech into text - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none; width:100%; min-width:0}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html" aria-current="page">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="dictation-turning-speech-into-text">Dictation: turning speech
+into text</h1>
+<p>Dictation is the feature most people end up using every day. You
+press a shortcut, talk, press it again, and a second or two later your
+words are sitting there as text — ready to paste into an email, a chat
+message, or a document.</p>
+<h2 id="the-basic-loop">The basic loop</h2>
+<ol type="1">
+<li>Press <strong>Shift+Alt+U</strong>. Mutation plays a short beep and
+starts recording.</li>
+<li>Say what you want to write. Take your time — pauses are fine.</li>
+<li>Press <strong>Shift+Alt+U</strong> again. The beep tells you
+recording has stopped.</li>
+<li>A moment later — usually one to three seconds for a few sentences —
+the text appears, and a success beep plays.</li>
+</ol>
+<p>That&#39;s it. The shortcut is global, so it works no matter which app
+you are in. You never have to switch to Mutation first.</p>
+<p>If you prefer clicking, the <strong>Speech to Text</strong> card on
+the main window has a <strong>Record</strong> button that does exactly
+the same thing.</p>
+<blockquote>
+<p><strong>Shift+Alt+U</strong> is just the default. Every shortcut in
+Mutation can be changed. Open <strong>Settings</strong> with
+<strong>Ctrl+Comma</strong> and look on the <strong>Hotkeys</strong>
+tab.</p>
+</blockquote>
+<h2 id="recording-and-cleaning-up-in-one-step">Recording and cleaning up
+in one step</h2>
+<p>There is a second shortcut, <strong>Shift+Alt+I</strong> by default,
+that records <em>and</em> then runs your chosen AI prompt on the result
+— all from the one press. So you can ramble a bit, and what comes back
+is already tidied into proper sentences.</p>
+<p>On the main window this is the <strong>Record and Format</strong>
+button, next to <strong>Record</strong>.</p>
+<p>Which prompt runs is up to you: it&#39;s the one you have marked as
+<strong>Auto-Run</strong>. See <a href="ai-prompts.html">Using AI
+prompts on your text</a> for how to set that up.</p>
+<h2 id="where-the-text-ends-up">Where the text ends up</h2>
+<p>Once a recording is transcribed, the text lands in three places at
+once:</p>
+<ul>
+<li>The <strong>Raw Transcript</strong> box on the main window — exactly
+what the transcription service heard.</li>
+<li>The <strong>Formatted Transcript</strong> box, just below it — the
+same text after your find-and-replace rules have been applied. If you
+haven&#39;t set any rules up, the two boxes will look the same. See <a href="transcript-formatting.html">Automatic find-and-replace
+rules</a>.</li>
+<li>Your <strong>clipboard</strong>. The formatted version is copied
+automatically, so you can paste it anywhere with
+<strong>Ctrl+V</strong>.</li>
+</ul>
+<p>Both boxes are ordinary text boxes. You can read them with your
+screen reader, edit them, or select and copy from them.</p>
+<h2 id="getting-the-text-into-the-app-you-were-using">Getting the text
+into the app you were using</h2>
+<p>This is the part that trips people up, so it&#39;s worth reading
+slowly.</p>
+<p>On the <strong>Automation</strong> card there is a dropdown called
+<strong>Third-party interaction</strong>. It decides what Mutation does
+with your transcript <em>after</em> it has copied it to the clipboard.
+There are three choices:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Choice in the list</th>
+<th scope="col">What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Paste</strong></td>
+<td>Mutation copies the text and then presses <strong>Ctrl+V</strong>
+for you, so it appears in whatever app was in front.</td>
+</tr>
+<tr>
+<td><strong>SendKeys</strong></td>
+<td>Mutation types the text out, one keystroke at a time, as if you had
+typed it yourself.</td>
+</tr>
+<tr>
+<td><strong>DoNotInsert</strong></td>
+<td>Mutation does nothing further. The text stays in the Mutation window
+and on the clipboard, and you paste it yourself.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote>
+<p>The three choices are shown using their short internal names —
+<strong>Paste</strong>, <strong>SendKeys</strong> and
+<strong>DoNotInsert</strong>. They are not the friendliest labels, but a
+line of explanation appears underneath the dropdown as soon as you pick
+one.</p>
+</blockquote>
+<p><strong>Which should you pick?</strong></p>
+<p>Start with <strong>Paste</strong>. It is the fastest and it handles
+long text without trouble.</p>
+<p>Switch to <strong>SendKeys</strong> when an app refuses to accept a
+paste, or mangles it. Some older apps, some remote-desktop sessions, and
+some web forms behave that way. Typing is slower and you will see the
+letters appear one by one, but it works almost everywhere.</p>
+<p>Choose <strong>DoNotInsert</strong> when you want to look at the text
+before it goes anywhere — or when you are dictating notes into Mutation
+itself and don&#39;t want stray text landing in another window.</p>
+<p>One thing worth knowing: if the Mutation window itself is the one in
+front, nothing is inserted anywhere. Mutation won&#39;t paste into
+itself.</p>
+<h3 id="sending-a-shortcut-afterwards">Sending a shortcut
+afterwards</h3>
+<p>In <strong>Settings</strong>, on the <strong>Speech to Text</strong>
+page, there is an optional box called <strong>Send hotkey after
+transcription</strong>. Whatever shortcut you put there is sent to the
+active app once the transcript has been delivered.</p>
+<p>It exists for apps that need one extra keypress to finish the job —
+for example sending <strong>Ctrl+V</strong> to paste, or a
+<strong>Tab</strong> or <strong>Enter</strong> to move on. Leave it
+blank if you don&#39;t need it.</p>
+<h2 id="choosing-a-transcription-service">Choosing a transcription
+service</h2>
+<p>At the top of the <strong>Speech to Text</strong> card is a dropdown
+listing your transcription services.</p>
+<p>A transcription service is simply an online service that receives
+your recording, listens to it, and sends the text back. Mutation doesn&#39;t
+do the listening itself — it hands the audio over and waits for the
+answer. Different services differ in how fast they are, how accurate
+they are, and what they charge, so it&#39;s worth trying a couple and
+settling on the one you like.</p>
+<p>Out of the box, Mutation knows about:</p>
+<ul>
+<li><strong>OpenAI gpt-4o-transcribe</strong> (and its smaller, cheaper
+sibling gpt-4o-mini-transcribe)</li>
+<li><strong>Groq Whisper 3</strong></li>
+<li><strong>Deepgram Nova3</strong></li>
+<li>Any other service that speaks the same language as OpenAI&#39;s
+Whisper</li>
+</ul>
+<p>Each service needs an API key — a long password that lets Mutation
+talk to the service on your behalf. See <a href="getting-started.html">Getting started</a> for where those go.</p>
+<blockquote>
+<p>Switching which service is <em>active</em> takes effect straight away
+— just pick a different one from the dropdown. But if you
+<strong>add</strong>, <strong>remove</strong>, or <strong>edit</strong>
+a service definition in Settings, you need to restart Mutation before
+the change takes hold.</p>
+</blockquote>
+<h2 id="the-prompt-box">The Prompt box</h2>
+<p>Under the session buttons there is a box simply labelled
+<strong>Prompt</strong>. It&#39;s optional and easy to overlook, but it can
+noticeably improve your results.</p>
+<p>Whatever you type here is sent along with each recording as a hint
+about what kind of words to expect. It is especially good at getting
+unusual spellings right.</p>
+<p>Say you work with a colleague called Siobhán, a product called
+Kestrel Nine, and you keep saying &quot;EBITDA&quot;. Type those into the Prompt
+box and the service will spell them properly instead of guessing:</p>
+<pre><code>Siobhán, Kestrel Nine, EBITDA, Bloemfontein, Anthropic</code></pre>
+<p>The Prompt box belongs to whichever service is currently selected, so
+you can keep a different list of terms for each one. It saves itself as
+you type.</p>
+<h2 id="working-with-past-recordings">Working with past recordings</h2>
+<p>Mutation keeps your recent recordings so you can go back to them.</p>
+<ul>
+<li>The <strong>older</strong> and <strong>newer</strong> arrow buttons
+step back and forward through your recent sessions.</li>
+<li><strong>Play selected session</strong> plays the one you&#39;ve landed
+on, so you can hear what you actually said.</li>
+<li>The <strong>Speed</strong> dropdown changes how fast it plays back,
+from half speed up to three times normal. Voices stay at their natural
+pitch at every speed — nobody turns into a chipmunk.</li>
+<li><strong>Retry transcription</strong> sends the selected recording
+off to be transcribed again. This is the useful one: if a transcript
+came back wrong, pick a different service or add some terms to the
+Prompt box, then press Retry.</li>
+</ul>
+<p>By default Mutation keeps the last <strong>10</strong> recordings,
+and quietly deletes the oldest ones beyond that. You can set this
+anywhere from 1 to 500 in <strong>Settings</strong>, under
+<strong>Recording sessions to keep</strong>. A recording that is still
+in progress is never deleted.</p>
+<h2 id="transcribing-a-file-you-already-have">Transcribing a file you
+already have</h2>
+<p>You don&#39;t have to record inside Mutation. If someone sends you a
+voice note, or you have a recording of a meeting, use the <strong>Upload
+audio for transcription</strong> button on the <strong>Speech to
+Text</strong> card. Pick the file and Mutation transcribes it the same
+way it would a live recording.</p>
+<p>It accepts audio files — MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, WMA —
+and video files — WEBM, MP4, AVI, MKV, MOV, WMV, M4V. With a video,
+Mutation pulls out the soundtrack and transcribes that. Long files take
+longer, naturally; Mutation allows a much more generous wait for them
+than for a quick live recording.</p>
+<h2 id="trimming-the-quiet-bits">Trimming the quiet bits</h2>
+<p>Mutation trims long silent gaps out of your audio before sending it
+off. This means the pauses while you think don&#39;t make the recording
+bigger and slower than it needs to be. It applies to recordings you make
+and to files you upload, and it is on by default — leave it on unless
+you have a reason not to.</p>
+<p>If you want to fine-tune how aggressive the trimming is, the dials
+live in <a href="settings.html">The Settings window</a>.</p>
+<hr />
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a> — clean
+up, rewrite, or summarise what you dictated.</li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace
+rules</a> — fix recurring mistakes automatically.</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
+list, and how to change them.</li>
+<li><a href="microphone.html">Muting your microphone</a> — choosing
+which microphone Mutation records from.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

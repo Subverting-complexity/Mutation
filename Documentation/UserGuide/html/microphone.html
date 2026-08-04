@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Muting your microphone - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none; width:100%; min-width:0}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html" aria-current="page">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="muting-your-microphone">Muting your microphone</h1>
+<p>This is the feature Mutation was built for in the first place, and it
+is still the one most people use every day.</p>
+<p>Press one shortcut and every microphone on your PC goes quiet. Press
+it again and they all come back. It works no matter which app you are in
+— you do not have to find the meeting window first, and you do not have
+to learn a different mute shortcut for Teams, Zoom, Slack and everything
+else.</p>
+<h2 id="why-it-mutes-every-microphone">Why it mutes <em>every</em>
+microphone</h2>
+<p>Most PCs have more than one microphone. There is the one in your
+headset, maybe one in your webcam, and maybe one built into the laptop
+lid. Meeting apps do not always pick the one you expect, and they can
+quietly switch to a different one.</p>
+<p>That is the trap. You mute what you think is &quot;the&quot; microphone, carry
+on talking to someone in the room, and the call has been listening
+through a different mic the whole time.</p>
+<p>Mutation avoids that by muting all of them together. When it says
+muted, every microphone on the machine is muted.</p>
+<h2 id="the-shortcut">The shortcut</h2>
+<p>The default shortcut is <strong>Alt+Q</strong>.</p>
+<p>You can change it. Open <strong>Settings</strong> with
+<strong>Ctrl+Comma</strong>, go to the <strong>Audio</strong> page, and
+set a new shortcut in the &quot;Toggle microphone mute&quot; box. Every shortcut
+in Mutation can be changed this way.</p>
+<p>You can also click the microphone button on the
+<strong>Microphone</strong> card on the main window. It does exactly the
+same thing as the shortcut.</p>
+<h2 id="how-you-know-it-worked">How you know it worked</h2>
+<p>Two things tell you the new state.</p>
+<ul>
+<li><strong>A beep.</strong> One sound for muted, a different one for
+unmuted.</li>
+<li><strong>A message</strong> on the main window: &quot;Microphone muted.&quot;
+or &quot;Microphone is live.&quot;</li>
+</ul>
+<p>If the change could not be confirmed, you get the failure beep
+instead and a message saying the microphone may still be live. That is
+deliberate. Mutation will never tell you that you are muted unless it
+has checked each microphone and confirmed it.</p>
+<blockquote>
+<p>Tip: tapping the shortcut twice very quickly is safe. The second
+press is ignored while the first is still working, so you cannot
+accidentally end up back where you started.</p>
+</blockquote>
+<h3 id="using-your-own-sounds">Using your own sounds</h3>
+<p>If you do not like the built-in beeps, you can swap in your own sound
+files — one for mute, one for unmute, and for Mutation&#39;s other status
+sounds too. Turn on &quot;Custom beeps&quot; on the <strong>Audio</strong> page in
+<strong>Settings</strong>, then browse for a sound file for each one.
+There is a play button next to each so you can hear it before you
+commit. See <a href="settings.html">The Settings window</a> for the full
+walkthrough.</p>
+<h2 id="choosing-the-active-microphone">Choosing the active
+microphone</h2>
+<p>The <strong>Microphone</strong> card has a dropdown listing the
+microphones Mutation can see. The one you pick is the <em>active</em>
+microphone — the one Mutation records from for dictation, and the one
+the level meter and the level controls apply to.</p>
+<p>This choice does not affect muting. Muting always covers every
+microphone, whichever one is selected. Your choice is remembered the
+next time you start Mutation.</p>
+<h2 id="the-live-level-display">The live level display</h2>
+<p>Underneath the dropdown is a live picture of what your microphone is
+hearing: a waveform that moves as you speak, and a vertical bar next to
+it that rises and falls with how loud you are. It is a quick way to
+check that the mic is actually picking you up before you start
+talking.</p>
+<p>To turn it off, click on the waveform itself — it is a toggle. Click
+it again to turn it back on. When it is off it simply shows the word
+&quot;Off&quot;.</p>
+<p>It is reachable from the keyboard too: tab to &quot;Toggle microphone
+visualization&quot; and press Space or Enter. There is also a &quot;Microphone
+visualization&quot; switch on the <strong>Audio</strong> page in
+<strong>Settings</strong> if you prefer to set it there. Either way, the
+setting is remembered.</p>
+<h2 id="pin-input-level">Pin input level</h2>
+<p>Windows lets any app change your microphone&#39;s input volume, and some
+of them do it without telling you. You set your mic to a comfortable
+level, join a call a few days later, and suddenly nobody can hear
+you.</p>
+<p>&quot;Pin input level&quot; stops that. It works like this:</p>
+<ol type="1">
+<li>Use the <strong>Input level</strong> slider to set the volume you
+want, from 0 to 100. The change applies to Windows straight away, even
+when you are not recording.</li>
+<li>Turn <strong>Pin input level</strong> on. Mutation remembers that
+number as your target.</li>
+</ol>
+<p>From then on, Mutation puts the level back to your number whenever it
+matters: when you start recording, when you switch microphones, and when
+the app starts up. If something moved it in the meantime, it gets moved
+back.</p>
+<p>Turning the pin off stops the re-checking. It does not change the
+level you are currently on — it just stops Mutation from correcting
+it.</p>
+<p>Some microphones have a fixed input level that software cannot change
+at all. On those, the switch and the slider are greyed out, and Mutation
+tells you why.</p>
+<h2 id="plugging-microphones-in-and-out">Plugging microphones in and
+out</h2>
+<p>You can plug in a headset or unplug one while Mutation is running. It
+notices and updates the list on its own.</p>
+<ul>
+<li><strong>A mic appears or disappears somewhere else in the
+list</strong> — your selected microphone is untouched, and Mutation
+stays quiet about it. Nothing about your audio changed, so there is
+nothing to interrupt you with.</li>
+<li><strong>Your selected microphone is unplugged</strong> — Mutation
+switches to the first microphone in the list and tells you: &quot;The
+selected microphone was disconnected. Now using ...&quot;.</li>
+<li><strong>No microphones at all</strong> — you get a message saying
+none are available.</li>
+</ul>
+<p>There is one more nicety. If you are muted and then plug in a new
+microphone, the new one comes up muted too. Connecting a headset
+mid-call will not quietly put you back on air.</p>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="main-window.html">A tour of the main window</a> — where the
+<strong>Microphone</strong> card sits and what else shares the screen
+with it.</li>
+<li><a href="settings.html">The Settings window</a> — changing the
+shortcut, and using your own sound files instead of the beeps.</li>
+<li><a href="dictation.html">Dictation: turning speech into text</a> —
+the other half of what your microphone does in Mutation.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — what to try
+when a mute does not take or a mic goes missing.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Getting started - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none; width:100%; min-width:0}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html" aria-current="page">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="getting-started">Getting started</h1>
+<p>Welcome. Mutation is a small Windows program that sits quietly in the
+background and gives your keyboard some extra powers. Press one key
+combination to mute every microphone on your PC at once. Press another
+to dictate a sentence instead of typing it. Press another to pull the
+text out of a screenshot, or to have whatever you copied read out
+loud.</p>
+<p>The clever part is that these shortcuts work everywhere. You do not
+have to switch to Mutation first. Whether you are in Outlook, Teams,
+Word or your browser, the same key combination does the same thing.
+Mutation was built by a developer who is almost blind, for his own daily
+work, so it is designed to be usable without hunting for tiny icons on
+screen.</p>
+<hr />
+<h2 id="what-you-need-before-you-start">What you need before you
+start</h2>
+<p><strong>Windows.</strong> Mutation is a Windows desktop app.</p>
+<p><strong>The .NET 10 runtime.</strong> This is a free piece of
+Microsoft plumbing that Mutation needs in order to run. Install it once,
+then start <strong>Mutation.exe</strong>. If you already have it,
+nothing more to do.</p>
+<p><strong>A key or two for the online services.</strong> Some of
+Mutation&#39;s features do their thinking on the internet rather than on
+your PC. Turning speech into text, or asking an AI to tidy up your
+writing, happens on someone else&#39;s servers. To use those servers you
+need an API key.</p>
+<p>An API key is simply a long password that lets Mutation talk to a
+service on your behalf. You create one on that company&#39;s website, copy
+it, and paste it into Mutation. Treat it exactly like a password: do not
+email it, do not paste it into a chat, and do not put it in a shared
+document. Anyone who has your key can spend money on your account.</p>
+<p>You only need the keys for the features you actually want. Here is
+what each one unlocks.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Key</th>
+<th scope="col">What it gives you</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI</td>
+<td>Dictation (speech to text) and AI prompts</td>
+</tr>
+<tr>
+<td>Anthropic</td>
+<td>AI prompts using Claude models</td>
+</tr>
+<tr>
+<td>Deepgram</td>
+<td>An alternative dictation service, if you prefer it to OpenAI</td>
+</tr>
+<tr>
+<td>Azure Computer Vision (key <em>and</em> endpoint)</td>
+<td>Reading text out of screenshots and images</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>If all you want is the microphone mute, you need no keys at all. That
+feature works straight away.</p>
+<blockquote>
+<p>The Azure Computer Vision service needs two things, not one: a key,
+and an &quot;endpoint&quot;, which is just the web address of your own Azure
+service. You get both from the same place when you set the service
+up.</p>
+</blockquote>
+<hr />
+<h2 id="your-very-first-launch">Your very first launch</h2>
+<p>The first time you run Mutation, it creates its settings file with
+sensible defaults, and every keyboard shortcut is already set up and
+ready to change later.</p>
+<p>If you have not yet added an OpenAI or Anthropic key, Mutation greets
+you with a short welcome message titled <strong>Welcome to
+Mutation</strong>. It explains that at least one key is needed, and
+lists which key does what. Press <strong>Continue</strong>.</p>
+<p>The <strong>Settings</strong> window then opens on its own, so you
+can paste your keys in right away. That is the whole of first-run setup.
+If you would rather do it later, just close Settings — you can reopen it
+at any time with <strong>Ctrl+Comma</strong>.</p>
+<p>One other message you might see later: if you have set up a dictation
+service but its key is missing, Mutation tells you which service it has
+switched off and opens Settings on the API keys page. Add the key, save,
+then restart Mutation so the service becomes available again.</p>
+<hr />
+<h2 id="entering-your-keys">Entering your keys</h2>
+<ol type="1">
+<li>Press <strong>Ctrl+Comma</strong> to open
+<strong>Settings</strong>.</li>
+<li>Choose <strong>API keys</strong> in the list on the left.</li>
+<li>Paste your key into the matching box: <strong>OpenAI API
+key</strong>, <strong>Anthropic API key</strong> or <strong>Deepgram API
+key</strong>.</li>
+<li>Save.</li>
+</ol>
+<p>The OpenAI key covers both AI prompts and OpenAI dictation, so one
+key does double duty there. The Deepgram key is only for Deepgram
+dictation.</p>
+<p>The Azure Computer Vision key lives somewhere else, because it
+belongs to the screenshot features. You will find it under
+<strong>Screen capture &amp; OCR</strong> in Settings, together with the
+<strong>Endpoint</strong> box.</p>
+<hr />
+<h2 id="where-your-settings-are-kept">Where your settings are kept</h2>
+<p>Everything you configure is stored in a single file called
+<strong>Mutation.json</strong>, which sits in the same folder as
+<strong>Mutation.exe</strong>.</p>
+<p>You do not need to open it. Everything in it can be changed from the
+Settings window. But it is worth knowing where it is for one reason: if
+you copy that file somewhere safe now and then, you have a backup of all
+your shortcuts, prompts and settings. Copy it back into the folder and
+Mutation picks up exactly where you left off.</p>
+<p>Because your API keys are stored in that file, keep any copies of it
+somewhere private.</p>
+<hr />
+<h2 id="try-it-in-five-minutes">Try it in five minutes</h2>
+<p>Give these a go, in any app you like. These are the shortcuts
+Mutation starts with — you can change every one of them later.</p>
+<ol type="1">
+<li><strong>Mute your microphone.</strong> Press <strong>Alt+Q</strong>.
+Every microphone on the PC mutes at once, and you hear a beep confirming
+which way it went. Press it again to unmute. See <a href="microphone.html">Muting your microphone</a>.</li>
+<li><strong>Dictate a sentence.</strong> Press
+<strong>Shift+Alt+U</strong>, say something, then press it again to
+stop. A few seconds later your words come back as text. See <a href="dictation.html">Dictation: turning speech into text</a>.</li>
+<li><strong>Have something read aloud.</strong> Copy any text, then
+press <strong>Ctrl+Shift+Alt+Q</strong> to hear it spoken. See <a href="read-aloud.html">Having text read aloud</a>.</li>
+<li><strong>Read text off the screen.</strong> Press
+<strong>Shift+Alt+J</strong>, drag a rectangle over some text in an
+image, and the text lands on your clipboard. This one needs the Azure
+key. See <a href="screen-capture-and-ocr.html">Screenshots and reading
+text from images</a>.</li>
+</ol>
+<p>That is the core of it. Everything else builds on those four
+ideas.</p>
+<hr />
+<h2 id="leave-it-running">Leave it running</h2>
+<p>Mutation does its job from the background. Once it is started you can
+minimise the main window and forget about it — the shortcuts keep
+working no matter which app you are using. Closing the window shuts the
+app down, and the shortcuts stop with it, so minimise rather than close
+if you want them to stay live.</p>
+<hr />
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="main-window.html">A tour of the main window</a> — what each
+part of the screen does.</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
+list, and how to change any of them.</li>
+<li><a href="settings.html">The Settings window</a> — every option,
+explained.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — if something is
+not behaving.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Screenshots and reading text from images - Mutation User
+Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none; width:100%; min-width:0}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html" aria-current="page">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="screenshots-and-reading-text-from-images">Screenshots and
+reading text from images</h1>
+<p>Sometimes the words you need are trapped inside a picture. A
+screenshot a colleague sent you. A scanned invoice. A PDF that will not
+let you select anything.</p>
+<p>OCR is the answer to that. It stands for optical character
+recognition, and it simply means reading the words out of a picture so
+you can copy, search, or paste them. Mutation does this for you, and
+puts the resulting text straight onto your clipboard.</p>
+<p>Everything in this chapter lives in the <strong>Visual
+Capture</strong> card on the main window.</p>
+<blockquote>
+<p>Before any of the OCR buttons will work, Mutation needs an Azure
+Computer Vision key (a long password that lets Mutation send your image
+to Microsoft&#39;s text-reading service and get the words back). See <a href="getting-started.html">Getting started</a> for how to set that
+up.</p>
+</blockquote>
+<h2 id="taking-a-screenshot-of-part-of-the-screen">Taking a screenshot
+of part of the screen</h2>
+<p>Press the screenshot shortcut — <strong>Shift+Alt+K</strong> by
+default. The screen freezes, and an overlay appears over everything. You
+then pick a rectangle. As soon as you finish picking, that rectangle is
+copied to your clipboard as an image, and you are back where you
+were.</p>
+<p>Press <strong>Esc</strong> at any point to cancel. Nothing is copied,
+and Mutation tells you so.</p>
+<h3 id="picking-the-rectangle-with-the-mouse">Picking the rectangle with
+the mouse</h3>
+<p>Hold the left mouse button down at one corner of the area you want,
+drag to the opposite corner, and let go. That is it. A right-click
+cancels instead.</p>
+<h3 id="picking-the-rectangle-with-the-keyboard">Picking the rectangle
+with the keyboard</h3>
+<p>You never need to see the screen to do this. The overlay talks you
+through it. When it opens it says what it wants from you, then as you
+move it announces the position you are at, the size of the rectangle you
+have built so far, and finally the size of what was captured.</p>
+<p>Think of it as a moving pointer that you park at one corner, pin
+down, and then drag to the other corner.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Key</th>
+<th scope="col">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arrow keys</td>
+<td>Move the pointer (hold <strong>Ctrl</strong> for fine steps,
+<strong>Shift</strong> for large steps)</td>
+</tr>
+<tr>
+<td><strong>Home</strong> / <strong>End</strong></td>
+<td>Jump the pointer to the left / right edge</td>
+</tr>
+<tr>
+<td><strong>Page Up</strong> / <strong>Page Down</strong></td>
+<td>Jump the pointer to the top / bottom edge</td>
+</tr>
+<tr>
+<td><strong>Enter</strong> or <strong>Space</strong></td>
+<td>First press pins one corner; second press captures the region</td>
+</tr>
+<tr>
+<td><strong>Ctrl+A</strong></td>
+<td>Select the whole screen — then <strong>Enter</strong> to capture
+it</td>
+</tr>
+<tr>
+<td><strong>Backspace</strong></td>
+<td>Clear the pinned corner and start the selection again</td>
+</tr>
+<tr>
+<td><strong>Esc</strong></td>
+<td>Cancel</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>So the quickest possible capture is <strong>Ctrl+A</strong> then
+<strong>Enter</strong>: the whole screen, in two keystrokes.</p>
+<h2 id="the-two-reading-orders">The two reading orders</h2>
+<p>A page of text can be read in two sensible ways, and Mutation offers
+both.</p>
+<ul>
+<li><strong>Natural</strong> follows the shape of the page. It reads
+down one column, then down the next, keeping sections together. Choose
+it for newspapers, magazines, brochures, and multi-column PDFs.</li>
+<li><strong>Basic</strong> reads straight across each row, left to
+right, all the way down. The app labels this one <strong>(L→R)</strong>.
+Choose it for tables, spreadsheets, forms, and invoices.</li>
+</ul>
+<p>Rule of thumb: if the thing you are reading has <em>columns</em>, use
+Natural. If it has <em>rows</em>, use Basic.</p>
+<p>If one order gives you a jumbled result, just try the other on the
+same image.</p>
+<h2 id="the-buttons-and-their-shortcuts">The buttons and their
+shortcuts</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Button</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Screenshot to clipboard</td>
+<td><strong>Shift+Alt+K</strong></td>
+<td>Picks a rectangle and copies it to the clipboard as an image. No
+text reading.</td>
+</tr>
+<tr>
+<td>OCR clipboard</td>
+<td><strong>Alt+J</strong></td>
+<td>Reads the text out of whatever image is already on your clipboard,
+in Natural order.</td>
+</tr>
+<tr>
+<td>OCR clipboard (L→R)</td>
+<td><strong>Alt+K</strong></td>
+<td>The same, but in Basic left-to-right order.</td>
+</tr>
+<tr>
+<td>Screenshot &amp; OCR</td>
+<td><strong>Shift+Alt+J</strong></td>
+<td>Picks a rectangle <em>and</em> reads its text, in Natural order. One
+step.</td>
+</tr>
+<tr>
+<td>Screenshot &amp; OCR (L→R)</td>
+<td><strong>Shift+Alt+E</strong></td>
+<td>The same, in Basic left-to-right order.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Every one of these shortcuts can be changed in
+<strong>Settings</strong> (<strong>Ctrl+Comma</strong>).</p>
+<p>In all four OCR cases the text lands on your clipboard, ready to
+paste, and also appears in the <strong>OCR result</strong> box at the
+bottom of the card so you can read it in place.</p>
+<h2 id="reading-a-batch-of-files-at-once">Reading a batch of files at
+once</h2>
+<p>The <strong>OCR documents</strong> button handles whole files rather
+than screenshots. Click it, pick one or more files, and Mutation reads
+them all.</p>
+<p>It accepts PDFs and image files: <code>.pdf</code>,
+<code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>,
+<code>.bmp</code>, <code>.tif</code> and <code>.tiff</code>. You can
+select several at once.</p>
+<p>A progress bar tells you which file and page it is on. When it
+finishes, all the text comes back as one combined block in the
+<strong>OCR result</strong> box — each file introduced by its name in
+square brackets, and each page of a PDF marked with its page number.
+That combined text is copied to the clipboard too.</p>
+<p>If you want to keep it, the <strong>Download OCR result</strong>
+button saves the whole thing to a plain text file.</p>
+<h2 id="a-few-settings-worth-knowing">A few settings worth knowing</h2>
+<p>These live under <strong>Screen capture &amp; OCR</strong> in
+<strong>Settings</strong> (<strong>Ctrl+Comma</strong>).</p>
+<ul>
+<li><strong>Invert screenshot before OCR</strong> — flips the colours
+before reading. Turn this on if you work with light text on a dark
+background; it usually improves accuracy a lot.</li>
+<li><strong>Free-tier page limit</strong> — if you are on Microsoft&#39;s
+free plan, this caps how many pages of each document get sent. The
+default is 2, so long PDFs are cut short unless you turn <strong>Use
+free tier</strong> off.</li>
+<li><strong>Max document size (MB)</strong> — any file or page bigger
+than this is skipped instead of being uploaded, so you never
+accidentally send something enormous. Set it to 0 to remove the
+limit.</li>
+</ul>
+<p>There is also an optional <strong>Send hotkey after OCR</strong>
+setting, which fires a keystroke of your choosing once the text is ready
+— handy for kicking off your screen reader automatically.</p>
+<p>The rest of the options are covered in <a href="settings.html">The
+Settings window</a>.</p>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="getting-started.html">Getting started</a> — setting up your
+Azure Computer Vision key</li>
+<li><a href="main-window.html">A tour of the main window</a> — where the
+<strong>Visual Capture</strong> card sits</li>
+<li><a href="read-aloud.html">Having text read aloud</a> — listen to the
+text you just captured</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
+list, and how to change them</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

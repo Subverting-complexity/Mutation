@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Settings window - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none; width:100%; min-width:0}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html" aria-current="page">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="the-settings-window">The Settings window</h1>
+<p>Everything you can change about Mutation lives in one window. This
+chapter walks through it, category by category, so you know where to
+look.</p>
+<h2 id="opening-it-and-finding-your-way-around">Opening it and finding
+your way around</h2>
+<p>Press <strong>Ctrl+Comma</strong> while Mutation&#39;s window is in
+front. You can also open the menu (<strong>Alt</strong>, then
+<strong>H</strong>) and choose <strong>Settings</strong>.</p>
+<p>The window has two halves. Down the left is a list of categories. On
+the right are the settings for whichever category you have picked. Move
+between categories with the arrow keys; the heading above the right-hand
+side always tells you which one you are in.</p>
+<p>At the bottom are <strong>Save</strong> and <strong>Cancel</strong>.
+Nothing you change takes effect until you press <strong>Save</strong>.
+<strong>Cancel</strong> throws away everything you changed in that
+visit. <strong>Escape</strong> closes the window too.</p>
+<h2 id="the-search-box">The search box</h2>
+<p>Above the category list is a <strong>Search settings</strong> box.
+Type into it and two things happen at once: the category list shrinks to
+the categories that match, and the settings on the right hide any
+section that does not mention your word.</p>
+<p>Non-matching sections are removed rather than greyed out, so they
+disappear from the Tab order and from your screen reader as well as from
+the screen. A short line under the search box tells you how many
+categories and sections matched, and it is announced politely as you
+type — you never have to go hunting to find out whether your search
+found anything.</p>
+<p>Press <strong>Escape</strong> while you are in the search box to
+clear it and put everything back.</p>
+<h2 id="the-advanced-switch">The Advanced switch</h2>
+<p>Bottom right there is an <strong>Advanced</strong> switch. It does
+one thing: turning it on reveals an <strong>Open Mutation.json</strong>
+button, which opens the raw settings file in whatever program your PC
+uses for that file type. Most people never need it. Leaving Advanced off
+simply hides that button.</p>
+<h2 id="the-categories">The categories</h2>
+<h3 id="audio">Audio</h3>
+<p>Your microphone and the little sounds Mutation makes.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Microphone visualization</td>
+<td>Shows a live waveform of the microphone input while recording. Turn
+it off to save a bit of CPU.</td>
+</tr>
+<tr>
+<td>Toggle microphone mute</td>
+<td>The shortcut that mutes and unmutes everything.</td>
+</tr>
+<tr>
+<td>Use custom beeps</td>
+<td>Play your own sound files instead of the built-in beeps for status
+cues.</td>
+</tr>
+<tr>
+<td>Beep files</td>
+<td>One file each for Success, Failure, Start, End, Mute and Unmute.
+<strong>Browse...</strong> picks a file, and the small play button lets
+you hear it.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="screen-capture--ocr">Screen capture &amp; OCR</h3>
+<p>Reading text out of pictures. OCR just means &quot;pulling the words out
+of an image&quot;.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Azure Computer Vision API key</td>
+<td>The long password that lets Mutation use the text-reading service on
+your behalf.</td>
+</tr>
+<tr>
+<td>Endpoint</td>
+<td>The web address of that service. Whoever gave you the key gives you
+this too.</td>
+</tr>
+<tr>
+<td>Use free tier</td>
+<td>Use the free OCR tier, which limits how many pages each document can
+contain.</td>
+</tr>
+<tr>
+<td>Invert screenshot before OCR</td>
+<td>Flips the image colours first, which helps a lot with light text on
+a dark background.</td>
+</tr>
+<tr>
+<td>Max document size (MB)</td>
+<td>Biggest file or page Mutation will send. Anything larger is skipped
+before upload, so you never accidentally send something huge. Set it to
+0 for no limit.</td>
+</tr>
+<tr>
+<td>Send hotkey after OCR</td>
+<td>Optional keystrokes sent to the app you are in once the text is
+delivered — <strong>Ctrl+V</strong> to paste, for example.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The timeout and the &quot;how many at a time&quot; numbers have sensible
+defaults and hover help. Leave them alone unless something is timing out
+on you.</p>
+<h3 id="speech-to-text">Speech to Text</h3>
+<p>Where your dictation gets turned into text.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Service definitions</td>
+<td>The transcription services you can pick from. Each one has a name, a
+provider (OpenAI Whisper or Deepgram), an optional key of its own, a
+model, and a prompt.</td>
+</tr>
+<tr>
+<td>Per-service prompt</td>
+<td>Optional priming text sent with each transcription to nudge the
+spelling of names and the punctuation.</td>
+</tr>
+<tr>
+<td>Recording sessions to keep</td>
+<td>How many past recordings stay on disk. Once you pass this, the
+oldest go first; the recording in progress is never deleted. Anything
+from 1 to 500, and 10 by default.</td>
+</tr>
+<tr>
+<td>Temp directory</td>
+<td>The folder your recordings are written to while they are being
+made.</td>
+</tr>
+<tr>
+<td>Send hotkey after transcription</td>
+<td>Optional keystrokes sent to the app you are in once your text
+arrives, for example <strong>Ctrl+V</strong> to paste.</td>
+</tr>
+<tr>
+<td>Strip silent gaps from audio</td>
+<td>Removes long silences before the audio is sent, so pauses while you
+think do not bloat the recording.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote>
+<p>Adding, removing, or editing a service definition takes effect after
+you restart Mutation. The per-service prompt and your choice of active
+service apply straight away. You choose which service is active from the
+main window.</p>
+</blockquote>
+<p>The three silence numbers underneath (minimum silence, threshold,
+edge guard) fine tune that trimming. The defaults are good; each has
+hover help if you want to experiment.</p>
+<h3 id="api-keys">API keys</h3>
+<p>Your keys in one place. An API key is a long password that lets
+Mutation talk to a service on your behalf.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI API key</td>
+<td>Used for OpenAI&#39;s AI models and for OpenAI/Whisper dictation.</td>
+</tr>
+<tr>
+<td>Anthropic API key</td>
+<td>Used for Anthropic (Claude) AI models.</td>
+</tr>
+<tr>
+<td>Deepgram API key</td>
+<td>Used for Deepgram dictation.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A speech service can override its key from the Speech to Text
+section. Otherwise the key here is the one used.</p>
+<h3 id="ai-assistance">AI assistance</h3>
+<p>The AI models Mutation can send your text to.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Request timeout (seconds)</td>
+<td>How long to wait for the model to answer before giving up.</td>
+</tr>
+<tr>
+<td>Retries</td>
+<td>How many times to try again after a failed request. Retries help the
+very first request after a reboot succeed while the network warms up.
+Three by default.</td>
+</tr>
+<tr>
+<td>Models</td>
+<td>Your list of models. Each row has a name, a provider, and an
+optional temperature — which controls how random the answers are. Leave
+temperature empty to use the provider&#39;s own setting.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Your prompts themselves are edited on the main window, not here.</p>
+<h3 id="text-to-speech">Text to Speech</h3>
+<p>How Mutation reads text out loud. Voice, rate and volume live on the
+main window; this page holds everything else.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enable speech preprocessing</td>
+<td>Tidies text up before it is spoken — expanding abbreviations,
+dropping stray symbols. This is the master switch for all the
+clean-ups.</td>
+</tr>
+<tr>
+<td>Individual cleanup rules</td>
+<td>Seven switches you can flick on and off one at a time: remove code
+blocks, strip bold and italic symbols, strip heading marks, shorten web
+links, strip bullet markers, expand abbreviations, and normalise
+whitespace. They only apply while the master switch is on.</td>
+</tr>
+<tr>
+<td>Rewind on resume (words)</td>
+<td>When you carry on after a pause, rewind this many words so you
+regain your place. Set it to 0 for no rewind.</td>
+</tr>
+<tr>
+<td>Rewind on resume after (seconds)</td>
+<td>Only rewind if the pause lasted longer than this. A quick pause
+carries on from the exact word.</td>
+</tr>
+<tr>
+<td>Announce progress every (percent)</td>
+<td>How often your progress is spoken while reading something long. 25
+means at 25%, 50% and 75%.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The skip-back grace window and the two &quot;only announce above this many
+minutes&quot; numbers have sensible defaults and hover help.</p>
+<h3 id="transcript-formatting">Transcript formatting</h3>
+<p>Your own find-and-replace rules, applied to a transcript when you
+press <strong>Format</strong>. Rules run from top to bottom, so the
+order matters — use the up and down arrows to move them.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Find / Replace with</td>
+<td>The text to look for, and what to put in its place.</td>
+</tr>
+<tr>
+<td>Match type</td>
+<td>How Find is read. <strong>Plain</strong> replaces the literal text.
+<strong>RegEx</strong> treats it as a search pattern.
+<strong>Smart</strong> matches the word with the surrounding spaces and
+punctuation tidied up, which is the friendly choice for replacing a
+spoken word or phrase.</td>
+</tr>
+<tr>
+<td>Case sensitive</td>
+<td>When on, capitals must match exactly. When off, case is
+ignored.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>See <a href="transcript-formatting.html">Automatic find-and-replace
+rules</a> for the full story.</p>
+<h3 id="interface">Interface</h3>
+<p>Small comforts for the main window.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th scope="col">Setting</th>
+<th scope="col">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Max text-box visible lines</td>
+<td>Caps how tall the transcript and OCR boxes grow on the main
+window.</td>
+</tr>
+<tr>
+<td>Dictation insert preference</td>
+<td>How your text reaches the app you are in. <strong>Paste</strong>
+puts it in via the clipboard, <strong>SendKeys</strong> types it out one
+key at a time, and <strong>DoNotInsert</strong> leaves the text in
+Mutation only.</td>
+</tr>
+<tr>
+<td>Reset window position</td>
+<td>Puts Mutation&#39;s window back to its starting position and size. Handy
+if it has ended up off-screen.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="hotkeys">Hotkeys</h3>
+<p>Every keyboard shortcut in one place, plus the shortcut router. This
+one has a chapter of its own: <a href="keyboard-shortcuts.html">Keyboard
+shortcuts</a>.</p>
+<h2 id="the-reset-buttons">The reset buttons</h2>
+<p>Next to most settings sits a small circular-arrow button. Your screen
+reader calls it &quot;Reset to default&quot;, and hovering shows the same thing —
+on the Hotkeys page it even names the value, like &quot;Reset to default
+(ALT+Q)&quot;.</p>
+<p>Each button resets <strong>only the setting it sits beside</strong>.
+There is no button that wipes the whole page or the whole app back to
+factory settings. If you want to undo a whole visit, press
+<strong>Cancel</strong> instead of <strong>Save</strong>.</p>
+<h2 id="saving-and-when-saving-goes-wrong">Saving, and when saving goes
+wrong</h2>
+<p>Nothing is written down until you press <strong>Save</strong>. That
+is the moment your changes reach the running app and get written to
+disk.</p>
+<p>If the save fails — the file is locked, the disk is full, something
+like that — Mutation tells you rather than failing quietly. A red bar
+appears at the bottom of the Settings window titled <strong>Save
+failed</strong>, with the actual reason, followed by: &quot;Your changes were
+not saved. Fix the problem and press Save again, or press Cancel to
+discard the changes.&quot; You also hear the failure beep, and screen readers
+get an urgent announcement. Your changes are still sitting there in the
+window, so you can fix the problem and press Save again.</p>
+<p>The same treatment applies if the <strong>Open Mutation.json</strong>
+button cannot open the file: a bar titled &quot;Could not open settings
+file&quot;, with the reason.</p>
+<h2 id="where-your-settings-live">Where your settings live</h2>
+<p>Everything is kept in a single file called
+<strong>Mutation.json</strong>, in the folder Mutation itself is
+installed in. Turn on the <strong>Advanced</strong> switch and press
+<strong>Open Mutation.json</strong> to see it.</p>
+<p>Two things worth knowing:</p>
+<ul>
+<li><strong>Back it up.</strong> Copy that one file somewhere safe and
+you have your shortcuts, prompts, formatting rules and preferences
+saved. Dropping it back in place restores the lot.</li>
+<li><strong>Do not share it.</strong> Your API keys are in there in
+plain text. Anyone who has the file can spend money on your accounts.
+Never email it, paste it into a chat, or attach it to a support ticket
+without stripping the keys out first.</li>
+</ul>
+<h2 id="one-last-thing">One last thing</h2>
+<p>You do not have to memorise any of this. Nearly every setting in the
+window has a small help icon beside it, and hovering over it — or
+landing on the setting with a screen reader — gives you the same plain
+explanation you have just read here.</p>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the
+Hotkeys page in full, including the shortcut router.</li>
+<li><a href="getting-started.html">Getting started</a> — the handful of
+settings worth filling in first.</li>
+<li><a href="main-window.html">A tour of the main window</a> — the
+settings that live on the main screen instead.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — when something
+is not behaving.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

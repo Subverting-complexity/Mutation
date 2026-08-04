@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="$lang$"$if(dir)$ dir="$dir$"$endif$>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>$pagetitle$</title>
+<meta name="generator" content="pandoc $pandoc-version$" />
+$for(header-includes)$
+$header-includes$
+$endfor$
+$for(css)$
+<link rel="stylesheet" href="$css$" />
+$endfor$
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+$for(include-before)$
+$include-before$
+$endfor$
+<main id="content" tabindex="-1">
+$body$
+$for(include-after)$
+$include-after$
+$endfor$
+</main>
+</div>
+</body>
+</html>
