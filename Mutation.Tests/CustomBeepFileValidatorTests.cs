@@ -102,7 +102,44 @@ public class CustomBeepFileValidatorTests
 		CustomBeepFileValidator.Validate(settings, path => { probed.Add(path); return true; });
 
 		Assert.Equal(6, probed.Count);
-		Assert.All(probed, p => Assert.True(System.IO.Path.IsPathRooted(p), $"'{p}' was not resolved"));
+		Assert.All(probed, p => Assert.NotEqual("./CustomAudio/Success.wav", p));
+		Assert.Contains(probed, p => p.EndsWith(@"CustomAudio\Success.wav", StringComparison.OrdinalIgnoreCase)
+			&& System.IO.Path.IsPathRooted(p));
+	}
+
+	// A network path is refused by ResolveAudioFilePath, which hands back an empty
+	// string. That has to read as "could not load", not as a crash or a pass.
+	[Fact]
+	public void UncPath_IsReportedAsUnloadable()
+	{
+		var settings = AllValid();
+		settings.BeepSuccessFile = @"\\server\share\Success.wav";
+
+		var issues = CustomBeepFileValidator.Validate(settings, path => path.Length > 0);
+
+		Assert.Equal(new[] { @"Could not load success beep file: \\server\share\Success.wav" }, issues);
+	}
+
+	// Mixed problems are reported in setting order, so the list reads the same way the
+	// Audio settings page is laid out.
+	[Fact]
+	public void SeveralProblemsAtOnce_AreReportedInSettingOrder()
+	{
+		var settings = AllValid();
+		settings.BeepFailureFile = "./CustomAudio/Failure.ogg";
+		settings.BeepMuteFile = null;
+
+		var issues = CustomBeepFileValidator.Validate(
+			settings, path => !path.EndsWith("Start.wav", StringComparison.OrdinalIgnoreCase));
+
+		Assert.Equal(
+			new[]
+			{
+				"Custom failure beep must be a .wav file: ./CustomAudio/Failure.ogg",
+				"Could not load start beep file: ./CustomAudio/Start.wav",
+				"Could not load mute beep file: ",
+			},
+			issues);
 	}
 
 	// Every label appears, so a user reading the list can tell which sound is broken.

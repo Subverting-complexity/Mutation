@@ -82,9 +82,16 @@ In all four OCR cases the text lands on your clipboard, ready to paste, and also
 appears in the **OCR result** box at the bottom of the card so you can read it in
 place.
 
-You can follow the whole thing by ear. The start beep says the overlay is ready for
-you to pick a rectangle. The end beep says your picture has been captured and sent off
-to be read. Then the success beep says the text is on your clipboard — or the failure
+You can follow all of this by ear.
+
+With **Screenshot & OCR**, the start beep says the overlay is ready for you to pick a
+rectangle. The end beep says your picture has been captured and sent off to be read.
+
+With **OCR clipboard**, there is no rectangle to pick, so there is no start beep. The
+end beep is the first thing you hear, and it says your picture has been sent off to be
+read.
+
+Either way, the success beep then says the text is on your clipboard — or the failure
 beep says something went wrong, and the status area tells you what.
 
 ## Reading a batch of files at once

@@ -71,32 +71,33 @@ public static class ErrorLogger
 	/// Never throws; falls back to the EXE-folder path if the local-app-data path
 	/// cannot be computed. Follows <see cref="RedirectTo"/> when one is in effect.
 	/// </summary>
-	public static string PrimaryLogPath
-	{
-		get
-		{
-			string? redirected = s_logDirectoryOverride;
-			if (redirected is not null)
-			{
-				try { return Path.Combine(redirected, ErrorLogFileName); }
-				catch { return ErrorLogFileName; }
-			}
+	public static string PrimaryLogPath => ResolveLogPath(s_logDirectoryOverride);
 
+	// Split out so the path rules can be tested without touching the process-wide
+	// override — reading the default path by switching the redirect off would let
+	// concurrent tests log into the user's real file, which is the thing being avoided.
+	internal static string ResolveLogPath(string? overrideDirectory)
+	{
+		if (!string.IsNullOrWhiteSpace(overrideDirectory))
+		{
+			try { return Path.Combine(overrideDirectory, ErrorLogFileName); }
+			catch { return ErrorLogFileName; }
+		}
+
+		try
+		{
+			string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+			return Path.Combine(localAppData, "Mutation", "logs", ErrorLogFileName);
+		}
+		catch
+		{
 			try
 			{
-				string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-				return Path.Combine(localAppData, "Mutation", "logs", ErrorLogFileName);
+				return Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
 			}
 			catch
 			{
-				try
-				{
-					return Path.Combine(AppContext.BaseDirectory, ErrorLogFileName);
-				}
-				catch
-				{
-					return ErrorLogFileName;
-				}
+				return ErrorLogFileName;
 			}
 		}
 	}
@@ -165,7 +166,9 @@ public static class ErrorLogger
 		string? redirected = s_logDirectoryOverride;
 		if (redirected is not null)
 		{
-			AppendQuietly(redirected, entry);
+			// A redirect replaces both default locations rather than adding a third: its
+			// whole purpose is that nothing lands in the user's log.
+			AppendQuietly(redirected, entry, createDirectory: true);
 			return;
 		}
 
@@ -173,7 +176,7 @@ public static class ErrorLogger
 		try
 		{
 			string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-			AppendQuietly(Path.Combine(localAppData, "Mutation", "logs"), entry);
+			AppendQuietly(Path.Combine(localAppData, "Mutation", "logs"), entry, createDirectory: true);
 		}
 		catch
 		{
@@ -181,18 +184,20 @@ public static class ErrorLogger
 		}
 
 		// (b) EXE folder. May fail if installed under a non-writable directory
-		// (e.g. Program Files); that must not stop the user-writable write above.
-		AppendQuietly(AppContext.BaseDirectory, entry);
+		// (e.g. Program Files); that must not stop the user-writable write above. It
+		// already exists by definition, so it is not created — that would put a
+		// filesystem call on every entry for nothing.
+		AppendQuietly(AppContext.BaseDirectory, entry, createDirectory: false);
 	}
 
-	// Appends to <directory>\Mutation_Errors.log, creating the directory if needed and
-	// swallowing every failure — a caller of the logger is usually already in a failure
-	// path and must not acquire a second one.
-	private static void AppendQuietly(string directory, string entry)
+	// Appends to <directory>\Mutation_Errors.log, swallowing every failure — a caller of
+	// the logger is usually already in a failure path and must not acquire a second one.
+	private static void AppendQuietly(string directory, string entry, bool createDirectory)
 	{
 		try
 		{
-			Directory.CreateDirectory(directory);
+			if (createDirectory)
+				Directory.CreateDirectory(directory);
 			AppendWithRotation(Path.Combine(directory, ErrorLogFileName), entry, MaxLogFileSizeBytes);
 		}
 		catch

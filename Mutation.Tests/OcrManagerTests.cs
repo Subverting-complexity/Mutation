@@ -750,8 +750,11 @@ public class OcrManagerTests
 
 	// Issue #268: the end beep used to sound here as a side effect of OcrService's retry
 	// signal firing on attempt 1. #216 silenced that first attempt, which left OCR with
-	// no end beep at all, and #269 restored it only for dictation. The user hears start
-	// (region overlay), end (image captured, request going out), then success.
+	// no end beep at all, and #269 restored it only for dictation.
+	//
+	// This is the clipboard path: no region overlay, so no start beep — the user hears
+	// end (image sent) then success. The screenshot path adds a start beep in front,
+	// from the overlay.
 	[Fact]
 	public async Task ExtractTextFromClipboardImageAsync_BeepsEndWhenTheRequestGoesOut_ThenSuccess()
 	{
