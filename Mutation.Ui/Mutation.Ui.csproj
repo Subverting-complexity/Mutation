@@ -35,6 +35,19 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!--
+			Ship the generated user guide beside the executable so the User guide
+			button works on an installed copy with no internet connection. The pages
+			are self-contained (styling is inlined), so the .html files are all that
+			is needed. Regenerate them with Documentation\Build-UserGuide.cmd.
+		-->
+		<Content Include="..\Documentation\UserGuide\html\*.html"
+		         Link="UserGuide\%(Filename)%(Extension)">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
 		<Content Include="Assets\SplashScreen.scale-200.png" />
 		<Content Include="Assets\LockScreenLogo.scale-200.png" />
 		<Content Include="Assets\Square150x150Logo.scale-200.png" />

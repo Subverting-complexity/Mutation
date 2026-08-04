@@ -77,6 +77,9 @@ Give these a go, in any app you like. These are the shortcuts Mutation starts wi
 
 That is the core of it. Everything else builds on those four ideas.
 
+> **Lost at any point?** Click **User guide** in the top right of Mutation's main
+> window, or press **Alt** then **G**, and this guide opens in your browser.
+
 ---
 
 ## Leave it running

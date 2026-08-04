@@ -2611,6 +2611,44 @@ public sealed partial class MainWindow : Window, IDisposable
 		await ShowSettingsDialogAsync();
 	}
 
+	/// <summary>
+	/// Opens the user guide's contents page in whatever browser the user has set as
+	/// their default. The guide ships beside the executable, so this works offline.
+	/// </summary>
+	private async void UserGuideButton_Click(object sender, RoutedEventArgs e)
+	{
+		UserGuideLocator.Result guide = UserGuideLocator.Locate(AppContext.BaseDirectory);
+
+		if (!guide.Found)
+		{
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus("User guide", guide.ErrorMessage!, InfoBarSeverity.Warning);
+			return;
+		}
+
+		try
+		{
+			// Handing a file to the shell can block while the browser starts, so it
+			// stays off the UI thread.
+			await Task.Run(() =>
+			{
+				using var _ = System.Diagnostics.Process.Start(
+					new System.Diagnostics.ProcessStartInfo(guide.IndexPath) { UseShellExecute = true });
+			});
+
+			ShowStatus("User guide", "Opening the user guide in your browser.", InfoBarSeverity.Informational);
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError(nameof(UserGuideButton_Click), ex);
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus(
+				"User guide",
+				"The user guide could not be opened. Check that a web browser is set as the default for .html files.",
+				InfoBarSeverity.Warning);
+		}
+	}
+
 	internal void ApplyLiveSettings()
 	{
 		try
