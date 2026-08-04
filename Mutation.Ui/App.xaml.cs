@@ -276,6 +276,15 @@ public partial class App : Application
 
 			_window.Activate();
 
+			// Activate() returns before the content has loaded, and until it has there
+			// is no XamlRoot to host a ContentDialog. Every notice below — the screen
+			// capture warning, the beep settings warning, the hotkey failures and the
+			// first-run onboarding — was raised inside that window, so each either
+			// degraded to a bare Win32 message box with no automation name or (for the
+			// hotkey failures) was dropped and left only an unexplained beep.
+			if (_window is MainWindow readyWindow)
+				await readyWindow.WaitForContentReadyAsync();
+
                         var preflight = ScreenCapturePreflight.TryCaptureProbe();
 			if (!preflight.ok)
 			{

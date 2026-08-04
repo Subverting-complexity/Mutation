@@ -37,7 +37,7 @@ The first time you run Mutation, it creates its settings file with sensible defa
 
 If you have not yet added an OpenAI or Anthropic key, Mutation greets you with a short welcome message titled **Welcome to Mutation**. It explains that at least one key is needed, and lists which key does what. Press **Continue**.
 
-The **Settings** window then opens on its own, so you can paste your keys in right away. That is the whole of first-run setup. If you would rather do it later, just close Settings — you can reopen it at any time with **Ctrl+Comma**.
+The **Settings** window then opens on its own, already on the **API keys** page, so you can paste your keys in right away. That is the whole of first-run setup. If you would rather do it later, just close Settings — you can reopen it at any time with **Ctrl+Comma**.
 
 One other message you might see later: if you have set up a dictation service but its key is missing, Mutation tells you which service it has switched off and opens Settings on the API keys page. Add the key, save, then restart Mutation so the service becomes available again.
 

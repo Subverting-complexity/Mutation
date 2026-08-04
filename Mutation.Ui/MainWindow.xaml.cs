@@ -2726,28 +2726,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		try
 		{
-			if (Content is not FrameworkElement rootElement || rootElement.XamlRoot is null)
-				return;
-
 			const string title = "Some hotkeys could not be registered";
 			string message = HotkeyManager.BuildFailureMessage(failures);
 
-			var dialog = new ContentDialog
-			{
-				Title = title,
-				Content = new TextBlock
-				{
-					Text = message,
-					TextWrapping = TextWrapping.Wrap,
-				},
-				CloseButtonText = "OK",
-				XamlRoot = rootElement.XamlRoot,
-				RequestedTheme = rootElement.ActualTheme,
-			};
-			Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dialog, title);
-			Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(dialog, message);
-
-			await ShowDialogAsync(dialog);
+			// Shown on whichever surface is available. This used to return early when
+			// the window had no XamlRoot yet — which is the state startup is in when it
+			// registers the core hotkeys — so the failure beep above played and the list
+			// of dead hotkeys was never shown to anyone.
+			await ShowNoticeAsync(title, message, "OK", System.Windows.Forms.MessageBoxIcon.Warning);
 		}
 		catch (Exception ex)
 		{
