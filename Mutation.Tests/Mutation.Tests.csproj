@@ -30,6 +30,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\CognitiveSupport\CognitiveSupport.csproj" />
 		<ProjectReference Include="..\Mutation.Ui\Mutation.Ui.csproj" />
+		<ProjectReference Include="..\Documentation\UserGuideBuilder\UserGuideBuilder.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

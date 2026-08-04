@@ -105,6 +105,7 @@ graphify-out/cost.json
 graphify-out/.graphify_python
 graphify-out/.graphify_root
 
-# pandoc is ~220MB, over GitHub's 100MB file limit - fetch it locally instead.
-# See Documentation/UserGuide/README.md
+# The user guide is built by Documentation/UserGuideBuilder, so pandoc is no
+# longer used. Kept ignored so a stray ~220MB copy can never be committed:
+# it is over GitHub's 100MB per-file limit and the push would be rejected.
 Documentation/pandoc.exe

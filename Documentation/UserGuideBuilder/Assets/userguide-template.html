@@ -1,0 +1,32 @@
+<!--
+	Page shell for every generated user guide page.
+
+	The {{TOKENS}} are filled in by PageTemplate.cs. Everything outside them is
+	plain HTML you can edit freely; there is no templating language to learn.
+
+	The structure is deliberate, not decorative. The skip link, the labelled nav
+	landmark and the <main> landmark are what let a screen reader user move around
+	the page without wading through the navigation every time.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{TITLE}}</title>
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+{{CSS}}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+{{NAV}}
+<main id="content" tabindex="-1">
+{{BODY}}
+{{FOOTER}}
+</main>
+</div>
+</body>
+</html>

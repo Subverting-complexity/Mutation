@@ -4,37 +4,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Troubleshooting - Mutation User Guide</title>
-<meta name="generator" content="pandoc 3.9.0.2" />
-<style type="text/css">
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+/*
+	userguide.css — styling for the generated Mutation user guide pages.
+
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
+
+	Built to stay readable for a screen-reader and ZoomText user: real focus
+	outlines, generous text size, high contrast in both themes, and a print
+	stylesheet that drops the navigation.
+*/
+
 :root{
-color-scheme: light dark;
---bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
---accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
---quote:#eef4fb; --quote-rule:#0b5fa5;
+	color-scheme: light dark;
+	--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+	--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+	--quote:#eef4fb; --quote-rule:#0b5fa5;
 }
 @media (prefers-color-scheme: dark){
-:root{
---bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
---accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
---quote:#1c2530; --quote-rule:#6fb3ff;
+	:root{
+		--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+		--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+		--quote:#1c2530; --quote-rule:#6fb3ff;
+	}
 }
-}
+
 *{box-sizing:border-box}
 html{font-size:106%}
 body{
-margin:0; background:var(--bg); color:var(--fg);
-font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
-line-height:1.65;
+	margin:0; background:var(--bg); color:var(--fg);
+	font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+	line-height:1.65;
 }
+
 .skip{
-position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
-background:var(--accent); color:var(--accent-fg); font-weight:600;
+	position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+	background:var(--accent); color:var(--accent-fg); font-weight:600;
 }
 .skip:focus{left:0}
+
 .layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+
 .sidebar{
-flex:0 0 16rem; position:sticky; top:1.5rem;
-background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+	flex:0 0 16rem; position:sticky; top:1.5rem;
+	background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
 }
 .sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
 .sidebar ol{list-style:none; margin:0; padding:0}
@@ -42,45 +58,67 @@ background:var(--surface); border:1px solid var(--rule); border-radius:10px; pad
 .sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
 .sidebar a:hover{background:var(--bg); text-decoration:underline}
 .sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+
 main{flex:1 1 auto; min-width:0; max-width:52rem}
+
 h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
 h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
 h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
 h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
 p{margin:.7rem 0}
+
 a{color:var(--accent)}
 a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
 ul,ol{margin:.7rem 0; padding-left:1.6rem}
 li{margin:.3rem 0}
+
 code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
 pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
 pre code{background:none; padding:0; font-size:.9em}
+
 blockquote{
-margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
-border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+	margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+	border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
+/*
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
+*/
 .table-wrap{overflow-x:auto; margin:1rem 0}
 table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
+
 hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
-footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
-@media (max-width:860px){
 
-.layout{flex-direction:column; align-items:stretch; padding:1rem}
-.sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none; width:100%; min-width:0}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+
+@media (max-width:860px){
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
+	.sidebar{position:static; flex:1 1 auto; width:100%}
+	main{max-width:none; width:100%; min-width:0}
 }
+
 @media print{
-.sidebar,.skip{display:none}
-body{background:#fff; color:#000}
-.layout{display:block; max-width:none; padding:0}
-a{color:#000}
+	.sidebar,.skip{display:none}
+	body{background:#fff; color:#000}
+	.layout{display:block; max-width:none; padding:0}
+	a{color:#000}
 }
+
 </style>
 </head>
 <body>
@@ -104,281 +142,222 @@ a{color:#000}
 <li><a href="troubleshooting.html" aria-current="page">Troubleshooting</a></li>
 </ol>
 </nav>
+
 <main id="content" tabindex="-1">
 <h1 id="troubleshooting">Troubleshooting</h1>
-<p>Most problems in Mutation fall into a handful of buckets. Find the
-one that sounds like yours below. Each entry says what is going on and
-what to do about it.</p>
+<p>Most problems in Mutation fall into a handful of buckets. Find the one that sounds like
+yours below. Each entry says what is going on and what to do about it.</p>
 <h2 id="common-problems">Common problems</h2>
 <h3 id="a-shortcut-does-nothing">A shortcut does nothing</h3>
-<p><strong>What&#39;s happening.</strong> Windows only lets one app own a
-global shortcut at a time. If another app grabbed your combination
-first, Mutation cannot have it. This is usually the cause when one
-shortcut is dead but the others all work.</p>
-<p>Mutation does not hide this. When it starts up, if any shortcut could
-not be claimed you get a failure beep and a dialog titled &quot;Some hotkeys
-could not be registered&quot;, listing each one and the reason. A common
-reason reads &quot;The shortcut is already registered by another
-application.&quot;</p>
+<p><strong>What's happening.</strong> Windows only lets one app own a global shortcut at a time.
+If another app grabbed your combination first, Mutation cannot have it. This is
+usually the cause when one shortcut is dead but the others all work.</p>
+<p>Mutation does not hide this. When it starts up, if any shortcut could not be claimed
+you get a failure beep and a dialog titled &quot;Some hotkeys could not be registered&quot;,
+listing each one and the reason. A common reason reads &quot;The shortcut is already
+registered by another application.&quot;</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Read the list in that dialog — it names the shortcuts that
-failed.</li>
-<li>Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong> and
-go to the shortcuts section.</li>
-<li>Change the failed shortcut to a combination nothing else uses.
-Adding <strong>Shift</strong> to an existing combination is often
-enough.</li>
-<li>Save. Every default shortcut in Mutation can be changed, so nothing
-is stuck.</li>
+<ol>
+<li>Read the list in that dialog — it names the shortcuts that failed.</li>
+<li>Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong> and go to the shortcuts section.</li>
+<li>Change the failed shortcut to a combination nothing else uses. Adding <strong>Shift</strong> to
+an existing combination is often enough.</li>
+<li>Save. Every default shortcut in Mutation can be changed, so nothing is stuck.</li>
 </ol>
-<p>If a shortcut you just typed into Settings is rejected outright, the
-combination could not be understood. Use the shortcut editor to record
-the keys rather than typing them by hand.</p>
-<h3 id="dictation-comes-back-empty-or-says-no-speech-was-detected">Dictation
-comes back empty, or says no speech was detected</h3>
-<p><strong>What&#39;s happening.</strong> Mutation trims silence off your
-recording before sending it. If what is left is too short to be worth
-transcribing, it skips the request entirely and tells you &quot;No speech
-detected — nothing to transcribe.&quot; That saves you the wait and the cost
-of a request that would have returned nothing.</p>
+<p>If a shortcut you just typed into Settings is rejected outright, the combination could
+not be understood. Use the shortcut editor to record the keys rather than typing them
+by hand.</p>
+<h3 id="dictation-comes-back-empty-or-says-no-speech-was-detected">Dictation comes back empty, or says no speech was detected</h3>
+<p><strong>What's happening.</strong> Mutation trims silence off your recording before sending it. If
+what is left is too short to be worth transcribing, it skips the request entirely and
+tells you &quot;No speech detected — nothing to transcribe.&quot; That saves you the wait and
+the cost of a request that would have returned nothing.</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Check the right microphone is selected on the
-<strong>Microphone</strong> card, and that it is not muted.</li>
-<li>Watch the level indicator while you talk — if it does not move, the
-microphone is not picking you up.</li>
+<ol>
+<li>Check the right microphone is selected on the <strong>Microphone</strong> card, and that it is
+not muted.</li>
+<li>Watch the level indicator while you talk — if it does not move, the microphone is
+not picking you up.</li>
 <li>Start speaking a beat after the start beep, not on top of it.</li>
-<li>If your input level is very low, raise it on the
-<strong>Microphone</strong> card.</li>
+<li>If your input level is very low, raise it on the <strong>Microphone</strong> card.</li>
 </ol>
-<h3 id="dictation-says-the-recorder-is-still-busy">Dictation says the
-recorder is still busy</h3>
-<p><strong>What&#39;s happening.</strong> A previous recording is still
-being transcribed and the recorder is not free yet. Mutation refuses to
-start a new one on top of it rather than losing either recording.</p>
-<p><strong>What to do.</strong> Wait for the previous transcription to
-finish — the status area will say when it is done — then press your
-dictation shortcut again.</p>
-<h3 id="dictation-is-slow-or-fails-with-a-timeout">Dictation is slow, or
-fails with a timeout</h3>
-<p><strong>What&#39;s happening.</strong> Transcription happens over the
-internet, so a slow connection or a busy service makes it slow. Mutation
-retries a failed attempt, giving each retry a longer window than the
-last, before it gives up. Long recordings naturally take longer than
-short ones.</p>
+<h3 id="dictation-says-the-recorder-is-still-busy">Dictation says the recorder is still busy</h3>
+<p><strong>What's happening.</strong> A previous recording is still being transcribed and the recorder
+is not free yet. Mutation refuses to start a new one on top of it rather than losing
+either recording.</p>
+<p><strong>What to do.</strong> Wait for the previous transcription to finish — the status area will
+say when it is done — then press your dictation shortcut again.</p>
+<h3 id="dictation-is-slow-or-fails-with-a-timeout">Dictation is slow, or fails with a timeout</h3>
+<p><strong>What's happening.</strong> Transcription happens over the internet, so a slow connection or
+a busy service makes it slow. Mutation retries a failed attempt, giving each retry a
+longer window than the last, before it gives up. Long recordings naturally take longer
+than short ones.</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Give it a moment — the retries are automatic and you will hear the
-result.</li>
-<li>Record in shorter chunks. A two-minute note transcribes far faster
-than a twenty-minute one.</li>
-<li>If it consistently times out, raise the timeout in
-<strong>Settings</strong>. There are separate timeouts for live
-dictation and for transcribing a file, plus a per-attempt timeout on
-each speech service.</li>
+<ol>
+<li>Give it a moment — the retries are automatic and you will hear the result.</li>
+<li>Record in shorter chunks. A two-minute note transcribes far faster than a
+twenty-minute one.</li>
+<li>If it consistently times out, raise the timeout in <strong>Settings</strong>. There are separate
+timeouts for live dictation and for transcribing a file, plus a per-attempt timeout
+on each speech service.</li>
 </ol>
-<h3 id="ocr-returns-nothing-useful-or-the-wrong-reading-order">OCR
-returns nothing useful, or the wrong reading order</h3>
-<p><strong>What&#39;s happening.</strong> OCR reads text out of a picture.
-If the picture is small, blurry, or is light text on a dark background,
-there may be nothing recognisable in it. Reading order is a separate
-matter: Mutation offers two layouts, and they suit different pages.</p>
+<h3 id="ocr-returns-nothing-useful-or-the-wrong-reading-order">OCR returns nothing useful, or the wrong reading order</h3>
+<p><strong>What's happening.</strong> OCR reads text out of a picture. If the picture is small,
+blurry, or is light text on a dark background, there may be nothing recognisable in
+it. Reading order is a separate matter: Mutation offers two layouts, and they suit
+different pages.</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Capture a tighter region at a larger zoom level. More pixels per
-letter helps a lot.</li>
-<li>If your text is light on a dark background, turn on the setting that
-inverts the image colours before OCR.</li>
-<li>Try the other reading order. <strong>Natural</strong> layout follows
-the visual structure of the page, which is better for columns and
-tables. <strong>Basic</strong> layout reads strictly left to right, top
-to bottom, which is better for a plain block of text that Natural has
-scrambled. Each has its own shortcut, so you can just try the other
-one.</li>
+<ol>
+<li>Capture a tighter region at a larger zoom level. More pixels per letter helps a lot.</li>
+<li>If your text is light on a dark background, turn on the setting that inverts the
+image colours before OCR.</li>
+<li>Try the other reading order. <strong>Natural</strong> layout follows the visual structure of the
+page, which is better for columns and tables. <strong>Basic</strong> layout reads strictly left
+to right, top to bottom, which is better for a plain block of text that Natural has
+scrambled. Each has its own shortcut, so you can just try the other one.</li>
 </ol>
-<h3 id="ocr-skipped-a-file-for-being-too-large">OCR skipped a file for
-being too large</h3>
-<p><strong>What&#39;s happening.</strong> There is a maximum size for a file
-or page sent for OCR, so a huge file cannot be uploaded by accident.
-Anything over it is skipped before upload, and the failure message names
-the file, its size, and the limit.</p>
-<p><strong>What to do.</strong> Open <strong>Settings</strong>, find the
-maximum document size under the OCR settings, and raise it — or set it
-to 0 for no limit at all. Alternatively, capture a smaller region or
-save the file at a lower resolution.</p>
-<h3 id="ocr-stops-after-a-couple-of-pages">OCR stops after a couple of
-pages</h3>
-<p><strong>What&#39;s happening.</strong> The free OCR tier limits how many
-pages a single document can contain. Mutation respects that limit by
-default, sending documents in small batches, with the page limit set to
-2 out of the box.</p>
-<p><strong>What to do.</strong> If you are on a paid tier, turn off the
-free-tier option in <strong>Settings</strong> under the OCR settings. If
-you are staying on the free tier, raise the page limit only as far as
-your tier allows.</p>
-<h3 id="nothing-happens-at-all--a-key-is-missing-or-wrong">Nothing
-happens at all — a key is missing or wrong</h3>
-<p><strong>What&#39;s happening.</strong> Mutation talks to outside services
-to do dictation, OCR and AI processing. Each needs an API key (a long
-password that lets Mutation use the service on your behalf). Without
-one, the feature has nothing to talk to.</p>
-<p>On a brand-new install Mutation shows a welcome dialog explaining
-which keys it needs, then opens Settings on the API keys tab. If a
-speech service has no key, it is disabled and Mutation tells you which
-ones and why. For OCR you need both an Azure Computer Vision key
-<strong>and</strong> an endpoint, and Mutation says specifically which
-of the two is missing.</p>
-<p><strong>What to do.</strong> Open <strong>Settings</strong> with
-<strong>Ctrl+Comma</strong>, go to the API keys tab, and paste in the
-key. Azure Computer Vision has its own tab, because the key and the
+<h3 id="ocr-skipped-a-file-for-being-too-large">OCR skipped a file for being too large</h3>
+<p><strong>What's happening.</strong> There is a maximum size for a file or page sent for OCR, so a
+huge file cannot be uploaded by accident. Anything over it is skipped before upload,
+and the failure message names the file, its size, and the limit.</p>
+<p><strong>What to do.</strong> Open <strong>Settings</strong>, find the maximum document size under the OCR
+settings, and raise it — or set it to 0 for no limit at all. Alternatively, capture a
+smaller region or save the file at a lower resolution.</p>
+<h3 id="ocr-stops-after-a-couple-of-pages">OCR stops after a couple of pages</h3>
+<p><strong>What's happening.</strong> The free OCR tier limits how many pages a single document can
+contain. Mutation respects that limit by default, sending documents in small batches,
+with the page limit set to 2 out of the box.</p>
+<p><strong>What to do.</strong> If you are on a paid tier, turn off the free-tier option in
+<strong>Settings</strong> under the OCR settings. If you are staying on the free tier, raise the
+page limit only as far as your tier allows.</p>
+<h3 id="nothing-happens-at-all--a-key-is-missing-or-wrong">Nothing happens at all — a key is missing or wrong</h3>
+<p><strong>What's happening.</strong> Mutation talks to outside services to do dictation, OCR and AI
+processing. Each needs an API key (a long password that lets Mutation use the service
+on your behalf). Without one, the feature has nothing to talk to.</p>
+<p>On a brand-new install Mutation shows a welcome dialog explaining which keys it needs,
+then opens Settings on the API keys tab. If a speech service has no key, it is
+disabled and Mutation tells you which ones and why. For OCR you need both an Azure
+Computer Vision key <strong>and</strong> an endpoint, and Mutation says specifically which of the
+two is missing.</p>
+<p><strong>What to do.</strong> Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong>, go to the API keys tab, and
+paste in the key. Azure Computer Vision has its own tab, because the key and the
 endpoint live together there. Save, and try again.</p>
-<h3 id="the-text-didnt-paste-into-the-other-app">The text didn&#39;t paste
-into the other app</h3>
-<p><strong>What&#39;s happening.</strong> Mutation delivers text through the
-clipboard, and only one app can hold the clipboard at a time. If another
-app is holding it at that moment, the copy fails. Mutation retries a few
-times before giving up. If it still cannot get through, you get a
-failure beep and a message like &quot;The clipboard is in use by another
-application; the transcript could not be delivered. It is available in
-the Mutation window.&quot;</p>
+<h3 id="the-text-didnt-paste-into-the-other-app">The text didn't paste into the other app</h3>
+<p><strong>What's happening.</strong> Mutation delivers text through the clipboard, and only one app
+can hold the clipboard at a time. If another app is holding it at that moment, the copy
+fails. Mutation retries a few times before giving up. If it still cannot get through,
+you get a failure beep and a message like &quot;The clipboard is in use by another
+application; the transcript could not be delivered. It is available in the Mutation
+window.&quot;</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Your text is not lost. Open the main window and copy it from
-there.</li>
-<li>Clipboard manager tools and remote-desktop sessions are the usual
-culprits. Closing or pausing one often fixes it for good.</li>
-<li>If you rely on the text landing in another app automatically, set
-the &quot;send keys after&quot; option to <strong>Ctrl+V</strong> so Mutation
-pastes for you once the copy succeeds.</li>
+<ol>
+<li>Your text is not lost. Open the main window and copy it from there.</li>
+<li>Clipboard manager tools and remote-desktop sessions are the usual culprits. Closing
+or pausing one often fixes it for good.</li>
+<li>If you rely on the text landing in another app automatically, set the &quot;send keys
+after&quot; option to <strong>Ctrl+V</strong> so Mutation pastes for you once the copy succeeds.</li>
 </ol>
-<h3 id="fast-mode-didnt-actually-run-fast">Fast mode didn&#39;t actually run
-fast</h3>
-<p><strong>What&#39;s happening.</strong> Fast mode is a faster setting for
-AI prompts. If it is not available, Mutation does not throw your text
-away — it quietly runs the prompt again at standard speed and then tells
-you why Fast mode could not be used. There are three different reasons,
-and each needs a different response:</p>
+<h3 id="fast-mode-didnt-actually-run-fast">Fast mode didn't actually run fast</h3>
+<p><strong>What's happening.</strong> Fast mode is a faster setting for AI prompts. If it is not
+available, Mutation does not throw your text away — it quietly runs the prompt again at
+standard speed and then tells you why Fast mode could not be used. There are three
+different reasons, and each needs a different response:</p>
 <ul>
-<li>Fast mode is not enabled for your account. You need to request
-access for it.</li>
-<li>Fast mode was rate limited or at capacity. Wait a moment and try
-again.</li>
-<li>The model you chose does not offer Fast mode. Choose a different
-model.</li>
+<li>Fast mode is not enabled for your account. You need to request access for it.</li>
+<li>Fast mode was rate limited or at capacity. Wait a moment and try again.</li>
+<li>The model you chose does not offer Fast mode. Choose a different model.</li>
 </ul>
-<p><strong>What to do.</strong> Listen to which of the three you got —
-the wording is deliberately different for each. You can also turn Fast
-mode off for that prompt in the prompt editor, which stops the notice
-appearing every time.</p>
-<h3 id="the-wrong-microphone-is-being-used-or-the-mute-didnt-take">The
-wrong microphone is being used, or the mute didn&#39;t take</h3>
-<p><strong>What&#39;s happening.</strong> Mutation&#39;s mute shortcut mutes
-every microphone on the PC, not just the one it is recording with. It
-re-checks the list of devices when one is plugged in or unplugged, so a
-headset you just connected is covered too.</p>
-<p>Mutation also verifies that a mute actually took effect at the
-operating-system level. If it cannot confirm it, it will not pretend —
-you get &quot;Could not change the microphone mute state. The microphone may
-still be live — please try again.&quot;</p>
+<p><strong>What to do.</strong> Listen to which of the three you got — the wording is deliberately
+different for each. You can also turn Fast mode off for that prompt in the prompt
+editor, which stops the notice appearing every time.</p>
+<h3 id="the-wrong-microphone-is-being-used-or-the-mute-didnt-take">The wrong microphone is being used, or the mute didn't take</h3>
+<p><strong>What's happening.</strong> Mutation's mute shortcut mutes every microphone on the PC, not
+just the one it is recording with. It re-checks the list of devices when one is plugged
+in or unplugged, so a headset you just connected is covered too.</p>
+<p>Mutation also verifies that a mute actually took effect at the operating-system level.
+If it cannot confirm it, it will not pretend — you get &quot;Could not change the microphone
+mute state. The microphone may still be live — please try again.&quot;</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Treat that message seriously. Assume the microphone is still live
-until you have confirmed otherwise.</li>
+<ol>
+<li>Treat that message seriously. Assume the microphone is still live until you have
+confirmed otherwise.</li>
 <li>Press the mute shortcut again and listen for the mute beep.</li>
-<li>If Mutation is recording from the wrong device, pick the right one
-on the <strong>Microphone</strong> card. Setting the input level can
-also fail if a device is busy or was just unplugged — you will be told,
-and can try again.</li>
+<li>If Mutation is recording from the wrong device, pick the right one on the
+<strong>Microphone</strong> card. Setting the input level can also fail if a device is busy or
+was just unplugged — you will be told, and can try again.</li>
 </ol>
-<h3 id="no-voices-in-the-voice-list-or-the-voice-sounds-wrong">No voices
-in the voice list, or the voice sounds wrong</h3>
-<p><strong>What&#39;s happening.</strong> The voices Mutation offers for
-reading aloud come from Windows itself, not from Mutation. An empty or
-very short list means Windows has few voices installed.</p>
+<h3 id="no-voices-in-the-voice-list-or-the-voice-sounds-wrong">No voices in the voice list, or the voice sounds wrong</h3>
+<p><strong>What's happening.</strong> The voices Mutation offers for reading aloud come from Windows
+itself, not from Mutation. An empty or very short list means Windows has few voices
+installed.</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Install more voices through Windows Settings, under the speech
-options. Restart Mutation afterwards so it picks them up.</li>
-<li>Choose the voice, rate and volume on the <strong>Voice &amp;
-Speech</strong> section of the main window.</li>
-<li>If the voice reads out stray symbols like asterisks and hash marks,
-turn on the text clean-up options in <strong>Settings</strong>. There
-are individual switches for stripping bold and italic marks, heading
-marks, bullet markers, code blocks, and for shortening long web
-links.</li>
+<ol>
+<li>Install more voices through Windows Settings, under the speech options. Restart
+Mutation afterwards so it picks them up.</li>
+<li>Choose the voice, rate and volume on the <strong>Voice &amp; Speech</strong> section of the main
+window.</li>
+<li>If the voice reads out stray symbols like asterisks and hash marks, turn on the
+text clean-up options in <strong>Settings</strong>. There are individual switches for stripping
+bold and italic marks, heading marks, bullet markers, code blocks, and for
+shortening long web links.</li>
 </ol>
-<h3 id="settings-wont-save">Settings won&#39;t save</h3>
-<p><strong>What&#39;s happening.</strong> Mutation writes your settings to a
-file. If that write fails — the file is read-only, a backup tool has it
-open, or the folder is not writable — the save cannot complete. Mutation
-plays the failure beep, announces the problem, and shows &quot;Save failed&quot;
-along with the actual reason and the words &quot;Your changes were not saved.
-Fix the problem and press Save again, or press Cancel to discard the
-changes.&quot;</p>
+<h3 id="settings-wont-save">Settings won't save</h3>
+<p><strong>What's happening.</strong> Mutation writes your settings to a file. If that write fails —
+the file is read-only, a backup tool has it open, or the folder is not writable — the
+save cannot complete. Mutation plays the failure beep, announces the problem, and shows
+&quot;Save failed&quot; along with the actual reason and the words &quot;Your changes were not saved.
+Fix the problem and press Save again, or press Cancel to discard the changes.&quot;</p>
 <p><strong>What to do.</strong></p>
-<ol type="1">
-<li>Read the reason given — it is the real cause, not a generic
-message.</li>
-<li>Close anything that might have the settings file open, including a
-text editor.</li>
-<li>Press Save again. Your changes are still in the dialog until you
-press Cancel.</li>
+<ol>
+<li>Read the reason given — it is the real cause, not a generic message.</li>
+<li>Close anything that might have the settings file open, including a text editor.</li>
+<li>Press Save again. Your changes are still in the dialog until you press Cancel.</li>
 </ol>
-<h3 id="screen-capture-appears-to-be-blocked">Screen capture appears to
-be blocked</h3>
-<p><strong>What&#39;s happening.</strong> Some managed work PCs disable
-screen capture by policy, and some privacy and DRM-protected windows
-cannot be captured at all. Mutation tests this before it tries, and
-tells you when the test fails, with the technical detail included.</p>
-<p><strong>What to do.</strong> If you are on a work device, this is a
-policy set by your IT department and Mutation cannot work around it —
-ask them. Otherwise, check for privacy or screen-recording-blocker
-software, and make sure the window you are capturing is not playing
-protected video.</p>
+<h3 id="screen-capture-appears-to-be-blocked">Screen capture appears to be blocked</h3>
+<p><strong>What's happening.</strong> Some managed work PCs disable screen capture by policy, and some
+privacy and DRM-protected windows cannot be captured at all. Mutation tests this before
+it tries, and tells you when the test fails, with the technical detail included.</p>
+<p><strong>What to do.</strong> If you are on a work device, this is a policy set by your IT
+department and Mutation cannot work around it — ask them. Otherwise, check for privacy
+or screen-recording-blocker software, and make sure the window you are capturing is not
+playing protected video.</p>
 <h2 id="finding-the-log-file">Finding the log file</h2>
-<p>When something goes wrong, Mutation writes a timestamped entry to a
-log file called <code>Mutation_Errors.log</code>. It lives here:</p>
-<pre><code>%LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log</code></pre>
-<p>To open the folder, press <strong>Windows+R</strong>, paste
-<code>%LOCALAPPDATA%\Mutation\logs</code> into the box, and press Enter.
-Mutation also writes a copy of the log next to its own program file, in
-case the first location is unavailable.</p>
-<p>The log is capped in size. When it gets too big, the old contents are
-moved to <code>Mutation_Errors.log.old</code> and a fresh file is
-started — so if the problem happened a while back, check the
-<code>.old</code> file too.</p>
-<p>Your API keys are stripped out of the log before anything is written,
-so it is safe to share.</p>
+<p>When something goes wrong, Mutation writes a timestamped entry to a log file called
+<code>Mutation_Errors.log</code>. It lives here:</p>
+<pre><code>%LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log
+</code></pre>
+<p>To open the folder, press <strong>Windows+R</strong>, paste <code>%LOCALAPPDATA%\Mutation\logs</code> into the
+box, and press Enter. Mutation also writes a copy of the log next to its own program
+file, in case the first location is unavailable.</p>
+<p>The log is capped in size. When it gets too big, the old contents are moved to
+<code>Mutation_Errors.log.old</code> and a fresh file is started — so if the problem happened a
+while back, check the <code>.old</code> file too.</p>
+<p>Your API keys are stripped out of the log before anything is written, so it is safe to
+share.</p>
 <h2 id="reporting-a-problem">Reporting a problem</h2>
-<p>If none of the above fixes it, please report it. The project&#39;s issues
-page is at <a href="https://github.com/Subverting-complexity/Mutation/issues">github.com/Subverting-complexity/Mutation</a>.</p>
+<p>If none of the above fixes it, please report it. The project's issues page is at
+<a href="https://github.com/Subverting-complexity/Mutation/issues">github.com/Subverting-complexity/Mutation</a>.</p>
 <p>Include as much of this as you can:</p>
 <ul>
-<li>What you did, step by step, and what you expected to happen
-instead.</li>
+<li>What you did, step by step, and what you expected to happen instead.</li>
 <li>The exact wording of any message you saw or heard.</li>
 <li>Which shortcut you pressed.</li>
-<li>The relevant entries from <code>Mutation_Errors.log</code>, with
-their timestamps.</li>
-<li>Your Windows version, and the name of your screen reader or
-magnifier if one was running.</li>
+<li>The relevant entries from <code>Mutation_Errors.log</code>, with their timestamps.</li>
+<li>Your Windows version, and the name of your screen reader or magnifier if one was
+running.</li>
 </ul>
 <h2 id="where-to-next">Where to next</h2>
 <ul>
-<li><a href="settings.html">The Settings window</a> — where most of the
-fixes above live.</li>
-<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — changing
-a shortcut another app owns.</li>
-<li><a href="getting-started.html">Getting started</a> — first-run setup
-and API keys.</li>
-<li><a href="accessibility.html">Screen reader and accessibility
-notes</a> — beeps, announcements, and the keyboard-driven capture
-overlay.</li>
+<li><a href="settings.html">The Settings window</a> — where most of the fixes above live.</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — changing a shortcut another app owns.</li>
+<li><a href="getting-started.html">Getting started</a> — first-run setup and API keys.</li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a> — beeps, announcements,
+and the keyboard-driven capture overlay.</li>
 </ul>
+
 <footer>
 <p><a href="index.html">Back to the contents page</a></p>
-<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
 </footer>
 </main>
 </div>

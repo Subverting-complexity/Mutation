@@ -4,37 +4,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>A tour of the main window - Mutation User Guide</title>
-<meta name="generator" content="pandoc 3.9.0.2" />
-<style type="text/css">
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+/*
+	userguide.css — styling for the generated Mutation user guide pages.
+
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
+
+	Built to stay readable for a screen-reader and ZoomText user: real focus
+	outlines, generous text size, high contrast in both themes, and a print
+	stylesheet that drops the navigation.
+*/
+
 :root{
-color-scheme: light dark;
---bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
---accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
---quote:#eef4fb; --quote-rule:#0b5fa5;
+	color-scheme: light dark;
+	--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+	--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+	--quote:#eef4fb; --quote-rule:#0b5fa5;
 }
 @media (prefers-color-scheme: dark){
-:root{
---bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
---accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
---quote:#1c2530; --quote-rule:#6fb3ff;
+	:root{
+		--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+		--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+		--quote:#1c2530; --quote-rule:#6fb3ff;
+	}
 }
-}
+
 *{box-sizing:border-box}
 html{font-size:106%}
 body{
-margin:0; background:var(--bg); color:var(--fg);
-font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
-line-height:1.65;
+	margin:0; background:var(--bg); color:var(--fg);
+	font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+	line-height:1.65;
 }
+
 .skip{
-position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
-background:var(--accent); color:var(--accent-fg); font-weight:600;
+	position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+	background:var(--accent); color:var(--accent-fg); font-weight:600;
 }
 .skip:focus{left:0}
+
 .layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+
 .sidebar{
-flex:0 0 16rem; position:sticky; top:1.5rem;
-background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+	flex:0 0 16rem; position:sticky; top:1.5rem;
+	background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
 }
 .sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
 .sidebar ol{list-style:none; margin:0; padding:0}
@@ -42,45 +58,67 @@ background:var(--surface); border:1px solid var(--rule); border-radius:10px; pad
 .sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
 .sidebar a:hover{background:var(--bg); text-decoration:underline}
 .sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+
 main{flex:1 1 auto; min-width:0; max-width:52rem}
+
 h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
 h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
 h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
 h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
 p{margin:.7rem 0}
+
 a{color:var(--accent)}
 a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
 ul,ol{margin:.7rem 0; padding-left:1.6rem}
 li{margin:.3rem 0}
+
 code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
 pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
 pre code{background:none; padding:0; font-size:.9em}
+
 blockquote{
-margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
-border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+	margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+	border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
+/*
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
+*/
 .table-wrap{overflow-x:auto; margin:1rem 0}
 table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
+
 hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
-footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
-@media (max-width:860px){
 
-.layout{flex-direction:column; align-items:stretch; padding:1rem}
-.sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none; width:100%; min-width:0}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+
+@media (max-width:860px){
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
+	.sidebar{position:static; flex:1 1 auto; width:100%}
+	main{max-width:none; width:100%; min-width:0}
 }
+
 @media print{
-.sidebar,.skip{display:none}
-body{background:#fff; color:#000}
-.layout{display:block; max-width:none; padding:0}
-a{color:#000}
+	.sidebar,.skip{display:none}
+	body{background:#fff; color:#000}
+	.layout{display:block; max-width:none; padding:0}
+	a{color:#000}
 }
+
 </style>
 </head>
 <body>
@@ -104,35 +142,19 @@ a{color:#000}
 <li><a href="troubleshooting.html">Troubleshooting</a></li>
 </ol>
 </nav>
+
 <main id="content" tabindex="-1">
 <h1 id="a-tour-of-the-main-window">A tour of the main window</h1>
-<p>Most of the time you will not look at Mutation at all. You press a
-keyboard shortcut in whatever app you are using, and Mutation does its
-job in the background. But there is a main window, and it is worth
-knowing your way around it.</p>
-<p>The window is titled <strong>Mutation Workspace</strong>. Think of it
-as the control panel. Everything on it is also available as a keyboard
-shortcut that works from any other app, so the window is where you go to
-change a setting, check a result, or run something once without
-remembering a shortcut.</p>
-<p>The window is laid out as a set of cards, one per feature. On a wide
-window the cards sit two to a row. Narrow the window and they stack into
-a single column, so nothing is ever hidden off to the side.</p>
+<p>Most of the time you will not look at Mutation at all. You press a keyboard shortcut in whatever app you are using, and Mutation does its job in the background. But there is a main window, and it is worth knowing your way around it.</p>
+<p>The window is titled <strong>Mutation Workspace</strong>. Think of it as the control panel. Everything on it is also available as a keyboard shortcut that works from any other app, so the window is where you go to change a setting, check a result, or run something once without remembering a shortcut.</p>
+<p>The window is laid out as a set of cards, one per feature. On a wide window the cards sit two to a row. Narrow the window and they stack into a single column, so nothing is ever hidden off to the side.</p>
 <blockquote>
-<p>Everything here is reachable from the keyboard. <strong>Tab</strong>
-moves forward through the controls, <strong>Shift+Tab</strong> moves
-back, <strong>Space</strong> or <strong>Enter</strong> presses a button,
-and the arrow keys open and move through dropdowns. Many buttons also
-have an access key: hold <strong>Alt</strong> and the underlined
-letter.</p>
+<p>Everything here is reachable from the keyboard. <strong>Tab</strong> moves forward through the controls, <strong>Shift+Tab</strong> moves back, <strong>Space</strong> or <strong>Enter</strong> presses a button, and the arrow keys open and move through dropdowns. Many buttons also have an access key: hold <strong>Alt</strong> and the underlined letter.</p>
 </blockquote>
 <hr />
 <h2 id="the-menu-at-the-top">The menu at the top</h2>
-<p>Top left is a single <strong>Menu</strong> button (the three-line
-&quot;hamburger&quot; icon). Press <strong>Alt</strong> then <strong>H</strong> to
-open it, or just click it.</p>
-<div class="table-wrap">
-<table>
+<p>Top left is a single <strong>Menu</strong> button (the three-line &quot;hamburger&quot; icon). Press <strong>Alt</strong> then <strong>H</strong> to open it, or just click it.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Item</th>
@@ -142,27 +164,20 @@ open it, or just click it.</p>
 <tbody>
 <tr>
 <td><strong>Settings</strong></td>
-<td>Opens the Settings window. Same as pressing
-<strong>Ctrl+Comma</strong> from anywhere in Mutation.</td>
+<td>Opens the Settings window. Same as pressing <strong>Ctrl+Comma</strong> from anywhere in Mutation.</td>
 </tr>
 <tr>
 <td><strong>Debug</strong></td>
-<td>A submenu with three &quot;Simulate ... Crash&quot; items. These exist so the
-developer can test error handling. Ordinary users can ignore them
-entirely.</td>
+<td>A submenu with three &quot;Simulate ... Crash&quot; items. These exist so the developer can test error handling. Ordinary users can ignore them entirely.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>See <a href="settings.html">The Settings window</a> for what is
-inside Settings.</p>
+<p>See <a href="settings.html">The Settings window</a> for what is inside Settings.</p>
 <hr />
 <h2 id="the-microphone-card">The Microphone card</h2>
-<p>This is the mute switch. It turns every microphone on your PC on or
-off at once, so you never have to hunt for the mute button in whichever
-meeting app you happen to be in.</p>
-<div class="table-wrap">
-<table>
+<p>This is the mute switch. It turns every microphone on your PC on or off at once, so you never have to hunt for the mute button in whichever meeting app you happen to be in.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -176,41 +191,32 @@ meeting app you happen to be in.</p>
 </tr>
 <tr>
 <td><strong>Toggle microphone</strong> (button)</td>
-<td>Mutes or unmutes. The icon shows a line through the microphone when
-you are muted.</td>
+<td>Mutes or unmutes. The icon shows a line through the microphone when you are muted.</td>
 </tr>
 <tr>
 <td><strong>Toggle microphone visualization</strong></td>
-<td>The big waveform panel is itself a button. Press it to turn the live
-waveform drawing on or off. When it is off it simply reads &quot;Off&quot;.</td>
+<td>The big waveform panel is itself a button. Press it to turn the live waveform drawing on or off. When it is off it simply reads &quot;Off&quot;.</td>
 </tr>
 <tr>
 <td>Level meter</td>
-<td>The thin bar beside the waveform. It rises and falls with how loud
-you are. Nothing to press.</td>
+<td>The thin bar beside the waveform. It rises and falls with how loud you are. Nothing to press.</td>
 </tr>
 <tr>
 <td><strong>Pin input level</strong> (on/off switch)</td>
-<td>Keeps the Windows recording level fixed at the value you choose.
-Mutation re-applies it every time you record, change microphone, or
-start the app.</td>
+<td>Keeps the Windows recording level fixed at the value you choose. Mutation re-applies it every time you record, change microphone, or start the app.</td>
 </tr>
 <tr>
 <td><strong>Input level</strong> (slider)</td>
-<td>Sets the Windows recording level from 0 to 100. The change takes
-effect straight away, even when you are not recording.</td>
+<td>Sets the Windows recording level from 0 to 100. The change takes effect straight away, even when you are not recording.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="microphone.html">Muting your
-microphone</a>.</p>
+<p>Full details: <a href="microphone.html">Muting your microphone</a>.</p>
 <hr />
 <h2 id="the-speech-to-text-card">The Speech to Text card</h2>
-<p>This is dictation. You press record, you talk, you press stop, and a
-few seconds later your words appear as text.</p>
-<div class="table-wrap">
-<table>
+<p>This is dictation. You press record, you talk, you press stop, and a few seconds later your words appear as text.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -224,27 +230,23 @@ few seconds later your words appear as text.</p>
 </tr>
 <tr>
 <td><strong>Record</strong> (button)</td>
-<td>Starts or stops speech capture. The transcript appears in the
-<strong>Raw Transcript</strong> box.</td>
+<td>Starts or stops speech capture. The transcript appears in the <strong>Raw Transcript</strong> box.</td>
 </tr>
 <tr>
 <td><strong>Record and Format</strong> (button)</td>
-<td>Starts or stops speech capture, then automatically sends the
-transcript to the AI model for tidying up.</td>
+<td>Starts or stops speech capture, then automatically sends the transcript to the AI model for tidying up.</td>
 </tr>
 <tr>
 <td><strong>Play selected session</strong></td>
 <td>Plays back the recording you currently have selected.</td>
 </tr>
 <tr>
-<td><strong>Go to older session</strong> / <strong>Go to newer
-session</strong></td>
+<td><strong>Go to older session</strong> / <strong>Go to newer session</strong></td>
 <td>Step backwards and forwards through your recent recordings.</td>
 </tr>
 <tr>
 <td><strong>Retry transcription</strong></td>
-<td>Transcribes the selected recording again. Useful if the first
-attempt failed.</td>
+<td>Transcribes the selected recording again. Useful if the first attempt failed.</td>
 </tr>
 <tr>
 <td><strong>Upload audio for transcription</strong></td>
@@ -252,27 +254,20 @@ attempt failed.</td>
 </tr>
 <tr>
 <td><strong>Speed</strong> (dropdown)</td>
-<td>How fast recordings play back. Voices stay at their natural pitch at
-every speed.</td>
+<td>How fast recordings play back. Voices stay at their natural pitch at every speed.</td>
 </tr>
 <tr>
 <td><strong>Prompt</strong> (text box)</td>
-<td>Optional. A few words of context or a list of names, to help the
-service spell things the way you want.</td>
+<td>Optional. A few words of context or a list of names, to help the service spell things the way you want.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="dictation.html">Dictation: turning speech into
-text</a>.</p>
+<p>Full details: <a href="dictation.html">Dictation: turning speech into text</a>.</p>
 <hr />
 <h2 id="the-llm-prompts-card">The LLM Prompts card</h2>
-<p>An LLM is an AI writing assistant. This card is where you keep your
-list of instructions for it — &quot;make this into a polite email&quot;,
-&quot;summarise this in three bullets&quot;, and so on. The card&#39;s own description
-says it plainly: configure multiple prompts for LLM processing.</p>
-<div class="table-wrap">
-<table>
+<p>An LLM is an AI writing assistant. This card is where you keep your list of instructions for it — &quot;make this into a polite email&quot;, &quot;summarise this in three bullets&quot;, and so on. The card's own description says it plainly: configure multiple prompts for LLM processing.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -286,24 +281,19 @@ says it plainly: configure multiple prompts for LLM processing.</p>
 </tr>
 <tr>
 <td>The list</td>
-<td>One row per prompt. Each row shows the prompt&#39;s name, its shortcut,
-its model, and the words <strong>(Auto-Run)</strong> if it is set to run
-by itself.</td>
+<td>One row per prompt. Each row shows the prompt's name, its shortcut, its model, and the words <strong>(Auto-Run)</strong> if it is set to run by itself.</td>
 </tr>
 <tr>
 <td><strong>(Auto-Run)</strong> label</td>
-<td>Means that prompt runs automatically after a recording finishes,
-instead of waiting for you to trigger it.</td>
+<td>Means that prompt runs automatically after a recording finishes, instead of waiting for you to trigger it.</td>
 </tr>
 <tr>
 <td><strong>Run</strong></td>
-<td>Runs that prompt now, on the text in the <strong>Raw
-Transcript</strong> box.</td>
+<td>Runs that prompt now, on the text in the <strong>Raw Transcript</strong> box.</td>
 </tr>
 <tr>
 <td><strong>Edit</strong></td>
-<td>Opens the prompt so you can change its wording, model or
-shortcut.</td>
+<td>Opens the prompt so you can change its wording, model or shortcut.</td>
 </tr>
 <tr>
 <td><strong>Delete</strong></td>
@@ -312,15 +302,11 @@ shortcut.</td>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="ai-prompts.html">Using AI prompts on your
-text</a>.</p>
+<p>Full details: <a href="ai-prompts.html">Using AI prompts on your text</a>.</p>
 <hr />
 <h2 id="the-transcript-boxes">The transcript boxes</h2>
-<p>This card has no heading of its own — just two labelled boxes stacked
-one above the other. It is where your dictated words land, and where the
-tidied-up version appears.</p>
-<div class="table-wrap">
-<table>
+<p>This card has no heading of its own — just two labelled boxes stacked one above the other. It is where your dictated words land, and where the tidied-up version appears.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -330,13 +316,11 @@ tidied-up version appears.</p>
 <tbody>
 <tr>
 <td><strong>Raw Transcript</strong> (text box)</td>
-<td>Exactly what came back from the transcription service. You can edit
-it by hand.</td>
+<td>Exactly what came back from the transcription service. You can edit it by hand.</td>
 </tr>
 <tr>
 <td><strong>Format with rules</strong> (button)</td>
-<td>Applies your own find-and-replace rules to the raw transcript. No AI
-involved, so it is instant.</td>
+<td>Applies your own find-and-replace rules to the raw transcript. No AI involved, so it is instant.</td>
 </tr>
 <tr>
 <td><strong>Process with LLM</strong> (button)</td>
@@ -349,16 +333,11 @@ involved, so it is instant.</td>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="transcript-formatting.html">Automatic
-find-and-replace rules</a> and <a href="ai-prompts.html">Using AI
-prompts on your text</a>.</p>
+<p>Full details: <a href="transcript-formatting.html">Automatic find-and-replace rules</a> and <a href="ai-prompts.html">Using AI prompts on your text</a>.</p>
 <hr />
 <h2 id="the-automation-card">The Automation card</h2>
-<p>One small but important setting: it controls where your finished
-transcripts are delivered. The card&#39;s own subtitle is &quot;Control where
-transcripts are delivered.&quot;</p>
-<div class="table-wrap">
-<table>
+<p>One small but important setting: it controls where your finished transcripts are delivered. The card's own subtitle is &quot;Control where transcripts are delivered.&quot;</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -373,26 +352,18 @@ transcripts are delivered.&quot;</p>
 </tbody>
 </table>
 </div>
-<p>There are three choices, and the line of text underneath the dropdown
-explains whichever one you have picked:</p>
+<p>There are three choices, and the line of text underneath the dropdown explains whichever one you have picked:</p>
 <ul>
-<li><strong>Paste</strong> — copies the transcript and pastes it into
-the active application.</li>
-<li><strong>SendKeys</strong> — types the transcript into the active app
-as if you entered it yourself.</li>
-<li><strong>DoNotInsert</strong> — keeps the transcript inside Mutation
-without sending it anywhere.</li>
+<li><strong>Paste</strong> — copies the transcript and pastes it into the active application.</li>
+<li><strong>SendKeys</strong> — types the transcript into the active app as if you entered it yourself.</li>
+<li><strong>DoNotInsert</strong> — keeps the transcript inside Mutation without sending it anywhere.</li>
 </ul>
-<p>Full details: <a href="dictation.html">Dictation: turning speech into
-text</a>.</p>
+<p>Full details: <a href="dictation.html">Dictation: turning speech into text</a>.</p>
 <hr />
 <h2 id="the-visual-capture-card">The Visual Capture card</h2>
-<p>Screenshots, and pulling the text out of pictures. OCR simply means
-reading the words in an image so you can copy them as text.</p>
-<p>Each button in this card shows its current keyboard shortcut in small
-print underneath it, so you never have to go looking.</p>
-<div class="table-wrap">
-<table>
+<p>Screenshots, and pulling the text out of pictures. OCR simply means reading the words in an image so you can copy them as text.</p>
+<p>Each button in this card shows its current keyboard shortcut in small print underneath it, so you never have to go looking.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -410,8 +381,7 @@ print underneath it, so you never have to go looking.</p>
 </tr>
 <tr>
 <td><strong>OCR clipboard (L→R)</strong></td>
-<td>The same, but reading strictly left to right and top to bottom. Use
-this when the normal order jumbles columns or tables.</td>
+<td>The same, but reading strictly left to right and top to bottom. Use this when the normal order jumbles columns or tables.</td>
 </tr>
 <tr>
 <td><strong>Screenshot &amp; OCR</strong></td>
@@ -423,8 +393,7 @@ this when the normal order jumbles columns or tables.</td>
 </tr>
 <tr>
 <td><strong>OCR documents</strong></td>
-<td>Pick several PDFs or images and read them all into one result. A
-progress bar appears while it works.</td>
+<td>Pick several PDFs or images and read them all into one result. A progress bar appears while it works.</td>
 </tr>
 <tr>
 <td><strong>OCR result</strong> (text box)</td>
@@ -432,20 +401,16 @@ progress bar appears while it works.</td>
 </tr>
 <tr>
 <td><strong>Download OCR result</strong></td>
-<td>Saves that text to a document. Stays greyed out until there is
-something to save.</td>
+<td>Saves that text to a document. Stays greyed out until there is something to save.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="screen-capture-and-ocr.html">Screenshots and
-reading text from images</a>.</p>
+<p>Full details: <a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a>.</p>
 <hr />
 <h2 id="the-voice--speech-card">The Voice &amp; Speech card</h2>
-<p>This is the read-aloud feature. Its subtitle says it well: speak the
-current clipboard contents and tune the voice.</p>
-<div class="table-wrap">
-<table>
+<p>This is the read-aloud feature. Its subtitle says it well: speak the current clipboard contents and tune the voice.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Control</th>
@@ -467,8 +432,7 @@ current clipboard contents and tune the voice.</p>
 </tr>
 <tr>
 <td><strong>Announce reading time at start</strong> (on/off)</td>
-<td>Speaks an estimate of how long the text will take before it starts
-reading.</td>
+<td>Speaks an estimate of how long the text will take before it starts reading.</td>
 </tr>
 <tr>
 <td><strong>Announce progress while reading</strong> (on/off)</td>
@@ -480,22 +444,19 @@ reading.</td>
 </tr>
 <tr>
 <td><strong>Speak selection</strong></td>
-<td>Copies whatever is highlighted in the app you were in, and reads
-that.</td>
+<td>Copies whatever is highlighted in the app you were in, and reads that.</td>
 </tr>
 <tr>
 <td><strong>Restart</strong></td>
 <td>Starts again from the beginning, ignoring the saved position.</td>
 </tr>
 <tr>
-<td><strong>Skip sentence backward</strong> / <strong>Skip sentence
-forward</strong></td>
+<td><strong>Skip sentence backward</strong> / <strong>Skip sentence forward</strong></td>
 <td>Jump one sentence back or forward.</td>
 </tr>
 <tr>
 <td><strong>Position</strong></td>
-<td>Speaks where you are: the sentence, the percentage, and the time
-left.</td>
+<td>Speaks where you are: the sentence, the percentage, and the time left.</td>
 </tr>
 <tr>
 <td><strong>Speak to file</strong></td>
@@ -504,44 +465,26 @@ left.</td>
 </tbody>
 </table>
 </div>
-<p>Full details: <a href="read-aloud.html">Having text read
-aloud</a>.</p>
+<p>Full details: <a href="read-aloud.html">Having text read aloud</a>.</p>
 <hr />
 <h2 id="status-messages">Status messages</h2>
-<p>Mutation tells you what it is doing through a status bar that appears
-in the <strong>top right</strong> of the window, not at the bottom. It
-stays out of the way until there is something to say — &quot;Transcribing&quot;,
-&quot;OCR complete&quot;, an error — then slides into view. It is announced to
-screen readers politely, so it will not interrupt you mid-sentence.
-Close it with its own close button, or leave it; it goes away on its
-own.</p>
+<p>Mutation tells you what it is doing through a status bar that appears in the <strong>top right</strong> of the window, not at the bottom. It stays out of the way until there is something to say — &quot;Transcribing&quot;, &quot;OCR complete&quot;, an error — then slides into view. It is announced to screen readers politely, so it will not interrupt you mid-sentence. Close it with its own close button, or leave it; it goes away on its own.</p>
 <hr />
 <h2 id="two-useful-habits">Two useful habits</h2>
-<p><strong>You rarely need this window.</strong> Every button here has
-an equivalent shortcut that works from any app. The window is for
-setting things up and checking results. See <a href="keyboard-shortcuts.html">Keyboard shortcuts</a> for the full list,
-and remember that every shortcut can be changed in Settings.</p>
-<p><strong>The window remembers itself.</strong> Mutation saves the
-window&#39;s position and size when you close it, and puts it back exactly
-there next time. The very first time you run it, with no saved size yet,
-it opens at three-quarters of your screen, centred. If you later unplug
-a monitor, Mutation nudges the window back onto a screen you can
-actually see.</p>
+<p><strong>You rarely need this window.</strong> Every button here has an equivalent shortcut that works from any app. The window is for setting things up and checking results. See <a href="keyboard-shortcuts.html">Keyboard shortcuts</a> for the full list, and remember that every shortcut can be changed in Settings.</p>
+<p><strong>The window remembers itself.</strong> Mutation saves the window's position and size when you close it, and puts it back exactly there next time. The very first time you run it, with no saved size yet, it opens at three-quarters of your screen, centred. If you later unplug a monitor, Mutation nudges the window back onto a screen you can actually see.</p>
 <hr />
 <h2 id="where-to-next">Where to next</h2>
 <ul>
-<li><a href="getting-started.html">Getting started</a> — set up your
-keys and take Mutation for its first run.</li>
-<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the
-shortcuts behind every button on this window.</li>
-<li><a href="settings.html">The Settings window</a> — everything the
-main window does not show.</li>
-<li><a href="accessibility.html">Screen reader and accessibility
-notes</a> — navigating Mutation without looking at it.</li>
+<li><a href="getting-started.html">Getting started</a> — set up your keys and take Mutation for its first run.</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the shortcuts behind every button on this window.</li>
+<li><a href="settings.html">The Settings window</a> — everything the main window does not show.</li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a> — navigating Mutation without looking at it.</li>
 </ul>
+
 <footer>
 <p><a href="index.html">Back to the contents page</a></p>
-<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
 </footer>
 </main>
 </div>

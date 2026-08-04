@@ -4,37 +4,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Having text read aloud - Mutation User Guide</title>
-<meta name="generator" content="pandoc 3.9.0.2" />
-<style type="text/css">
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+/*
+	userguide.css — styling for the generated Mutation user guide pages.
+
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
+
+	Built to stay readable for a screen-reader and ZoomText user: real focus
+	outlines, generous text size, high contrast in both themes, and a print
+	stylesheet that drops the navigation.
+*/
+
 :root{
-color-scheme: light dark;
---bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
---accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
---quote:#eef4fb; --quote-rule:#0b5fa5;
+	color-scheme: light dark;
+	--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+	--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+	--quote:#eef4fb; --quote-rule:#0b5fa5;
 }
 @media (prefers-color-scheme: dark){
-:root{
---bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
---accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
---quote:#1c2530; --quote-rule:#6fb3ff;
+	:root{
+		--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+		--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+		--quote:#1c2530; --quote-rule:#6fb3ff;
+	}
 }
-}
+
 *{box-sizing:border-box}
 html{font-size:106%}
 body{
-margin:0; background:var(--bg); color:var(--fg);
-font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
-line-height:1.65;
+	margin:0; background:var(--bg); color:var(--fg);
+	font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+	line-height:1.65;
 }
+
 .skip{
-position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
-background:var(--accent); color:var(--accent-fg); font-weight:600;
+	position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+	background:var(--accent); color:var(--accent-fg); font-weight:600;
 }
 .skip:focus{left:0}
+
 .layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+
 .sidebar{
-flex:0 0 16rem; position:sticky; top:1.5rem;
-background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+	flex:0 0 16rem; position:sticky; top:1.5rem;
+	background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
 }
 .sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
 .sidebar ol{list-style:none; margin:0; padding:0}
@@ -42,45 +58,67 @@ background:var(--surface); border:1px solid var(--rule); border-radius:10px; pad
 .sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
 .sidebar a:hover{background:var(--bg); text-decoration:underline}
 .sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+
 main{flex:1 1 auto; min-width:0; max-width:52rem}
+
 h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
 h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
 h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
 h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
 p{margin:.7rem 0}
+
 a{color:var(--accent)}
 a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
 ul,ol{margin:.7rem 0; padding-left:1.6rem}
 li{margin:.3rem 0}
+
 code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
 pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
 pre code{background:none; padding:0; font-size:.9em}
+
 blockquote{
-margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
-border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+	margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+	border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
+/*
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
+*/
 .table-wrap{overflow-x:auto; margin:1rem 0}
 table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
+
 hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
-footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
-@media (max-width:860px){
 
-.layout{flex-direction:column; align-items:stretch; padding:1rem}
-.sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none; width:100%; min-width:0}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+
+@media (max-width:860px){
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
+	.sidebar{position:static; flex:1 1 auto; width:100%}
+	main{max-width:none; width:100%; min-width:0}
 }
+
 @media print{
-.sidebar,.skip{display:none}
-body{background:#fff; color:#000}
-.layout{display:block; max-width:none; padding:0}
-a{color:#000}
+	.sidebar,.skip{display:none}
+	body{background:#fff; color:#000}
+	.layout{display:block; max-width:none; padding:0}
+	a{color:#000}
 }
+
 </style>
 </head>
 <body>
@@ -104,60 +142,50 @@ a{color:#000}
 <li><a href="troubleshooting.html">Troubleshooting</a></li>
 </ol>
 </nav>
+
 <main id="content" tabindex="-1">
 <h1 id="having-text-read-aloud">Having text read aloud</h1>
-<p>Mutation can read text out loud to you. Copy an email, a report, a
-long article — then press a shortcut and listen while you do something
-else.</p>
-<p>Once you know a handful of shortcuts you can drive it like a music
-player: play, pause, skip ahead, jump back.</p>
+<p>Mutation can read text out loud to you. Copy an email, a report, a long article —
+then press a shortcut and listen while you do something else.</p>
+<p>Once you know a handful of shortcuts you can drive it like a music player: play,
+pause, skip ahead, jump back.</p>
 <h2 id="starting-a-reading">Starting a reading</h2>
-<p>There are two ways to get text into Mutation&#39;s ears.</p>
-<p><strong>Read the clipboard.</strong> Copy some text anywhere (the
-usual <strong>Ctrl+C</strong>), then press
+<p>There are two ways to get text into Mutation's ears.</p>
+<p><strong>Read the clipboard.</strong> Copy some text anywhere (the usual <strong>Ctrl+C</strong>), then press
 <strong>Ctrl+Shift+Alt+Q</strong>. Mutation starts reading it.</p>
-<p><strong>Read what you have selected.</strong> Highlight text in any
-app and press <strong>Ctrl+Shift+Q</strong>. Mutation grabs the
-selection for you, so you don&#39;t need to copy first.</p>
-<p>Both shortcuts are global. That means they work no matter which app
-is in front — you never have to switch back to Mutation. All of these
-shortcuts are just defaults, and you can change any of them in
-<strong>Settings</strong> (<strong>Ctrl+Comma</strong>) on the
+<p><strong>Read what you have selected.</strong> Highlight text in any app and press
+<strong>Ctrl+Shift+Q</strong>. Mutation grabs the selection for you, so you don't need to copy
+first.</p>
+<p>Both shortcuts are global. That means they work no matter which app is in front —
+you never have to switch back to Mutation. All of these shortcuts are just
+defaults, and you can change any of them in <strong>Settings</strong> (<strong>Ctrl+Comma</strong>) on the
 <strong>Hotkeys</strong> tab.</p>
-<p>If you prefer buttons, the <strong>Voice &amp; Speech</strong> card
-on the main window has <strong>Speak clipboard</strong> and
-<strong>Speak selection</strong> buttons that do the same thing.</p>
+<p>If you prefer buttons, the <strong>Voice &amp; Speech</strong> card on the main window has <strong>Speak
+clipboard</strong> and <strong>Speak selection</strong> buttons that do the same thing.</p>
 <h2 id="pausing-and-picking-up-again">Pausing and picking up again</h2>
-<p>There are two ways to interrupt a reading, and they behave slightly
-differently.</p>
-<p><strong>Pause properly: Ctrl+Shift+Space.</strong> This is the real
-pause button. Press it while Mutation is reading and it says &quot;Paused.&quot;
-Press it again and it says &quot;Resuming.&quot; and carries on. If nothing is
-being read, it tells you &quot;Nothing to resume.&quot;</p>
-<p>When it resumes, it rewinds a few words first — five by default — so
-you get your bearings instead of being dropped mid-sentence. That rewind
-only happens if your pause was long enough to lose the thread. A quick
-pause of a few seconds picks up from exactly where it stopped. By
-default, &quot;long enough&quot; means more than 10 seconds.</p>
-<p>Both of those numbers are yours to set, on the <strong>Text to
-Speech</strong> tab in <strong>Settings</strong>: &quot;Rewind on resume
-(words)&quot; (0 to 20, where 0 means no rewind at all) and &quot;Rewind on resume
-after (seconds)&quot; (set it to 0 to always rewind, however brief the
-pause).</p>
-<p><strong>Stop with the same key you started with:
-Ctrl+Shift+Alt+Q.</strong> Pressing the speak shortcut again while it is
-reading stops it, and Mutation says &quot;Stopped.&quot; Press it once more and it
-picks the same text up again from where it left off — so in everyday use
-it works like a play/stop button on the one key.</p>
-<p>One handy detail: if you copy something new before pressing it again,
-Mutation notices and reads the <em>new</em> clipboard text instead of
-carrying on with the old one. It tells you so: &quot;Speaking new clipboard
-text.&quot;</p>
+<p>There are two ways to interrupt a reading, and they behave slightly differently.</p>
+<p><strong>Pause properly: Ctrl+Shift+Space.</strong> This is the real pause button. Press it while
+Mutation is reading and it says &quot;Paused.&quot; Press it again and it says &quot;Resuming.&quot; and
+carries on. If nothing is being read, it tells you &quot;Nothing to resume.&quot;</p>
+<p>When it resumes, it rewinds a few words first — five by default — so you get your
+bearings instead of being dropped mid-sentence. That rewind only happens if your
+pause was long enough to lose the thread. A quick pause of a few seconds picks up
+from exactly where it stopped. By default, &quot;long enough&quot; means more than 10 seconds.</p>
+<p>Both of those numbers are yours to set, on the <strong>Text to Speech</strong> tab in
+<strong>Settings</strong>: &quot;Rewind on resume (words)&quot; (0 to 20, where 0 means no rewind at all)
+and &quot;Rewind on resume after (seconds)&quot; (set it to 0 to always rewind, however brief
+the pause).</p>
+<p><strong>Stop with the same key you started with: Ctrl+Shift+Alt+Q.</strong> Pressing the speak
+shortcut again while it is reading stops it, and Mutation says &quot;Stopped.&quot; Press it
+once more and it picks the same text up again from where it left off — so in
+everyday use it works like a play/stop button on the one key.</p>
+<p>One handy detail: if you copy something new before pressing it again, Mutation
+notices and reads the <em>new</em> clipboard text instead of carrying on with the old one.
+It tells you so: &quot;Speaking new clipboard text.&quot;</p>
 <h2 id="moving-around-the-text">Moving around the text</h2>
-<p>You can move through the text sentence by sentence, the way you skip
-tracks on a music player.</p>
-<div class="table-wrap">
-<table>
+<p>You can move through the text sentence by sentence, the way you skip tracks on a
+music player.</p>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">What you want</th>
@@ -188,131 +216,107 @@ tracks on a music player.</p>
 </tbody>
 </table>
 </div>
-<p>Skipping back is a little cleverer than it looks. If you have only
-just landed on a sentence, pressing back jumps to the previous one —
-because you probably missed that one. If you have been listening to the
-current sentence for a moment, pressing back restarts the current
-sentence instead — because you probably want to hear that bit again.</p>
-<p>The dividing line is a short grace window, 1.5 seconds by default.
-You can adjust it under &quot;Skip-back grace window (milliseconds)&quot; on the
-<strong>Text to Speech</strong> tab. A larger value makes stepping back
-to the previous sentence easier; a smaller value favours re-reading the
-sentence you are on.</p>
-<p>If you skip past the end, Mutation says &quot;End of text.&quot; If you skip
-back before the start, it says &quot;Beginning of text.&quot;</p>
-<p>The <strong>Position</strong> button on the <strong>Voice &amp;
-Speech</strong> card (or <strong>Ctrl+Shift+P</strong>) tells you where
-you are in the text. You hear something like &quot;Sentence 4 of 22, about
-40% through, about 2 minutes left.&quot; If nothing is being read, it simply
-says &quot;Not currently reading.&quot;</p>
-<h2 id="choosing-a-voice-speed-and-volume">Choosing a voice, speed, and
-volume</h2>
-<p>The <strong>Voice &amp; Speech</strong> card on the main window holds
-three controls.</p>
+<p>Skipping back is a little cleverer than it looks. If you have only just landed on a
+sentence, pressing back jumps to the previous one — because you probably missed
+that one. If you have been listening to the current sentence for a moment, pressing
+back restarts the current sentence instead — because you probably want to hear that
+bit again.</p>
+<p>The dividing line is a short grace window, 1.5 seconds by default. You can adjust
+it under &quot;Skip-back grace window (milliseconds)&quot; on the <strong>Text to Speech</strong> tab. A
+larger value makes stepping back to the previous sentence easier; a smaller value
+favours re-reading the sentence you are on.</p>
+<p>If you skip past the end, Mutation says &quot;End of text.&quot; If you skip back before the
+start, it says &quot;Beginning of text.&quot;</p>
+<p>The <strong>Position</strong> button on the <strong>Voice &amp; Speech</strong> card (or <strong>Ctrl+Shift+P</strong>) tells
+you where you are in the text. You hear something like &quot;Sentence 4 of 22, about 40%
+through, about 2 minutes left.&quot; If nothing is being read, it simply says &quot;Not
+currently reading.&quot;</p>
+<h2 id="choosing-a-voice-speed-and-volume">Choosing a voice, speed, and volume</h2>
+<p>The <strong>Voice &amp; Speech</strong> card on the main window holds three controls.</p>
 <ul>
-<li><strong>Voice</strong> — a list of every voice installed on Windows,
-plus &quot;(System default)&quot;. Pick one and Mutation immediately speaks a
-short sample in that voice, so you can hear it before committing.</li>
-<li><strong>Rate</strong> — how fast it reads, from -10 (slow) to +10
-(fast). The default is 8, which is brisk. Slide it down if that is too
-quick.</li>
-<li><strong>Volume</strong> — 0 to 100%, separate from your Windows
-volume.</li>
+<li><strong>Voice</strong> — a list of every voice installed on Windows, plus &quot;(System default)&quot;.
+Pick one and Mutation immediately speaks a short sample in that voice, so you can
+hear it before committing.</li>
+<li><strong>Rate</strong> — how fast it reads, from -10 (slow) to +10 (fast). The default is 8,
+which is brisk. Slide it down if that is too quick.</li>
+<li><strong>Volume</strong> — 0 to 100%, separate from your Windows volume.</li>
 </ul>
-<p>Your choices are saved automatically. There is no Save button to
-press.</p>
-<p>Want more voices? Install them through Windows&#39; own speech settings,
-and they turn up in Mutation&#39;s Voice list next time.</p>
-<h2 id="being-told-how-long-it-will-take">Being told how long it will
-take</h2>
-<p>Two switches on the <strong>Voice &amp; Speech</strong> card keep you
-informed while you listen.</p>
-<p><strong>Announce reading time at start</strong> speaks a short
-estimate before it begins, such as &quot;Reading approximately 3 minutes of
-text.&quot;</p>
-<p><strong>Announce progress while reading</strong> speaks your progress
-at regular points along the way, such as &quot;50%, about 3 minutes
-left.&quot;</p>
-<p>Short texts stay quiet. On the <strong>Text to Speech</strong> tab in
-<strong>Settings</strong> you can set a minimum length for each
-announcement: &quot;Announce reading time only above (minutes)&quot; and &quot;Announce
-progress only above (minutes)&quot;. Set either to 0 to hear it for any
-length of text. You can also set how often progress is spoken with
-&quot;Announce progress every (percent)&quot; — 25 gives you 25%, 50%, and
-75%.</p>
+<p>Your choices are saved automatically. There is no Save button to press.</p>
+<p>Want more voices? Install them through Windows' own speech settings, and they turn
+up in Mutation's Voice list next time.</p>
+<h2 id="being-told-how-long-it-will-take">Being told how long it will take</h2>
+<p>Two switches on the <strong>Voice &amp; Speech</strong> card keep you informed while you listen.</p>
+<p><strong>Announce reading time at start</strong> speaks a short estimate before it begins, such
+as &quot;Reading approximately 3 minutes of text.&quot;</p>
+<p><strong>Announce progress while reading</strong> speaks your progress at regular points along
+the way, such as &quot;50%, about 3 minutes left.&quot;</p>
+<p>Short texts stay quiet. On the <strong>Text to Speech</strong> tab in <strong>Settings</strong> you can set a
+minimum length for each announcement: &quot;Announce reading time only above (minutes)&quot;
+and &quot;Announce progress only above (minutes)&quot;. Set either to 0 to hear it for any
+length of text. You can also set how often progress is spoken with &quot;Announce
+progress every (percent)&quot; — 25 gives you 25%, 50%, and 75%.</p>
 <h2 id="tidier-reading">Tidier reading</h2>
-<p>Text copied from the web or from notes is often littered with symbols
-that sound awful when read out. So before speaking, Mutation quietly
-cleans the text up. This is on by default.</p>
+<p>Text copied from the web or from notes is often littered with symbols that sound
+awful when read out. So before speaking, Mutation quietly cleans the text up. This
+is on by default.</p>
 <p>Here is what it tidies:</p>
 <ul>
-<li><strong>Remove code blocks</strong> — drops chunks of code (text
-between triple backticks) rather than reading them out.</li>
-<li><strong>Strip bold, italic, and inline-code symbols</strong> —
-removes asterisks, underscores, and backticks, keeping the words between
-them.</li>
-<li><strong>Strip heading marks</strong> — removes leading
-<code>#</code> symbols so headings read as plain text.</li>
-<li><strong>Shorten web links</strong> — reads &quot;link to example.com&quot;
-instead of the full address.</li>
-<li><strong>Strip bullet markers</strong> — removes the <code>-</code>,
-<code>*</code>, or <code>+</code> at the start of list items.</li>
-<li><strong>Expand abbreviations</strong> — &quot;e.g.&quot; becomes &quot;for
-example&quot;, &quot;i.e.&quot; becomes &quot;that is&quot;, &quot;etc.&quot; becomes &quot;et cetera&quot;, and
-&quot;vs.&quot; becomes &quot;versus&quot;.</li>
-<li><strong>Normalise paragraph breaks and whitespace</strong> —
-collapses blank lines and runs of spaces so you don&#39;t sit through long
-silent gaps.</li>
+<li><strong>Remove code blocks</strong> — drops chunks of code (text between triple backticks)
+rather than reading them out.</li>
+<li><strong>Strip bold, italic, and inline-code symbols</strong> — removes asterisks, underscores,
+and backticks, keeping the words between them.</li>
+<li><strong>Strip heading marks</strong> — removes leading <code>#</code> symbols so headings read as plain
+text.</li>
+<li><strong>Shorten web links</strong> — reads &quot;link to example.com&quot; instead of the full address.</li>
+<li><strong>Strip bullet markers</strong> — removes the <code>-</code>, <code>*</code>, or <code>+</code> at the start of list
+items.</li>
+<li><strong>Expand abbreviations</strong> — &quot;e.g.&quot; becomes &quot;for example&quot;, &quot;i.e.&quot; becomes &quot;that
+is&quot;, &quot;etc.&quot; becomes &quot;et cetera&quot;, and &quot;vs.&quot; becomes &quot;versus&quot;.</li>
+<li><strong>Normalise paragraph breaks and whitespace</strong> — collapses blank lines and runs of
+spaces so you don't sit through long silent gaps.</li>
 </ul>
-<p>Each of those is its own switch on the <strong>Text to
-Speech</strong> tab in <strong>Settings</strong>, so you can keep the
-ones you like and turn off the ones you don&#39;t. Above them is a master
-switch, &quot;Enable speech preprocessing&quot;. Turn that off and you hear the
-text exactly as written, symbols and all.</p>
+<p>Each of those is its own switch on the <strong>Text to Speech</strong> tab in <strong>Settings</strong>, so
+you can keep the ones you like and turn off the ones you don't. Above them is a
+master switch, &quot;Enable speech preprocessing&quot;. Turn that off and you hear the text
+exactly as written, symbols and all.</p>
 <blockquote>
-<p>Every setting on the page has a small reset button next to it that
-puts it back to the default, so experimenting is safe.</p>
+<p>Every setting on the page has a small reset button next to it that puts it back
+to the default, so experimenting is safe.</p>
 </blockquote>
-<h2 id="saving-a-reading-as-an-audio-file">Saving a reading as an audio
-file</h2>
-<p>The <strong>Speak to file</strong> button on the <strong>Voice &amp;
-Speech</strong> card takes whatever text is on your clipboard and saves
-it as a spoken audio file (a <code>.wav</code> file) instead of playing
-it. Mutation suggests a name with the date and time in it, and you
-choose where to put it.</p>
-<p>This is useful when you want to listen later — on your phone during a
-commute, for instance — or when you want to keep a spoken copy of a
-document.</p>
-<h2 id="when-mutation-cant-read-something">When Mutation can&#39;t read
-something</h2>
-<p>If there is nothing to read, Mutation tells you out loud rather than
-sitting silently. You will hear one of these:</p>
+<h2 id="saving-a-reading-as-an-audio-file">Saving a reading as an audio file</h2>
+<p>The <strong>Speak to file</strong> button on the <strong>Voice &amp; Speech</strong> card takes whatever text is
+on your clipboard and saves it as a spoken audio file (a <code>.wav</code> file) instead of
+playing it. Mutation suggests a name with the date and time in it, and you choose
+where to put it.</p>
+<p>This is useful when you want to listen later — on your phone during a commute, for
+instance — or when you want to keep a spoken copy of a document.</p>
+<h2 id="when-mutation-cant-read-something">When Mutation can't read something</h2>
+<p>If there is nothing to read, Mutation tells you out loud rather than sitting
+silently. You will hear one of these:</p>
 <ul>
 <li>&quot;No text on the clipboard.&quot; — nothing has been copied yet.</li>
-<li>&quot;The clipboard contains an image, not text. Use OCR to extract text
-first.&quot; — see <a href="screen-capture-and-ocr.html">Screenshots and
-reading text from images</a> for how to pull the words out of a
-picture.</li>
-<li>&quot;The clipboard is in use by another application. Try again in a
-moment.&quot; — just press the shortcut again.</li>
+<li>&quot;The clipboard contains an image, not text. Use OCR to extract text first.&quot; — see
+<a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a> for how to
+pull the words out of a picture.</li>
+<li>&quot;The clipboard is in use by another application. Try again in a moment.&quot; — just
+press the shortcut again.</li>
 </ul>
-<p>Each of these also appears as a message on the main window, and plays
-the failure beep.</p>
+<p>Each of these also appears as a message on the main window, and plays the failure
+beep.</p>
 <h2 id="where-to-next">Where to next</h2>
 <ul>
-<li><a href="screen-capture-and-ocr.html">Screenshots and reading text
-from images</a> — get text out of a picture so it can be read
-aloud.</li>
-<li><a href="settings.html">The Settings window</a> — where the
-<strong>Text to Speech</strong> tab lives.</li>
-<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
-list, and how to change them.</li>
-<li><a href="main-window.html">A tour of the main window</a> — where the
-<strong>Voice &amp; Speech</strong> card sits.</li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a> — get text
+out of a picture so it can be read aloud.</li>
+<li><a href="settings.html">The Settings window</a> — where the <strong>Text to Speech</strong> tab lives.</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full list, and how to change
+them.</li>
+<li><a href="main-window.html">A tour of the main window</a> — where the <strong>Voice &amp; Speech</strong> card
+sits.</li>
 </ul>
+
 <footer>
 <p><a href="index.html">Back to the contents page</a></p>
-<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
 </footer>
 </main>
 </div>

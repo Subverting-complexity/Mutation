@@ -4,37 +4,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The Mutation User Guide</title>
-<meta name="generator" content="pandoc 3.9.0.2" />
-<style type="text/css">
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+/*
+	userguide.css — styling for the generated Mutation user guide pages.
+
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
+
+	Built to stay readable for a screen-reader and ZoomText user: real focus
+	outlines, generous text size, high contrast in both themes, and a print
+	stylesheet that drops the navigation.
+*/
+
 :root{
-color-scheme: light dark;
---bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
---accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
---quote:#eef4fb; --quote-rule:#0b5fa5;
+	color-scheme: light dark;
+	--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+	--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+	--quote:#eef4fb; --quote-rule:#0b5fa5;
 }
 @media (prefers-color-scheme: dark){
-:root{
---bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
---accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
---quote:#1c2530; --quote-rule:#6fb3ff;
+	:root{
+		--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+		--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+		--quote:#1c2530; --quote-rule:#6fb3ff;
+	}
 }
-}
+
 *{box-sizing:border-box}
 html{font-size:106%}
 body{
-margin:0; background:var(--bg); color:var(--fg);
-font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
-line-height:1.65;
+	margin:0; background:var(--bg); color:var(--fg);
+	font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+	line-height:1.65;
 }
+
 .skip{
-position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
-background:var(--accent); color:var(--accent-fg); font-weight:600;
+	position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+	background:var(--accent); color:var(--accent-fg); font-weight:600;
 }
 .skip:focus{left:0}
+
 .layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+
 .sidebar{
-flex:0 0 16rem; position:sticky; top:1.5rem;
-background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+	flex:0 0 16rem; position:sticky; top:1.5rem;
+	background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
 }
 .sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
 .sidebar ol{list-style:none; margin:0; padding:0}
@@ -42,45 +58,67 @@ background:var(--surface); border:1px solid var(--rule); border-radius:10px; pad
 .sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
 .sidebar a:hover{background:var(--bg); text-decoration:underline}
 .sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+
 main{flex:1 1 auto; min-width:0; max-width:52rem}
+
 h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
 h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
 h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
 h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
 p{margin:.7rem 0}
+
 a{color:var(--accent)}
 a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
 ul,ol{margin:.7rem 0; padding-left:1.6rem}
 li{margin:.3rem 0}
+
 code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
 pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
 pre code{background:none; padding:0; font-size:.9em}
+
 blockquote{
-margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
-border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+	margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+	border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
+/*
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
+*/
 .table-wrap{overflow-x:auto; margin:1rem 0}
 table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
+
 hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
-footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
-@media (max-width:860px){
 
-.layout{flex-direction:column; align-items:stretch; padding:1rem}
-.sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none; width:100%; min-width:0}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+
+@media (max-width:860px){
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
+	.sidebar{position:static; flex:1 1 auto; width:100%}
+	main{max-width:none; width:100%; min-width:0}
 }
+
 @media print{
-.sidebar,.skip{display:none}
-body{background:#fff; color:#000}
-.layout{display:block; max-width:none; padding:0}
-a{color:#000}
+	.sidebar,.skip{display:none}
+	body{background:#fff; color:#000}
+	.layout{display:block; max-width:none; padding:0}
+	a{color:#000}
 }
+
 </style>
 </head>
 <body>
@@ -104,184 +142,149 @@ a{color:#000}
 <li><a href="troubleshooting.html">Troubleshooting</a></li>
 </ol>
 </nav>
+
 <main id="content" tabindex="-1">
 <h1 id="the-mutation-user-guide">The Mutation User Guide</h1>
-<p>Welcome. Mutation is a small Windows app that sits quietly in the
-background and gives you a set of keyboard shortcuts that work
-<em>everywhere</em> — in your email, in a meeting, in a spreadsheet, in
-your browser. You don&#39;t have to switch to Mutation to use it. You just
-press a key.</p>
+<p>Welcome. Mutation is a small Windows app that sits quietly in the background and
+gives you a set of keyboard shortcuts that work <em>everywhere</em> — in your email, in a
+meeting, in a spreadsheet, in your browser. You don't have to switch to Mutation to
+use it. You just press a key.</p>
 <p>It does six main jobs for you:</p>
 <ul>
-<li><strong>Mutes every microphone on your PC at once</strong>, so you
-always know for certain whether you are muted.</li>
-<li><strong>Grabs a piece of your screen and pulls the words out of
-it</strong>, so text trapped in a picture becomes text you can copy,
-search and paste.</li>
-<li><strong>Turns what you say into typed text</strong>, so you can
-dictate a message instead of typing it.</li>
-<li><strong>Runs your text past an AI assistant</strong> to fix the
-grammar, shorten it, or turn rough notes into a proper email.</li>
-<li><strong>Reads text out loud</strong>, with proper pause, resume and
-skip controls.</li>
-<li><strong>Turns one keyboard shortcut into another</strong>, so an
-awkward shortcut in some other app becomes an easy one.</li>
+<li><strong>Mutes every microphone on your PC at once</strong>, so you always know for certain
+whether you are muted.</li>
+<li><strong>Grabs a piece of your screen and pulls the words out of it</strong>, so text trapped in
+a picture becomes text you can copy, search and paste.</li>
+<li><strong>Turns what you say into typed text</strong>, so you can dictate a message instead of
+typing it.</li>
+<li><strong>Runs your text past an AI assistant</strong> to fix the grammar, shorten it, or turn
+rough notes into a proper email.</li>
+<li><strong>Reads text out loud</strong>, with proper pause, resume and skip controls.</li>
+<li><strong>Turns one keyboard shortcut into another</strong>, so an awkward shortcut in some other
+app becomes an easy one.</li>
 </ul>
-<p>Mutation was built by a nearly-blind developer for his own daily
-work, so everything in it can be done from the keyboard, and everything
-it does it also tells you about out loud or with a sound.</p>
+<p>Mutation was built by a nearly-blind developer for his own daily work, so everything
+in it can be done from the keyboard, and everything it does it also tells you about
+out loud or with a sound.</p>
 <hr />
 <h2 id="where-to-start">Where to start</h2>
 <p>If you are brand new, read these two, in this order:</p>
-<ol type="1">
-<li><strong><a href="getting-started.html">Getting started</a></strong>
-— what you need, what happens the first time you run Mutation, and a
-five-minute first try.</li>
-<li><strong><a href="main-window.html">A tour of the main
-window</a></strong> — a quick map of what every part of the screen
-does.</li>
+<ol>
+<li><strong><a href="getting-started.html">Getting started</a></strong> — what you need, what happens the first
+time you run Mutation, and a five-minute first try.</li>
+<li><strong><a href="main-window.html">A tour of the main window</a></strong> — a quick map of what every part
+of the screen does.</li>
 </ol>
-<p>After that, dip into whichever chapter covers the job you want to
-do.</p>
+<p>After that, dip into whichever chapter covers the job you want to do.</p>
 <hr />
 <h2 id="all-the-chapters">All the chapters</h2>
 <h3 id="getting-going">Getting going</h3>
-<div class="table-wrap">
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Chapter</th>
-<th scope="col">What&#39;s in it</th>
+<th scope="col">What's in it</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><a href="getting-started.html">Getting started</a></td>
-<td>What you need before you begin, setting up your account keys, where
-your settings are kept, and a quick first try.</td>
+<td>What you need before you begin, setting up your account keys, where your settings are kept, and a quick first try.</td>
 </tr>
 <tr>
 <td><a href="main-window.html">A tour of the main window</a></td>
-<td>Every section of the main screen, what each button does, and where
-to read more.</td>
+<td>Every section of the main screen, what each button does, and where to read more.</td>
 </tr>
 </tbody>
 </table>
 </div>
 <h3 id="the-things-mutation-does">The things Mutation does</h3>
-<div class="table-wrap">
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Chapter</th>
-<th scope="col">What&#39;s in it</th>
+<th scope="col">What's in it</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><a href="microphone.html">Muting your microphone</a></td>
-<td>One shortcut to mute and unmute every microphone at once, the
-confirmation beeps, the input level meter, and pinning your input
-level.</td>
+<td>One shortcut to mute and unmute every microphone at once, the confirmation beeps, the input level meter, and pinning your input level.</td>
 </tr>
 <tr>
-<td><a href="dictation.html">Dictation: turning speech into
-text</a></td>
-<td>Recording your voice and getting text back, choosing a transcription
-service, where the text is delivered, replaying past recordings, and
-transcribing files you already have.</td>
+<td><a href="dictation.html">Dictation: turning speech into text</a></td>
+<td>Recording your voice and getting text back, choosing a transcription service, where the text is delivered, replaying past recordings, and transcribing files you already have.</td>
 </tr>
 <tr>
-<td><a href="screen-capture-and-ocr.html">Screenshots and reading text
-from images</a></td>
-<td>Capturing part of your screen with the mouse or the keyboard,
-pulling the text out of pictures and PDFs, and choosing the right
-reading order.</td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></td>
+<td>Capturing part of your screen with the mouse or the keyboard, pulling the text out of pictures and PDFs, and choosing the right reading order.</td>
 </tr>
 <tr>
 <td><a href="read-aloud.html">Having text read aloud</a></td>
-<td>Reading the clipboard or your selection out loud, pausing and
-resuming, skipping around sentence by sentence, and picking a voice,
-speed and volume.</td>
+<td>Reading the clipboard or your selection out loud, pausing and resuming, skipping around sentence by sentence, and picking a voice, speed and volume.</td>
 </tr>
 <tr>
 <td><a href="ai-prompts.html">Using AI prompts on your text</a></td>
-<td>Saving your own instructions like &quot;fix the grammar&quot; or &quot;turn this
-into an email&quot;, giving each one a shortcut, and choosing which AI model
-runs it.</td>
+<td>Saving your own instructions like &quot;fix the grammar&quot; or &quot;turn this into an email&quot;, giving each one a shortcut, and choosing which AI model runs it.</td>
 </tr>
 <tr>
-<td><a href="transcript-formatting.html">Automatic find-and-replace
-rules</a></td>
-<td>Teaching Mutation to fix the words it always gets wrong, and to
-strip out filler, automatically.</td>
+<td><a href="transcript-formatting.html">Automatic find-and-replace rules</a></td>
+<td>Teaching Mutation to fix the words it always gets wrong, and to strip out filler, automatically.</td>
 </tr>
 </tbody>
 </table>
 </div>
 <h3 id="settings-and-reference">Settings and reference</h3>
-<div class="table-wrap">
-<table>
+<div class="table-wrap"><table>
 <thead>
 <tr>
 <th scope="col">Chapter</th>
-<th scope="col">What&#39;s in it</th>
+<th scope="col">What's in it</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></td>
-<td>The full list of shortcuts and their defaults, how to change one,
-and how to make one shortcut stand in for another.</td>
+<td>The full list of shortcuts and their defaults, how to change one, and how to make one shortcut stand in for another.</td>
 </tr>
 <tr>
 <td><a href="settings.html">The Settings window</a></td>
-<td>A guided walk through every settings page, what each option does,
-and how to put things back the way they were.</td>
+<td>A guided walk through every settings page, what each option does, and how to put things back the way they were.</td>
 </tr>
 <tr>
-<td><a href="accessibility.html">Screen reader and accessibility
-notes</a></td>
-<td>How Mutation works with a screen reader and ZoomText, what it
-announces, and the sounds it uses to tell you what happened.</td>
+<td><a href="accessibility.html">Screen reader and accessibility notes</a></td>
+<td>How Mutation works with a screen reader and ZoomText, what it announces, and the sounds it uses to tell you what happened.</td>
 </tr>
 <tr>
 <td><a href="troubleshooting.html">Troubleshooting</a></td>
-<td>When something doesn&#39;t work: the usual causes, the quick fixes, and
-where the log file lives.</td>
+<td>When something doesn't work: the usual causes, the quick fixes, and where the log file lives.</td>
 </tr>
 </tbody>
 </table>
 </div>
 <hr />
-<h2 id="a-few-things-worth-knowing-up-front">A few things worth knowing
-up front</h2>
+<h2 id="a-few-things-worth-knowing-up-front">A few things worth knowing up front</h2>
 <ul>
-<li><strong>Every shortcut in this guide can be changed.</strong> The
-ones printed here are just what Mutation starts with. If a combination
-clashes with something you already use, go to Settings and pick your own
-— see <a href="keyboard-shortcuts.html">Keyboard shortcuts</a>.</li>
-<li><strong>You only need to set up the parts you want.</strong>
-Mutation asks for account keys for the online services it uses, but they
-are separate. If you only want the microphone mute, you don&#39;t need any
-of them.</li>
-<li><strong>Settings open with Ctrl+Comma</strong> from anywhere in the
-app.</li>
-<li><strong>Most settings have hover help.</strong> If a setting isn&#39;t
-clear, rest your mouse on it, or tab to it with a screen reader — the
-same explanation is available both ways.</li>
+<li><strong>Every shortcut in this guide can be changed.</strong> The ones printed here are just what
+Mutation starts with. If a combination clashes with something you already use, go to
+Settings and pick your own — see <a href="keyboard-shortcuts.html">Keyboard shortcuts</a>.</li>
+<li><strong>You only need to set up the parts you want.</strong> Mutation asks for account keys for
+the online services it uses, but they are separate. If you only want the microphone
+mute, you don't need any of them.</li>
+<li><strong>Settings open with Ctrl+Comma</strong> from anywhere in the app.</li>
+<li><strong>Most settings have hover help.</strong> If a setting isn't clear, rest your mouse on it,
+or tab to it with a screen reader — the same explanation is available both ways.</li>
 </ul>
 <hr />
 <h2 id="about-this-guide">About this guide</h2>
-<p>The chapters live as Markdown files in the <code>markdown</code>
-folder, and the matching web pages in the <code>html</code> folder are
-generated from them. The Markdown is always the authoritative version.
-To rebuild the web pages after an edit, run
-<code>Build-UserGuide.cmd</code> in the <code>Documentation</code>
-folder.</p>
+<p>The chapters live as Markdown files in the <code>markdown</code> folder, and the matching web
+pages in the <code>html</code> folder are generated from them. The Markdown is always the
+authoritative version. To rebuild the web pages after an edit, run
+<code>Build-UserGuide.cmd</code> in the <code>Documentation</code> folder.</p>
+
 <footer>
 <p><a href="index.html">Back to the contents page</a></p>
-<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
 </footer>
 </main>
 </div>

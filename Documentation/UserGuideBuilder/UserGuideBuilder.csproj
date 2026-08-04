@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<!-- Plain net10.0: this is a build-time tool with no Windows dependencies. -->
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+		<RootNamespace>Mutation.UserGuideBuilder</RootNamespace>
+		<AssemblyName>UserGuideBuilder</AssemblyName>
+		<Platforms>AnyCPU;ARM32;ARM64;x64</Platforms>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Markdig" Version="0.44.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			The page shell and stylesheet are embedded so the tool needs no files
+			beside it at run time and works whatever the working directory is.
+			They stay ordinary editable files in assets/ - edit and rebuild.
+		-->
+		<EmbeddedResource Include="Assets\userguide-template.html" />
+		<EmbeddedResource Include="Assets\userguide.css" />
+	</ItemGroup>
+
+</Project>
