@@ -276,6 +276,69 @@ public class UserGuideBuilderTests
 		Assert.Contains('\n', html);
 	}
 
+	// Same reasoning as the LF rule above: the pages are committed, so a footer date on
+	// every page would rewrite all 13 on the first rebuild of a new day, burying the
+	// edits that matter and colliding between concurrent branches.
+	[Fact]
+	public void Render_dates_only_the_contents_page()
+	{
+		PageTemplate template = PageTemplate.Load("Mutation User Guide");
+		var builtOn = new DateTimeOffset(2026, 8, 5, 9, 0, 0, TimeSpan.Zero);
+		GuideChapter contents = Chapter("index");
+		GuideChapter dictation = Chapter("dictation");
+		IReadOnlyList<GuideChapter> all = [contents, dictation];
+
+		string contentsHtml = template.Render(contents, "<p>Body</p>", all, builtOn);
+		string chapterHtml = template.Render(dictation, "<p>Body</p>", all, builtOn);
+
+		Assert.Contains("Generated from the Markdown source on 5 August 2026.", contentsHtml, StringComparison.Ordinal);
+		Assert.DoesNotContain("Generated from the Markdown source", chapterHtml, StringComparison.Ordinal);
+	}
+
+	// Dropping the date must not drop the warning that goes with it, or someone edits a
+	// generated page by hand and loses the work on the next build.
+	[Fact]
+	public void Render_keeps_the_do_not_edit_warning_on_every_page()
+	{
+		PageTemplate template = PageTemplate.Load("Mutation User Guide");
+		GuideChapter contents = Chapter("index");
+		GuideChapter dictation = Chapter("dictation");
+		IReadOnlyList<GuideChapter> all = [contents, dictation];
+
+		foreach (GuideChapter chapter in all)
+		{
+			string html = template.Render(chapter, "<p>Body</p>", all, DateTimeOffset.Now);
+
+			Assert.Contains("do not edit these HTML pages by hand", html, StringComparison.Ordinal);
+			Assert.Contains(@"<p><a href=""index.html"">Back to the contents page</a></p>", html, StringComparison.Ordinal);
+		}
+	}
+
+	// The whole point: rebuilding on a later day must leave every chapter page
+	// byte-identical, so only real wording changes show up in the diff.
+	[Fact]
+	public void Render_is_byte_identical_for_a_chapter_rebuilt_on_a_later_day()
+	{
+		PageTemplate template = PageTemplate.Load("Mutation User Guide");
+		GuideChapter dictation = Chapter("dictation");
+		IReadOnlyList<GuideChapter> all = [Chapter("index"), dictation];
+
+		string today = template.Render(dictation, "<p>Body</p>", all, new DateTimeOffset(2026, 8, 5, 9, 0, 0, TimeSpan.Zero));
+		string nextYear = template.Render(dictation, "<p>Body</p>", all, new DateTimeOffset(2027, 1, 30, 22, 0, 0, TimeSpan.Zero));
+
+		Assert.Equal(today, nextYear);
+	}
+
+	[Theory]
+	[InlineData("index", true)]
+	[InlineData("INDEX", true)]
+	[InlineData("dictation", false)]
+	[InlineData("settings", false)]
+	public void IsContentsPage_identifies_the_contents_page(string slug, bool expected)
+	{
+		Assert.Equal(expected, Chapter(slug).IsContentsPage);
+	}
+
 	[Fact]
 	public void Render_escapes_chapter_titles_in_the_navigation()
 	{

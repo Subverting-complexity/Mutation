@@ -12,4 +12,12 @@ public sealed record GuideChapter(
 	string SourcePath,
 	string Slug,
 	string OutputFileName,
-	string Title);
+	string Title)
+{
+	/// <summary>
+	/// Whether this is the guide's contents page — the one page that carries the build
+	/// date in its footer.
+	/// </summary>
+	public bool IsContentsPage =>
+		string.Equals(Slug, ChapterDiscovery.ContentsSlug, StringComparison.OrdinalIgnoreCase);
+}

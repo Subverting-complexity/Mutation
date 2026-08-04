@@ -94,6 +94,15 @@ the current page, a `<main>` landmark, headings in document order, `scope="col"`
 every table header, visible focus outlines, and a light/dark theme that follows the
 reader's Windows setting. There is also a print stylesheet that drops the navigation.
 
+The output is also **reproducible**: rebuild on a different day and only pages whose
+Markdown changed come out different. That is deliberate, because the pages are
+committed — a build date in every footer would rewrite all 13 on the first rebuild of a
+new day, burying the real edits and colliding between branches. So only `index.html`
+carries the "Generated from the Markdown source on …" line; every other page keeps the
+"do not edit by hand" warning without a date. Line endings are forced to LF for the
+same reason. If you add anything else that varies per build, put it on the contents
+page too, or leave it out.
+
 > **Why tables are wrapped in a div.** A wide table has to scroll sideways in a narrow
 > window — including at high ZoomText magnification, which shrinks the usable viewport
 > the same way. Doing that with `table { display: block }` costs the element its
