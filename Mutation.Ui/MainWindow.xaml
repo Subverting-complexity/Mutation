@@ -78,44 +78,55 @@
                 <FontIcon Glyph="&#xE700;" FontFamily="Segoe Fluent Icons"/>
             </Button>
 
-            <StackPanel Grid.Column="1" Margin="32,24,32,12" Spacing="4">
-                <TextBlock Text="Mutation Workspace" Style="{StaticResource TitleTextStyle}" AutomationProperties.Name="Application Title" />
-                <TextBlock Text="Capture ideas, format transcripts, and automate workflows from one polished surface." Style="{StaticResource SubtitleTextStyle}" />
-            </StackPanel>
+            <!--
+                Title on the left, User guide button on the right, sharing the same
+                column as the content below so the button lines up with the cards.
+                The button column is Auto so its text never wraps; the title takes
+                whatever is left and wraps instead when the window is narrow.
+            -->
+            <Grid Grid.Column="1" Margin="32,24,32,12" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <!-- User guide (Top Right) -->
-            <Button
-                x:Name="UserGuideButton"
-                Grid.Column="2"
-                Style="{StaticResource SubtleButtonStyle}"
-                Margin="0,24,16,12"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top"
-                AccessKey="G"
-                Click="UserGuideButton_Click"
-                AutomationProperties.Name="User guide"
-                AutomationProperties.HelpText="Read the documentation. Opens the Mutation user guide in your web browser."
-                ToolTipService.ToolTip="Read the documentation (opens in your browser)">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon
-                        Glyph="&#xE897;"
-                        FontFamily="Segoe Fluent Icons"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="User guide" TextWrapping="Wrap" />
-                        <TextBlock
-                            Text="Read the documentation"
-                            Style="{StaticResource CaptionTextStyle}"
-                            TextWrapping="Wrap"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </Grid>
-            </Button>
+                <StackPanel Spacing="4" VerticalAlignment="Top">
+                    <TextBlock Text="Mutation Workspace" Style="{StaticResource TitleTextStyle}" AutomationProperties.Name="Application Title" />
+                    <TextBlock Text="Capture ideas, format transcripts, and automate workflows from one polished surface." Style="{StaticResource SubtitleTextStyle}" />
+                </StackPanel>
+
+                <!-- User guide (Top Right) -->
+                <Button
+                    x:Name="UserGuideButton"
+                    Grid.Column="1"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    VerticalAlignment="Top"
+                    AccessKey="G"
+                    Click="UserGuideButton_Click"
+                    AutomationProperties.Name="User guide"
+                    AutomationProperties.HelpText="Read the documentation. Opens the Mutation user guide in your web browser."
+                    ToolTipService.ToolTip="Read the documentation (opens in your browser)">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Glyph="&#xE897;"
+                            FontFamily="Segoe Fluent Icons"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="User guide" TextWrapping="NoWrap" />
+                            <TextBlock
+                                Text="Read the documentation"
+                                Style="{StaticResource CaptionTextStyle}"
+                                TextWrapping="NoWrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Button>
+            </Grid>
         </Grid>
 
         <Grid Grid.Row="1">
