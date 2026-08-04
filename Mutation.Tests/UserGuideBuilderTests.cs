@@ -287,6 +287,97 @@ public class UserGuideBuilderTests
 		Assert.Contains("Tom &amp; Jerry &lt;b&gt;", html, StringComparison.Ordinal);
 	}
 
+	// ---- End to end --------------------------------------------------------
+
+	[Fact]
+	public void Build_renders_every_chapter_and_clears_pages_whose_chapter_is_gone()
+	{
+		using TempGuide guide = new();
+		guide.WriteChapter("index", "# Contents\n\nSee [Dictation](dictation.md).\n");
+		guide.WriteChapter("dictation", "# Dictation\n\nHold the key.\n");
+		// A page left behind by a chapter that has since been renamed or deleted.
+		guide.WritePage("removed-chapter.html", "<p>stale</p>");
+
+		GuideBuilder.BuildResult result = GuideBuilder.Build(
+			guide.MarkdownDirectory,
+			guide.HtmlDirectory,
+			"Mutation User Guide",
+			DateTimeOffset.Now);
+
+		Assert.Equal(["index.html", "dictation.html"], result.PagesWritten);
+		Assert.Equal(["removed-chapter.html"], result.StalePagesRemoved);
+		Assert.False(File.Exists(Path.Combine(guide.HtmlDirectory, "removed-chapter.html")));
+
+		string index = guide.ReadPage("index.html");
+		Assert.Contains(@"href=""dictation.html""", index, StringComparison.Ordinal);
+		Assert.Contains("<title>Contents - Mutation User Guide</title>", index, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Build_skips_files_whose_name_starts_with_an_underscore()
+	{
+		using TempGuide guide = new();
+		guide.WriteChapter("index", "# Contents\n");
+		guide.WriteChapter("_draft", "# Not ready yet\n");
+
+		GuideBuilder.BuildResult result = GuideBuilder.Build(
+			guide.MarkdownDirectory,
+			guide.HtmlDirectory,
+			"Mutation User Guide",
+			DateTimeOffset.Now);
+
+		Assert.Equal(["index.html"], result.PagesWritten);
+	}
+
+	[Fact]
+	public void Build_reports_a_readable_error_when_the_markdown_folder_is_missing()
+	{
+		using TempGuide guide = new();
+		string missing = Path.Combine(guide.Root, "nope");
+
+		DirectoryNotFoundException error = Assert.Throws<DirectoryNotFoundException>(
+			() => GuideBuilder.Build(missing, guide.HtmlDirectory, "Mutation User Guide", DateTimeOffset.Now));
+
+		Assert.Contains(missing, error.Message, StringComparison.Ordinal);
+	}
+
+	private sealed class TempGuide : IDisposable
+	{
+		public string Root { get; }
+		public string MarkdownDirectory { get; }
+		public string HtmlDirectory { get; }
+
+		public TempGuide()
+		{
+			Root = Path.Combine(Path.GetTempPath(), "mutation-guide-tests-" + Guid.NewGuid().ToString("n"));
+			MarkdownDirectory = Path.Combine(Root, "markdown");
+			HtmlDirectory = Path.Combine(Root, "html");
+			Directory.CreateDirectory(MarkdownDirectory);
+			Directory.CreateDirectory(HtmlDirectory);
+		}
+
+		public void WriteChapter(string slug, string markdown) =>
+			File.WriteAllText(Path.Combine(MarkdownDirectory, slug + ".md"), markdown);
+
+		public void WritePage(string fileName, string html) =>
+			File.WriteAllText(Path.Combine(HtmlDirectory, fileName), html);
+
+		public string ReadPage(string fileName) =>
+			File.ReadAllText(Path.Combine(HtmlDirectory, fileName));
+
+		public void Dispose()
+		{
+			try
+			{
+				Directory.Delete(Root, recursive: true);
+			}
+			catch (IOException)
+			{
+				// A locked temp file must not fail the test run.
+			}
+		}
+	}
+
 	private static GuideChapter Chapter(string slug) =>
 		new($"{slug}.md", slug, $"{slug}.html", slug);
 
