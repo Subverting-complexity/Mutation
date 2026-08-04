@@ -2,18 +2,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Views;
 
 namespace Mutation.Ui;
 
 public sealed partial class MainWindow
 {
-	// First-run onboarding: show a friendly welcome, then open Settings so the
-	// user can add their API keys. Replaces the old behaviour of opening
-	// Mutation.json in Notepad. Called from App.OnLaunched when no LLM key is
-	// configured.
+	// First-run onboarding: show a friendly welcome, then open Settings on the API keys
+	// page so the user can add their API keys. Replaces the old behaviour of opening
+	// Mutation.json in Notepad. Called from App.OnLaunched when no LLM key is configured.
 	//
 	// The two dialogs must NOT be opened back-to-back in the same continuation:
 	// WinUI throws "Only a single ContentDialog can be open at any time" because
@@ -24,11 +21,13 @@ public sealed partial class MainWindow
 	{
 		await ShowFirstRunWelcomeAsync();
 		await YieldToDispatcherAsync();
-		await ShowSettingsDialogAsync();
+		// The welcome says the Settings window opens "so you can add your keys", so it
+		// opens where the keys are rather than on whichever page happens to be first.
+		await ShowSettingsDialogAsync("apikeys");
 	}
 
 	// Friendly, screen-reader-accessible welcome shown on first run.
-	private async Task ShowFirstRunWelcomeAsync()
+	private Task ShowFirstRunWelcomeAsync()
 	{
 		const string title = "Welcome to Mutation";
 		const string message =
@@ -39,28 +38,7 @@ public sealed partial class MainWindow
 			"All hotkeys are preset and fully editable. The Settings window will now open so you can add your keys. " +
 			"You can reopen it anytime with Ctrl+Comma.";
 
-		if (Content is not FrameworkElement rootElement || rootElement.XamlRoot is null)
-		{
-			System.Windows.Forms.MessageBox.Show(
-				message,
-				title,
-				System.Windows.Forms.MessageBoxButtons.OK,
-				System.Windows.Forms.MessageBoxIcon.Information);
-			return;
-		}
-
-		var dialog = new ContentDialog
-		{
-			Title = title,
-			Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-			CloseButtonText = "Continue",
-			XamlRoot = rootElement.XamlRoot,
-			RequestedTheme = rootElement.ActualTheme
-		};
-		AutomationProperties.SetName(dialog, title);
-		AutomationProperties.SetHelpText(dialog, message);
-
-		await ShowDialogAsync(dialog);
+		return ShowNoticeAsync(title, message, "Continue", NoticeSeverity.Information);
 	}
 
 	// Opens the Settings dialog. Reused by the Settings menu item, the Ctrl+,
@@ -102,29 +80,7 @@ public sealed partial class MainWindow
 			"\n\nThe Settings window will now open on the API keys tab so you can add the missing key. " +
 			"Restart Mutation after saving for the service to become available.";
 
-		if (Content is FrameworkElement rootElement && rootElement.XamlRoot is not null)
-		{
-			var dialog = new ContentDialog
-			{
-				Title = title,
-				Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-				CloseButtonText = "Continue",
-				XamlRoot = rootElement.XamlRoot,
-				RequestedTheme = rootElement.ActualTheme
-			};
-			AutomationProperties.SetName(dialog, title);
-			AutomationProperties.SetHelpText(dialog, message);
-
-			await ShowDialogAsync(dialog);
-		}
-		else
-		{
-			System.Windows.Forms.MessageBox.Show(
-				message,
-				title,
-				System.Windows.Forms.MessageBoxButtons.OK,
-				System.Windows.Forms.MessageBoxIcon.Warning);
-		}
+		await ShowNoticeAsync(title, message, "Continue", NoticeSeverity.Warning);
 
 		// Yield a dispatcher turn so the warning dialog fully closes before the
 		// Settings dialog opens (WinUI allows only one ContentDialog at a time).
