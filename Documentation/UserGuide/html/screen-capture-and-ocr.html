@@ -62,8 +62,8 @@ border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
-table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
-thead,tbody,tr{width:100%}
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
@@ -71,9 +71,10 @@ hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
 footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
 @media (max-width:860px){
-.layout{flex-direction:column; padding:1rem}
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
 .sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none}
+main{max-width:none; width:100%; min-width:0}
 }
 @media print{
 .sidebar,.skip{display:none}
@@ -144,6 +145,7 @@ move it announces the position you are at, the size of the rectangle you
 have built so far, and finally the size of what was captured.</p>
 <p>Think of it as a moving pointer that you park at one corner, pin
 down, and then drag to the other corner.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -184,6 +186,7 @@ it</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>So the quickest possible capture is <strong>Ctrl+A</strong> then
 <strong>Enter</strong>: the whole screen, in two keystrokes.</p>
 <h2 id="the-two-reading-orders">The two reading orders</h2>
@@ -203,6 +206,7 @@ Natural. If it has <em>rows</em>, use Basic.</p>
 same image.</p>
 <h2 id="the-buttons-and-their-shortcuts">The buttons and their
 shortcuts</h2>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -242,6 +246,7 @@ step.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Every one of these shortcuts can be changed in
 <strong>Settings</strong> (<strong>Ctrl+Comma</strong>).</p>
 <p>In all four OCR cases the text lands on your clipboard, ready to

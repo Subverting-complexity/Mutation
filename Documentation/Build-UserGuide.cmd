@@ -19,8 +19,10 @@ cd /d "%~dp0"
 
 REM Pause at the end only when double-clicked, so the window stays open long
 REM enough to read. When run from a prompt or a script, finish and return.
+REM CMDCMDLINE is quoted before echoing: an unquoted path containing & or |
+REM would otherwise be parsed as a command separator.
 set "INTERACTIVE="
-echo %CMDCMDLINE% | find /i "%~nx0" >nul 2>&1 && set "INTERACTIVE=1"
+echo "%CMDCMDLINE%" | find /i "%~nx0" >nul 2>&1 && set "INTERACTIVE=1"
 
 echo.
 echo Building the Mutation user guide...

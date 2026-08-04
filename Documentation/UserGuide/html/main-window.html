@@ -61,8 +61,8 @@ border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
-table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
-thead,tbody,tr{width:100%}
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
@@ -70,9 +70,10 @@ hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
 footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
 @media (max-width:860px){
-.layout{flex-direction:column; padding:1rem}
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
 .sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none}
+main{max-width:none; width:100%; min-width:0}
 }
 @media print{
 .sidebar,.skip{display:none}
@@ -130,6 +131,7 @@ letter.</p>
 <p>Top left is a single <strong>Menu</strong> button (the three-line
 &quot;hamburger&quot; icon). Press <strong>Alt</strong> then <strong>H</strong> to
 open it, or just click it.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -151,6 +153,7 @@ entirely.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>See <a href="settings.html">The Settings window</a> for what is
 inside Settings.</p>
 <hr />
@@ -158,6 +161,7 @@ inside Settings.</p>
 <p>This is the mute switch. It turns every microphone on your PC on or
 off at once, so you never have to hunt for the mute button in whichever
 meeting app you happen to be in.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -198,12 +202,14 @@ effect straight away, even when you are not recording.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="microphone.html">Muting your
 microphone</a>.</p>
 <hr />
 <h2 id="the-speech-to-text-card">The Speech to Text card</h2>
 <p>This is dictation. You press record, you talk, you press stop, and a
 few seconds later your words appear as text.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -256,6 +262,7 @@ service spell things the way you want.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="dictation.html">Dictation: turning speech into
 text</a>.</p>
 <hr />
@@ -264,6 +271,7 @@ text</a>.</p>
 list of instructions for it — &quot;make this into a polite email&quot;,
 &quot;summarise this in three bullets&quot;, and so on. The card&#39;s own description
 says it plainly: configure multiple prompts for LLM processing.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -303,6 +311,7 @@ shortcut.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="ai-prompts.html">Using AI prompts on your
 text</a>.</p>
 <hr />
@@ -310,6 +319,7 @@ text</a>.</p>
 <p>This card has no heading of its own — just two labelled boxes stacked
 one above the other. It is where your dictated words land, and where the
 tidied-up version appears.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -338,6 +348,7 @@ involved, so it is instant.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="transcript-formatting.html">Automatic
 find-and-replace rules</a> and <a href="ai-prompts.html">Using AI
 prompts on your text</a>.</p>
@@ -346,6 +357,7 @@ prompts on your text</a>.</p>
 <p>One small but important setting: it controls where your finished
 transcripts are delivered. The card&#39;s own subtitle is &quot;Control where
 transcripts are delivered.&quot;</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -360,6 +372,7 @@ transcripts are delivered.&quot;</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>There are three choices, and the line of text underneath the dropdown
 explains whichever one you have picked:</p>
 <ul>
@@ -378,6 +391,7 @@ text</a>.</p>
 reading the words in an image so you can copy them as text.</p>
 <p>Each button in this card shows its current keyboard shortcut in small
 print underneath it, so you never have to go looking.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -423,12 +437,14 @@ something to save.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="screen-capture-and-ocr.html">Screenshots and
 reading text from images</a>.</p>
 <hr />
 <h2 id="the-voice--speech-card">The Voice &amp; Speech card</h2>
 <p>This is the read-aloud feature. Its subtitle says it well: speak the
 current clipboard contents and tune the voice.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -487,6 +503,7 @@ left.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Full details: <a href="read-aloud.html">Having text read
 aloud</a>.</p>
 <hr />

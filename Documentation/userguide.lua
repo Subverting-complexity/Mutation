@@ -39,12 +39,25 @@ function Link(el)
 	return nil
 end
 
---- Add scope="col" to the header cells of every table.
+--- Add scope="col" to the header cells of every table, and wrap the table in a
+--- scrollable div.
+---
+--- The wrapper matters for accessibility, not just looks. A wide table has to be
+--- able to scroll sideways on a narrow window, but doing that with
+--- `table { display: block }` drops the element's implicit table semantics in
+--- several browser and screen-reader combinations, so the rows and columns stop
+--- being announced as a table. Scrolling the wrapper instead leaves the table a
+--- table.
 function Table(tbl)
 	for _, row in ipairs(tbl.head.rows) do
 		for _, cell in ipairs(row.cells) do
 			cell.attr.attributes["scope"] = "col"
 		end
 	end
-	return tbl
+
+	return {
+		pandoc.RawBlock("html", '<div class="table-wrap">'),
+		tbl,
+		pandoc.RawBlock("html", "</div>"),
+	}
 end

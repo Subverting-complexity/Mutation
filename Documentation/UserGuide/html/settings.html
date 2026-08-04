@@ -61,8 +61,8 @@ border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
 }
 blockquote p{margin:.3rem 0}
 
-table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
-thead,tbody,tr{width:100%}
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
@@ -70,9 +70,10 @@ hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
 kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
 footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
 @media (max-width:860px){
-.layout{flex-direction:column; padding:1rem}
+
+.layout{flex-direction:column; align-items:stretch; padding:1rem}
 .sidebar{position:static; flex:1 1 auto; width:100%}
-main{max-width:none}
+main{max-width:none; width:100%; min-width:0}
 }
 @media print{
 .sidebar,.skip{display:none}
@@ -143,6 +144,7 @@ simply hides that button.</p>
 <h2 id="the-categories">The categories</h2>
 <h3 id="audio">Audio</h3>
 <p>Your microphone and the little sounds Mutation makes.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -173,9 +175,11 @@ you hear it.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <h3 id="screen-capture--ocr">Screen capture &amp; OCR</h3>
 <p>Reading text out of pictures. OCR just means &quot;pulling the words out
 of an image&quot;.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -217,11 +221,13 @@ delivered — <strong>Ctrl+V</strong> to paste, for example.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The timeout and the &quot;how many at a time&quot; numbers have sensible
 defaults and hover help. Leave them alone unless something is timing out
 on you.</p>
 <h3 id="speech-to-text">Speech to Text</h3>
 <p>Where your dictation gets turned into text.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -264,6 +270,7 @@ think do not bloat the recording.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <blockquote>
 <p>Adding, removing, or editing a service definition takes effect after
 you restart Mutation. The per-service prompt and your choice of active
@@ -276,6 +283,7 @@ hover help if you want to experiment.</p>
 <h3 id="api-keys">API keys</h3>
 <p>Your keys in one place. An API key is a long password that lets
 Mutation talk to a service on your behalf.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -298,10 +306,12 @@ Mutation talk to a service on your behalf.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>A speech service can override its key from the Speech to Text
 section. Otherwise the key here is the one used.</p>
 <h3 id="ai-assistance">AI assistance</h3>
 <p>The AI models Mutation can send your text to.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -328,10 +338,12 @@ temperature empty to use the provider&#39;s own setting.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Your prompts themselves are edited on the main window, not here.</p>
 <h3 id="text-to-speech">Text to Speech</h3>
 <p>How Mutation reads text out loud. Voice, rate and volume live on the
 main window; this page holds everything else.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -370,12 +382,14 @@ means at 25%, 50% and 75%.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The skip-back grace window and the two &quot;only announce above this many
 minutes&quot; numbers have sensible defaults and hover help.</p>
 <h3 id="transcript-formatting">Transcript formatting</h3>
 <p>Your own find-and-replace rules, applied to a transcript when you
 press <strong>Format</strong>. Rules run from top to bottom, so the
 order matters — use the up and down arrows to move them.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -403,10 +417,12 @@ ignored.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <p>See <a href="transcript-formatting.html">Automatic find-and-replace
 rules</a> for the full story.</p>
 <h3 id="interface">Interface</h3>
 <p>Small comforts for the main window.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -434,6 +450,7 @@ if it has ended up off-screen.</td>
 </tr>
 </tbody>
 </table>
+</div>
 <h3 id="hotkeys">Hotkeys</h3>
 <p>Every keyboard shortcut in one place, plus the shortcut router. This
 one has a chapter of its own: <a href="keyboard-shortcuts.html">Keyboard

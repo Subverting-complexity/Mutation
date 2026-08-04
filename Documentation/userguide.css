@@ -74,9 +74,13 @@ blockquote{
 }
 blockquote p{margin:.3rem 0}
 
-/* Pandoc emits bare tables; the wrapper keeps wide ones scrollable on phones. */
-table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
-thead,tbody,tr{width:100%}
+/*
+	The wrapper scrolls, not the table. Setting `display: block` on a <table> to
+	make it scroll costs the element its table semantics in some screen readers,
+	so userguide.lua wraps each table in .table-wrap and the table stays a table.
+*/
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
 th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
 th{background:var(--surface); font-weight:700; text-align:left}
 tbody tr:nth-child(even){background:var(--surface)}
@@ -87,9 +91,15 @@ kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width
 footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
 
 @media (max-width:860px){
-	.layout{flex-direction:column; padding:1rem}
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
 	.sidebar{position:static; flex:1 1 auto; width:100%}
-	main{max-width:none}
+	main{max-width:none; width:100%; min-width:0}
 }
 
 @media print{
