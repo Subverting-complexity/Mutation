@@ -215,6 +215,24 @@ department and Mutation cannot work around it — ask them. Otherwise, check for
 or screen-recording-blocker software, and make sure the window you are capturing is not
 playing protected video.
 
+### Your own beep sounds stopped playing
+
+**What's happening.** At startup Mutation checks every sound file you picked for the
+custom beeps. If one of them has been moved, renamed, deleted, or is not a `.wav` file,
+it cannot be played. Rather than leave you with a silent cue, Mutation switches back to
+its built-in beeps and shows a message titled "Custom Beep Settings Issues", naming each
+file and what is wrong with it.
+
+**What to do.**
+
+1. Read the list — it names each sound and the file it could not use.
+2. Put the file back, or pick a new one: open **Settings** with **Ctrl+Comma**, go to
+   **Audio**, and browse for a `.wav` file for that cue. The small play button lets you
+   hear it before you commit.
+3. Turn **Use custom beeps** back on, and save.
+
+Until you do, everything still works — you just hear Mutation's own beeps.
+
 ## Finding the log file
 
 When something goes wrong, Mutation writes a timestamped entry to a log file called

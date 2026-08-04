@@ -392,6 +392,16 @@ public class OcrManager
         if (!IsOcrConfigured(out string configurationError))
             return new(false, configurationError);
 
+        // The image is captured and the request is going out — the same moment the
+        // dictation end beep marks (issue #268). It used to sound here as a side effect
+        // of OcrService's retry signal beeping on attempt 1; #216 silenced that first
+        // attempt, which was correct for retries and left OCR with no end beep at all.
+        // #269 restored it for dictation and missed this path.
+        //
+        // Raised here rather than in the batch path: that one issues a request per
+        // segment, so a beep each would be a burst, and it reports progress of its own.
+        await PlayBeepSafeAsync(BeepType.End);
+
         using var stream = new InMemoryRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
         encoder.SetSoftwareBitmap(bitmap);

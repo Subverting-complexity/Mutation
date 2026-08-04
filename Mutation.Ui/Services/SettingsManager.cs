@@ -22,6 +22,18 @@ internal class SettingsManager : ISettingsManager
 	public string SettingsFilePath { get; }
 	private string SettingsFileFullPath => Path.GetFullPath(SettingsFilePath);
 
+	/// <summary>
+	/// Custom beep files that could not be used, as found by the most recent
+	/// <see cref="EnsureSettings"/>. Empty when they are all fine or custom beeps are
+	/// off. Custom beeps have been switched off in the settings whenever this is
+	/// non-empty.
+	///
+	/// Deliberately not on <see cref="ISettingsManager"/>: only startup surfaces these,
+	/// and it holds the concrete manager. Everything else consumes settings, not the
+	/// story of how they were loaded.
+	/// </summary>
+	public IReadOnlyList<string> CustomBeepIssues { get; private set; } = Array.Empty<string>();
+
 	public SettingsManager(
 		string settingsFilePath)
 	{
@@ -184,114 +196,17 @@ internal class SettingsManager : ISettingsManager
 			audioSettings.PlaybackSpeed = normalizedSpeed;
 			somethingWasMissing = true;
 		}
-		if (audioSettings.CustomBeepSettings.UseCustomBeeps)
+		// Reported, not announced. This runs before there is a window to host a dialog,
+		// so anything shown from here can only be a bare Win32 message box with no
+		// automation name — nothing a screen reader can work with. The issues are handed
+		// to the caller instead, and App.OnLaunched raises them once the window is ready.
+		var beepIssues = CustomBeepFileValidator.Validate(audioSettings.CustomBeepSettings, File.Exists);
+		if (beepIssues.Count > 0)
 		{
-			string[] allowedExtensions = new[] { ".wav" };
-			var beepIssues = new List<string>();
-
-			string successPath = audioSettings.CustomBeepSettings.BeepSuccessFile ?? string.Empty;
-			string resolvedSuccessPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(successPath);
-			if (string.IsNullOrWhiteSpace(successPath) ||
-				!allowedExtensions.Contains(Path.GetExtension(successPath)?.ToLower()) ||
-				!File.Exists(resolvedSuccessPath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(successPath) && Path.GetExtension(successPath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom success beep must be a .wav file: {successPath}");
-				else
-					beepIssues.Add($"Could not load success beep file: {successPath}");
-			}
-
-			string failurePath = audioSettings.CustomBeepSettings.BeepFailureFile ?? string.Empty;
-			string resolvedFailurePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(failurePath);
-			if (string.IsNullOrWhiteSpace(failurePath) ||
-				!allowedExtensions.Contains(Path.GetExtension(failurePath)?.ToLower()) ||
-				!File.Exists(resolvedFailurePath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(failurePath) && Path.GetExtension(failurePath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom failure beep must be a .wav file: {failurePath}");
-				else
-					beepIssues.Add($"Could not load failure beep file: {failurePath}");
-			}
-
-			string startPath = audioSettings.CustomBeepSettings.BeepStartFile ?? string.Empty;
-			string resolvedStartPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(startPath);
-			if (string.IsNullOrWhiteSpace(startPath) ||
-				!allowedExtensions.Contains(Path.GetExtension(startPath)?.ToLower()) ||
-				!File.Exists(resolvedStartPath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(startPath) && Path.GetExtension(startPath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom start beep must be a .wav file: {startPath}");
-				else
-					beepIssues.Add($"Could not load start beep file: {startPath}");
-			}
-
-			string endPath = audioSettings.CustomBeepSettings.BeepEndFile ?? string.Empty;
-			string resolvedEndPath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(endPath);
-			if (string.IsNullOrWhiteSpace(endPath) ||
-				!allowedExtensions.Contains(Path.GetExtension(endPath)?.ToLower()) ||
-				!File.Exists(resolvedEndPath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(endPath) && Path.GetExtension(endPath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom end beep must be a .wav file: {endPath}");
-				else
-					beepIssues.Add($"Could not load end beep file: {endPath}");
-			}
-
-			string mutePath = audioSettings.CustomBeepSettings.BeepMuteFile ?? string.Empty;
-			string resolvedMutePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(mutePath);
-			if (string.IsNullOrWhiteSpace(mutePath) ||
-				!allowedExtensions.Contains(Path.GetExtension(mutePath)?.ToLower()) ||
-				!File.Exists(resolvedMutePath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(mutePath) && Path.GetExtension(mutePath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom mute beep must be a .wav file: {mutePath}");
-				else
-					beepIssues.Add($"Could not load mute beep file: {mutePath}");
-			}
-
-			string unmutePath = audioSettings.CustomBeepSettings.BeepUnmuteFile ?? string.Empty;
-			string resolvedUnmutePath = audioSettings.CustomBeepSettings.ResolveAudioFilePath(unmutePath);
-			if (string.IsNullOrWhiteSpace(unmutePath) ||
-				!allowedExtensions.Contains(Path.GetExtension(unmutePath)?.ToLower()) ||
-				!File.Exists(resolvedUnmutePath))
-			{
-				somethingWasMissing = true;
-
-				if (!string.IsNullOrWhiteSpace(unmutePath) && Path.GetExtension(unmutePath)?.ToLower() != ".wav")
-					beepIssues.Add($"Custom unmute beep must be a .wav file: {unmutePath}");
-				else
-					beepIssues.Add($"Could not load unmute beep file: {unmutePath}");
-			}
-
-			if (beepIssues.Any())
-			{
-				if (audioSettings.CustomBeepSettings != null)
-					audioSettings.CustomBeepSettings.UseCustomBeeps = false;
-
-				string message =
-					"The following issues were found with the custom beep settings:" + Environment.NewLine + Environment.NewLine +
-					string.Join(Environment.NewLine, beepIssues) + Environment.NewLine + Environment.NewLine +
-					"Falling back to default beep sounds. UseCustomBeeps has been disabled." + Environment.NewLine + Environment.NewLine +
-					"To use custom beeps again, fix the issues above and re-enable UseCustomBeeps in the settings file.";
-
-				System.Windows.Forms.MessageBox.Show(
-					message,
-					"Custom Beep Settings Issues",
-					System.Windows.Forms.MessageBoxButtons.OK,
-					System.Windows.Forms.MessageBoxIcon.Warning
-				);
-			}
+			audioSettings.CustomBeepSettings.UseCustomBeeps = false;
+			somethingWasMissing = true;
 		}
+		CustomBeepIssues = beepIssues;
 
 
 		if (settings.SpeechToTextSettings is null)

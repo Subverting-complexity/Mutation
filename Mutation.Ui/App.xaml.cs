@@ -342,12 +342,22 @@ public partial class App : Application
 					NoticeSeverity.Warning);
 			}
 
-			if (BeepPlayer.LastInitializationIssues.Count > 0 && _window is MainWindow beepWindow)
+			// One notice for both checks. The settings layer rejects a path that is not a
+			// .wav or does not exist and switches custom beeps off; the player then finds
+			// anything that survives that but still will not load (a corrupt or
+			// unreadable file). Either way the user has the same problem to fix.
+			var beepIssues = settingsManager.CustomBeepIssues
+				.Concat(BeepPlayer.LastInitializationIssues)
+				.Distinct(StringComparer.Ordinal)
+				.ToList();
+			if (beepIssues.Count > 0 && _window is MainWindow beepWindow)
 			{
 				await beepWindow.ShowNoticeAsync(
 					"Custom Beep Settings Issues",
 					"The following issues were found with the custom beep settings:\n\n" +
-						string.Join("\n", BeepPlayer.LastInitializationIssues),
+						string.Join("\n", beepIssues) +
+						"\n\nMutation has switched back to its built-in beeps. Fix the files above, then turn " +
+						"Use custom beeps back on under Audio in Settings.",
 					"OK",
 					NoticeSeverity.Warning);
 			}

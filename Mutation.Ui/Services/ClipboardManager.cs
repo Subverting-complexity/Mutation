@@ -44,7 +44,9 @@ public class ClipboardManager
 		return success ? result : (ClipboardKind.Unavailable, string.Empty);
 	}
 
-	public async Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
+	// Virtual for the same reason SetText is: it reaches the real Windows clipboard, so
+	// a test that wants to drive the OCR path has to be able to hand an image in.
+	public virtual async Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
 	{
 		while (attempts-- > 0)
 		{
