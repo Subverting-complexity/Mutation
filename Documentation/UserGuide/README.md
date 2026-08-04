@@ -4,16 +4,19 @@ This folder holds the Mutation user guide.
 
 ```
 Documentation/
-	Build-UserGuide.cmd        <- double-click this to rebuild the HTML
-	Convert-UserGuide.ps1      <- the build script it calls
-	userguide-template.html    <- page shell (skip link, nav slot, main landmark)
-	userguide.css              <- styling, inlined into every page at build time
-	userguide.lua              <- pandoc filter: .md links -> .html, table scope
-	pandoc.exe                 <- the converter (not in git, see below)
+	Build-UserGuide.cmd            <- double-click this to rebuild the HTML
+	UserGuideBuilder/              <- the converter, a small .NET console project
+		Program.cs                 <- command line and orchestration
+		GuideBuilder.cs            <- builds every chapter, clears stale pages
+		ChapterDiscovery.cs        <- finds chapters, reading order, titles
+		MarkdownRenderer.cs        <- Markdig pipeline and the guide's own rules
+		PageTemplate.cs            <- assembles nav, body and footer into a page
+		Assets/userguide-template.html  <- the page shell
+		Assets/userguide.css            <- styling, inlined into every page
 	UserGuide/
-		markdown/              <- the source of truth. Edit these.
-		html/                  <- generated. Do not edit by hand.
-		README.md              <- this file (not part of the guide)
+		markdown/                  <- the source of truth. Edit these.
+		html/                      <- generated. Do not edit by hand.
+		README.md                  <- this file (not part of the guide)
 ```
 
 ## The Markdown is authoritative
@@ -34,65 +37,82 @@ Documentation\Build-UserGuide.cmd
 Commit the regenerated `UserGuide/html/` alongside your Markdown change so the two
 never drift.
 
-## You need pandoc
+**Everything needed is in this repository.** The converter is the `UserGuideBuilder`
+project; the only thing you need installed is the .NET SDK, which you already have if
+you can build Mutation itself. There is no separate tool to download and nothing to
+put on your PATH.
 
-Conversion is done by [pandoc](https://pandoc.org). The build looks for it in this
-order:
-
-1. `pandoc.exe` in the `Documentation` folder.
-2. `pandoc` on your PATH.
-3. Whatever you pass to `-Pandoc`, for example:
+You can also run it directly, which is handy when working on the converter:
 
 ```bash
-powershell -File Documentation\Convert-UserGuide.ps1 -Pandoc "C:\tools\pandoc.exe"
+dotnet run --project Documentation/UserGuideBuilder
 ```
 
-If none of those find it, the build stops with a message telling you where to put it.
-
-**`pandoc.exe` is deliberately not committed.** It is around 220 MB, which is over
-GitHub's 100 MB per-file limit, so a push containing it would be rejected outright.
-It is listed in `.gitignore`. Download it once from
-<https://pandoc.org/installing.html> and drop it in `Documentation\`, or install it
-normally so it is on your PATH.
+It accepts `--markdown`, `--html` and `--site-title` if you ever need to point it
+somewhere else. With no arguments it finds the guide by walking up from the
+executable, so the working directory does not matter.
 
 ## Adding a chapter
 
 1. Add `UserGuide/markdown/your-chapter.md`, starting with a single `# Title` line.
+   That heading becomes the page title and the sidebar label.
 2. Link to it from `UserGuide/markdown/index.md` so readers can find it.
-3. Add its file name (without `.md`) to `$chapterOrder` near the top of
-   `Convert-UserGuide.ps1` so it lands in the right place in the sidebar. Chapters
-   that are not listed still build — they are just appended alphabetically.
+3. Add its file name (without `.md`) to `ChapterDiscovery.ReadingOrder` so it lands in
+   the right place in the sidebar. Chapters that are not listed still build — they are
+   just appended alphabetically.
 4. Run the build.
 
-Renaming or deleting a chapter is safe: the build removes orphaned HTML files.
+Renaming or deleting a chapter is safe: the build deletes orphaned HTML files.
+
+A file whose name starts with `_` is ignored, which is useful for drafts.
 
 ## Markdown flavour
 
-Pages are parsed as GitHub Flavored Markdown, so anything that renders on GitHub
-renders here: headings, lists, tables, fenced code, blockquotes, task lists,
-strikethrough, autolinks.
+Chapters are parsed by [Markdig](https://github.com/xoofx/markdig) as CommonMark plus
+the GitHub extensions people actually reach for: tables, task lists, strikethrough,
+autolinks, and heading anchors.
 
-Two project-specific rules the build applies on top:
+Three project-specific rules are applied on top:
 
 - Links to `something.md` are rewritten to `something.html`, so chapters can link to
   each other and stay correct both on GitHub and in the built site.
-- Table header cells get `scope="col"` for screen readers.
+- Table header cells get `scope="col"`, and each table is wrapped in a scrolling
+  `div` — see the note on table semantics below.
+- **Raw HTML is escaped, not passed through.** The page shell carries the landmarks a
+  screen reader navigates by, and one unclosed tag in a chapter could break that
+  nesting for every reader of the page. Write Markdown, not HTML.
 
 ## The generated pages
 
-Each page is standalone — the CSS is inlined by pandoc, so there are no external
-files or network requests, and `UserGuide/html/index.html` opens correctly straight
-off disk.
+Each page is standalone — the stylesheet is inlined at build time, so there are no
+external files or network requests, and `UserGuide/html/index.html` opens correctly
+straight off disk.
 
 The output is built to be accessible, which matters for this project specifically:
-`lang` set, a skip-to-content link, a labelled `<nav>` landmark with `aria-current`
-on the current page, a `<main>` landmark, headings in document order, `scope="col"`
-on every table header, visible focus outlines, and a light/dark theme that follows
-the reader's Windows setting. There is also a print stylesheet that drops the
-navigation.
+`lang` set, a skip-to-content link, a labelled `<nav>` landmark with `aria-current` on
+the current page, a `<main>` landmark, headings in document order, `scope="col"` on
+every table header, visible focus outlines, and a light/dark theme that follows the
+reader's Windows setting. There is also a print stylesheet that drops the navigation.
 
-To change how pages look, edit `userguide.css`. To change their structure, edit
-`userguide-template.html`. Neither needs the Markdown to be touched.
+> **Why tables are wrapped in a div.** A wide table has to scroll sideways in a narrow
+> window — including at high ZoomText magnification, which shrinks the usable viewport
+> the same way. Doing that with `table { display: block }` costs the element its
+> implicit table semantics in several browser and screen-reader combinations, so rows
+> and columns stop being announced as a table. Scrolling the wrapper instead leaves
+> the table a table.
+
+To change how pages look, edit `Assets/userguide.css`. To change their structure, edit
+`Assets/userguide-template.html` — the `{{TOKENS}}` in it are filled in by
+`PageTemplate.cs`. Both are embedded into the tool at build time, so just rebuild.
+
+## Tests
+
+The converter is covered by `Mutation.Tests/UserGuideBuilderTests.cs`, which runs as
+part of the normal suite:
+
+```bash
+dotnet test --configuration Release
+```
 
 ## Linking the guide from the app
 

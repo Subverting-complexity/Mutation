@@ -1,8 +1,9 @@
 /*
 	userguide.css — styling for the generated Mutation user guide pages.
 
-	This file is inlined into every page at build time (pandoc --embed-resources),
-	so the generated HTML has no external dependencies and opens straight off disk.
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
 
 	Built to stay readable for a screen-reader and ZoomText user: real focus
 	outlines, generous text size, high contrast in both themes, and a print
@@ -75,9 +76,10 @@ blockquote{
 blockquote p{margin:.3rem 0}
 
 /*
-	The wrapper scrolls, not the table. Setting `display: block` on a <table> to
-	make it scroll costs the element its table semantics in some screen readers,
-	so userguide.lua wraps each table in .table-wrap and the table stays a table.
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
 */
 .table-wrap{overflow-x:auto; margin:1rem 0}
 table{border-collapse:collapse; width:100%; min-width:26rem}

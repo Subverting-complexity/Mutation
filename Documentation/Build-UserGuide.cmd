@@ -8,8 +8,9 @@ REM
 REM  The Markdown is always the source of truth. Edit the .md files, run this,
 REM  and never edit the generated .html by hand.
 REM
-REM  Conversion is done by pandoc.exe, which is looked for in this folder first
-REM  and then on PATH.
+REM  Everything needed is in this repository: the converter is the small .NET
+REM  project in .\UserGuideBuilder. All you need installed is the .NET SDK,
+REM  which you already have if you can build Mutation itself.
 REM
 REM  Just double-click this file, or run it from a command prompt.
 REM ===========================================================================
@@ -28,10 +29,20 @@ echo.
 echo Building the Mutation user guide...
 echo.
 
-set "PS_EXE=powershell.exe"
-where pwsh.exe >nul 2>&1 && set "PS_EXE=pwsh.exe"
+where dotnet >nul 2>&1
+if errorlevel 1 (
+	echo The .NET SDK was not found.
+	echo.
+	echo Install it from https://dotnet.microsoft.com/download and run this again.
+	echo.
+	if defined INTERACTIVE pause
+	endlocal
+	exit /b 1
+)
 
-"%PS_EXE%" -NoProfile -NoLogo -ExecutionPolicy Bypass -File "%~dp0Convert-UserGuide.ps1"
+REM Anything after the project path that dotnet does not recognise is forwarded
+REM to the tool itself, so keep this to genuine 'dotnet run' options.
+dotnet run --project "%~dp0UserGuideBuilder\UserGuideBuilder.csproj" --configuration Release --verbosity quiet
 set "RESULT=%ERRORLEVEL%"
 
 echo.

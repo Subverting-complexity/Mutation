@@ -10,6 +10,13 @@
     <Platform Solution="*|Any CPU" Project="x64" />
     <Platform Solution="Debug|x64" Project="x64" />
   </Project>
+  <Project Path="Documentation/UserGuideBuilder/UserGuideBuilder.csproj">
+    <Platform Solution="*|Any CPU" Project="AnyCPU" />
+    <Platform Solution="*|ARM32" Project="AnyCPU" />
+    <Platform Solution="*|ARM64" Project="AnyCPU" />
+    <Platform Solution="*|x64" Project="AnyCPU" />
+    <Platform Solution="*|x86" Project="AnyCPU" />
+  </Project>
   <Project Path="Mutation.Tests/Mutation.Tests.csproj">
     <Platform Solution="*|Any CPU" Project="x64" />
     <Platform Solution="*|ARM32" Project="ARM32" />
