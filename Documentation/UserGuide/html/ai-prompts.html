@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Using AI prompts on your text - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
+thead,tbody,tr{width:100%}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+.layout{flex-direction:column; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html" aria-current="page">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="using-ai-prompts-on-your-text">Using AI prompts on your
+text</h1>
+<p>A prompt is a saved instruction that you can run on any piece of
+text. You write the instruction once — &quot;fix the grammar&quot;, &quot;make this
+shorter&quot;, &quot;turn these rough notes into a polite email&quot; — give it a name,
+and from then on it is one click or one keyboard shortcut away.</p>
+<p>That is the whole idea. You are not chatting with anything. You hand
+Mutation some text, Mutation hands it to an AI along with your saved
+instruction, and you get the tidied-up version back.</p>
+<p>Here are four that earn their keep in an ordinary working day.</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Name</th>
+<th scope="col">The instruction you would write</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fix Grammar</td>
+<td>Fix the grammar, spelling and punctuation in the following text. Do
+not change the meaning or the tone.</td>
+</tr>
+<tr>
+<td>Shorten</td>
+<td>Rewrite the following text so it says the same thing in about half
+the words.</td>
+</tr>
+<tr>
+<td>Make It an Email</td>
+<td>Turn the following rough notes into a short, polite work email. Keep
+it plain and friendly.</td>
+</tr>
+<tr>
+<td>Key Points</td>
+<td>Summarise the following text as a short bullet list of the main
+points.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="where-the-text-comes-from-and-where-the-answer-goes">Where the
+text comes from, and where the answer goes</h2>
+<p>When you run a prompt, Mutation uses <strong>whatever text is on your
+clipboard</strong>. So the normal routine is: select the text anywhere —
+in Word, in your browser, in an email — press <strong>Ctrl+C</strong>,
+then run the prompt.</p>
+<p>When the answer comes back, three things happen at once. The answer
+appears in the <strong>Formatted Transcript</strong> box on the main
+window, it is copied onto your clipboard, and Mutation puts it into the
+app you were working in. You hear a success beep when all of that
+worked. If the clipboard was busy and the text could not be delivered,
+you get a failure beep and a message telling you the result is still
+sitting safely in the Mutation window.</p>
+<hr />
+<h2 id="the-prompt-list">The prompt list</h2>
+<p>Your prompts live on the <strong>LLM Prompts</strong> card on the
+main window. Each row shows the prompt&#39;s name, its keyboard shortcut if
+it has one, the model it uses, and the word &quot;(Auto-Run)&quot; if it is the
+automatic one.</p>
+<p>Each row has three buttons.</p>
+<ul>
+<li><strong>Run</strong> — runs that prompt on the clipboard text, right
+now.</li>
+<li><strong>Edit</strong> — opens the prompt so you can change it.</li>
+<li><strong>Delete</strong> — removes it.</li>
+</ul>
+<p><strong>Add Prompt</strong>, at the top right of the card, creates a
+new one.</p>
+<hr />
+<h2 id="creating-a-prompt">Creating a prompt</h2>
+<p>Press <strong>Add Prompt</strong> and the <strong>Edit
+Prompt</strong> window opens. Two fields matter most.</p>
+<p><strong>Name</strong> is what you will see in the list. Keep it short
+— &quot;Fix Grammar&quot;, &quot;Shorten&quot;, &quot;Draft Reply&quot;.</p>
+<p><strong>Prompt Instructions</strong> is the instruction itself. This
+is the part that does the work.</p>
+<p>Three pointers for writing a good one:</p>
+<ul>
+<li>Say what you want done, plainly, as if you were asking a colleague.
+&quot;Fix the grammar and punctuation&quot; beats &quot;improve this&quot;.</li>
+<li>Say what you want back. Adding &quot;Reply with only the corrected text
+and nothing else&quot; stops the AI from adding a chatty preamble.</li>
+<li>Say what must not change. &quot;Keep my wording and tone&quot; is worth adding
+to any tidy-up prompt.</li>
+</ul>
+<p>There is a <strong>Test Run</strong> button at the bottom. It runs
+the prompt against your current clipboard content using the settings on
+screen, without saving anything. Use it to try an instruction before you
+commit to it.</p>
+<p>Then press <strong>Save</strong>, or <strong>Cancel</strong> to throw
+it away.</p>
+<hr />
+<h2 id="giving-a-prompt-its-own-shortcut">Giving a prompt its own
+shortcut</h2>
+<p>The <strong>Hotkey</strong> box in the prompt editor is optional.
+Fill it in and that key combination runs this prompt from anywhere — no
+need to switch to Mutation first. Copy some text in Outlook, press your
+shortcut, and the cleaned-up version lands back in Outlook.</p>
+<p>Pick combinations that nothing else is using.
+<strong>Ctrl+Alt</strong> plus a letter is usually safe. If a shortcut
+cannot be claimed because another program already has it, Mutation tells
+you.</p>
+<hr />
+<h2 id="the-auto-run-prompt">The Auto-Run prompt</h2>
+<p>One prompt in your list can be marked <strong>Run automatically after
+transcription</strong>. That prompt then runs on its own as soon as a
+recording has been turned into text, without you pressing anything.</p>
+<p>This is what the record-and-process dictation shortcut uses: you
+dictate, Mutation transcribes, and your Auto-Run prompt cleans the
+result up in the same breath. See <a href="dictation.html">Dictation:
+turning speech into text</a> for that shortcut.</p>
+<p>The <strong>Process with LLM</strong> button on the
+<strong>Transcripts</strong> card also reaches for the Auto-Run
+prompt.</p>
+<p>Only one prompt can hold this role. Marking a new one automatically
+clears it from the old one.</p>
+<hr />
+<h2 id="choosing-a-model">Choosing a model</h2>
+<p>A model is the particular AI that reads your text and writes the
+reply. Different models cost different amounts and are better at
+different jobs.</p>
+<p>The <strong>Model</strong> box in the prompt editor lets you pin a
+prompt to a specific one. <strong>If you leave it alone, that is
+completely fine</strong> — the prompt just uses the standard model. Only
+change it if you have a reason to.</p>
+<p>The list of available models is managed in <strong>Settings</strong>
+(<strong>Ctrl+Comma</strong>), under <strong>AI assistance</strong>.
+Each model belongs to one of two providers: <strong>OpenAI</strong> or
+<strong>Anthropic</strong> (whose models are called Claude). You need
+the matching key set up for the provider you choose — an OpenAI key for
+OpenAI models, an Anthropic key for Claude models. See <a href="getting-started.html">Getting started</a> for how to add them.</p>
+<hr />
+<h2 id="fast-mode">Fast mode</h2>
+<p><strong>Fast mode</strong> is a check box in the prompt editor. It
+runs the same model faster. The model, and the quality of its answers,
+are unchanged — only the speed and the price differ.</p>
+<p>The catch is the price. Fast mode is billed at roughly
+<strong>twice</strong> the standard rate, so turn it on only for prompts
+where waiting actually costs you something.</p>
+<p>Two more things to know. Not every model offers Fast mode. And on
+Anthropic (Claude) models it also needs research-preview access on your
+account, which you have to request.</p>
+<p>If Fast mode cannot be used for any reason, nothing breaks. The
+prompt still runs at normal speed, you still get your answer, and
+Mutation tells you why Fast mode was skipped — whether you need to
+request access, pick a different model, or simply try again later.</p>
+<hr />
+<h2 id="waiting-and-when-things-go-slowly">Waiting, and when things go
+slowly</h2>
+<p>Under <strong>AI assistance</strong> in <strong>Settings</strong>
+there are two knobs worth knowing about.</p>
+<p><strong>Request timeout</strong> is how long Mutation waits for the
+model to respond before giving up. If you regularly send long documents
+and see things time out, raise it.</p>
+<p><strong>Retries</strong> is how many times Mutation quietly tries
+again after a failed request, before telling you it did not work. The
+default of three is there for a good reason: it helps the very first
+request after you reboot succeed while your network is still warming
+up.</p>
+<hr />
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="dictation.html">Dictation: turning speech into text</a> —
+the record-and-process shortcut that uses your Auto-Run prompt</li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace
+rules</a> — fixing repeat offenders without involving an AI at all</li>
+<li><a href="getting-started.html">Getting started</a> — adding your
+OpenAI and Anthropic keys</li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
+list, and how to change any of them</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

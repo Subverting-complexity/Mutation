@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Screen reader and accessibility notes - Mutation User
+Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
+thead,tbody,tr{width:100%}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+.layout{flex-direction:column; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html" aria-current="page">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="screen-reader-and-accessibility-notes">Screen reader and
+accessibility notes</h1>
+<p>Mutation was written by a developer who is nearly blind, for his own
+daily use. That shows up all through the app. This chapter gathers the
+things that matter most if you work with a screen reader, a magnifier,
+or both.</p>
+<h2 id="everything-works-from-the-keyboard">Everything works from the
+keyboard</h2>
+<p>There is no part of Mutation that needs a mouse. The global shortcuts
+do the real work, so most of the time you never open the app at all.
+When you do open the main window, you can Tab through every card, and
+every button, slider, list and text box can be reached and operated from
+the keyboard.</p>
+<p>Settings opens with <strong>Ctrl+Comma</strong> and is
+keyboard-driven too, including the search box at the top and the
+&quot;Advanced&quot; toggle.</p>
+<h2 id="controls-are-named-and-the-help-text-is-the-same-text-you-see">Controls
+are named, and the help text is the same text you see</h2>
+<p>Every control tells your screen reader what it is. Buttons that have
+a shortcut attached announce the shortcut as part of their name, so you
+hear something like &quot;Mute, Ctrl+Shift+M&quot;. When a button changes state,
+the announced name changes with it — a button that becomes Unmute
+announces itself as Unmute, not as the name it had at startup.</p>
+<p>The help text for settings is written once and used twice. The
+sentence your screen reader reads out for a setting is exactly the
+sentence that appears in the tooltip when you hover it with the mouse.
+There is no short visual label with a longer hidden explanation, or the
+other way around. What you hear is what is there.</p>
+<h2 id="sounds-tell-you-what-happened">Sounds tell you what
+happened</h2>
+<p>Mutation uses short beeps so you know an action landed without having
+to check the screen. There are distinct sounds for:</p>
+<ul>
+<li><strong>Start</strong> — a recording has begun.</li>
+<li><strong>End</strong> — a recording has stopped.</li>
+<li><strong>Success</strong> — a two-note rising chirp when something
+completed.</li>
+<li><strong>Failure</strong> — a low tone, repeated, when something went
+wrong.</li>
+<li><strong>Mute</strong> — a low tone when microphones are muted.</li>
+<li><strong>Unmute</strong> — a short high tone when they are live.</li>
+</ul>
+<p>You can replace all of them with your own sound files. Open
+<strong>Settings</strong> with <strong>Ctrl+Comma</strong>, go to the
+audio settings, turn on the option to play your own sound files instead
+of the built-in beeps, and pick a <code>.wav</code> file for each of the
+six cues. There is a preview button so you can hear a file before
+committing to it.</p>
+<h2 id="spoken-status-announcements">Spoken status announcements</h2>
+<p>The main window has a status area at the bottom, named &quot;Status
+notifications&quot; for your screen reader. Everything that appears there is
+also announced out loud, even when the status area was already open — so
+a run of updates like &quot;Recording…&quot; then &quot;Transcribing…&quot; then the final
+result all reach you.</p>
+<p>Errors and warnings interrupt whatever your screen reader is
+currently saying, because they need you now. Routine progress updates
+wait their turn politely. If several updates arrive quickly, you hear
+the most recent one rather than a backlog of stale messages.</p>
+<h2 id="the-screenshot-overlay-talks-you-through-it">The screenshot
+overlay talks you through it</h2>
+<p>Grabbing part of a screen you cannot see sounds impossible. It is
+not.</p>
+<p>When the screen-capture overlay opens, it announces itself and tells
+you the keys: move with the arrow keys, press <strong>Enter</strong> to
+set the first corner, move again, then <strong>Enter</strong> to
+capture. <strong>Ctrl+A</strong> selects the whole screen, which means
+any capture can be finished in two keystrokes.
+<strong>Backspace</strong> clears the corner you set.
+<strong>Escape</strong> cancels.</p>
+<p>As you move, it reads your position out. Before you set a corner you
+hear the caret position. After you set one you hear the size of the
+region and where its top-left corner sits, so you always know where on
+the screen you are. Hold <strong>Ctrl</strong> for one-pixel steps or
+<strong>Shift</strong> for big hundred-pixel jumps. When the capture
+finishes it tells you the size of what it grabbed, in pixels. If you
+press Enter twice without moving, it tells you the region is empty
+rather than silently doing nothing.</p>
+<h2 id="reading-aloud-is-a-first-class-feature">Reading aloud is a
+first-class feature</h2>
+<p>Mutation can read the clipboard out loud, with its own voice, rate
+and volume, and its own pause, skip and rewind controls. It can announce
+roughly how long a piece of text will take to read before it starts, and
+read your progress out at intervals — &quot;50%, about 3 minutes left&quot;. You
+can ask where you are at any moment and hear &quot;Sentence 4 of 22, about
+40% through, about 2 minutes left&quot;.</p>
+<p>See <a href="read-aloud.html">Having text read aloud</a> for the full
+picture.</p>
+<h2 id="handing-the-result-to-your-screen-reader-automatically">Handing
+the result to your screen reader automatically</h2>
+<p>This one is worth setting up. After an OCR run or a dictation
+finishes, Mutation can send a keystroke of your choosing to whatever app
+you were in.</p>
+<p>Say you dictate a note into an email. Mutation puts the transcript on
+the clipboard, then sends <strong>Ctrl+V</strong> to the email window
+for you, so the text lands where your cursor was without you touching
+anything. Or set it to your screen reader&#39;s own &quot;read from here&quot;
+shortcut, and the OCR result gets read to you the moment it is
+ready.</p>
+<p>You set it in <strong>Settings</strong>, under the shortcuts section:
+one box for &quot;after OCR&quot; and one for &quot;after transcription&quot;. Leave a box
+empty and nothing is sent.</p>
+<h2 id="alongside-a-screen-reader-and-zoomtext">Alongside a screen
+reader and ZoomText</h2>
+<p>Mutation is designed to sit next to your existing tools, not replace
+them. Its global shortcuts are registered with Windows, so they work
+whichever app has focus. If your screen reader or magnifier already owns
+a combination you want, Windows will refuse to give it to Mutation — you
+will get a message at startup listing the shortcuts that could not be
+registered and why, and you can pick different ones. See <a href="troubleshooting.html">Troubleshooting</a> if that happens.</p>
+<p>Every default shortcut in Mutation can be changed, so you can fit it
+around the shortcuts you already have in your fingers.</p>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a> — the full
+list, and how to change them.</li>
+<li><a href="read-aloud.html">Having text read aloud</a> — voices,
+speed, and the reading controls.</li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text
+from images</a> — the capture overlay in context.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — when something
+does not behave.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

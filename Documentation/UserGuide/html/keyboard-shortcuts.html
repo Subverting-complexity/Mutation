@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Keyboard shortcuts - Mutation User Guide</title>
+<meta name="generator" content="pandoc 3.9.0.2" />
+<style type="text/css">
+:root{
+color-scheme: light dark;
+--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+:root{
+--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+--quote:#1c2530; --quote-rule:#6fb3ff;
+}
+}
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+margin:0; background:var(--bg); color:var(--fg);
+font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+line-height:1.65;
+}
+.skip{
+position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+.sidebar{
+flex:0 0 16rem; position:sticky; top:1.5rem;
+background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+blockquote{
+margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+table{border-collapse:collapse; width:100%; margin:1rem 0; display:block; overflow-x:auto}
+thead,tbody,tr{width:100%}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+@media (max-width:860px){
+.layout{flex-direction:column; padding:1rem}
+.sidebar{position:static; flex:1 1 auto; width:100%}
+main{max-width:none}
+}
+@media print{
+.sidebar,.skip{display:none}
+body{background:#fff; color:#000}
+.layout{display:block; max-width:none; padding:0}
+a{color:#000}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="keyboard-shortcuts.html" aria-current="page">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+<main id="content" tabindex="-1">
+<h1 id="keyboard-shortcuts">Keyboard shortcuts</h1>
+<p>Keyboard shortcuts are how you actually use Mutation day to day. This
+chapter lists every one of them, shows you how to change them, and
+explains what to do when a combination refuses to work.</p>
+<h2 id="what-global-means">What &quot;global&quot; means</h2>
+<p>Almost every Mutation shortcut is <strong>global</strong>. That means
+it works no matter which app you are in. You can be halfway through an
+email, a spreadsheet, or a video call, and the shortcut still fires.
+Mutation&#39;s own window does not need to be open, in front, or even
+visible. It just sits quietly in the background and listens.</p>
+<p>There is one exception, and it is noted in the tables below:
+<strong>Ctrl+Comma</strong> opens Settings, and that one only works when
+Mutation&#39;s own window is in front.</p>
+<p>Every default shortcut listed here can be changed. Nothing is
+fixed.</p>
+<h2 id="the-full-list">The full list</h2>
+<h3 id="microphone">Microphone</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mute or unmute every microphone at once</td>
+<td><strong>Alt+Q</strong></td>
+<td><a href="microphone.html">Muting your microphone</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="dictation">Dictation</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start or stop recording your voice, then turn it into text</td>
+<td><strong>Shift+Alt+U</strong></td>
+<td><a href="dictation.html">Dictation</a></td>
+</tr>
+<tr>
+<td>Same, then send the text straight through an AI prompt</td>
+<td><strong>Shift+Alt+I</strong></td>
+<td><a href="dictation.html">Dictation</a></td>
+</tr>
+<tr>
+<td>Send a key to the app you are in, after the text is delivered</td>
+<td>None — set your own</td>
+<td><a href="dictation.html">Dictation</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="screenshots-and-ocr">Screenshots and OCR</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Take a screenshot of part of the screen</td>
+<td><strong>Shift+Alt+K</strong></td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+<tr>
+<td>Take a screenshot and pull the text out of it</td>
+<td><strong>Shift+Alt+J</strong></td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+<tr>
+<td>Same, but read strictly left to right, top to bottom</td>
+<td><strong>Shift+Alt+E</strong></td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+<tr>
+<td>Pull the text out of an image already on the clipboard</td>
+<td><strong>Alt+J</strong></td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+<tr>
+<td>Same, but read strictly left to right, top to bottom</td>
+<td><strong>Alt+K</strong></td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+<tr>
+<td>Send a key to the app you are in, after the text is delivered</td>
+<td>None — set your own</td>
+<td><a href="screen-capture-and-ocr.html">Screenshots and OCR</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="reading-aloud">Reading aloud</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read whatever is on the clipboard</td>
+<td><strong>Ctrl+Shift+Alt+Q</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Read the text you have selected</td>
+<td><strong>Ctrl+Shift+Q</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Pause, or carry on from where you paused</td>
+<td><strong>Ctrl+Shift+Space</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Start again from the beginning</td>
+<td><strong>Ctrl+Shift+B</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Go back a sentence</td>
+<td><strong>Ctrl+Shift+J</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Go forward a sentence</td>
+<td><strong>Ctrl+Shift+K</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Say how far through the text you are</td>
+<td><strong>Ctrl+Shift+P</strong></td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+<tr>
+<td>Save the spoken audio to a file</td>
+<td>None, and see the note below</td>
+<td><a href="read-aloud.html">Having text read aloud</a></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Speak to file</strong> is the one action without a row on the
+Hotkeys page. Use the <strong>Speak to file</strong> button on the main
+window. If you really want a shortcut for it, it can only be added by
+editing the settings file by hand — see <a href="settings.html">The
+Settings window</a> for where that file lives.</p>
+</blockquote>
+<h3 id="ai-prompts">AI prompts</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run one of your AI prompts</td>
+<td>None — set your own, one per prompt</td>
+<td><a href="ai-prompts.html">Using AI prompts</a></td>
+</tr>
+</tbody>
+</table>
+<p>Each prompt you create can have its own shortcut. You set it in the
+prompt editor on the main window, not on the Hotkeys page. None are
+filled in for you.</p>
+<h3 id="app">App</h3>
+<table>
+<thead>
+<tr>
+<th scope="col">What it does</th>
+<th scope="col">Default shortcut</th>
+<th scope="col">More about it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Open Settings (only when Mutation&#39;s window is in front)</td>
+<td><strong>Ctrl+Comma</strong></td>
+<td><a href="settings.html">The Settings window</a></td>
+</tr>
+<tr>
+<td>Open Mutation&#39;s menu (only when Mutation&#39;s window is in front)</td>
+<td><strong>Alt</strong>, then <strong>H</strong></td>
+<td><a href="main-window.html">A tour of the main window</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="changing-a-shortcut">Changing a shortcut</h2>
+<p>Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong>, then
+pick <strong>Hotkeys</strong> from the list on the left. Every shortcut
+in the tables above is on that one page, in roughly the same order — the
+only exception is <strong>Speak to file</strong>, noted above.</p>
+<p>Each row has the name of the action, a box holding the current
+combination, a <strong>Record</strong> button, a <strong>Clear</strong>
+button, and a small reset button. Hover over the reset button and it
+tells you what the default is, for example &quot;Reset to default
+(ALT+Q)&quot;.</p>
+<p>To record a new combination:</p>
+<ol type="1">
+<li>Press the <strong>Record</strong> button. Its label changes to
+&quot;Press keys...&quot;.</li>
+<li>Hold down the modifiers you want and press the final key. Holding
+Ctrl, Shift, Alt or the Windows key on their own does nothing — Mutation
+waits for a real key before it decides you are finished.</li>
+<li>The box fills in with what you pressed, in Mutation&#39;s own style,
+like <code>CTRL+ALT+J</code>. Recording stops on its own.</li>
+</ol>
+<p>Changed your mind mid-recording? Press <strong>Escape</strong> and
+nothing is captured.</p>
+<p>You can also just type into the box if you prefer. Write the keys
+separated by plus signs. Mutation tidies up the capitals for you when
+you move away from the box. The <strong>Clear</strong> button empties a
+box, which is what you want for the two optional &quot;send a key afterwards&quot;
+fields.</p>
+<p>Your changes are held until you press <strong>Save</strong> at the
+bottom of Settings. Press <strong>Cancel</strong> and nothing you
+changed is kept.</p>
+<h2 id="when-a-combination-is-taken-or-not-allowed">When a combination
+is taken or not allowed</h2>
+<p>Mutation checks as you go, and shows the problem in red just under
+the box. Screen readers announce it straight away.</p>
+<ul>
+<li><strong>Left blank when a shortcut is required</strong> — &quot;Enter a
+hotkey.&quot;</li>
+<li><strong>Only modifier keys</strong> — &quot;Hotkey must include a
+non-modifier key.&quot; Ctrl+Shift on its own is not a shortcut; it needs a
+letter, number, or other key on the end.</li>
+<li><strong>A key Mutation does not recognise</strong> — &quot;Unsupported
+key&quot;, followed by the key you typed.</li>
+<li><strong>The same combination used twice inside Mutation</strong> —
+an orange <strong>Duplicate hotkey</strong> note appears under both
+rows. Give one of them a different combination, otherwise only one of
+the two will ever fire.</li>
+<li><strong>Another app already owns it</strong> — Mutation cannot tell
+until it actually tries to claim the combination. When it fails, you get
+a beep and a message titled &quot;Some hotkeys could not be registered&quot;,
+listing each action, its combination, and the reason, usually &quot;The
+shortcut is already registered by another application.&quot; Go back to the
+Hotkeys page and pick something else.</li>
+</ul>
+<h2 id="choosing-combinations-that-wont-clash">Choosing combinations
+that won&#39;t clash</h2>
+<ol type="1">
+<li><strong>Use three modifiers.</strong> Combinations like
+<strong>Ctrl+Shift+Alt+Q</strong> are almost never claimed by anything
+else. That is exactly why Mutation uses one for reading the
+clipboard.</li>
+<li><strong>Stay away from the famous ones.</strong> Ctrl+C, Ctrl+V,
+Ctrl+S, Ctrl+Z, Ctrl+F, Alt+Tab and Alt+F4 are used everywhere. So are
+most combinations that include the Windows key, which Windows itself
+reserves.</li>
+<li><strong>Test it in the app you use most.</strong> Set the shortcut,
+switch to that app, and press it. If Mutation responds and the other app
+does not, you are fine. If nothing happens at all, something else
+grabbed it first — try another.</li>
+</ol>
+<h2 id="the-shortcut-router">The shortcut router</h2>
+<p>The router does one thing: you press one combination, and Mutation
+presses a different one for you. It never runs a Mutation feature. It
+just passes a different set of keys along to whatever app you are
+in.</p>
+<p>Two reasons people use it:</p>
+<ul>
+<li><strong>To make an awkward shortcut easy.</strong> Some other app
+has a shortcut that is a stretch for one hand. Give yourself a
+comfortable one instead.</li>
+<li><strong>To get around a clash.</strong> A combination you want is
+blocked or occupied, so you reach the same action a different way.</li>
+</ul>
+<p>Here is a worked example. Your video call app mutes with
+<strong>Ctrl+Shift+M</strong>, which is a fiddly reach while you are
+holding a coffee. Add a mapping with <strong>Ctrl+Alt+1</strong> in the
+&quot;From&quot; box and <strong>Ctrl+Shift+M</strong> in the &quot;To&quot; box. From then
+on, pressing <strong>Ctrl+Alt+1</strong> anywhere makes Mutation send
+<strong>Ctrl+Shift+M</strong> to whatever app you are in, and the call
+mutes.</p>
+<p>To set one up, go to <strong>Settings</strong>
+(<strong>Ctrl+Comma</strong>), pick <strong>Hotkeys</strong>, and scroll
+down to the <strong>Hotkey Router</strong> section. Press <strong>Add
+mapping</strong>, fill in the &quot;From&quot; and &quot;To&quot; boxes, and press
+<strong>Save</strong>. Each row shows a small status marker: a tick once
+the mapping is live, or an error marker with a message if something is
+wrong. Two mappings listening for the same &quot;From&quot; combination get a
+&quot;Duplicate &#39;From&#39; hotkey&quot; message. <strong>Delete</strong> removes a
+mapping.</p>
+<blockquote>
+<p>As the in-app help puts it: map one shortcut to another so a single
+key press can trigger a more complex shortcut. Changes apply when you
+save settings.</p>
+</blockquote>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="settings.html">The Settings window</a> — where the Hotkeys
+page lives, and everything else you can change.</li>
+<li><a href="main-window.html">A tour of the main window</a> — the
+buttons behind these shortcuts.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — what to do when
+a shortcut stops responding.</li>
+<li><a href="accessibility.html">Screen reader and accessibility
+notes</a> — how Mutation announces what it is doing.</li>
+</ul>
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>Generated from the Markdown source on 4 August 2026. The Markdown files are the source of truth – do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>
