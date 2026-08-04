@@ -134,15 +134,24 @@ public class EndOfRecordingNotificationTests : IDisposable
 		Assert.Equal(StubService.Transcript, text);
 	}
 
+	// Cancelling while the recorder is closing still ends the recording, so the signal
+	// has to precede the cancellation check rather than be thrown past.
 	[Fact]
-	public async Task StopRecordingAndTranscribe_WithoutANotification_TranscribesAsBefore()
+	public async Task StopRecordingAndTranscribe_WhenCancelledDuringTheStop_StillNotifies()
 	{
-		using var manager = new SpeechToTextManager(_settings, () => new StubAudioRecorder());
+		bool notified = false;
+		using var cts = new CancellationTokenSource();
+		using var manager = new SpeechToTextManager(_settings, () => new StubAudioRecorder { OnStop = cts.Cancel });
 		await manager.StartRecordingAsync(0);
 
-		string text = await manager.StopRecordingAndTranscribeAsync(new StubService(), "prompt", CancellationToken.None);
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+			manager.StopRecordingAndTranscribeAsync(
+				new StubService(),
+				"prompt",
+				cts.Token,
+				onRecordingStopped: () => notified = true));
 
-		Assert.Equal(StubService.Transcript, text);
+		Assert.True(notified);
 	}
 
 	private sealed class RecordingAudioRecorder : IAudioRecorder
@@ -182,6 +191,7 @@ public class EndOfRecordingNotificationTests : IDisposable
 	{
 		public double? TrimmedSeconds { get; init; }
 		public Exception? CaptureError { get; init; }
+		public Action? OnStop { get; init; }
 
 		public double? TrimmedSpeechSeconds => TrimmedSeconds;
 		public Exception? CaptureException => CaptureError;
@@ -190,9 +200,7 @@ public class EndOfRecordingNotificationTests : IDisposable
 		{
 		}
 
-		public void StopRecording()
-		{
-		}
+		public void StopRecording() => OnStop?.Invoke();
 
 		public void Dispose()
 		{

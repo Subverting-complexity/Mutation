@@ -211,8 +211,11 @@ public class SpeechToTextManager : IDisposable
 	/// throw and before the transcription request. That is the only point at which
 	/// "capture has ended" is true and the microphone is closed, so a caller can signal
 	/// it audibly without the sound bleeding into the recording it is ending.
+	/// Required rather than optional: issue #268 was caused by the end-of-recording
+	/// signal quietly losing its only caller, so every stop path has to state what it
+	/// does about it and the compiler has to notice when one stops.
 	/// </param>
-	public async Task<string> StopRecordingAndTranscribeAsync(ISpeechToTextService service, string prompt, CancellationToken token, Action? onRecordingStopped = null)
+	public async Task<string> StopRecordingAndTranscribeAsync(ISpeechToTextService service, string prompt, CancellationToken token, Action onRecordingStopped)
 	{
 		if (service is null)
 			throw new ArgumentNullException(nameof(service));
@@ -274,12 +277,10 @@ public class SpeechToTextManager : IDisposable
 	}
 
 	// A notification is a courtesy to the caller, never a reason to fail the
-	// transcription the user is actually waiting on.
-	private static void NotifyRecordingStopped(Action? onRecordingStopped)
+	// transcription the user is actually waiting on. A null handed in past the
+	// non-nullable parameter is caught here too, for the same reason.
+	private static void NotifyRecordingStopped(Action onRecordingStopped)
 	{
-		if (onRecordingStopped is null)
-			return;
-
 		try
 		{
 			onRecordingStopped();
