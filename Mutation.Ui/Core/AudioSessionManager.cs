@@ -208,7 +208,15 @@ public class AudioSessionManager : IDisposable
 
                 try
                 {
-                    string text = await _speechManager.StopRecordingAndTranscribeAsync(activeService, prompt, cancellationToken);
+                    // The end beep is raised from inside the stop, not from here: it has to
+                    // land after the recorder is closed (or it is captured into the very
+                    // recording it ends) and before the transcription request (or the user
+                    // waits out a network call for the sound that says capture stopped).
+                    string text = await _speechManager.StopRecordingAndTranscribeAsync(
+                        activeService,
+                        prompt,
+                        cancellationToken,
+                        onRecordingStopped: () => BeepPlayer.Play(BeepType.End));
                     await ProcessTranscriptAsync(text, llmPrompt);
                 }
                 catch (OperationCanceledException)
