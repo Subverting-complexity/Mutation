@@ -276,90 +276,18 @@ public partial class App : Application
 
 			_window.Activate();
 
-			// Activate() returns before the content has loaded, and until it has there
-			// is no XamlRoot to host a ContentDialog. Every notice below — the screen
-			// capture warning, the beep settings warning, the hotkey failures and the
-			// first-run onboarding — was raised inside that window, so each either
-			// degraded to a bare Win32 message box with no automation name or (for the
-			// hotkey failures) was dropped and left only an unexplained beep.
-			if (_window is MainWindow readyWindow)
-				await readyWindow.WaitForContentReadyAsync();
-
-                        var preflight = ScreenCapturePreflight.TryCaptureProbe();
-			if (!preflight.ok)
-			{
-				string title = "Screen Capture Disabled";
-				string message = preflight.message ?? "Screen capture may be disabled by system policy.";
-				if (_window.Content is FrameworkElement fe0 && fe0.XamlRoot is not null)
-				{
-					var dialog = new ContentDialog
-					{
-						Title = title,
-						Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-						CloseButtonText = "OK",
-						XamlRoot = fe0.XamlRoot
-					};
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dialog, title);
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(dialog, message);
-					await dialog.ShowAsync();
-				}
-				else
-				{
-					System.Windows.Forms.MessageBox.Show(message, title,
-						System.Windows.Forms.MessageBoxButtons.OK,
-						System.Windows.Forms.MessageBoxIcon.Warning);
-				}
-			}
-
-			if (BeepPlayer.LastInitializationIssues.Count > 0)
-			{
-				const string title = "Custom Beep Settings Issues";
-				string message = "The following issues were found with the custom beep settings:\n\n" +
-										  string.Join("\n", BeepPlayer.LastInitializationIssues);
-
-				if (_window.Content is FrameworkElement fe && fe.XamlRoot is not null)
-				{
-					var dialog = new ContentDialog
-					{
-						Title = title,
-						Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-						CloseButtonText = "OK",
-						XamlRoot = fe.XamlRoot
-					};
-					// Provide accessible name/help text for screen readers
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dialog, title);
-					Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(dialog, message);
-					await dialog.ShowAsync();
-				}
-				else
-				{
-					System.Windows.Forms.MessageBox.Show(
-							  message,
-							  title,
-							  System.Windows.Forms.MessageBoxButtons.OK,
-							  System.Windows.Forms.MessageBoxIcon.Warning);
-				}
-			}
-
 			var ocrMgr = _host.Services.GetRequiredService<OcrManager>();
 			ocrMgr.InitializeWindow(_window);
 
-                        var hkManager = _host.Services.GetRequiredService<HotkeyManager>();
-                        // Register core, prompt, and router hotkeys, then surface any that could not be
-                        // bound the same way (dialog + failure beep). AttachHotkeyManager registers the
-                        // prompt and router hotkeys and RegisterCoreHotkeys registers the core ones; both
-                        // return the failures they encountered.
-                        var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();
-                        if (_window is MainWindow main)
-                        {
-                                hotkeyFailures.AddRange(main.AttachHotkeyManager(hkManager));
-                                hotkeyFailures.AddRange(main.RegisterCoreHotkeys(hkManager));
-                        }
-                        var settingsSvc = _host.Services.GetRequiredService<Settings>();
+			var hkManager = _host.Services.GetRequiredService<HotkeyManager>();
 
-			if (hotkeyFailures.Count > 0 && _window is MainWindow mainWindow)
-				await mainWindow.ShowHotkeyBindingFailuresAsync(hotkeyFailures);
-
+			// Wired before anything that can put a dialog on screen and park this method.
+			// A WinUI ContentDialog does not disable its window, so the user can still
+			// close the app from behind one — and every startup notice below now really
+			// does open a dialog (before, they degraded to a Win32 message box or were
+			// dropped, so this method ran to the end in one dispatcher turn). Closing
+			// with this handler unwired skips ShutdownAsync entirely: the keyboard hook
+			// stays installed and the process lingers invisibly.
 			_window.Closed += async (_, __) =>
 			{
 				// Ensure global hooks are released promptly
@@ -376,6 +304,56 @@ public partial class App : Application
 				// Stop background host services and exit the app
 				await ShutdownAsync();
 			};
+
+			// Register core, prompt, and router hotkeys. AttachHotkeyManager registers the
+			// prompt and router hotkeys and RegisterCoreHotkeys registers the core ones;
+			// both return the failures they encountered, which are surfaced below once the
+			// window can host the dialog that lists them.
+			var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();
+			if (_window is MainWindow main)
+			{
+				hotkeyFailures.AddRange(main.AttachHotkeyManager(hkManager));
+				hotkeyFailures.AddRange(main.RegisterCoreHotkeys(hkManager));
+			}
+
+			// Activate() returns before the content has loaded, and until it has there
+			// is no XamlRoot to host a ContentDialog. Every notice below — the screen
+			// capture warning, the beep settings warning, the hotkey failures and the
+			// first-run onboarding — was raised inside that window, so each either
+			// degraded to a bare Win32 message box with no automation name or (for the
+			// hotkey failures) was dropped and left only an unexplained beep.
+			if (_window is MainWindow readyWindow && !await readyWindow.WaitForContentReadyAsync())
+			{
+				// Not fatal — every notice has a message box fallback — but it means the
+				// accessible surface was abandoned, which is worth a trace of its own.
+				ErrorLogger.LogError(
+					"Startup",
+					new TimeoutException(
+						"The window content did not become ready in time; startup notices fall back to system message boxes."));
+			}
+
+			var preflight = ScreenCapturePreflight.TryCaptureProbe();
+			if (!preflight.ok && _window is MainWindow preflightWindow)
+			{
+				await preflightWindow.ShowNoticeAsync(
+					"Screen Capture Disabled",
+					preflight.message ?? "Screen capture may be disabled by system policy.",
+					"OK",
+					NoticeSeverity.Warning);
+			}
+
+			if (BeepPlayer.LastInitializationIssues.Count > 0 && _window is MainWindow beepWindow)
+			{
+				await beepWindow.ShowNoticeAsync(
+					"Custom Beep Settings Issues",
+					"The following issues were found with the custom beep settings:\n\n" +
+						string.Join("\n", BeepPlayer.LastInitializationIssues),
+					"OK",
+					NoticeSeverity.Warning);
+			}
+
+			if (hotkeyFailures.Count > 0 && _window is MainWindow mainWindow)
+				await mainWindow.ShowHotkeyBindingFailuresAsync(hotkeyFailures);
 
 			// First-run / unconfigured onboarding. Replaces opening Mutation.json
 			// in Notepad: show a friendly welcome, then open the in-app Settings

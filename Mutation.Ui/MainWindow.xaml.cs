@@ -2254,6 +2254,18 @@ public sealed partial class MainWindow : Window, IDisposable
 	}
 
     private async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
+        => (await ShowDialogCoreAsync(dialog)).Result;
+
+    /// <summary>
+    /// Shows a dialog and reports whether it actually made it on screen. Callers that
+    /// owe the user a message they must acknowledge use this so they can fall back to
+    /// another surface: a failed show otherwise degrades to a status-bar line, which is
+    /// not an acknowledgement and can pass unnoticed entirely.
+    /// </summary>
+    private async Task<bool> TryShowDialogAsync(ContentDialog dialog)
+        => (await ShowDialogCoreAsync(dialog)).Shown;
+
+    private async Task<(ContentDialogResult Result, bool Shown)> ShowDialogCoreAsync(ContentDialog dialog)
     {
         // A dialog requested while another is open is announced now and queued;
         // the queue shows it when the current dialog closes rather than
@@ -2263,13 +2275,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
         try
         {
-            return await _dialogQueue.EnqueueAsync(async () => await dialog.ShowAsync());
+            return (await _dialogQueue.EnqueueAsync(async () => await dialog.ShowAsync()), true);
         }
         catch (Exception ex)
         {
             // Fallback safety if something else goes wrong with the dialog
             ShowStatus("Dialog Error", $"Failed to show dialog: {ex.Message}", InfoBarSeverity.Error);
-            return ContentDialogResult.None;
+            return (ContentDialogResult.None, false);
         }
     }
 
@@ -2733,7 +2745,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			// the window had no XamlRoot yet — which is the state startup is in when it
 			// registers the core hotkeys — so the failure beep above played and the list
 			// of dead hotkeys was never shown to anyone.
-			await ShowNoticeAsync(title, message, "OK", System.Windows.Forms.MessageBoxIcon.Warning);
+			await ShowNoticeAsync(title, message, "OK", NoticeSeverity.Warning);
 		}
 		catch (Exception ex)
 		{
