@@ -263,6 +263,20 @@ public class UserGuideBuilderTests
 	}
 
 	[Fact]
+	public void Render_emits_lf_endings_so_rebuilds_do_not_churn_the_diff()
+	{
+		// The pages are committed and the repository is LF throughout. CRLF here
+		// would mark all 13 pages as modified on every rebuild.
+		PageTemplate template = PageTemplate.Load("Mutation User Guide");
+		GuideChapter chapter = Chapter("index");
+
+		string html = template.Render(chapter, "<p>Body</p>", [chapter], DateTimeOffset.Now);
+
+		Assert.DoesNotContain('\r', html);
+		Assert.Contains('\n', html);
+	}
+
+	[Fact]
 	public void Render_escapes_chapter_titles_in_the_navigation()
 	{
 		PageTemplate template = PageTemplate.Load("Mutation User Guide");

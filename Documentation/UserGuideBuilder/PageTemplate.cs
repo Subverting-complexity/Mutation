@@ -68,12 +68,30 @@ public sealed class PageTemplate
 		ArgumentNullException.ThrowIfNull(bodyHtml);
 		ArgumentNullException.ThrowIfNull(allChapters);
 
-		return _shell
+		string page = _shell
 			.Replace("{{TITLE}}", WebUtility.HtmlEncode(BrowserTitle(chapter.Title)), StringComparison.Ordinal)
 			.Replace("{{CSS}}", _css, StringComparison.Ordinal)
 			.Replace("{{NAV}}", BuildNav(chapter, allChapters), StringComparison.Ordinal)
 			.Replace("{{BODY}}", bodyHtml, StringComparison.Ordinal)
 			.Replace("{{FOOTER}}", BuildFooter(builtOn), StringComparison.Ordinal);
+
+		return NormaliseLineEndings(page);
+	}
+
+	/// <summary>
+	/// Forces LF endings on the generated page.
+	///
+	/// These pages are committed, and .gitattributes puts the whole repository on
+	/// LF. Without this the output picks up CRLF from Environment.NewLine, and
+	/// every rebuild marks all 13 pages as modified even when nothing changed -
+	/// noise that hides the edits that do matter.
+	/// </summary>
+	internal static string NormaliseLineEndings(string text)
+	{
+		ArgumentNullException.ThrowIfNull(text);
+
+		return text.Replace("\r\n", "\n", StringComparison.Ordinal)
+			.Replace('\r', '\n');
 	}
 
 	/// <summary>
