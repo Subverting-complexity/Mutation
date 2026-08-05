@@ -12,19 +12,13 @@ namespace Mutation.UserGuideBuilder;
 public static class ChapterDiscovery
 {
 	/// <summary>
-	/// The guide's contents page. It is the one page that carries the build date, so
-	/// a rebuild on a new day touches one file rather than all of them.
-	/// </summary>
-	public const string ContentsSlug = "index";
-
-	/// <summary>
 	/// The order chapters appear in the sidebar. Anything not listed here still
 	/// builds - it is appended alphabetically - so adding a chapter never breaks
 	/// the build, it just lands at the end until it is added to this list.
 	/// </summary>
 	public static readonly string[] ReadingOrder =
 	[
-		ContentsSlug,
+		GuideChapter.ContentsSlug,
 		"getting-started",
 		"main-window",
 		"microphone",

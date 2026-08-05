@@ -25,6 +25,18 @@ public static class GuideBuilder
 
 		MarkdownPipeline pipeline = MarkdownRenderer.CreatePipeline();
 		IReadOnlyList<GuideChapter> chapters = ChapterDiscovery.Discover(markdownDirectory, pipeline);
+
+		// Every page's footer links back to the contents page, and it is the one page
+		// that carries the build date. Without it the build would quietly produce a set
+		// of pages with a dead "back to the contents page" link on each of them and no
+		// date anywhere.
+		if (!chapters.Any(c => c.IsContentsPage))
+		{
+			throw new InvalidOperationException(
+				$"No contents page found: {markdownDirectory} has no {GuideChapter.ContentsSlug}.md. " +
+				"Every other page links back to it, so the guide cannot be built without one.");
+		}
+
 		PageTemplate template = PageTemplate.Load(siteTitle);
 
 		Directory.CreateDirectory(htmlDirectory);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Markdig;
 using Mutation.UserGuideBuilder;
 
@@ -310,7 +311,48 @@ public class UserGuideBuilderTests
 			string html = template.Render(chapter, "<p>Body</p>", all, DateTimeOffset.Now);
 
 			Assert.Contains("do not edit these HTML pages by hand", html, StringComparison.Ordinal);
-			Assert.Contains(@"<p><a href=""index.html"">Back to the contents page</a></p>", html, StringComparison.Ordinal);
+		}
+	}
+
+	// A link that reloads the page you are already on is a dead end, and unlike the
+	// sidebar's entry the footer link carries no aria-current to say so.
+	[Fact]
+	public void Render_links_back_to_the_contents_page_from_every_page_but_that_one()
+	{
+		PageTemplate template = PageTemplate.Load("Mutation User Guide");
+		GuideChapter contents = Chapter("index");
+		GuideChapter dictation = Chapter("dictation");
+		IReadOnlyList<GuideChapter> all = [contents, dictation];
+
+		const string backLink = @"<p><a href=""index.html"">Back to the contents page</a></p>";
+		Assert.Contains(backLink, template.Render(dictation, "<p>Body</p>", all, DateTimeOffset.Now), StringComparison.Ordinal);
+		Assert.DoesNotContain(backLink, template.Render(contents, "<p>Body</p>", all, DateTimeOffset.Now), StringComparison.Ordinal);
+	}
+
+	// The build has to produce the same bytes on every machine, and the pages declare
+	// lang="en" - a French-locale build would otherwise write "5 aout 2026" into a
+	// document a screen reader pronounces as English.
+	[Theory]
+	[InlineData("fr-FR")]
+	[InlineData("af-ZA")]
+	[InlineData("tr-TR")]
+	public void Render_dates_the_contents_page_the_same_way_in_every_locale(string culture)
+	{
+		var original = CultureInfo.CurrentCulture;
+		CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+		try
+		{
+			PageTemplate template = PageTemplate.Load("Mutation User Guide");
+			GuideChapter contents = Chapter("index");
+
+			string html = template.Render(
+				contents, "<p>Body</p>", [contents], new DateTimeOffset(2026, 8, 5, 9, 0, 0, TimeSpan.Zero));
+
+			Assert.Contains("Generated from the Markdown source on 5 August 2026.", html, StringComparison.Ordinal);
+		}
+		finally
+		{
+			CultureInfo.CurrentCulture = original;
 		}
 	}
 
@@ -390,6 +432,48 @@ public class UserGuideBuilderTests
 			DateTimeOffset.Now);
 
 		Assert.Equal(["index.html"], result.PagesWritten);
+	}
+
+	// The claim this whole change makes is about the committed files, which come out of
+	// Build - not out of PageTemplate.Render on its own. Pinned end to end so a future
+	// per-build value introduced anywhere upstream of the template (a modified time, a
+	// culture-sensitive sort) fails here rather than turning up as 13 churned files.
+	[Fact]
+	public void Build_produces_identical_chapter_pages_on_a_later_day()
+	{
+		using TempGuide first = new();
+		using TempGuide second = new();
+		foreach (TempGuide guide in new[] { first, second })
+		{
+			guide.WriteChapter("index", "# Contents\n\nSee [Dictation](dictation.md).\n");
+			guide.WriteChapter("dictation", "# Dictation\n\nHold the key.\n");
+			guide.WriteChapter("settings", "# Settings\n\n| A | B |\n|---|---|\n| 1 | 2 |\n");
+		}
+
+		GuideBuilder.Build(first.MarkdownDirectory, first.HtmlDirectory, "Mutation User Guide",
+			new DateTimeOffset(2026, 8, 5, 9, 0, 0, TimeSpan.Zero));
+		GuideBuilder.Build(second.MarkdownDirectory, second.HtmlDirectory, "Mutation User Guide",
+			new DateTimeOffset(2027, 1, 30, 22, 0, 0, TimeSpan.Zero));
+
+		foreach (string page in new[] { "dictation.html", "settings.html" })
+			Assert.Equal(first.ReadPage(page), second.ReadPage(page));
+
+		// The contents page is the one that is allowed to differ, and it must.
+		Assert.NotEqual(first.ReadPage("index.html"), second.ReadPage("index.html"));
+	}
+
+	// Without a contents page the build would quietly emit a set of pages whose footer
+	// link is dead and with no date anywhere.
+	[Fact]
+	public void Build_reports_a_readable_error_when_there_is_no_contents_page()
+	{
+		using TempGuide guide = new();
+		guide.WriteChapter("dictation", "# Dictation\n\nHold the key.\n");
+
+		InvalidOperationException error = Assert.Throws<InvalidOperationException>(
+			() => GuideBuilder.Build(guide.MarkdownDirectory, guide.HtmlDirectory, "Mutation User Guide", DateTimeOffset.Now));
+
+		Assert.Contains("index.md", error.Message, StringComparison.Ordinal);
 	}
 
 	[Fact]

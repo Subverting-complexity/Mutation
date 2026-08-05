@@ -34,7 +34,7 @@ try
 
 	Console.WriteLine();
 	Console.WriteLine($"Done. {result.PagesWritten.Count} page(s) written to {htmlDirectory}");
-	Console.WriteLine($"Open {Path.Combine(htmlDirectory, "index.html")} to read the guide.");
+	Console.WriteLine($"Open {Path.Combine(htmlDirectory, GuideChapter.ContentsFileName)} to read the guide.");
 	return 0;
 }
 catch (Exception ex) when (ex is DirectoryNotFoundException or InvalidOperationException or IOException or ArgumentException)

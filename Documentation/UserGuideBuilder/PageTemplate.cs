@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -134,29 +135,46 @@ public sealed class PageTemplate
 	}
 
 	/// <summary>
-	/// The page footer. Only the contents page is dated.
+	/// The page footer. Only the contents page is dated, and only the other pages carry
+	/// the link back to it.
 	///
 	/// These pages are committed, so a footer date on every page means a rebuild on a
-	/// new day rewrites all 13 of them even when no wording changed — noise that hides
+	/// new day rewrites all 13 of them even when no wording changed - noise that hides
 	/// the edits that matter and collides between concurrent branches. The date is
 	/// genuinely useful (it says how current the guide is), so it stays, on the one page
 	/// a reader arrives at. Same reasoning as NormaliseLineEndings above.
+	///
+	/// The date is formatted invariantly. The build has to produce the same bytes on
+	/// every machine, and the pages declare lang="en" - a French-locale build would
+	/// otherwise write "5 aout 2026" into a document a screen reader pronounces as
+	/// English.
+	///
+	/// The contents page does not link back to itself: a link that reloads the page you
+	/// are already on is a dead end, and unlike the sidebar's entry it has no
+	/// aria-current to say so.
 	/// </summary>
 	private static string BuildFooter(DateTimeOffset builtOn, bool isContentsPage)
 	{
 		const string Provenance =
 			"The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.";
 
-		string note = isContentsPage
-			? $"Generated from the Markdown source on {builtOn:d MMMM yyyy}. {Provenance}"
-			: Provenance;
+		StringBuilder footer = new();
+		footer.AppendLine("<footer>");
 
-		return $"""
-			<footer>
-			<p><a href="index.html">Back to the contents page</a></p>
-			<p>{note}</p>
-			</footer>
-			""";
+		if (isContentsPage)
+		{
+			string date = builtOn.ToString("d MMMM yyyy", CultureInfo.InvariantCulture);
+			footer.AppendLine($"<p>Generated from the Markdown source on {date}. {Provenance}</p>");
+		}
+		else
+		{
+			footer.AppendLine(
+				$@"<p><a href=""{GuideChapter.ContentsFileName}"">Back to the contents page</a></p>");
+			footer.AppendLine($"<p>{Provenance}</p>");
+		}
+
+		footer.Append("</footer>");
+		return footer.ToString();
 	}
 
 	private static string ReadResource(string name)
