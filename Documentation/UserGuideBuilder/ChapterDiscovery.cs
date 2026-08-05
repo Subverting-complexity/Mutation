@@ -18,7 +18,7 @@ public static class ChapterDiscovery
 	/// </summary>
 	public static readonly string[] ReadingOrder =
 	[
-		"index",
+		GuideChapter.ContentsSlug,
 		"getting-started",
 		"main-window",
 		"microphone",

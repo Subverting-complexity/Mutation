@@ -12,4 +12,19 @@ public sealed record GuideChapter(
 	string SourcePath,
 	string Slug,
 	string OutputFileName,
-	string Title);
+	string Title)
+{
+	/// <summary>
+	/// The guide's contents page. It is the page every other page links back to, and
+	/// the one page that carries the build date - so a rebuild on a new day touches one
+	/// file rather than all of them.
+	/// </summary>
+	public const string ContentsSlug = "index";
+
+	/// <summary>The generated contents page, i.e. what "back to contents" points at.</summary>
+	public const string ContentsFileName = ContentsSlug + ".html";
+
+	/// <summary>Whether this is the guide's contents page.</summary>
+	public bool IsContentsPage =>
+		string.Equals(Slug, ContentsSlug, StringComparison.OrdinalIgnoreCase);
+}
