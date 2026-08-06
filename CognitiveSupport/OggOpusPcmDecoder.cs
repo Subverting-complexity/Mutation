@@ -148,6 +148,14 @@ public static class OggOpusPcmDecoder
 
 				DecodePacket(decoder, packet.Data, channels, buffer, ref remainingPreSkip, onSamples);
 			}
+
+			// The header sniff scans raw bytes, so it can match an "OpusHead" that is not
+			// actually an identification packet — inside a comment string, say. Say so instead
+			// of returning nothing: silently decoding to zero samples would have the converter
+			// write a valid but empty .ogg and the app transcribe silence.
+			if (audioSerialNumber is null)
+				throw new InvalidDataException(
+					$"'{Path.GetFileName(filePath)}' has no Opus identification header.");
 		}
 		finally
 		{

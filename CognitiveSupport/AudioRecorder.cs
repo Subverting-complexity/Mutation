@@ -76,6 +76,11 @@ public class AudioRecorder : IAudioRecorder
 			TrimmedSpeechSeconds = null;
 			_captureException = null;
 
+			// A source left over from a previous recording still holds the microphone open, and
+			// its handlers still point here: its buffers would land in the new recording and
+			// its RecordingStopped would open the new drain gate early.
+			DetachCaptureSource();
+
 			IAudioCaptureSource? waveIn = null;
 			Stream? fileStream = null;
 			OpusEncoder? encoder = null;
@@ -243,6 +248,18 @@ public class AudioRecorder : IAudioRecorder
 		}
 	}
 
+	// Unhooks and releases the current capture source. Callers must hold _writeLock.
+	private void DetachCaptureSource()
+	{
+		if (_waveIn is null)
+			return;
+
+		_waveIn.DataAvailable -= OnDataAvailable;
+		_waveIn.RecordingStopped -= OnRecordingStopped;
+		try { _waveIn.Dispose(); } catch { /* Releasing a dead device must not fail the caller. */ }
+		_waveIn = null;
+	}
+
 	public void Dispose()
 	{
 		StopRecording();
@@ -252,8 +269,7 @@ public class AudioRecorder : IAudioRecorder
 			if (_disposed)
 				return;
 
-			_waveIn?.Dispose();
-			_waveIn = null;
+			DetachCaptureSource();
 
 			// _oggStream does not implement IDisposable but it uses the stream.
 			// The stream is disposed here.

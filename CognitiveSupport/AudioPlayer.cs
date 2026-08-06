@@ -15,7 +15,8 @@ namespace CognitiveSupport;
 /// </summary>
 public class AudioPlayer : IDisposable
 {
-    private WaveOutEvent? _waveOut;
+    private readonly Func<IAudioOutputDevice> _outputDeviceFactory;
+    private IAudioOutputDevice? _waveOut;
     private MemoryStream? _pcmStream;
     private WaveStream? _sourceStream;
     private SoundTouchSampleProvider? _speedProvider;
@@ -26,6 +27,16 @@ public class AudioPlayer : IDisposable
     // Opus parameters matching AudioRecorder
     private const int SampleRate = 48000;
     private const int Channels = 1;
+
+    public AudioPlayer()
+        : this(() => new WaveOutAudioOutputDevice())
+    {
+    }
+
+    internal AudioPlayer(Func<IAudioOutputDevice> outputDeviceFactory)
+    {
+        _outputDeviceFactory = outputDeviceFactory ?? throw new ArgumentNullException(nameof(outputDeviceFactory));
+    }
 
     public bool IsPlaying => _waveOut?.PlaybackState == PlaybackState.Playing;
 
@@ -157,7 +168,7 @@ public class AudioPlayer : IDisposable
         _speedProvider = new SoundTouchSampleProvider(source.ToSampleProvider()) { Tempo = _speed };
         IWaveProvider output = new SampleToWaveProvider(_speedProvider);
 
-        _waveOut = new WaveOutEvent();
+        _waveOut = _outputDeviceFactory();
         _waveOut.PlaybackStopped += OnPlaybackStopped;
         _waveOut.Init(output);
         _waveOut.Play();
@@ -165,6 +176,18 @@ public class AudioPlayer : IDisposable
 
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
     {
+        // A device that is no longer the current one has nothing to say: a newer Play already
+        // took over and disposed it on its way in. Checked before the events are raised, so a
+        // stopped notification cannot arrive after the next file has started and have a
+        // listener tear that one down instead.
+        lock (_playLock)
+        {
+            if (!ReferenceEquals(sender, _waveOut))
+                return;
+        }
+
+        // Raised outside the lock: these run listener code, which is free to call back into
+        // Play or Stop, and holding the lock across it invites a stall.
         if (e.Exception != null)
         {
             PlaybackFailed?.Invoke(this, $"Playback error: {e.Exception.Message}");
@@ -177,11 +200,11 @@ public class AudioPlayer : IDisposable
         // Release the output device and the decoded audio now that the file has run to its
         // end. Waiting for the next Stop/Dispose meant a recording played to completion kept
         // an open WinMM output handle and its whole PCM buffer resident for the rest of the
-        // app's life. Stop detaches this handler first, so this cannot recurse.
+        // app's life. StopCore detaches this handler first, so this cannot recurse.
         lock (_playLock)
         {
-            // A PlaybackEnded handler may have started the next file already. That instance
-            // owns the teardown now, and it disposed this one on its way in.
+            // Re-checked: a listener above may have started the next file, and that instance
+            // owns the teardown now.
             if (!ReferenceEquals(sender, _waveOut))
                 return;
 

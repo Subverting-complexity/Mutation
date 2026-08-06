@@ -75,8 +75,10 @@ public class AudioRecorderDrainTests : IDisposable
 		Assert.InRange(DecodedFrames(path), 19, 21);
 	}
 
-	[Fact]
-	public void Stop_gives_up_on_a_capture_source_that_never_reports_it_has_drained()
+	// The timeout is the assertion's safety net: if the drain wait ever regressed to
+	// unbounded, this must go red rather than hang the whole suite.
+	[Fact(Timeout = 20000)]
+	public async Task Stop_gives_up_on_a_capture_source_that_never_reports_it_has_drained()
 	{
 		// A wedged driver must cost a bounded pause, not a hung app: the recording is still
 		// closed and still readable, it just loses whatever the driver never handed over.
@@ -87,7 +89,10 @@ public class AudioRecorderDrainTests : IDisposable
 		{
 			recorder.StartRecording(0, path);
 			capture.Deliver(Tone(frames: 10));
-			recorder.StopRecording();
+
+			// Off the test thread only so xUnit's Timeout applies: a regression to an
+			// unbounded wait then fails this test instead of stalling the suite.
+			await Task.Run(recorder.StopRecording);
 		}
 
 		Assert.InRange(DecodedFrames(path), 9, 11);
