@@ -64,7 +64,7 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(5, 11, "report.pdf", 5, 5));
 
-		Assert.Equal("report.pdf done. 1 of 3 documents processed.", announcement);
+		Assert.Equal("report.pdf: 1 of 3 documents finished.", announcement);
 		Assert.Equal(1, narrator.DocumentsCompleted);
 	}
 
@@ -83,7 +83,7 @@ public class OcrBatchProgressNarratorTests
 		}
 
 		Assert.Single(announcements);
-		Assert.Equal("big.pdf done. 1 of 2 documents processed.", announcements[0]);
+		Assert.Equal("big.pdf: 1 of 2 documents finished.", announcements[0]);
 	}
 
 	[Fact]
@@ -102,9 +102,9 @@ public class OcrBatchProgressNarratorTests
 		Assert.Equal(
 			new[]
 			{
-				"scan1.png done. 1 of 4 documents processed.",
-				"scan2.png done. 2 of 4 documents processed.",
-				"scan3.png done. 3 of 4 documents processed.",
+				"scan1.png: 1 of 4 documents finished.",
+				"scan2.png: 2 of 4 documents finished.",
+				"scan3.png: 3 of 4 documents finished.",
 			},
 			announcements);
 	}
@@ -146,7 +146,7 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(2, 9, "second.png", 1, 1));
 
-		Assert.Equal("second.png done. 2 of 2 documents processed.", announcement);
+		Assert.Equal("second.png: 2 of 2 documents finished.", announcement);
 	}
 
 	[Fact]
@@ -156,7 +156,7 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(1, 9, "scan.png", 1, 1));
 
-		Assert.Equal("scan.png done. 1 of 1 documents processed.", announcement);
+		Assert.Equal("scan.png: 1 of 1 documents finished.", announcement);
 	}
 
 	[Fact]
@@ -168,11 +168,17 @@ public class OcrBatchProgressNarratorTests
 		Assert.Throws<ArgumentNullException>(() => OcrBatchProgressNarrator.ComposeLabel(null!));
 	}
 
-	// Progress and status share a screen-reader queue keyed by activity id. If they shared
-	// one, a progress tick would supersede the pending "Processing N document(s)".
+	// A document that failed outright still reports its last page, so the announcement
+	// must not claim it succeeded — the closing summary is about to say otherwise.
 	[Fact]
-	public void ProgressAnnouncementsUseTheirOwnActivity()
+	public void AFinishedDocumentIsNotDescribedAsSucceeding()
 	{
-		Assert.NotEqual(Mutation.Ui.Core.StatusAnnouncement.ActivityId, OcrBatchProgressNarrator.AnnouncementActivityId);
+		var narrator = new OcrBatchProgressNarrator(totalDocuments: 2);
+
+		string? announcement = narrator.TryComposeAnnouncement(Progress(1, 9, "corrupt.pdf", 1, 1));
+
+		Assert.NotNull(announcement);
+		Assert.DoesNotContain("done", announcement, StringComparison.OrdinalIgnoreCase);
+		Assert.DoesNotContain("success", announcement, StringComparison.OrdinalIgnoreCase);
 	}
 }

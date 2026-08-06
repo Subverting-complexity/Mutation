@@ -108,13 +108,19 @@ page limit only as far as your tier allows.
 
 ### A batch of documents is taking far too long
 
-**What's happening.** Every page of every file you picked is sent off to be read, one
-request at a time. Forty PDFs is a lot of pages, and it can run for several minutes.
+**What's happening.** Every page of every file you picked is sent off to be read.
+Mutation works on two documents at a time by default, with up to four pages in the air
+at once, so forty PDFs still adds up to a lot of waiting.
 
-**What to do.** Listen for the per-file announcements — Mutation says "done" as each
-file finishes, so you can tell it is still working. If you picked the wrong files, or
-simply want it to stop, click **Cancel OCR** under the progress bar. Closing the
-Mutation window stops a running batch too.
+**What to do.** Listen for the per-file announcements — Mutation names each file as it
+finishes, so you can tell it is still working. If you picked the wrong files, or simply
+want it to stop, click **Cancel OCR** under the progress bar. Closing the Mutation
+window stops a running batch too.
+
+To speed things up, open **Settings** (**Ctrl+Comma**) and find **Max parallel
+documents** and **Max parallel requests** under the OCR settings. Raising them sends
+more at once. Do not go beyond what your Azure plan allows, or the service starts
+refusing requests and the batch ends up slower.
 
 ### Nothing happens at all — a key is missing or wrong
 

@@ -200,6 +200,12 @@ public class OcrManager
         // OperationCanceledException so fail-fast cancellation behaviour is preserved.
         FileOcrOutcome[] outcomes = await Task.WhenAll(tasks);
 
+        // A cancel that lands after the last page finished but before the reduce would
+        // otherwise fall through to the success path and overwrite the clipboard — the
+        // one thing the user is told cancelling never does. Checked here so cancelling
+        // means the same thing however late it arrives (issue #227).
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Reduce: combine results on a single thread, in original selection order, so today's
         // output format and ordering are protected against the concurrent execution above.
         var combinedText = new StringBuilder();

@@ -66,10 +66,13 @@ public sealed class OcrBatchProgressNarrator
 		if (progress.ProcessedSegments >= progress.TotalSegments)
 			return null;
 
+		// "Finished", not "done": a document that failed outright still reports its last
+		// page, and telling the user "corrupt.pdf done" would claim a success the closing
+		// summary is about to contradict. This says where the run is, not how it went.
 		int total = Math.Max(_totalDocuments, completed);
 		return string.Format(
 			CultureInfo.CurrentCulture,
-			"{0} done. {1} of {2} documents processed.",
+			"{0}: {1} of {2} documents finished.",
 			progress.FileName,
 			completed,
 			total);

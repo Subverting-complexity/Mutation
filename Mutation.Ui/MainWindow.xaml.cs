@@ -866,6 +866,17 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private async void BtnOcrDocuments_Click(object sender, RoutedEventArgs e)
 	{
+		// Claimed here, before the first await, and not by BtnOcrDocuments.IsEnabled — that
+		// only lands after the configuration check and the file picker, so two fast clicks
+		// would both get past it. The second handler would then reach its finally and end
+		// the first one's run, severing an in-flight batch from cancellation entirely.
+		// Check and Begin sit together with nothing awaited between them, so on the UI
+		// thread nothing can interleave (issue #227).
+		if (_ocrDocumentsRun.IsRunning)
+			return;
+
+		OcrDocumentsRun run = _ocrDocumentsRun.Begin();
+
 		// Declared out here so the cancellation message can report how far the run got.
 		OcrBatchProgressNarrator? narrator = null;
 		try
@@ -886,11 +897,6 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (files == null || files.Count == 0)
 				return;
 
-			// Begun before the Cancel button is enabled, never after: a press that landed
-			// in between would find no run to cancel and silently do nothing (issue #227).
-			// The run's token, not CancellationToken.None, so closing the window stops it.
-			CancellationToken runToken = _ocrDocumentsRun.Begin();
-
                         BtnOcrDocuments.IsEnabled = false;
                         ShowStatus("OCR documents", $"Processing {files.Count} document(s)...", InfoBarSeverity.Informational);
 
@@ -898,7 +904,13 @@ public sealed partial class MainWindow : Window, IDisposable
                         OcrDocumentsProgressBar.Maximum = 1;
                         OcrDocumentsProgressPanel.Visibility = Visibility.Visible;
                         OcrDocumentsProgressLabel.Text = "Preparing documents...";
+
+                        // Focus has to move: it is sitting on the OCR button that was just
+                        // disabled, and WinUI would drop it somewhere arbitrary. Cancel is where
+                        // the user would want to be anyway — it is the only control the run
+                        // offers, and hunting for it by Tab is the wrong thing to ask.
                         BtnCancelOcrDocuments.IsEnabled = true;
+                        try { BtnCancelOcrDocuments.Focus(FocusState.Programmatic); } catch { }
 
                         var paths = files.Select(file => file.Path).ToList();
                         narrator = new OcrBatchProgressNarrator(paths.Count);
@@ -909,15 +921,16 @@ public sealed partial class MainWindow : Window, IDisposable
                                 OcrDocumentsProgressBar.Value = info.ProcessedSegments;
                                 OcrDocumentsProgressLabel.Text = OcrBatchProgressNarrator.ComposeLabel(info);
 
-                                // The label is a live region, but the run reports once per page and
-                                // a forty-page batch would leave the reader talking for minutes. The
-                                // narrator holds announcements to one per finished document (#228).
+                                // The label above updates every page, for the eye. Speech is not
+                                // free that way — a forty-page batch would leave the reader talking
+                                // for minutes — so the narrator decides what is worth saying, which
+                                // is one announcement per finished document (issue #228).
                                 string? announcement = narrator.TryComposeAnnouncement(info);
                                 if (announcement is not null)
                                         AnnounceOcrDocumentsProgress(announcement);
                         });
 
-                        var result = await _ocrManager.ExtractTextFromFilesAsync(paths, OcrReadingOrder.TopToBottomColumnAware, runToken, progress);
+                        var result = await _ocrManager.ExtractTextFromFilesAsync(paths, OcrReadingOrder.TopToBottomColumnAware, run.Token, progress);
 			SetOcrText(result.Text);
 
 			if (result.SuccessCount == 0)
@@ -956,9 +969,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
                 finally
                 {
-                        // Safe when no run was ever begun, e.g. the user cancelled the picker.
-                        _ocrDocumentsRun.End();
+                        _ocrDocumentsRun.End(run);
                         BtnOcrDocuments.IsEnabled = true;
+
+                        // The Cancel button is about to disappear. If the user is standing on it
+                        // — which they are if they pressed it, or if focus never moved off it —
+                        // put them back on the button they started from rather than letting
+                        // focus fall to wherever WinUI decides.
+                        RestoreFocusFromCancelOcrDocuments();
+
                         BtnCancelOcrDocuments.IsEnabled = false;
                         OcrDocumentsProgressPanel.Visibility = Visibility.Collapsed;
                         OcrDocumentsProgressBar.Value = 0;
@@ -969,21 +988,46 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private void BtnCancelOcrDocuments_Click(object sender, RoutedEventArgs e)
 	{
-		// Disabled immediately so a second press cannot re-announce a stop already asked
-		// for. The batch does not end here — it unwinds when the running OCR calls
-		// observe the token — so this only reports that the request landed; the
-		// OperationCanceledException handler confirms it took effect (issue #227).
+		// The button is deliberately not disabled here: doing that would destroy focus on
+		// the control the user is standing on, and leave a screen-reader user with no idea
+		// where they are. Cancel() returns false for a second press instead, so the repeat
+		// is simply silent (issue #227).
 		if (!_ocrDocumentsRun.Cancel())
 			return;
 
-		BtnCancelOcrDocuments.IsEnabled = false;
-		ShowStatus("OCR documents", "Cancelling; finishing the pages already in flight...", InfoBarSeverity.Informational);
+		// The batch does not end here — it unwinds as the running OCR calls observe the
+		// token — so this only reports that the request landed. The
+		// OperationCanceledException handler confirms it took effect.
+		ShowStatus("OCR documents", "Cancelling the batch...", InfoBarSeverity.Informational);
+	}
+
+	/// <summary>
+	/// Moves focus off the Cancel button before it is hidden, but only when focus is
+	/// actually on it — the user may have wandered elsewhere during a long batch, and
+	/// yanking them back would be worse than leaving them be.
+	/// </summary>
+	private void RestoreFocusFromCancelOcrDocuments()
+	{
+		try
+		{
+			if (Content?.XamlRoot is null)
+				return;
+
+			object? focused = FocusManager.GetFocusedElement(Content.XamlRoot);
+			if (ReferenceEquals(focused, BtnCancelOcrDocuments))
+				BtnOcrDocuments.Focus(FocusState.Programmatic);
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"RestoreFocusFromCancelOcrDocuments failed: {ex.Message}");
+		}
 	}
 
 	/// <summary>
 	/// Announces batch OCR progress to the screen reader. Raised on the progress label
-	/// itself so the announcement carries that context, and Polite so it queues behind
-	/// whatever the user is doing rather than interrupting them (issue #228).
+	/// itself so the announcement carries that context. "Other" rather than an important
+	/// kind, and MostRecent, so a slow reader hears where the run is now instead of
+	/// working through a backlog of documents that finished minutes ago (issue #228).
 	/// </summary>
 	private void AnnounceOcrDocumentsProgress(string announcement)
 	{

@@ -347,6 +347,10 @@ public class OcrService : IOcrService, IDisposable
 				}
 			}
 
+			// Not dead code: the test suite invokes this reflectively to clear the shared
+			// static limiter between runs, which is the only way one test's requests can
+			// be kept out of the next one's window. Flagged as unused by issue #239's
+			// notes; it is reachable, so it stays.
 			private void Reset()
 			{
 				lock (_sync)
