@@ -8,18 +8,11 @@ namespace Mutation.Tests;
 
 public class SettingsManagerMigrationTests : IDisposable
 {
-	private readonly string _tempPath;
+	private readonly TempSettingsFile _settingsFile = new("settings");
 
-	public SettingsManagerMigrationTests()
-	{
-		_tempPath = Path.Combine(Path.GetTempPath(), $"mutation-settings-{Guid.NewGuid():N}.json");
-	}
+	private string _tempPath => _settingsFile.Path;
 
-	public void Dispose()
-	{
-		if (File.Exists(_tempPath))
-			File.Delete(_tempPath);
-	}
+	public void Dispose() => _settingsFile.Dispose();
 
 	private JObject UpgradeAndReload(string json)
 	{

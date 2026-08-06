@@ -401,21 +401,42 @@ public class OcrServiceTests
 		Assert.Throws<ArgumentNullException>(() => new OcrService("key", null, 10));
 	}
 
+	private static CancellationTokenSource CreatePerRequestCts(OcrService service, CancellationToken overallToken)
+	{
+		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestCancellationTokenSource", BindingFlags.NonPublic | BindingFlags.Instance);
+		Assert.NotNull(method);
+		return (CancellationTokenSource)method!.Invoke(service, new object[] { overallToken })!;
+	}
+
 	[Fact]
-	public void CreatePerRequestCancellationTokenSource_LinkedAndScheduledToCancel()
+	public void CreatePerRequestCancellationTokenSource_IsLinkedToTheOverallToken()
 	{
 		var service = new OcrService("dummy-key", "https://example.com/", 1);
 
-		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestCancellationTokenSource", BindingFlags.NonPublic | BindingFlags.Instance);
-		Assert.NotNull(method);
-
 		using var overall = new CancellationTokenSource();
-		using var cts = (CancellationTokenSource)method!.Invoke(service, new object[] { overall.Token })!;
+		using var cts = CreatePerRequestCts(service, overall.Token);
 
 		Assert.False(cts.IsCancellationRequested);
 
 		overall.Cancel();
 		Assert.True(cts.Token.IsCancellationRequested);
+	}
+
+	[Fact]
+	public void CreatePerRequestCancellationTokenSource_SelfCancelsAfterThePerRequestTimeout()
+	{
+		// The timeout is what stops a wedged Azure call hanging the batch, and linking
+		// alone does not provide it. A one-second service timeout with a ten-second wait
+		// leaves ample slack on a loaded agent while still failing if CancelAfter is lost.
+		var service = new OcrService("dummy-key", "https://example.com/", 1);
+
+		using var overall = new CancellationTokenSource();
+		using var cts = CreatePerRequestCts(service, overall.Token);
+
+		Assert.True(
+			cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10)),
+			"The per-request source never cancelled itself, so no per-request timeout is scheduled.");
+		Assert.False(overall.IsCancellationRequested);
 	}
 
 	// ---------------------------------------------------------------------

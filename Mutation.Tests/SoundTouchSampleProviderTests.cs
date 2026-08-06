@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CognitiveSupport;
 using NAudio.Wave;
 
@@ -33,16 +34,69 @@ public class SoundTouchSampleProviderTests
 		return totalFrames;
 	}
 
+	// Everything the provider produced, kept so the output's pitch can be measured.
+	private static float[] Drain(ISampleProvider provider)
+	{
+		var output = new List<float>();
+		var buffer = new float[SampleRate];
+		int read;
+		while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+			output.AddRange(buffer.AsSpan(0, read).ToArray());
+
+		return output.ToArray();
+	}
+
+	// Goertzel: the energy at one frequency, without pulling in an FFT. Comparing the
+	// energy at 440 Hz against its octaves is enough to say the pitch did not move.
+	private static double EnergyAt(ReadOnlySpan<float> samples, double frequency)
+	{
+		double coefficient = 2.0 * Math.Cos(2.0 * Math.PI * frequency / SampleRate);
+		double previous = 0.0;
+		double beforeThat = 0.0;
+
+		foreach (float sample in samples)
+		{
+			double current = sample + (coefficient * previous) - beforeThat;
+			beforeThat = previous;
+			previous = current;
+		}
+
+		return Math.Sqrt(Math.Abs((previous * previous) + (beforeThat * beforeThat) - (coefficient * previous * beforeThat)));
+	}
+
 	[Fact]
-	public void WaveFormat_PreservesSampleRate_SoPitchIsUnchanged()
+	public void WaveFormat_IsPassedThroughFromSource()
 	{
 		var format = WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 1);
 		var source = new BufferSampleProvider(BuildTone(SampleRate), format);
 
-		var provider = new SoundTouchSampleProvider(source) { Tempo = 2.0 };
+		var provider = new SoundTouchSampleProvider(source);
 
 		Assert.Equal(SampleRate, provider.WaveFormat.SampleRate);
 		Assert.Equal(1, provider.WaveFormat.Channels);
+	}
+
+	[Theory]
+	[InlineData(2.0)]
+	[InlineData(0.5)]
+	public void Tempo_ChangesSpeedWithoutChangingPitch(double tempo)
+	{
+		// The point of the time-stretcher over plain resampling: a 440 Hz tone played at
+		// another speed must still be 440 Hz, not the chipmunk octave a resampler gives.
+		var format = WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 1);
+		var source = new BufferSampleProvider(BuildTone(SampleRate), format);
+
+		float[] output = Drain(new SoundTouchSampleProvider(source) { Tempo = tempo });
+
+		// A whole number of cycles at 220/440/880 Hz, taken from the middle so the
+		// stretcher's start-up and tail-flush ramps are not measured.
+		const int Window = 12000;
+		Assert.True(output.Length >= Window, "Not enough output to measure the pitch.");
+		var middle = output.AsSpan((output.Length - Window) / 2, Window);
+
+		double atPitch = EnergyAt(middle, 440.0);
+		Assert.True(atPitch > EnergyAt(middle, 880.0) * 4.0, "Output has drifted an octave up.");
+		Assert.True(atPitch > EnergyAt(middle, 220.0) * 4.0, "Output has drifted an octave down.");
 	}
 
 	[Fact]

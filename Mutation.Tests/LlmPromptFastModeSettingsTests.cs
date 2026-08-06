@@ -16,18 +16,11 @@ namespace Mutation.Tests;
 /// </summary>
 public class LlmPromptFastModeSettingsTests : IDisposable
 {
-	private readonly string _tempPath;
+	private readonly TempSettingsFile _settingsFile = new("fastmode");
 
-	public LlmPromptFastModeSettingsTests()
-	{
-		_tempPath = Path.Combine(Path.GetTempPath(), $"mutation-fastmode-{Guid.NewGuid():N}.json");
-	}
+	private string _tempPath => _settingsFile.Path;
 
-	public void Dispose()
-	{
-		if (File.Exists(_tempPath))
-			File.Delete(_tempPath);
-	}
+	public void Dispose() => _settingsFile.Dispose();
 
 	[Fact]
 	public void NewPrompt_DefaultsToStandardSpeed()

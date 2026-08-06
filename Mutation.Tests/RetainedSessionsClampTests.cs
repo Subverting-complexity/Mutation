@@ -49,22 +49,14 @@ public class RetainedSessionsClampTests
 
 	private static Settings ApplyEnsure(int storedValue)
 	{
-		string tempPath = Path.Combine(Path.GetTempPath(), $"mutation-retain-{System.Guid.NewGuid():N}.json");
-		File.WriteAllText(tempPath, "{}");
-		try
+		using var settingsFile = new TempSettingsFile("retain", "{}");
+
+		var manager = new SettingsManager(settingsFile.Path);
+		var settings = new Settings
 		{
-			var manager = new SettingsManager(tempPath);
-			var settings = new Settings
-			{
-				SpeechToTextSettings = new SpeechToTextSettings { MaxRetainedSessions = storedValue },
-			};
-			manager.EnsureSettings(settings, isNewFile: false);
-			return settings;
-		}
-		finally
-		{
-			if (File.Exists(tempPath))
-				File.Delete(tempPath);
-		}
+			SpeechToTextSettings = new SpeechToTextSettings { MaxRetainedSessions = storedValue },
+		};
+		manager.EnsureSettings(settings, isNewFile: false);
+		return settings;
 	}
 }

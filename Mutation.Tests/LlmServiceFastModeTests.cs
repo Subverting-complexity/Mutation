@@ -6,7 +6,7 @@ using CognitiveSupport;
 
 namespace Mutation.Tests;
 
-public class LlmServiceFastModeTests
+public class LlmServiceFastModeTests : IDisposable
 {
 	private const string Model = "gpt-5.6";
 	private const string SuccessBody =
@@ -15,15 +15,30 @@ public class LlmServiceFastModeTests
 	private static readonly LlmModelConfig Config =
 		new(Model, LlmProvider.OpenAI, customTemperature: null);
 
+	// One client per test, all released at the end of the class rather than left to the
+	// finalizer. Disposing the client disposes the fake handler with it.
+	private readonly List<HttpClient> _clients = new();
+
+	public void Dispose()
+	{
+		foreach (var client in _clients)
+			client.Dispose();
+	}
+
 	// The SDK's own HttpClient-backed transport, pointed at the fake handler, so the
 	// request under assertion is the one the SDK really serializes.
-	private static LlmService CreateService(FakeHttpMessageHandler handler, int retryCount = 0) =>
-		new(
+	private LlmService CreateService(FakeHttpMessageHandler handler, int retryCount = 0)
+	{
+		var client = new HttpClient(handler);
+		_clients.Add(client);
+
+		return new(
 			"test-key",
 			new[] { Config },
 			timeoutSeconds: 5,
 			retryCount: retryCount,
-			transport: new HttpClientPipelineTransport(new HttpClient(handler)));
+			transport: new HttpClientPipelineTransport(client));
+	}
 
 	private static IList<LlmChatMessage> Messages() =>
 		new List<LlmChatMessage> { new(LlmChatRole.User, "hello") };
