@@ -204,6 +204,40 @@ Fix the problem and press Save again, or press Cancel to discard the changes."
 2. Close anything that might have the settings file open, including a text editor.
 3. Press Save again. Your changes are still in the dialog until you press Cancel.
 
+Some settings are saved for you a moment after you change them, without a Save
+button — the read-aloud speed and volume sliders, for example. If one of those writes
+fails you get the failure beep and a message titled "Settings not saved", which ends
+with "Close anything that has the settings file open, then change the setting again."
+Do that, then nudge the slider once more. Until you do, the setting works for now but
+goes back to its old value the next time you start Mutation.
+
+### The temp directory box won't accept what I typed
+
+**What's happening.** The **Temp directory** on the **Speech to Text** page is the
+folder your recordings are written to. It has to be a full path that starts with a
+drive, like `D:\Recordings`. If you clear the box, or type just a folder name like
+`Recordings`, Mutation would have nowhere sensible to put your recordings — they would
+end up next to the program itself, or fail outright.
+
+So when you press Save, Mutation puts its own folder back in the box, plays the
+failure beep, and tells you what was wrong and where recordings will go instead.
+
+**What to do.** Press **Save** again to accept the folder Mutation filled in, or type
+the full path you want and save. The **Browse...** button next to the box always gives
+you a full path.
+
+### A hotkey router mapping came up blank
+
+**What's happening.** The hotkey router lets you press one shortcut and have Mutation
+send a different one. If a mapping in the settings file has lost one of its two
+shortcuts, Mutation no longer refuses to start — it leaves that side blank, keeps
+every other setting, and shows a message titled "Hotkey Router Settings Issues"
+naming the mapping.
+
+**What to do.** Open **Settings** with **Ctrl+Comma**, go to **Hotkeys**, and either
+fill in the missing shortcut or delete the row. A mapping with a blank side simply
+does nothing until you finish it.
+
 ### Screen capture appears to be blocked
 
 **What's happening.** Some managed work PCs disable screen capture by policy, and some

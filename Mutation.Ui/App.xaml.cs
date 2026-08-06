@@ -370,6 +370,20 @@ public partial class App : Application
 					NoticeSeverity.Warning);
 			}
 
+			// A mapping with a missing hotkey used to throw during deserialization and
+			// cost the user every other setting in the file. It is repaired on load
+			// now, and said out loud here so the blank row is not a mystery (issue #247).
+			if (settingsManager.HotKeyRouterIssues.Count > 0 && _window is MainWindow routerWindow)
+			{
+				await routerWindow.ShowNoticeAsync(
+					"Hotkey Router Settings Issues",
+					"The following hotkey router mappings were incomplete and have been repaired:\n\n" +
+						string.Join("\n", settingsManager.HotKeyRouterIssues) +
+						"\n\nOpen Hotkeys in Settings to finish or remove them.",
+					"OK",
+					NoticeSeverity.Warning);
+			}
+
 			if (hotkeyFailures.Count > 0 && _window is MainWindow mainWindow)
 				await mainWindow.ShowHotkeyBindingFailuresAsync(hotkeyFailures);
 

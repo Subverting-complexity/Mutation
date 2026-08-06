@@ -375,12 +375,23 @@ public class HotKeyRouterSettings
 		public string? FromHotKey { get; set; }
 		public string? ToHotKey { get; set; }
 
+		// A half-finished mapping is a normal state, not a fault: the Hotkeys page
+		// adds a blank row and lets the user fill in the two sides one at a time,
+		// and the router simply treats an incomplete row as inactive. The
+		// constructor used to throw on null anyway, which meant a settings file
+		// with "FromHotKey": null took the whole load down with it — every other
+		// setting lost to one unfinished mapping (issue #247). Null is accepted
+		// here and repaired to blank on load.
+		public HotKeyRouterMap()
+		{
+		}
+
 		public HotKeyRouterMap(
 			string? fromHotKey,
 			string? toHotKey)
 		{
-			FromHotKey = fromHotKey ?? throw new ArgumentNullException(nameof(fromHotKey));
-			ToHotKey = toHotKey ?? throw new ArgumentNullException(nameof(toHotKey));
+			FromHotKey = fromHotKey;
+			ToHotKey = toHotKey;
 		}
 	}
 }

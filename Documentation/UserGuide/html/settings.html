@@ -266,7 +266,7 @@ help. Leave them alone unless something is timing out on you.</p>
 </tr>
 <tr>
 <td>Temp directory</td>
-<td>The folder your recordings are written to while they are being made.</td>
+<td>The folder your recordings are written to while they are being made. It has to be a full path that starts with a drive, like <code>D:\Recordings</code>.</td>
 </tr>
 <tr>
 <td>Send hotkey after transcription</td>
@@ -284,6 +284,11 @@ help. Leave them alone unless something is timing out on you.</p>
 Mutation. The per-service prompt and your choice of active service apply straight
 away. You choose which service is active from the main window.</p>
 </blockquote>
+<p>If you clear the <strong>Temp directory</strong> box, or type a folder name on its own like
+<code>Recordings</code>, Mutation cannot save yet. It puts its own folder back in the box, plays
+the failure beep, and tells you what it did. Press <strong>Save</strong> again to accept that
+folder, or type a full path of your own. The <strong>Browse...</strong> button next to the box
+always gives you a full path.</p>
 <p>The three silence numbers underneath (minimum silence, threshold, edge guard) fine
 tune that trimming. The defaults are good; each has hover help if you want to
 experiment.</p>

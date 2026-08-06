@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Mutation.Ui.Core;
@@ -122,6 +123,116 @@ public class DebouncerTests
 
 		Assert.Equal(0, clock.Count);
 		Assert.Equal(0, Volatile.Read(ref runs));
+	}
+
+	// The run is fire-and-forget, so without a callback a throwing action is silent:
+	// the settings write fails and the user hears nothing (issue #233).
+	[Fact]
+	public void Trigger_ActionThrows_InvokesTheFailureCallback()
+	{
+		var clock = new ManualDelay();
+		Exception? reported = null;
+		using var reportedSignal = new ManualResetEventSlim(false);
+		var failure = new IOException("The process cannot access the file.");
+		using var debouncer = new Debouncer(
+			TimeSpan.FromMilliseconds(500),
+			() => throw failure,
+			clock.Func,
+			onError: ex => { reported = ex; reportedSignal.Set(); });
+
+		debouncer.Trigger();
+		clock.CompleteLast();
+
+		Assert.True(reportedSignal.Wait(TimeSpan.FromSeconds(5)), "The failure callback should be invoked.");
+		Assert.Same(failure, reported);
+	}
+
+	[Fact]
+	public void Trigger_ActionThrows_LeavesTheDebouncerUsable()
+	{
+		var clock = new ManualDelay();
+		bool shouldThrow = true;
+		int successfulRuns = 0;
+		using var ran = new AutoResetEvent(false);
+		using var debouncer = new Debouncer(
+			TimeSpan.FromMilliseconds(500),
+			() =>
+			{
+				if (shouldThrow)
+					throw new IOException("locked");
+				Interlocked.Increment(ref successfulRuns);
+				ran.Set();
+			},
+			clock.Func,
+			onError: _ => ran.Set());
+
+		debouncer.Trigger();
+		clock.CompleteLast();
+		Assert.True(ran.WaitOne(TimeSpan.FromSeconds(5)), "The failing run should settle.");
+
+		shouldThrow = false;
+		debouncer.Trigger();
+		clock.CompleteLast();
+
+		Assert.True(ran.WaitOne(TimeSpan.FromSeconds(5)), "A later trigger should still run.");
+		Assert.Equal(1, Volatile.Read(ref successfulRuns));
+	}
+
+	// The callback runs on an unobserved task; if it could throw out of RunAsync it
+	// would take the process down instead of reporting a save failure.
+	[Fact]
+	public void Trigger_FailureCallbackItselfThrows_IsSwallowed()
+	{
+		var clock = new ManualDelay();
+		using var called = new ManualResetEventSlim(false);
+		using var debouncer = new Debouncer(
+			TimeSpan.FromMilliseconds(500),
+			() => throw new IOException("locked"),
+			clock.Func,
+			onError: _ => { called.Set(); throw new InvalidOperationException("reporter failed"); });
+
+		debouncer.Trigger();
+		clock.CompleteLast();
+
+		Assert.True(called.Wait(TimeSpan.FromSeconds(5)), "The failure callback should be invoked.");
+		Thread.Sleep(50);
+	}
+
+	// Cancellation is the normal case (a newer trigger superseded this run) and must
+	// never be reported to the user as a failed save.
+	[Fact]
+	public void Trigger_SupersededRun_DoesNotInvokeTheFailureCallback()
+	{
+		var clock = new ManualDelay();
+		int reports = 0;
+		using var ran = new ManualResetEventSlim(false);
+		using var debouncer = new Debouncer(
+			TimeSpan.FromMilliseconds(500),
+			() => ran.Set(),
+			clock.Func,
+			onError: _ => Interlocked.Increment(ref reports));
+
+		debouncer.Trigger();
+		debouncer.Trigger();
+		clock.CompleteLast();
+
+		Assert.True(ran.Wait(TimeSpan.FromSeconds(5)), "The surviving run should fire.");
+		Thread.Sleep(50);
+		Assert.Equal(0, Volatile.Read(ref reports));
+	}
+
+	[Fact]
+	public void Trigger_ActionThrows_WithNoCallback_DoesNotFaultTheCaller()
+	{
+		var clock = new ManualDelay();
+		using var debouncer = new Debouncer(
+			TimeSpan.FromMilliseconds(500),
+			() => throw new IOException("locked"),
+			clock.Func);
+
+		debouncer.Trigger();
+		clock.CompleteLast();
+		Thread.Sleep(50);
 	}
 
 	[Fact]

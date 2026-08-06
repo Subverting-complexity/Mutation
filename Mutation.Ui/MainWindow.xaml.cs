@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views;
+using Mutation.Ui.Views.SettingsUi;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -165,7 +166,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
         _settingsSaveDebouncer = new Debouncer(
             SettingsSaveDebounceDelay,
-            () => _settingsManager.SaveSettingsToFile(_settings));
+            () => _settingsManager.SaveSettingsToFile(_settings),
+            onError: ReportSettingsSaveFailure);
 
         _audioSessionManager = audioSessionManager;
         _micLevelWriteCoordinator = micLevelWriteCoordinator;
@@ -2195,6 +2197,23 @@ public sealed partial class MainWindow : Window, IDisposable
 			Update();
 		else
 			DispatcherQueue.TryEnqueue(Update);
+	}
+
+	// The debounced settings save runs on a fire-and-forget task, so a failed write
+	// used to be completely silent — the setting simply reverted on the next launch
+	// (issue #233). Surfaced on the same channel as every other status: the InfoBar
+	// for sighted users, a UIA notification for the screen reader, and the failure
+	// beep for anyone not looking at the window at all.
+	private void ReportSettingsSaveFailure(Exception exception)
+	{
+		ErrorLogger.LogError("Settings save", exception);
+
+		ShowStatus(
+			SettingsFailureFeedback.BackgroundSaveTitle,
+			SettingsFailureFeedback.ComposeBackgroundSaveMessage(exception),
+			InfoBarSeverity.Error);
+
+		BeepPlayer.Play(BeepType.Failure);
 	}
 
 	private void AnnounceStatus(string title, string message, InfoBarSeverity severity)
