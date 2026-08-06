@@ -7,7 +7,9 @@ namespace Mutation.Tests;
 
 public class OggPacketReaderTests
 {
-	private static List<byte[]> Read(Stream stream) => OggPacketReader.ReadPackets(stream).ToList();
+	private static List<OggPacket> ReadAll(Stream stream) => OggPacketReader.ReadPackets(stream).ToList();
+
+	private static List<byte[]> Read(Stream stream) => OggPacketReader.ReadPackets(stream).Select(p => p.Data).ToList();
 
 	private static byte[] Filled(int length, byte value)
 	{
@@ -105,5 +107,45 @@ public class OggPacketReaderTests
 		stream.Position = 0;
 
 		Assert.Empty(Read(stream));
+	}
+
+	[Fact]
+	public void TagsEachPacketWithItsLogicalStreamSerialNumber()
+	{
+		using var stream = new MemoryStream();
+		OggStreamBuilder.WritePage(stream, new[] { Filled(10, 1) }, serial: 111);
+		OggStreamBuilder.WritePage(stream, new[] { Filled(20, 2) }, serial: 222, pageSequence: 1);
+		stream.Position = 0;
+
+		var packets = ReadAll(stream);
+
+		Assert.Equal(2, packets.Count);
+		Assert.Equal(111u, packets[0].SerialNumber);
+		Assert.Equal(222u, packets[1].SerialNumber);
+	}
+
+	// A multiplexed container (video plus audio, say) interleaves pages from several logical
+	// streams. A packet split across two of one stream's pages must not pick up the segments
+	// of the other stream's page that landed in between.
+	[Fact]
+	public void DoesNotSpliceAnInterleavedStreamIntoAContinuedPacket()
+	{
+		using var stream = new MemoryStream();
+		OggStreamBuilder.WritePage(stream, new[] { Filled(255, 4) }, serial: 111); // no terminator: continues
+		OggStreamBuilder.WritePage(stream, new[] { Filled(17, 9) }, serial: 222, pageSequence: 1);
+		OggStreamBuilder.WritePage(stream, new[] { Filled(30, 5) }, continued: true, serial: 111, pageSequence: 1);
+		stream.Position = 0;
+
+		var packets = ReadAll(stream);
+
+		Assert.Equal(2, packets.Count);
+
+		var other = Assert.Single(packets, p => p.SerialNumber == 222);
+		Assert.Equal(17, other.Data.Length);
+
+		var reassembled = Assert.Single(packets, p => p.SerialNumber == 111);
+		Assert.Equal(285, reassembled.Data.Length);
+		Assert.Equal(4, reassembled.Data[254]);
+		Assert.Equal(5, reassembled.Data[255]);
 	}
 }

@@ -2,6 +2,7 @@ using Concentus;
 using Concentus.Structs;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace CognitiveSupport;
 
@@ -118,17 +119,81 @@ public static class OggOpusPcmDecoder
 				"Convert it to mono or stereo first.");
 
 		var decoder = OpusCodecFactory.CreateDecoder(SampleRate, channels);
-		var buffer = new short[MaxFrameSamples * channels];
-		int remainingPreSkip = preSkipSamples;
-
-		using var stream = File.OpenRead(filePath);
-		foreach (byte[] packet in OggPacketReader.ReadPackets(stream))
+		try
 		{
-			if (IsHeaderPacket(packet))
-				continue;
+			var buffer = new short[MaxFrameSamples * channels];
+			int remainingPreSkip = preSkipSamples;
+			uint? audioSerialNumber = null;
 
-			DecodePacket(decoder, packet, channels, buffer, ref remainingPreSkip, onSamples);
+			using var stream = File.OpenRead(filePath);
+			foreach (OggPacket packet in OggPacketReader.ReadPackets(stream))
+			{
+				if (IsOpusHead(packet.Data))
+				{
+					// Lock onto the first Opus stream in the container and ignore every other
+					// logical bitstream. A multiplexed file (Theora video plus Opus audio, or
+					// Vorbis plus Opus) would otherwise feed non-Opus packets to the decoder as
+					// if they were audio — most bounce off the parse guard below, but any that
+					// happen to look like a valid TOC byte decode as noise. It also stops a
+					// chained file from having the first chain's pre-skip applied to the next.
+					audioSerialNumber ??= packet.SerialNumber;
+					continue;
+				}
+
+				if (audioSerialNumber != packet.SerialNumber)
+					continue;
+
+				if (IsOpusTags(packet.Data))
+					continue;
+
+				DecodePacket(decoder, packet.Data, channels, buffer, ref remainingPreSkip, onSamples);
+			}
+
+			// The header sniff scans raw bytes, so it can match an "OpusHead" that is not
+			// actually an identification packet — inside a comment string, say. Say so instead
+			// of returning nothing: silently decoding to zero samples would have the converter
+			// write a valid but empty .ogg and the app transcribe silence.
+			if (audioSerialNumber is null)
+				throw new InvalidDataException(
+					$"'{Path.GetFileName(filePath)}' has no Opus identification header.");
 		}
+		finally
+		{
+			// IOpusDecoder does not extend IDisposable (Concentus 2.2.2), so `using` is not
+			// available without this cast — but the concrete OpusDecoder does implement it, and
+			// it holds pooled internal state that is otherwise reclaimed only by finalization.
+			// Batch-converting a folder abandoned one decoder per file.
+			(decoder as IDisposable)?.Dispose();
+		}
+	}
+
+	/// <summary>
+	/// Decodes the whole file into one 48 kHz mono 16-bit PCM buffer, ready to hand to NAudio's
+	/// <c>RawSourceWaveStream</c>. Bytes are written as each frame is decoded rather than
+	/// collecting shorts and converting afterwards, which held the entire recording twice over —
+	/// roughly 340 MB for a 30-minute voice note.
+	///
+	/// Samples are laid out in the machine's byte order, which on every platform this app ships
+	/// to is little-endian, as NAudio's 16-bit PCM formats expect.
+	/// </summary>
+	/// <exception cref="InvalidDataException">The file is not an Ogg/Opus stream.</exception>
+	/// <exception cref="NotSupportedException">The file is surround Opus, which Concentus
+	/// cannot decode.</exception>
+	public static MemoryStream DecodeToPcmStream(string filePath)
+	{
+		var pcm = new MemoryStream();
+		try
+		{
+			DecodeToMonoPcm(filePath, samples => pcm.Write(MemoryMarshal.AsBytes(samples.AsSpan())));
+		}
+		catch
+		{
+			pcm.Dispose();
+			throw;
+		}
+
+		pcm.Position = 0;
+		return pcm;
 	}
 
 	/// <summary>
@@ -248,8 +313,9 @@ public static class OggOpusPcmDecoder
 		onSamples(mono);
 	}
 
-	private static bool IsHeaderPacket(byte[] packet) =>
-		MatchesAt(packet, 0, OpusHeadMagic) || MatchesAt(packet, 0, OpusTagsMagic);
+	private static bool IsOpusHead(byte[] packet) => MatchesAt(packet, 0, OpusHeadMagic);
+
+	private static bool IsOpusTags(byte[] packet) => MatchesAt(packet, 0, OpusTagsMagic);
 
 	/// <summary>
 	/// Locates the OpusHead identification header near the start of the stream and reads the

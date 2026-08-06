@@ -235,11 +235,21 @@ public class SpeechToTextManager : IDisposable
 			var transcribeToken = _state.StartTranscription(token);
 			try
 			{
-				_audioRecorder?.StopRecording();
-				double? trimmedSpeechSeconds = _audioRecorder?.TrimmedSpeechSeconds;
-				Exception? captureError = _audioRecorder?.CaptureException;
-				_audioRecorder?.Dispose();
-				_audioRecorder = null;
+				// Stopping blocks: it resets the capture device and then waits for the
+				// driver to hand over the buffers it has already filled, and disposing
+				// flushes the encoder to disk. Run off the calling thread so a slow or
+				// wedged audio driver cannot freeze the window — and the screen reader
+				// with it — while the user waits to hear the end-of-recording beep.
+				(double? trimmedSpeechSeconds, Exception? captureError) = await Task.Run(() =>
+				{
+					IAudioRecorder? recorder = _audioRecorder;
+					_audioRecorder = null;
+					recorder?.StopRecording();
+					var trimmed = recorder?.TrimmedSpeechSeconds;
+					var error = recorder?.CaptureException;
+					recorder?.Dispose();
+					return (trimmed, error);
+				});
 
 				// Before the cancellation and capture-error checks below: capture has
 				// ended however this call turns out, so the end-of-recording signal is
