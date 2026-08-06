@@ -48,6 +48,28 @@ public class SettingsFailureFeedbackTests
 		Assert.StartsWith("An unknown error occurred.", message);
 	}
 
+	// The debounced save has no Save button behind it, so the dialog's "press Save
+	// again" advice would send the user looking for a control that is not there.
+	[Fact]
+	public void ComposeBackgroundSaveMessage_ExplainsTheLossAndWhatToDo()
+	{
+		string message = SettingsFailureFeedback.ComposeBackgroundSaveMessage(
+			new IOException("The file is locked by another process."));
+
+		Assert.StartsWith("The file is locked by another process.", message);
+		Assert.Contains("was not saved", message);
+		Assert.Contains("change the setting again", message);
+		Assert.DoesNotContain("press Save again", message);
+	}
+
+	[Fact]
+	public void ComposeBackgroundSaveMessage_NullException_UsesFallbackText()
+	{
+		string message = SettingsFailureFeedback.ComposeBackgroundSaveMessage(null);
+
+		Assert.StartsWith("An unknown error occurred.", message);
+	}
+
 	[Fact]
 	public void ComposeOpenJsonMessage_ReturnsInnermostDetailOnly()
 	{

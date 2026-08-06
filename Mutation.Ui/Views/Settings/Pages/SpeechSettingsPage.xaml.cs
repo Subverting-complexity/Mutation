@@ -189,6 +189,22 @@ public sealed partial class SpeechSettingsPage : UserControl
 	private void BtnResetSilenceGuard_Click(object sender, RoutedEventArgs e) =>
 		NbSilenceGuard.Value = SettingsDefaults.Speech.SilenceGuardMilliseconds;
 
+	// Puts the stored temp directory back on screen after the dialog has repaired an
+	// unusable one, so the user is looking at the path that will actually be saved
+	// (issue #230). _suppressEvents keeps the write-back from firing on the way in.
+	public void RefreshTempDirectory()
+	{
+		_suppressEvents = true;
+		try
+		{
+			TxtTempDir.Text = _settings.SpeechToTextSettings?.TempDirectory ?? string.Empty;
+		}
+		finally
+		{
+			_suppressEvents = false;
+		}
+	}
+
 	private void BtnResetTempDir_Click(object sender, RoutedEventArgs e) =>
 		TxtTempDir.Text = SettingsDefaults.Speech.TempDirectory;
 

@@ -77,13 +77,19 @@ Where your dictation gets turned into text.
 | Service definitions | The transcription services you can pick from. Each one has a name, a provider (OpenAI Whisper or Deepgram), an optional key of its own, a model, and a prompt. |
 | Per-service prompt | Optional priming text sent with each transcription to nudge the spelling of names and the punctuation. |
 | Recording sessions to keep | How many past recordings stay on disk. Once you pass this, the oldest go first; the recording in progress is never deleted. Anything from 1 to 500, and 10 by default. |
-| Temp directory | The folder your recordings are written to while they are being made. |
+| Temp directory | The folder your recordings are written to while they are being made. It has to be a full path that starts with a drive, like `D:\Recordings`. |
 | Send hotkey after transcription | Optional keystrokes sent to the app you are in once your text arrives, for example **Ctrl+V** to paste. |
 | Strip silent gaps from audio | Removes long silences before the audio is sent, so pauses while you think do not bloat the recording. |
 
 > Adding, removing, or editing a service definition takes effect after you restart
 > Mutation. The per-service prompt and your choice of active service apply straight
 > away. You choose which service is active from the main window.
+
+If you clear the **Temp directory** box, or type a folder name on its own like
+`Recordings`, Mutation cannot save yet. It puts its own folder back in the box, plays
+the failure beep, and tells you what it did. Press **Save** again to accept that
+folder, or type a full path of your own. The **Browse...** button next to the box
+always gives you a full path.
 
 The three silence numbers underneath (minimum silence, threshold, edge guard) fine
 tune that trimming. The defaults are good; each has hover help if you want to

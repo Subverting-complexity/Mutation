@@ -31,8 +31,8 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	private readonly Action<string, string, InfoBarSeverity> _showStatus;
 
 	private readonly WaveformRenderGate _waveformRenderGate = new();
+	private readonly SingleTimerSlot<DispatcherQueueTimer> _waveformTimer;
 	private WaveInEvent? _waveformCapture;
-	private DispatcherQueueTimer? _waveformTimer;
 	private Signal? _waveformSignal;
 	private double[] _waveformBuffer = Array.Empty<double>();
 	private double[] _waveformRenderBuffer = Array.Empty<double>();
@@ -67,6 +67,24 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		_rmsLevelBar = rmsLevelBar;
 		_pulseOverlay = pulseOverlay;
 		_showStatus = showStatus ?? throw new ArgumentNullException(nameof(showStatus));
+
+		// Initialize() runs again on every Settings-dialog save; the slot guarantees
+		// the previous frame timer is stopped and unwired before the next is created,
+		// so the saves cannot stack up 30 FPS timers on the UI thread (issue #231).
+		_waveformTimer = new SingleTimerSlot<DispatcherQueueTimer>(
+			create: () =>
+			{
+				var timer = _dispatcherQueue.CreateTimer();
+				timer.Interval = TimeSpan.FromMilliseconds(WaveformFrameIntervalMilliseconds);
+				timer.Tick += WaveformTimer_Tick;
+				return timer;
+			},
+			start: timer => timer.Start(),
+			stop: timer =>
+			{
+				timer.Tick -= WaveformTimer_Tick;
+				timer.Stop();
+			});
 	}
 
 	public void Initialize()
@@ -89,10 +107,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 			if (_offLabel != null) _offLabel.Visibility = Visibility.Visible;
 		}
 
-		_waveformTimer = _dispatcherQueue.CreateTimer();
-		_waveformTimer.Interval = TimeSpan.FromMilliseconds(WaveformFrameIntervalMilliseconds);
-		_waveformTimer.Tick += WaveformTimer_Tick;
-		_waveformTimer.Start();
+		_waveformTimer.Restart();
 	}
 
 	public void StartCapture()
@@ -208,12 +223,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	{
 		StopCapture();
 
-		if (_waveformTimer is not null)
-		{
-			_waveformTimer.Tick -= WaveformTimer_Tick;
-			_waveformTimer.Stop();
-			_waveformTimer = null;
-		}
+		_waveformTimer.Stop();
 
 		_waveformSignal = null;
 		_waveformBuffer = Array.Empty<double>();

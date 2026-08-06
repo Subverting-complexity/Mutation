@@ -24,6 +24,7 @@ public sealed class Debouncer : IDisposable
 {
 	private readonly TimeSpan _delay;
 	private readonly Action _action;
+	private readonly Action<Exception>? _onError;
 	private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
 	private readonly object _gate = new();
 	private CancellationTokenSource? _cts;
@@ -39,10 +40,16 @@ public sealed class Debouncer : IDisposable
 	/// <param name="delayAsync">The delay mechanism; defaults to
 	/// <see cref="Task.Delay(TimeSpan, CancellationToken)"/>. Injectable so tests
 	/// can drive the timing deterministically.</param>
+	/// <param name="onError">Called when the action throws. Runs on the same
+	/// context as the action. Without it a failure is invisible: the run is
+	/// fire-and-forget, so the exception only reaches
+	/// <see cref="TaskScheduler.UnobservedTaskException"/> and the user is never
+	/// told the work did not happen (issue #233).</param>
 	public Debouncer(
 		TimeSpan delay,
 		Action action,
-		Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
+		Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+		Action<Exception>? onError = null)
 	{
 		if (delay < TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(delay), "Delay must not be negative.");
@@ -50,6 +57,7 @@ public sealed class Debouncer : IDisposable
 		_delay = delay;
 		_action = action ?? throw new ArgumentNullException(nameof(action));
 		_delayAsync = delayAsync ?? Task.Delay;
+		_onError = onError;
 	}
 
 	/// <summary>
@@ -85,6 +93,31 @@ public sealed class Debouncer : IDisposable
 		catch (OperationCanceledException)
 		{
 			// A newer trigger (or Dispose) superseded this run — expected, drop it.
+		}
+		catch (Exception ex)
+		{
+			// Nobody awaits this task, so an unhandled exception here would vanish.
+			// Hand it to the caller instead; for the settings save that is the only
+			// chance the user has of hearing that the write failed.
+			ReportError(ex);
+		}
+	}
+
+	private void ReportError(Exception exception)
+	{
+		if (_onError is null)
+			return;
+
+		try
+		{
+			_onError(exception);
+		}
+		catch (Exception callbackFailure)
+		{
+			// The reporter itself failing must not take the process with it — this
+			// still runs on an unobserved task.
+			System.Diagnostics.Debug.WriteLine(
+				$"Debouncer error callback failed: {callbackFailure.Message}");
 		}
 	}
 

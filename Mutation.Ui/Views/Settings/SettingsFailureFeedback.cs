@@ -9,9 +9,17 @@ public static class SettingsFailureFeedback
 {
 	public const string SaveTitle = "Save failed";
 	public const string OpenJsonTitle = "Could not open settings file";
+	public const string BackgroundSaveTitle = "Settings not saved";
 
 	public static string ComposeMessage(Exception? exception) =>
 		$"{ExtractDetail(exception)} Your changes were not saved. Fix the problem and press Save again, or press Cancel to discard the changes.";
+
+	// For the saves the main window writes on its own, with no Save button behind
+	// them — a slider or toggle change that is persisted a moment after the user
+	// stops adjusting it. There is nothing to press again, so the advice is to
+	// clear the problem and change the setting once more.
+	public static string ComposeBackgroundSaveMessage(Exception? exception) =>
+		$"{ExtractDetail(exception)} Your change was not saved and will be lost when Mutation closes. Close anything that has the settings file open, then change the setting again.";
 
 	public static string ComposeOpenJsonMessage(Exception? exception) =>
 		ExtractDetail(exception);

@@ -265,8 +265,44 @@ public sealed partial class SettingsDialog : ContentDialog
 		BeepPlayer.Play(BeepType.Failure);
 	}
 
+	// Checks the one free-text path on the settings pages before it is committed.
+	// A blank or relative temp directory would otherwise be stored verbatim and only
+	// go wrong later, at record time, as a raw exception (issue #230). Returns false
+	// when the value had to be repaired: the save is held back so the user can see —
+	// and hear — the corrected path before pressing Save again.
+	private bool TryValidateTempDirectory()
+	{
+		var speech = _workingCopy.SpeechToTextSettings ??= new SpeechToTextSettings();
+		var validation = TempDirectorySetting.Normalize(speech.TempDirectory);
+
+		// Always the normalised path, not just on the repair path: the textbox writes
+		// its raw text straight through, so ' C:\Recordings' with a stray leading
+		// space would otherwise be stored verbatim and fail at record time — the very
+		// fault this guards against.
+		speech.TempDirectory = validation.Path;
+
+		// The page is rebuilt from the working copy on every navigation, so it only
+		// needs refreshing when it is the page currently on screen.
+		(_activePage as SpeechSettingsPage)?.RefreshTempDirectory();
+
+		if (!validation.WasRepaired)
+			return true;
+
+		ShowFailure(
+			"Temp directory",
+			TempDirectorySetting.ComposeMessage(validation.Problem!, validation.Path)
+				+ " Press Save again to keep that, or type the folder you want.");
+		return false;
+	}
+
 	private void SettingsDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
 	{
+		if (!TryValidateTempDirectory())
+		{
+			args.Cancel = true;
+			return;
+		}
+
 		try
 		{
 			SettingsWorkingCopy.CommitInto(_live, _workingCopy);

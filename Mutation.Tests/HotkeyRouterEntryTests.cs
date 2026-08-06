@@ -99,18 +99,30 @@ public class HotkeyRouterEntryTests
 		Assert.Null(entry.BindingErrorMessage);
 	}
 
+	// While the user is typing (setter, commit=false) invalid input clears the map's
+	// value. It clears it to blank, not null: RefreshRegistrations auto-persists, so a
+	// half-typed hotkey does reach the file, and a null there is what the load-time
+	// repair reports back at the user on the next launch (issue #247).
 	[Fact]
-	public void Setter_InvalidInput_ClearsMapValueDuringTypingPhase()
+	public void Setter_InvalidInput_BlanksMapValueDuringTypingPhase()
 	{
-		// Pins down current behavior: while the user is typing (setter, commit=false),
-		// invalid input nulls the map's FromHotKey. SyncSettings reads `IsValid` rather
-		// than the map directly, so this transient null does not leak to persisted settings.
 		var map = Map("Ctrl+C", "Ctrl+V");
 		var entry = new HotkeyRouterEntry(map);
 
 		entry.FromHotkey = "Ctrl+";
 
-		Assert.Null(map.FromHotKey);
+		Assert.Equal(string.Empty, map.FromHotKey);
+	}
+
+	[Fact]
+	public void Setter_InvalidToInput_BlanksMapValueDuringTypingPhase()
+	{
+		var map = Map("Ctrl+C", "Ctrl+V");
+		var entry = new HotkeyRouterEntry(map);
+
+		entry.ToHotkey = "Ctrl+";
+
+		Assert.Equal(string.Empty, map.ToHotKey);
 	}
 
 	[Fact]

@@ -34,6 +34,22 @@ internal class SettingsManager : ISettingsManager
 	/// </summary>
 	public IReadOnlyList<string> CustomBeepIssues { get; private set; } = Array.Empty<string>();
 
+	/// <summary>
+	/// Hotkey-router mappings that had to be repaired by the most recent
+	/// <see cref="EnsureSettings"/>. Empty when they were all well-formed. Surfaced
+	/// the same way as <see cref="CustomBeepIssues"/>, and for the same reason.
+	/// </summary>
+	public IReadOnlyList<string> HotKeyRouterIssues { get; private set; } = Array.Empty<string>();
+
+	/// <summary>
+	/// Set when the most recent <see cref="EnsureSettings"/> had to replace an
+	/// unusable temp directory, describing what was wrong and where recordings are
+	/// stored instead. Null when the stored path was fine. Surfaced like
+	/// <see cref="CustomBeepIssues"/>: the dialog can say this for itself, but a
+	/// hand-edited file is only repaired at load, where there is no window yet.
+	/// </summary>
+	public string? TempDirectoryIssue { get; private set; }
+
 	public SettingsManager(
 		string settingsFilePath)
 	{
@@ -260,17 +276,32 @@ internal class SettingsManager : ISettingsManager
 			speechToTextSettings.SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 			somethingWasMissing = true;
 		}
-		if (string.IsNullOrWhiteSpace(speechToTextSettings.TempDirectory))
-		{
-			speechToTextSettings.TempDirectory = SettingsDefaults.Speech.TempDirectory;
-			somethingWasMissing = true;
-		}
-		else if (IsLegacyTempDirectory(speechToTextSettings.TempDirectory))
+		TempDirectoryIssue = null;
+		if (IsLegacyTempDirectory(speechToTextSettings.TempDirectory))
 		{
 			// The old default under C:\ was readable by every local user; only an
 			// unchanged default is rewritten — an explicitly different path is kept.
 			speechToTextSettings.TempDirectory = SettingsDefaults.Speech.TempDirectory;
 			somethingWasMissing = true;
+		}
+		else
+		{
+			// Blank, relative, or unusable falls back to the default. Left as-is, a
+			// blank makes SessionsDirectory resolve relative to the executable, so
+			// recordings land in the install folder (issue #230).
+			var tempDirectory = TempDirectorySetting.Normalize(speechToTextSettings.TempDirectory);
+			if (!string.Equals(tempDirectory.Path, speechToTextSettings.TempDirectory, StringComparison.Ordinal))
+			{
+				speechToTextSettings.TempDirectory = tempDirectory.Path;
+				somethingWasMissing = true;
+			}
+
+			// Only a real repair is worth telling the user about; trimming or resolving
+			// a path they would recognise anyway is not. Moving where their recordings
+			// are kept is, and silently is exactly how this used to go wrong.
+			TempDirectoryIssue = tempDirectory.WasRepaired
+				? TempDirectorySetting.ComposeMessage(tempDirectory.Problem!, tempDirectory.Path)
+				: null;
 		}
 
 		// Clamp silence-stripping values to sane ranges in case the file was hand-edited.
@@ -614,6 +645,16 @@ End of summary.
 		{
 			settings.HotKeyRouterSettings = new();
 		}
+		settings.HotKeyRouterSettings.Mappings ??= new List<HotKeyRouterSettings.HotKeyRouterMap>();
+
+		// Same shape as the custom beep check above: repair here, report to the
+		// caller, and let App raise it once there is a window that can host an
+		// accessible notice.
+		var routerIssues = HotKeyRouterMappingRepair.Repair(settings.HotKeyRouterSettings.Mappings);
+		if (routerIssues.Count > 0)
+			somethingWasMissing = true;
+		HotKeyRouterIssues = routerIssues;
+
 		if (isNewFile && !settings.HotKeyRouterSettings.Mappings.Any())
 		{
 			settings.HotKeyRouterSettings.Mappings.Add(
