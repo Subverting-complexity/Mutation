@@ -274,14 +274,19 @@ public sealed partial class SettingsDialog : ContentDialog
 	{
 		var speech = _workingCopy.SpeechToTextSettings ??= new SpeechToTextSettings();
 		var validation = TempDirectorySetting.Normalize(speech.TempDirectory);
-		if (!validation.WasRepaired)
-			return true;
 
+		// Always the normalised path, not just on the repair path: the textbox writes
+		// its raw text straight through, so ' C:\Recordings' with a stray leading
+		// space would otherwise be stored verbatim and fail at record time — the very
+		// fault this guards against.
 		speech.TempDirectory = validation.Path;
 
 		// The page is rebuilt from the working copy on every navigation, so it only
 		// needs refreshing when it is the page currently on screen.
 		(_activePage as SpeechSettingsPage)?.RefreshTempDirectory();
+
+		if (!validation.WasRepaired)
+			return true;
 
 		ShowFailure(
 			"Temp directory",

@@ -370,6 +370,19 @@ public partial class App : Application
 					NoticeSeverity.Warning);
 			}
 
+			// Where the recordings go is worth saying out loud when it is not where the
+			// settings file asked for. The dialog reports this for itself; a hand-edited
+			// file is only caught at load, before there is a window (issue #230).
+			if (settingsManager.TempDirectoryIssue is not null && _window is MainWindow tempDirWindow)
+			{
+				await tempDirWindow.ShowNoticeAsync(
+					"Recording Folder Changed",
+					settingsManager.TempDirectoryIssue +
+						"\n\nOpen Speech to Text in Settings to choose a different folder.",
+					"OK",
+					NoticeSeverity.Warning);
+			}
+
 			// A mapping with a missing hotkey used to throw during deserialization and
 			// cost the user every other setting in the file. It is repaired on load
 			// now, and said out loud here so the blank row is not a mystery (issue #247).

@@ -41,6 +41,15 @@ internal class SettingsManager : ISettingsManager
 	/// </summary>
 	public IReadOnlyList<string> HotKeyRouterIssues { get; private set; } = Array.Empty<string>();
 
+	/// <summary>
+	/// Set when the most recent <see cref="EnsureSettings"/> had to replace an
+	/// unusable temp directory, describing what was wrong and where recordings are
+	/// stored instead. Null when the stored path was fine. Surfaced like
+	/// <see cref="CustomBeepIssues"/>: the dialog can say this for itself, but a
+	/// hand-edited file is only repaired at load, where there is no window yet.
+	/// </summary>
+	public string? TempDirectoryIssue { get; private set; }
+
 	public SettingsManager(
 		string settingsFilePath)
 	{
@@ -267,6 +276,7 @@ internal class SettingsManager : ISettingsManager
 			speechToTextSettings.SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 			somethingWasMissing = true;
 		}
+		TempDirectoryIssue = null;
 		if (IsLegacyTempDirectory(speechToTextSettings.TempDirectory))
 		{
 			// The old default under C:\ was readable by every local user; only an
@@ -285,6 +295,13 @@ internal class SettingsManager : ISettingsManager
 				speechToTextSettings.TempDirectory = tempDirectory.Path;
 				somethingWasMissing = true;
 			}
+
+			// Only a real repair is worth telling the user about; trimming or resolving
+			// a path they would recognise anyway is not. Moving where their recordings
+			// are kept is, and silently is exactly how this used to go wrong.
+			TempDirectoryIssue = tempDirectory.WasRepaired
+				? TempDirectorySetting.ComposeMessage(tempDirectory.Problem!, tempDirectory.Path)
+				: null;
 		}
 
 		// Clamp silence-stripping values to sane ranges in case the file was hand-edited.

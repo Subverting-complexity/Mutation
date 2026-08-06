@@ -32,6 +32,8 @@ public class SettingsLoadRepairTests
 	}
 	""";
 
+	// Blank and null were already handled before this change and are kept as
+	// regression cover; the relative path is the case that used to get through.
 	[Theory]
 	[InlineData("\"\"")]
 	[InlineData("\"   \"")]
@@ -42,6 +44,70 @@ public class SettingsLoadRepairTests
 		var settings = Load(SpeechFileWithTempDirectory(jsonValue));
 
 		Assert.Equal(SettingsDefaults.Speech.TempDirectory, settings.SpeechToTextSettings!.TempDirectory);
+	}
+
+	[Fact]
+	public void Load_UnusableTempDirectory_IsReported()
+	{
+		using var file = new TempSettingsFile("load-repair", SpeechFileWithTempDirectory("\"Sessions\""));
+		var manager = new SettingsManager(file.FilePath);
+
+		manager.LoadAndEnsureSettings();
+
+		Assert.NotNull(manager.TempDirectoryIssue);
+		Assert.Contains("not a full path", manager.TempDirectoryIssue);
+		Assert.Contains(SettingsDefaults.Speech.TempDirectory, manager.TempDirectoryIssue);
+	}
+
+	[Fact]
+	public void Load_UsableTempDirectory_ReportsNothing()
+	{
+		using var file = new TempSettingsFile("load-repair", SpeechFileWithTempDirectory("\"D:\\\\MyRecordings\""));
+		var manager = new SettingsManager(file.FilePath);
+
+		manager.LoadAndEnsureSettings();
+
+		Assert.Null(manager.TempDirectoryIssue);
+	}
+
+	// The migration off the old world-readable default is not a fault of the user's,
+	// and it already moves the recordings across — nothing to raise at startup.
+	[Fact]
+	public void Load_LegacyTempDirectory_ReportsNothing()
+	{
+		using var file = new TempSettingsFile("load-repair", SpeechFileWithTempDirectory("\"C:\\\\Temp\\\\Mutation\""));
+		var manager = new SettingsManager(file.FilePath);
+
+		var settings = manager.LoadAndEnsureSettings();
+
+		Assert.Equal(SettingsDefaults.Speech.TempDirectory, settings.SpeechToTextSettings!.TempDirectory);
+		Assert.Null(manager.TempDirectoryIssue);
+	}
+
+	// EnsureSettings runs on every launch. A path it rewrites to something it would
+	// rewrite again means a settings file churned on each start, and a startup notice
+	// the user can never clear.
+	[Theory]
+	[InlineData(@"D:\MyRecordings")]
+	[InlineData(@"D:\MyRecordings\")]
+	[InlineData(@"d:\myrecordings")]
+	[InlineData(@"\\server\share\Mutation")]
+	[InlineData("Sessions")]
+	[InlineData("")]
+	public void EnsureSettings_RunTwice_SettlesOnTheSameTempDirectory(string tempDirectory)
+	{
+		var settings = new Settings
+		{
+			SpeechToTextSettings = new SpeechToTextSettings { TempDirectory = tempDirectory },
+		};
+		var manager = new SettingsManager("unused.json");
+
+		manager.EnsureSettings(settings, isNewFile: false);
+		string afterFirst = settings.SpeechToTextSettings.TempDirectory!;
+		manager.EnsureSettings(settings, isNewFile: false);
+
+		Assert.Equal(afterFirst, settings.SpeechToTextSettings.TempDirectory);
+		Assert.Null(manager.TempDirectoryIssue);
 	}
 
 	[Fact]

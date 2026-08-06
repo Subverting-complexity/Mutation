@@ -205,7 +205,11 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 }
                 else if (!_isFromValid)
                 {
-                        _map.FromHotKey = null;
+                        // Blank, not null. Half-typed text is a routine state that gets
+                        // auto-persisted, and a null on disk is what the load-time repair
+                        // reports at the next launch — a notice about the user's own
+                        // typing (issue #247).
+                        _map.FromHotKey = string.Empty;
                 }
 
                 OnPropertyChanged(nameof(IsFromValid));
@@ -229,7 +233,8 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 }
                 else if (!_isToValid)
                 {
-                        _map.ToHotKey = null;
+                        // Blank, not null — see EvaluateFrom.
+                        _map.ToHotKey = string.Empty;
                 }
 
                 OnPropertyChanged(nameof(IsToValid));

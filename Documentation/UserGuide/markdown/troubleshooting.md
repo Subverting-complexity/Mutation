@@ -226,6 +226,10 @@ failure beep, and tells you what was wrong and where recordings will go instead.
 the full path you want and save. The **Browse...** button next to the box always gives
 you a full path.
 
+If the settings file itself has an unusable folder in it — after editing it by hand,
+say — Mutation fixes it while starting up and shows a message titled "Recording Folder
+Changed" telling you where your recordings will go instead.
+
 ### A hotkey router mapping came up blank
 
 **What's happening.** The hotkey router lets you press one shortcut and have Mutation

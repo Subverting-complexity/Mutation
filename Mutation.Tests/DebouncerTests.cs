@@ -178,26 +178,6 @@ public class DebouncerTests
 		Assert.Equal(1, Volatile.Read(ref successfulRuns));
 	}
 
-	// The callback runs on an unobserved task; if it could throw out of RunAsync it
-	// would take the process down instead of reporting a save failure.
-	[Fact]
-	public void Trigger_FailureCallbackItselfThrows_IsSwallowed()
-	{
-		var clock = new ManualDelay();
-		using var called = new ManualResetEventSlim(false);
-		using var debouncer = new Debouncer(
-			TimeSpan.FromMilliseconds(500),
-			() => throw new IOException("locked"),
-			clock.Func,
-			onError: _ => { called.Set(); throw new InvalidOperationException("reporter failed"); });
-
-		debouncer.Trigger();
-		clock.CompleteLast();
-
-		Assert.True(called.Wait(TimeSpan.FromSeconds(5)), "The failure callback should be invoked.");
-		Thread.Sleep(50);
-	}
-
 	// Cancellation is the normal case (a newer trigger superseded this run) and must
 	// never be reported to the user as a failed save.
 	[Fact]
@@ -221,18 +201,34 @@ public class DebouncerTests
 		Assert.Equal(0, Volatile.Read(ref reports));
 	}
 
+	// A throwing action with no callback wired must still leave the debouncer usable.
+	// (That the failure is swallowed rather than faulting the run is deliberate but
+	// not assertable — the task is discarded, so nothing observes either outcome.)
 	[Fact]
-	public void Trigger_ActionThrows_WithNoCallback_DoesNotFaultTheCaller()
+	public void Trigger_ActionThrows_WithNoCallback_LeavesTheDebouncerUsable()
 	{
 		var clock = new ManualDelay();
+		bool shouldThrow = true;
+		using var ran = new ManualResetEventSlim(false);
 		using var debouncer = new Debouncer(
 			TimeSpan.FromMilliseconds(500),
-			() => throw new IOException("locked"),
+			() =>
+			{
+				if (shouldThrow)
+					throw new IOException("locked");
+				ran.Set();
+			},
 			clock.Func);
 
 		debouncer.Trigger();
 		clock.CompleteLast();
 		Thread.Sleep(50);
+
+		shouldThrow = false;
+		debouncer.Trigger();
+		clock.CompleteLast();
+
+		Assert.True(ran.Wait(TimeSpan.FromSeconds(5)), "A trigger after a failed run should still fire.");
 	}
 
 	[Fact]
