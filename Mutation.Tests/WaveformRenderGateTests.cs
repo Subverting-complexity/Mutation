@@ -1,6 +1,7 @@
+using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Mutation.Ui.Core;
 using Xunit;
 
@@ -52,49 +53,69 @@ public class WaveformRenderGateTests
 		Assert.False(gate.ConsumeShouldRender());
 	}
 
-	// The audio capture callback marks arrivals while the render timer consumes them, on
-	// two different threads with no lock between them. Awaiting a Task.Run would publish
-	// the write for free and prove nothing, so this runs the producers concurrently with
-	// a consumer loop and checks the two invariants that matter: every render signal the
-	// consumer sees was earned by a real arrival, and once the producers are finished no
-	// arrival is left stranded without a render.
+	// The capture callback marks arrivals while the render tick consumes them, on two
+	// different threads. Awaiting a Task.Run would publish the write for free and prove
+	// nothing, so several producers run against the consumer here for real.
+	//
+	// What this pins down: with capture running, the render tick keeps being told to
+	// redraw, and once capture stops the gate settles clear and stays clear. It does not
+	// claim to catch a torn read-and-clear — on x64 a plain bool field would survive that
+	// too, which is why the deleted version proved nothing. Threads, not thread-pool
+	// tasks, so a stall cannot occupy a pool slot; every loop yields rather than spinning
+	// hot; and the whole thing is bounded by a deadline so a broken gate fails rather
+	// than hangs.
 	[Fact]
-	public async Task MarkDataArrived_UnderConcurrentProducers_NeitherLosesNorInventsRenders()
+	public void ConsumeShouldRender_WithCaptureRunning_KeepsSignalling_ThenSettlesClear()
 	{
 		const int Producers = 4;
-		const int ArrivalsEach = 20_000;
+		const int TargetRenders = 1_000;
 
 		var gate = new WaveformRenderGate();
-		using var producersDone = new CountdownEvent(Producers);
-		int renders = 0;
+		using var stop = new CancellationTokenSource();
 
-		var consumer = Task.Run(() =>
+		var producers = Enumerable.Range(0, Producers).Select(_ =>
 		{
-			// Keep consuming until the producers have stopped, then drain what is left.
-			while (!producersDone.IsSet)
+			var thread = new Thread(() =>
+			{
+				while (!stop.IsCancellationRequested)
+				{
+					gate.MarkDataArrived();
+					Thread.Yield();
+				}
+			})
+			{ IsBackground = true, Name = "waveform-gate-producer" };
+			thread.Start();
+			return thread;
+		}).ToArray();
+
+		int renders = 0;
+		try
+		{
+			// The test thread plays the render tick. A working gate reaches the target in
+			// milliseconds; ten seconds is four orders of magnitude of slack for a loaded
+			// agent, so only a gate that stopped signalling can time out here.
+			var elapsed = Stopwatch.StartNew();
+			while (renders < TargetRenders && elapsed.Elapsed < TimeSpan.FromSeconds(10))
 			{
 				if (gate.ConsumeShouldRender())
 					renders++;
+				else
+					Thread.Yield();
 			}
-
-			if (gate.ConsumeShouldRender())
-				renders++;
-		});
-
-		var producers = Enumerable.Range(0, Producers).Select(_ => Task.Run(() =>
+		}
+		finally
 		{
-			for (int i = 0; i < ArrivalsEach; i++)
-				gate.MarkDataArrived();
-			producersDone.Signal();
-		})).ToArray();
+			stop.Cancel();
+			foreach (var producer in producers)
+				producer.Join(TimeSpan.FromSeconds(5));
+		}
 
-		await Task.WhenAll(producers);
-		await consumer;
+		Assert.Equal(TargetRenders, renders);
 
-		// Coalescing means renders <= arrivals, never the other way around: a render the
-		// consumer was never told to do would be a spurious redraw every frame.
-		Assert.InRange(renders, 1, Producers * ArrivalsEach);
-		// And nothing is left pending — the final drain claimed the last arrival.
+		// Capture has stopped. Draining once must leave the gate clear and keep it clear —
+		// a consume that failed to clear is the ~30 FPS idle redraw this gate exists to
+		// stop, and it would have raced through the loop above without ever settling.
+		gate.ConsumeShouldRender();
 		Assert.False(gate.ConsumeShouldRender());
 	}
 }

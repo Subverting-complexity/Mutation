@@ -920,15 +920,17 @@ public class OcrManagerTests
 
 		public Task<string> ExtractText(OcrReadingOrder ocrReadingOrder, Stream imageStream, CancellationToken overallCancellationToken)
 		{
-			Interlocked.Increment(ref _callCount);
-
 			Func<Stream, CancellationToken, Task<string>> behavior;
 			lock (_gate)
 			{
+				// Counted only once a behaviour is actually handed out, so an
+				// under-configured test fails on the missing behaviour rather than on a
+				// CallCount that includes a call this stub refused to serve.
 				if (_behaviors.Count == 0)
 					throw new InvalidOperationException("No behavior configured for this OCR call.");
 
 				behavior = _behaviors.Dequeue();
+				Interlocked.Increment(ref _callCount);
 			}
 
 			return behavior(imageStream, overallCancellationToken);

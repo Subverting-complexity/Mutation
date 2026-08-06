@@ -51,7 +51,7 @@ public class RetainedSessionsClampTests
 	{
 		using var settingsFile = new TempSettingsFile("retain", "{}");
 
-		var manager = new SettingsManager(settingsFile.Path);
+		var manager = new SettingsManager(settingsFile.FilePath);
 		var settings = new Settings
 		{
 			SpeechToTextSettings = new SpeechToTextSettings { MaxRetainedSessions = storedValue },

@@ -12,7 +12,7 @@ public class PlaybackSpeedSettingsTests : IDisposable
 {
 	private readonly TempSettingsFile _settingsFile = new("playbackspeed", "{}");
 
-	private string _tempPath => _settingsFile.Path;
+	private string _tempPath => _settingsFile.FilePath;
 
 	public void Dispose() => _settingsFile.Dispose();
 

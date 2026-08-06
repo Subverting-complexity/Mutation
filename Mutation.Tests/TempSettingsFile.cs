@@ -24,17 +24,19 @@ internal sealed class TempSettingsFile : IDisposable
 	public TempSettingsFile(string prefix, string? contents = null)
 	{
 		_directory = Directory.CreateTempSubdirectory($"mutation-{prefix}-").FullName;
-		Path = System.IO.Path.Combine(_directory, "Mutation.json");
+		FilePath = Path.Combine(_directory, "Mutation.json");
 
 		if (contents is not null)
-			File.WriteAllText(Path, contents);
+			File.WriteAllText(FilePath, contents);
 	}
 
 	/// <summary>Full path of the settings file to hand to a SettingsManager.</summary>
-	public string Path { get; }
+	public string FilePath { get; }
 
 	public void Dispose()
 	{
-		try { Directory.Delete(_directory, recursive: true); } catch { }
+		// Best-effort: a test that has already failed should report its own failure, not
+		// be buried under a cleanup exception from a file something else still holds.
+		try { Directory.Delete(_directory, recursive: true); } catch { /* best-effort cleanup */ }
 	}
 }

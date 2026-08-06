@@ -16,7 +16,7 @@ public class SettingsDefaultsParityTests : IDisposable
 	// branch. EnsureSettings will still apply all defaults.
 	private readonly TempSettingsFile _settingsFile = new("defaults", "{}");
 
-	private string _tempPath => _settingsFile.Path;
+	private string _tempPath => _settingsFile.FilePath;
 
 	public void Dispose() => _settingsFile.Dispose();
 

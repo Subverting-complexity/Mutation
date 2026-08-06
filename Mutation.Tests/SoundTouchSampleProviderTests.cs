@@ -95,6 +95,12 @@ public class SoundTouchSampleProviderTests
 		var middle = output.AsSpan((output.Length - Window) / 2, Window);
 
 		double atPitch = EnergyAt(middle, 440.0);
+
+		// An absolute floor first: the octave checks below are ratios, and near-silence
+		// with a faint residue would satisfy every ratio while being inaudible. A clean
+		// 0.5-amplitude tone measures about 0.5 * Window / 2; a twentieth of that is a
+		// wide margin against splice artefacts but nowhere near silence.
+		Assert.True(atPitch > Window * 0.05, "Output is too quiet to have a pitch at all.");
 		Assert.True(atPitch > EnergyAt(middle, 880.0) * 4.0, "Output has drifted an octave up.");
 		Assert.True(atPitch > EnergyAt(middle, 220.0) * 4.0, "Output has drifted an octave down.");
 	}
@@ -137,10 +143,11 @@ public class SoundTouchSampleProviderTests
 		var source = new BufferSampleProvider(BuildTone(frames), format);
 
 		var provider = new SoundTouchSampleProvider(source) { Tempo = 0.5 };
-		int outFrames = DrainFrameCount(provider, out _);
+		int outFrames = DrainFrameCount(provider, out float peak);
 
 		int expected = frames * 2;
 		Assert.InRange(outFrames, expected - (frames / 5), expected + (frames / 5));
+		Assert.True(peak > 0.01f, "Output should not be silent.");
 	}
 
 	// Minimal in-memory ISampleProvider that emits a fixed buffer once, then signals
