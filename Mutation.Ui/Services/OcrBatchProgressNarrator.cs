@@ -12,12 +12,28 @@ namespace Mutation.Ui.Services;
 /// for minutes. So the visible label still updates on every report, while announcements
 /// are held back to one per finished document (issue #228).
 ///
+/// Per document alone is not enough, though. A batch of one long PDF finishes exactly
+/// once, and that once is the end of the run, which is silent — so the user would sit
+/// through minutes of nothing, which is the failure the issue describes. Long documents
+/// therefore get a heartbeat every <see cref="PageAnnouncementInterval"/> pages: often
+/// enough to prove the run is alive, rare enough not to talk over the user.
+///
 /// The last segment of the run is deliberately silent: the run's own completion summary
 /// announces the outcome, and it should be the only thing the user hears at the end so
 /// "finished" never sounds like just another progress tick.
+///
+/// Not thread-safe by contract, though it is cheap about it: every call arrives on the UI
+/// thread, because the run's <c>Progress&lt;T&gt;</c> is built there and posts back to it.
 /// </summary>
 public sealed class OcrBatchProgressNarrator
 {
+	/// <summary>
+	/// How many pages of one document pass between heartbeats. Ten pages is on the order
+	/// of half a minute of OCR at the shipped parallelism — long enough not to nag, short
+	/// enough that silence never starts to sound like a hang.
+	/// </summary>
+	public const int PageAnnouncementInterval = 10;
+
 	/// <summary>
 	/// Its own UIA activity, separate from the status bar's. Progress announcements
 	/// supersede each other, and sharing the status activity would let a progress tick
@@ -56,9 +72,20 @@ public sealed class OcrBatchProgressNarrator
 	{
 		ArgumentNullException.ThrowIfNull(progress);
 
-		// Mid-document pages are silent: the document is what the user thinks in.
+		// Mid-document pages are silent apart from the heartbeat: the document is what the
+		// user thinks in, and a page each would be unbearable on a long PDF.
 		if (progress.PageNumber < progress.TotalPagesForFile)
-			return null;
+		{
+			if (progress.PageNumber % PageAnnouncementInterval != 0)
+				return null;
+
+			return string.Format(
+				CultureInfo.CurrentCulture,
+				"{0}, page {1} of {2}.",
+				progress.FileName,
+				progress.PageNumber,
+				progress.TotalPagesForFile);
+		}
 
 		int completed = Interlocked.Increment(ref _documentsCompleted);
 
@@ -72,7 +99,7 @@ public sealed class OcrBatchProgressNarrator
 		int total = Math.Max(_totalDocuments, completed);
 		return string.Format(
 			CultureInfo.CurrentCulture,
-			"{0}: {1} of {2} documents finished.",
+			"Finished {0}. {1} of {2} documents.",
 			progress.FileName,
 			completed,
 			total);

@@ -805,6 +805,7 @@
                                     x:Name="OcrDocumentsProgressPanel"
                                     Spacing="4"
                                     AutomationProperties.Name="OCR documents progress"
+                                    AutomationProperties.AutomationControlType="Group"
                                     Visibility="Collapsed">
                                     <!--
                                         No AutomationProperties.Name on the label: for a TextBlock

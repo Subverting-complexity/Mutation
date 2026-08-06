@@ -64,13 +64,14 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(5, 11, "report.pdf", 5, 5));
 
-		Assert.Equal("report.pdf: 1 of 3 documents finished.", announcement);
+		Assert.Equal("Finished report.pdf. 1 of 3 documents.", announcement);
 		Assert.Equal(1, narrator.DocumentsCompleted);
 	}
 
-	// The cadence the issue asks for: one announcement per document, not per page.
+	// The cadence the issue asks for: nowhere near one per page, and the page reports that
+	// do get through are the sparse heartbeat, not the running commentary.
 	[Fact]
-	public void AFortyPageDocumentIsAnnouncedOnce()
+	public void AFortyPageDocumentIsAnnouncedFourTimes()
 	{
 		var narrator = new OcrBatchProgressNarrator(totalDocuments: 2);
 		var announcements = new List<string>();
@@ -82,8 +83,72 @@ public class OcrBatchProgressNarratorTests
 				announcements.Add(announcement);
 		}
 
-		Assert.Single(announcements);
-		Assert.Equal("big.pdf: 1 of 2 documents finished.", announcements[0]);
+		Assert.Equal(
+			new[]
+			{
+				"big.pdf, page 10 of 40.",
+				"big.pdf, page 20 of 40.",
+				"big.pdf, page 30 of 40.",
+				"Finished big.pdf. 1 of 2 documents.",
+			},
+			announcements);
+	}
+
+	// The exact scenario issue #228 describes: one long PDF, several minutes, and the user
+	// hearing nothing. Per-document announcements alone cannot cover it — the document
+	// finishes exactly once, and that once is the end of the run, which is silent by
+	// design. Without the heartbeat this run says nothing at all.
+	[Fact]
+	public void ABatchOfOneLongDocumentIsNotSilent()
+	{
+		var narrator = new OcrBatchProgressNarrator(totalDocuments: 1);
+		var announcements = new List<string>();
+
+		for (int page = 1; page <= 40; page++)
+		{
+			string? announcement = narrator.TryComposeAnnouncement(Progress(page, 40, "big.pdf", page, 40));
+			if (announcement is not null)
+				announcements.Add(announcement);
+		}
+
+		Assert.NotEmpty(announcements);
+		Assert.Equal(
+			new[]
+			{
+				"big.pdf, page 10 of 40.",
+				"big.pdf, page 20 of 40.",
+				"big.pdf, page 30 of 40.",
+			},
+			announcements);
+	}
+
+	// The heartbeat must not turn a short document into a running commentary.
+	[Fact]
+	public void AShortDocumentGetsNoHeartbeat()
+	{
+		var narrator = new OcrBatchProgressNarrator(totalDocuments: 2);
+		var announcements = new List<string>();
+
+		for (int page = 1; page <= 9; page++)
+		{
+			string? announcement = narrator.TryComposeAnnouncement(Progress(page, 20, "short.pdf", page, 9));
+			if (announcement is not null)
+				announcements.Add(announcement);
+		}
+
+		Assert.Equal(new[] { "Finished short.pdf. 1 of 2 documents." }, announcements);
+	}
+
+	// A heartbeat is a position report, not an outcome, so it must not be counted as a
+	// finished document — the cancellation message reports off that count.
+	[Fact]
+	public void AHeartbeatDoesNotCountAsAFinishedDocument()
+	{
+		var narrator = new OcrBatchProgressNarrator(totalDocuments: 1);
+
+		Assert.NotNull(narrator.TryComposeAnnouncement(Progress(10, 40, "big.pdf", 10, 40)));
+
+		Assert.Equal(0, narrator.DocumentsCompleted);
 	}
 
 	[Fact]
@@ -102,9 +167,9 @@ public class OcrBatchProgressNarratorTests
 		Assert.Equal(
 			new[]
 			{
-				"scan1.png: 1 of 4 documents finished.",
-				"scan2.png: 2 of 4 documents finished.",
-				"scan3.png: 3 of 4 documents finished.",
+				"Finished scan1.png. 1 of 4 documents.",
+				"Finished scan2.png. 2 of 4 documents.",
+				"Finished scan3.png. 3 of 4 documents.",
 			},
 			announcements);
 	}
@@ -146,7 +211,7 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(2, 9, "second.png", 1, 1));
 
-		Assert.Equal("second.png: 2 of 2 documents finished.", announcement);
+		Assert.Equal("Finished second.png. 2 of 2 documents.", announcement);
 	}
 
 	[Fact]
@@ -156,7 +221,7 @@ public class OcrBatchProgressNarratorTests
 
 		string? announcement = narrator.TryComposeAnnouncement(Progress(1, 9, "scan.png", 1, 1));
 
-		Assert.Equal("scan.png: 1 of 1 documents finished.", announcement);
+		Assert.Equal("Finished scan.png. 1 of 1 documents.", announcement);
 	}
 
 	[Fact]

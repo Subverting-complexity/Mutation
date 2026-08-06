@@ -112,10 +112,10 @@ page limit only as far as your tier allows.
 Mutation works on two documents at a time by default, with up to four pages in the air
 at once, so forty PDFs still adds up to a lot of waiting.
 
-**What to do.** Listen for the per-file announcements — Mutation names each file as it
-finishes, so you can tell it is still working. If you picked the wrong files, or simply
-want it to stop, click **Cancel OCR** under the progress bar. Closing the Mutation
-window stops a running batch too.
+**What to do.** Listen for the announcements — Mutation names each file as it finishes,
+and calls out the page count every ten pages inside a long PDF, so you can tell it is
+still working. If you picked the wrong files, or simply want it to stop, click **Cancel
+OCR** under the progress bar. Closing the Mutation window stops a running batch too.
 
 To speed things up, open **Settings** (**Ctrl+Comma**) and find **Max parallel
 documents** and **Max parallel requests** under the OCR settings. Raising them sends

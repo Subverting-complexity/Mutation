@@ -270,8 +270,12 @@ public class OcrManagerTests
 
 	// A cancel that lands after the last page finished but before the reduce used to fall
 	// straight through to the success path and overwrite the clipboard — the one thing the
-	// user is told cancelling never does. Every page succeeds here, and the token is
-	// cancelled only once they have, so nothing but the final check can stop it.
+	// user is told cancelling never does.
+	//
+	// The cancel is raised from inside the OCR call, just before it hands back its text:
+	// that guarantees the token is already cancelled when the last page completes, with no
+	// scheduling assumption. The page itself succeeds, so nothing before the reduce has a
+	// cancellation point left to trip on — only the final check can stop this run.
 	[Fact]
 	public async Task ExtractTextFromFilesAsync_DoesNotTouchTheClipboard_WhenCancelledAfterTheLastPage()
 	{
@@ -279,17 +283,15 @@ public class OcrManagerTests
 		var clipboard = new TestClipboard();
 		using var only = new TempFile(".png");
 		var cts = new CancellationTokenSource();
-		var service = new StubOcrService(new Func<Stream, CancellationToken, Task<string>>(async (_, _) =>
+		var service = new StubOcrService(new Func<Stream, CancellationToken, Task<string>>((_, _) =>
 		{
-			await Task.Yield();
-			return "page text";
+			cts.Cancel();
+			return Task.FromResult("page text");
 		}));
 		var manager = new TestableOcrManager(settings, service, clipboard);
 
-		var progress = new Progress<OcrProcessingProgress>(_ => cts.Cancel());
-
 		await Assert.ThrowsAnyAsync<OperationCanceledException>(
-			() => manager.ExtractTextFromFilesAsync(new[] { only.Path }, DefaultOrder, cts.Token, progress));
+			() => manager.ExtractTextFromFilesAsync(new[] { only.Path }, DefaultOrder, cts.Token));
 
 		Assert.Equal(1, service.CallCount);
 		Assert.Equal(0, clipboard.SetTextCalls);

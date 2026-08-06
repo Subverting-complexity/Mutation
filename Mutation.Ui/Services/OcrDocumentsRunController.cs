@@ -58,6 +58,11 @@ public sealed class OcrDocumentsRun
 /// shutdown cancel never reaches the run. That makes "who is allowed to end this run" a
 /// correctness question, not bookkeeping, which is why <see cref="End"/> takes the handle
 /// <see cref="Begin"/> returned and ignores anything else.
+///
+/// UI-thread affinity is the contract, not an accident: <see cref="IsRunning"/> and
+/// <see cref="Begin"/> are meant to be called back to back as one atomic claim, and that
+/// only holds while every caller is on the same thread. Do not drive this from a
+/// background task without adding synchronisation.
 /// </summary>
 public sealed class OcrDocumentsRunController : IDisposable
 {

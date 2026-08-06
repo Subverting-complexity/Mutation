@@ -875,12 +875,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_ocrDocumentsRun.IsRunning)
 			return;
 
-		OcrDocumentsRun run = _ocrDocumentsRun.Begin();
-
 		// Declared out here so the cancellation message can report how far the run got.
 		OcrBatchProgressNarrator? narrator = null;
+		OcrDocumentsRun? run = null;
 		try
 		{
+			// Inside the try: Begin throws on a disposed controller, and this is an
+			// async void handler, so an escaping exception would take the process down.
+			run = _ocrDocumentsRun.Begin();
+
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var picker = new FileOpenPicker
 			{
@@ -897,20 +900,22 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (files == null || files.Count == 0)
 				return;
 
-                        BtnOcrDocuments.IsEnabled = false;
                         ShowStatus("OCR documents", $"Processing {files.Count} document(s)...", InfoBarSeverity.Informational);
 
                         OcrDocumentsProgressBar.Value = 0;
                         OcrDocumentsProgressBar.Maximum = 1;
                         OcrDocumentsProgressPanel.Visibility = Visibility.Visible;
                         OcrDocumentsProgressLabel.Text = "Preparing documents...";
-
-                        // Focus has to move: it is sitting on the OCR button that was just
-                        // disabled, and WinUI would drop it somewhere arbitrary. Cancel is where
-                        // the user would want to be anyway — it is the only control the run
-                        // offers, and hunting for it by Tab is the wrong thing to ask.
                         BtnCancelOcrDocuments.IsEnabled = true;
-                        try { BtnCancelOcrDocuments.Focus(FocusState.Programmatic); } catch { }
+
+                        // Focus moves to Cancel before the OCR button is disabled, not after:
+                        // disabling the focused element destroys focus first, and if the move
+                        // then failed the user would be left adrift with no way back. Cancel is
+                        // where they would want to be anyway — it is the only control the run
+                        // offers, and hunting for it by Tab is the wrong thing to ask.
+                        MoveFocusToCancelOcrDocuments();
+
+                        BtnOcrDocuments.IsEnabled = false;
 
                         var paths = files.Select(file => file.Path).ToList();
                         narrator = new OcrBatchProgressNarrator(paths.Count);
@@ -990,15 +995,52 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		// The button is deliberately not disabled here: doing that would destroy focus on
 		// the control the user is standing on, and leave a screen-reader user with no idea
-		// where they are. Cancel() returns false for a second press instead, so the repeat
-		// is simply silent (issue #227).
-		if (!_ocrDocumentsRun.Cancel())
+		// where they are (issue #227).
+		if (_ocrDocumentsRun.Cancel())
+		{
+			// The batch does not end here — it unwinds as the running OCR calls observe
+			// the token — so this only reports that the request landed. The
+			// OperationCanceledException handler confirms it took effect.
+			ShowStatus("OCR documents", "Cancelling the batch...", InfoBarSeverity.Informational);
 			return;
+		}
 
-		// The batch does not end here — it unwinds as the running OCR calls observe the
-		// token — so this only reports that the request landed. The
-		// OperationCanceledException handler confirms it took effect.
-		ShowStatus("OCR documents", "Cancelling the batch...", InfoBarSeverity.Informational);
+		// A repeat press on a stop already asked for. Answered rather than ignored: an
+		// enabled, focused button that produces silence reads as one that did not register.
+		if (_ocrDocumentsRun.IsRunning)
+			ShowStatus("OCR documents", "Already stopping.", InfoBarSeverity.Informational);
+	}
+
+	/// <summary>
+	/// Puts focus on the Cancel button as the run starts. The button was collapsed until
+	/// a moment ago, and WinUI refuses focus to an element it has not laid out yet, so a
+	/// refusal is retried once the layout pass has run — and only if the run is still
+	/// going, so a batch that finished in the meantime does not snatch focus back.
+	/// </summary>
+	private void MoveFocusToCancelOcrDocuments()
+	{
+		try
+		{
+			if (BtnCancelOcrDocuments.Focus(FocusState.Programmatic))
+				return;
+
+			DispatcherQueue?.TryEnqueue(() =>
+			{
+				try
+				{
+					if (OcrDocumentsProgressPanel.Visibility == Visibility.Visible && BtnCancelOcrDocuments.IsEnabled)
+						BtnCancelOcrDocuments.Focus(FocusState.Programmatic);
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"MoveFocusToCancelOcrDocuments (retry) failed: {ex.Message}");
+				}
+			});
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"MoveFocusToCancelOcrDocuments failed: {ex.Message}");
+		}
 	}
 
 	/// <summary>
