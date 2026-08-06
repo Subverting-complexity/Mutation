@@ -230,6 +230,13 @@ with the page limit set to 2 out of the box.</p>
 <p><strong>What to do.</strong> If you are on a paid tier, turn off the free-tier option in
 <strong>Settings</strong> under the OCR settings. If you are staying on the free tier, raise the
 page limit only as far as your tier allows.</p>
+<h3 id="a-batch-of-documents-is-taking-far-too-long">A batch of documents is taking far too long</h3>
+<p><strong>What's happening.</strong> Every page of every file you picked is sent off to be read, one
+request at a time. Forty PDFs is a lot of pages, and it can run for several minutes.</p>
+<p><strong>What to do.</strong> Listen for the per-file announcements — Mutation says &quot;done&quot; as each
+file finishes, so you can tell it is still working. If you picked the wrong files, or
+simply want it to stop, click <strong>Cancel OCR</strong> under the progress bar. Closing the
+Mutation window stops a running batch too.</p>
 <h3 id="nothing-happens-at-all--a-key-is-missing-or-wrong">Nothing happens at all — a key is missing or wrong</h3>
 <p><strong>What's happening.</strong> Mutation talks to outside services to do dictation, OCR and AI
 processing. Each needs an API key (a long password that lets Mutation use the service

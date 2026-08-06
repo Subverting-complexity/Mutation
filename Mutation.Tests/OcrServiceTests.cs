@@ -440,6 +440,127 @@ public class OcrServiceTests
 	}
 
 	// ---------------------------------------------------------------------
+	// BufferImage — what actually gets uploaded (issue #239)
+	//
+	// A MemoryStream's backing array is its *capacity* buffer. Reading it whole used to
+	// POST the unused tail as image payload, and for a stream built over a slice it sent
+	// a region of somebody else's array entirely.
+	// ---------------------------------------------------------------------
+
+	private static byte[] BufferImage(Stream stream)
+	{
+		MethodInfo? method = typeof(OcrService).GetMethod("BufferImage", BindingFlags.NonPublic | BindingFlags.Static);
+		Assert.NotNull(method);
+		return (byte[])method!.Invoke(null, new object[] { stream })!;
+	}
+
+	[Fact]
+	public void BufferImage_MemoryStreamWithSpareCapacity_UploadsOnlyTheImage()
+	{
+		byte[] image = Enumerable.Range(1, 100).Select(value => (byte)value).ToArray();
+
+		// Capacity deliberately larger than the content, as a grown MemoryStream's is.
+		using var stream = new MemoryStream(capacity: 512);
+		stream.Write(image, 0, image.Length);
+		stream.Position = 0;
+
+		Assert.True(stream.Capacity > image.Length, "The test needs spare capacity to be meaningful.");
+
+		byte[] uploaded = BufferImage(stream);
+
+		Assert.Equal(image, uploaded);
+	}
+
+	[Fact]
+	public void BufferImage_SlicedMemoryStream_UploadsTheSliceNotTheWholeArray()
+	{
+		byte[] backing = Enumerable.Range(0, 200).Select(value => (byte)value).ToArray();
+		byte[] expected = backing.Skip(40).Take(60).ToArray();
+
+		using var stream = new MemoryStream(backing, index: 40, count: 60, writable: false, publiclyVisible: true);
+
+		byte[] uploaded = BufferImage(stream);
+
+		Assert.Equal(expected, uploaded);
+	}
+
+	// TryGetBuffer refuses a stream that is not publicly visible, so this one has to take
+	// the copy path — and must still come back as exactly the slice.
+	[Fact]
+	public void BufferImage_SlicedMemoryStreamWithHiddenBuffer_UploadsTheSlice()
+	{
+		byte[] backing = Enumerable.Range(0, 200).Select(value => (byte)value).ToArray();
+		byte[] expected = backing.Skip(40).Take(60).ToArray();
+
+		using var stream = new MemoryStream(backing, index: 40, count: 60, writable: false);
+
+		byte[] uploaded = BufferImage(stream);
+
+		Assert.Equal(expected, uploaded);
+	}
+
+	// The buffered copy is what every retry re-reads, so it must not alias the caller's
+	// array — a caller reusing its buffer would otherwise change the retried payload.
+	[Fact]
+	public void BufferImage_DoesNotAliasTheCallersArray()
+	{
+		byte[] backing = { 1, 2, 3, 4 };
+		using var stream = new MemoryStream(backing, index: 0, count: 4, writable: true, publiclyVisible: true);
+
+		byte[] uploaded = BufferImage(stream);
+		backing[0] = 99;
+
+		Assert.Equal(new byte[] { 1, 2, 3, 4 }, uploaded);
+	}
+
+	// A mid-stream position must not truncate the upload: Read seeks to the start before
+	// each attempt, so the buffer has to hold the whole image regardless.
+	[Fact]
+	public void BufferImage_IgnoresTheStreamPosition()
+	{
+		byte[] image = { 10, 20, 30, 40, 50 };
+		using var stream = new MemoryStream(capacity: 64);
+		stream.Write(image, 0, image.Length);
+		stream.Position = 3;
+
+		byte[] uploaded = BufferImage(stream);
+
+		Assert.Equal(image, uploaded);
+	}
+
+	[Fact]
+	public void BufferImage_NonMemoryStream_UploadsEveryByte()
+	{
+		byte[] image = Enumerable.Range(0, 300).Select(value => (byte)value).ToArray();
+		string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".bin");
+		File.WriteAllBytes(path, image);
+
+		try
+		{
+			using var stream = File.OpenRead(path);
+
+			byte[] uploaded = BufferImage(stream);
+
+			Assert.Equal(image, uploaded);
+		}
+		finally
+		{
+			if (File.Exists(path))
+				File.Delete(path);
+		}
+	}
+
+	[Fact]
+	public void BufferImage_EmptyStream_ReturnsEmpty()
+	{
+		using var stream = new MemoryStream();
+
+		byte[] uploaded = BufferImage(stream);
+
+		Assert.Empty(uploaded);
+	}
+
+	// ---------------------------------------------------------------------
 	// EnsureMinimumImageSize
 	// ---------------------------------------------------------------------
 

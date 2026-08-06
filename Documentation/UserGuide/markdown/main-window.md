@@ -132,7 +132,7 @@ Each button in this card shows its current keyboard shortcut in small print unde
 | **OCR clipboard (L→R)** | The same, but reading strictly left to right and top to bottom. Use this when the normal order jumbles columns or tables. |
 | **Screenshot & OCR** | Grab part of the screen and read its text, in one step. |
 | **Screenshot & OCR (L→R)** | The same, in strict left-to-right, top-to-bottom order. |
-| **OCR documents** | Pick several PDFs or images and read them all into one result. A progress bar appears while it works. |
+| **OCR documents** | Pick several PDFs or images and read them all into one result. A progress bar appears while it works, with a **Cancel OCR** button below it. |
 | **OCR result** (text box) | Where the extracted text appears. |
 | **Download OCR result** | Saves that text to a document. Stays greyed out until there is something to save. |
 

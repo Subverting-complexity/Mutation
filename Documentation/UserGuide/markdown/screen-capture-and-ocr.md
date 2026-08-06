@@ -102,13 +102,27 @@ pick one or more files, and Mutation reads them all.
 It accepts PDFs and image files: `.pdf`, `.png`, `.jpg`, `.jpeg`, `.bmp`, `.tif` and
 `.tiff`. You can select several at once.
 
-A progress bar tells you which file and page it is on. When it finishes, all the text
-comes back as one combined block in the **OCR result** box — each file introduced by
-its name in square brackets, and each page of a PDF marked with its page number. That
-combined text is copied to the clipboard too.
+A progress bar tells you which file and page it is on. As each file finishes, Mutation
+says so out loud — for example, "invoice.pdf done. 3 of 12 documents processed." You
+hear it once per file, not once per page, so a long PDF does not talk over you.
+
+When it finishes, all the text comes back as one combined block in the **OCR result**
+box — each file introduced by its name in square brackets, and each page of a PDF
+marked with its page number. That combined text is copied to the clipboard too.
 
 If you want to keep it, the **Download OCR result** button saves the whole thing to a
 plain text file.
+
+### Stopping a batch part way
+
+Picked forty files by mistake? The **Cancel OCR** button sits just below the progress
+bar while a batch is running. Click it and Mutation stops sending files off to be read.
+
+The pages already on their way still finish, so there is a short pause before it stops.
+Mutation then tells you how many files got done. Nothing is copied to your clipboard
+when you cancel, and the **OCR result** box is left as it was.
+
+Closing the Mutation window also stops a batch that is still running.
 
 ## A few settings worth knowing
 

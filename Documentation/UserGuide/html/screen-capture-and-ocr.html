@@ -281,12 +281,21 @@ beep says something went wrong, and the status area tells you what.</p>
 pick one or more files, and Mutation reads them all.</p>
 <p>It accepts PDFs and image files: <code>.pdf</code>, <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.bmp</code>, <code>.tif</code> and
 <code>.tiff</code>. You can select several at once.</p>
-<p>A progress bar tells you which file and page it is on. When it finishes, all the text
-comes back as one combined block in the <strong>OCR result</strong> box — each file introduced by
-its name in square brackets, and each page of a PDF marked with its page number. That
-combined text is copied to the clipboard too.</p>
+<p>A progress bar tells you which file and page it is on. As each file finishes, Mutation
+says so out loud — for example, &quot;invoice.pdf done. 3 of 12 documents processed.&quot; You
+hear it once per file, not once per page, so a long PDF does not talk over you.</p>
+<p>When it finishes, all the text comes back as one combined block in the <strong>OCR result</strong>
+box — each file introduced by its name in square brackets, and each page of a PDF
+marked with its page number. That combined text is copied to the clipboard too.</p>
 <p>If you want to keep it, the <strong>Download OCR result</strong> button saves the whole thing to a
 plain text file.</p>
+<h3 id="stopping-a-batch-part-way">Stopping a batch part way</h3>
+<p>Picked forty files by mistake? The <strong>Cancel OCR</strong> button sits just below the progress
+bar while a batch is running. Click it and Mutation stops sending files off to be read.</p>
+<p>The pages already on their way still finish, so there is a short pause before it stops.
+Mutation then tells you how many files got done. Nothing is copied to your clipboard
+when you cancel, and the <strong>OCR result</strong> box is left as it was.</p>
+<p>Closing the Mutation window also stops a batch that is still running.</p>
 <h2 id="a-few-settings-worth-knowing">A few settings worth knowing</h2>
 <p>These live under <strong>Screen capture &amp; OCR</strong> in <strong>Settings</strong> (<strong>Ctrl+Comma</strong>).</p>
 <ul>

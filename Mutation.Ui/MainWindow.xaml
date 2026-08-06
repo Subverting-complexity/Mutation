@@ -805,14 +805,24 @@
                                     <TextBlock
                                         x:Name="OcrDocumentsProgressLabel"
                                         Text="Preparing documents..."
+                                        AutomationProperties.Name="OCR documents progress"
+                                        AutomationProperties.LiveSetting="Polite"
                                         Style="{StaticResource CaptionTextStyle}"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     <ProgressBar
                                         x:Name="OcrDocumentsProgressBar"
+                                        AutomationProperties.Name="OCR documents progress bar"
                                         Minimum="0"
                                         Maximum="1"
                                         Value="0"
                                         Height="4" />
+                                    <Button
+                                        x:Name="BtnCancelOcrDocuments"
+                                        Content="Cancel OCR"
+                                        HorizontalAlignment="Left"
+                                        Click="BtnCancelOcrDocuments_Click"
+                                        AutomationProperties.Name="Cancel OCR documents"
+                                        ToolTipService.ToolTip="Stop processing the remaining documents" />
                                 </StackPanel>
                             </StackPanel>
 

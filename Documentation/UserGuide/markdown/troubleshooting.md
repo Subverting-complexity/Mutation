@@ -106,6 +106,16 @@ with the page limit set to 2 out of the box.
 **Settings** under the OCR settings. If you are staying on the free tier, raise the
 page limit only as far as your tier allows.
 
+### A batch of documents is taking far too long
+
+**What's happening.** Every page of every file you picked is sent off to be read, one
+request at a time. Forty PDFs is a lot of pages, and it can run for several minutes.
+
+**What to do.** Listen for the per-file announcements — Mutation says "done" as each
+file finishes, so you can tell it is still working. If you picked the wrong files, or
+simply want it to stop, click **Cancel OCR** under the progress bar. Closing the
+Mutation window stops a running batch too.
+
 ### Nothing happens at all — a key is missing or wrong
 
 **What's happening.** Mutation talks to outside services to do dictation, OCR and AI

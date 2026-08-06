@@ -75,7 +75,10 @@ public class OcrManager
         }
         try
         {
-            var bitmap = await CaptureScreenshotAsync();
+            // Disposed here: a virtual-screen capture is tens of megabytes of unmanaged
+            // imaging memory, and waiting for a finalizer pass lets repeated hotkey
+            // presses grow the working set until an encode fails outright (issue #229).
+            using var bitmap = await CaptureScreenshotAsync();
             if (bitmap != null)
             {
                 await _clipboard.SetImageAsync(bitmap);
@@ -101,7 +104,7 @@ public class OcrManager
         }
         try
         {
-            var bitmap = await CaptureScreenshotAsync();
+            using var bitmap = await CaptureScreenshotAsync();
             if (bitmap == null)
             {
                 await PlayBeepSafeAsync(BeepType.Failure);
@@ -121,7 +124,7 @@ public class OcrManager
 
     public async Task<OcrResult> ExtractTextFromClipboardImageAsync(OcrReadingOrder order)
     {
-        var bitmap = await _clipboard.TryGetImageAsync();
+        using var bitmap = await _clipboard.TryGetImageAsync();
         if (bitmap == null)
         {
             PlayBeepSafe(BeepType.Failure);
@@ -782,8 +785,9 @@ public class OcrManager
         try
         {
             var overlay = _cachedOverlay ?? new RegionSelectionWindow();
+            // InitializeAsync already calls UpdateBitmap; calling it again converted and
+            // copied the whole virtual screen a second time for nothing (issue #229).
             await overlay.InitializeAsync(bmp);
-            overlay.UpdateBitmap(bmp);
             _activeOverlay = overlay;
             try
             {

@@ -78,6 +78,9 @@ public sealed partial class MainWindow : Window, IDisposable
 	// completion signal App's shutdown handler waits on before ending the process.
 	private readonly Mutation.Ui.Core.ApplicationCloseSequence _closeSequence;
 	private readonly CancellationTokenSource _shutdownCts = new();
+	// Cancellation lifetime of the batch OCR run, linked to shutdown so closing the window
+	// stops it, and cancellable on its own from the Cancel button (issue #227).
+	private readonly OcrDocumentsRunController _ocrDocumentsRun;
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	// Shows modal dialogs one at a time; a dialog requested while another
@@ -163,6 +166,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_wavFileSpeechExporter = wavFileSpeechExporter;
 		_transcriptFormatter = transcriptFormatter;
 		_settings = settings;
+		_ocrDocumentsRun = new OcrDocumentsRunController(_shutdownCts.Token);
 
         _settingsSaveDebouncer = new Debouncer(
             SettingsSaveDebounceDelay,
@@ -862,6 +866,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private async void BtnOcrDocuments_Click(object sender, RoutedEventArgs e)
 	{
+		// Declared out here so the cancellation message can report how far the run got.
+		OcrBatchProgressNarrator? narrator = null;
 		try
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
@@ -880,6 +886,11 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (files == null || files.Count == 0)
 				return;
 
+			// Begun before the Cancel button is enabled, never after: a press that landed
+			// in between would find no run to cancel and silently do nothing (issue #227).
+			// The run's token, not CancellationToken.None, so closing the window stops it.
+			CancellationToken runToken = _ocrDocumentsRun.Begin();
+
                         BtnOcrDocuments.IsEnabled = false;
                         ShowStatus("OCR documents", $"Processing {files.Count} document(s)...", InfoBarSeverity.Informational);
 
@@ -887,16 +898,26 @@ public sealed partial class MainWindow : Window, IDisposable
                         OcrDocumentsProgressBar.Maximum = 1;
                         OcrDocumentsProgressPanel.Visibility = Visibility.Visible;
                         OcrDocumentsProgressLabel.Text = "Preparing documents...";
+                        BtnCancelOcrDocuments.IsEnabled = true;
 
                         var paths = files.Select(file => file.Path).ToList();
+                        narrator = new OcrBatchProgressNarrator(paths.Count);
                         var progress = new Progress<OcrProcessingProgress>(info =>
                         {
                                 OcrDocumentsProgressPanel.Visibility = Visibility.Visible;
                                 OcrDocumentsProgressBar.Maximum = Math.Max(1, info.TotalSegments);
                                 OcrDocumentsProgressBar.Value = info.ProcessedSegments;
-                                OcrDocumentsProgressLabel.Text = $"{info.FileName} (Page {info.PageNumber} of {info.TotalPagesForFile})";
+                                OcrDocumentsProgressLabel.Text = OcrBatchProgressNarrator.ComposeLabel(info);
+
+                                // The label is a live region, but the run reports once per page and
+                                // a forty-page batch would leave the reader talking for minutes. The
+                                // narrator holds announcements to one per finished document (#228).
+                                string? announcement = narrator.TryComposeAnnouncement(info);
+                                if (announcement is not null)
+                                        AnnounceOcrDocumentsProgress(announcement);
                         });
-                        var result = await _ocrManager.ExtractTextFromFilesAsync(paths, OcrReadingOrder.TopToBottomColumnAware, CancellationToken.None, progress);
+
+                        var result = await _ocrManager.ExtractTextFromFilesAsync(paths, OcrReadingOrder.TopToBottomColumnAware, runToken, progress);
 			SetOcrText(result.Text);
 
 			if (result.SuccessCount == 0)
@@ -917,6 +938,17 @@ public sealed partial class MainWindow : Window, IDisposable
 				ShowStatus("OCR documents", message, InfoBarSeverity.Warning);
 			}
 		}
+		catch (OperationCanceledException)
+		{
+			// The confirmation that cancelling took effect. Cancelling is something the
+			// user asked for, not a failure, so it does not raise the error dialog — but
+			// it must still be said out loud, since the only other signal that the batch
+			// stopped is the progress bar vanishing (issue #227).
+			ShowStatus(
+				"OCR documents",
+				$"Cancelled. {narrator?.DocumentsCompleted ?? 0} document(s) finished before the batch stopped; no results were copied.",
+				InfoBarSeverity.Informational);
+		}
 		catch (Exception ex)
 		{
 			ShowStatus("OCR documents", ex.Message, InfoBarSeverity.Error);
@@ -924,13 +956,47 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
                 finally
                 {
+                        // Safe when no run was ever begun, e.g. the user cancelled the picker.
+                        _ocrDocumentsRun.End();
                         BtnOcrDocuments.IsEnabled = true;
+                        BtnCancelOcrDocuments.IsEnabled = false;
                         OcrDocumentsProgressPanel.Visibility = Visibility.Collapsed;
                         OcrDocumentsProgressBar.Value = 0;
                         OcrDocumentsProgressBar.Maximum = 1;
                         OcrDocumentsProgressLabel.Text = string.Empty;
                 }
         }
+
+	private void BtnCancelOcrDocuments_Click(object sender, RoutedEventArgs e)
+	{
+		// Disabled immediately so a second press cannot re-announce a stop already asked
+		// for. The batch does not end here — it unwinds when the running OCR calls
+		// observe the token — so this only reports that the request landed; the
+		// OperationCanceledException handler confirms it took effect (issue #227).
+		if (!_ocrDocumentsRun.Cancel())
+			return;
+
+		BtnCancelOcrDocuments.IsEnabled = false;
+		ShowStatus("OCR documents", "Cancelling; finishing the pages already in flight...", InfoBarSeverity.Informational);
+	}
+
+	/// <summary>
+	/// Announces batch OCR progress to the screen reader. Raised on the progress label
+	/// itself so the announcement carries that context, and Polite so it queues behind
+	/// whatever the user is doing rather than interrupting them (issue #228).
+	/// </summary>
+	private void AnnounceOcrDocumentsProgress(string announcement)
+	{
+		if (string.IsNullOrWhiteSpace(announcement))
+			return;
+
+		var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(OcrDocumentsProgressLabel);
+		peer?.RaiseNotificationEvent(
+			Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind.Other,
+			Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.MostRecent,
+			announcement,
+			OcrBatchProgressNarrator.AnnouncementActivityId);
+	}
 
         private async void BtnDownloadOcrResults_Click(object sender, RoutedEventArgs e)
         {
@@ -2873,6 +2939,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		_formatDebounceCts?.Dispose();
 		_promptDebounceCts?.Dispose();
 		_settingsSaveDebouncer?.Dispose();
+		_ocrDocumentsRun.Dispose();
 		_shutdownCts.Dispose();
 		_statusDismissTimer?.Stop();
 	}
