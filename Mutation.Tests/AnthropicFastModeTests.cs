@@ -5,18 +5,33 @@ using CognitiveSupport;
 
 namespace Mutation.Tests;
 
-public class AnthropicFastModeTests
+public class AnthropicFastModeTests : IDisposable
 {
 	private const string Model = "claude-opus-5";
 	private const string SuccessBody = """{"content":[{"type":"text","text":"done"}]}""";
 
-	private static AnthropicLlmService CreateService(FakeHttpMessageHandler handler, int retryCount = 0) =>
-		new(
+	// One client per test, all released at the end of the class rather than left to the
+	// finalizer. Disposing the client disposes the fake handler with it.
+	private readonly List<HttpClient> _clients = new();
+
+	public void Dispose()
+	{
+		foreach (var client in _clients)
+			client.Dispose();
+	}
+
+	private AnthropicLlmService CreateService(FakeHttpMessageHandler handler, int retryCount = 0)
+	{
+		var client = new HttpClient(handler);
+		_clients.Add(client);
+
+		return new(
 			"test-key",
 			new[] { new LlmModelConfig(Model, LlmProvider.Anthropic, customTemperature: null) },
-			new HttpClient(handler),
+			client,
 			timeoutSeconds: 5,
 			retryCount: retryCount);
+	}
 
 	private static IList<LlmChatMessage> Messages() =>
 		new List<LlmChatMessage>

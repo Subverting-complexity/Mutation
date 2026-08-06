@@ -18,7 +18,11 @@ public class HotkeyRouterControllerTests
 		FakeSettingsManager settingsManager,
 		ObservableCollection<HotkeyRouterEntry> entries,
 		List<(string From, string To)> snapshot)
-	BuildController(bool initialized = true, bool autoPersist = true)
+	// injectSettingsManager mirrors the two real shapes: the main window passes a manager
+	// with autoPersist on, while the settings page passes null with autoPersist off. It is
+	// separable so a test can prove the _autoPersist gate itself rather than relying on a
+	// null field to make the save impossible.
+	BuildController(bool initialized = true, bool autoPersist = true, bool injectSettingsManager = true)
 	{
 		var controller = (HotkeyRouterController)RuntimeHelpers.GetUninitializedObject(typeof(HotkeyRouterController));
 		var settings = new Settings();
@@ -27,7 +31,7 @@ public class HotkeyRouterControllerTests
 		var snapshot = new List<(string From, string To)>();
 
 		SetField(controller, "_settings", settings);
-		SetField(controller, "_settingsManager", autoPersist ? settingsManager : null);
+		SetField(controller, "_settingsManager", injectSettingsManager ? settingsManager : null);
 		SetField(controller, "_entries", entries);
 		SetField(controller, "_persistedSnapshot", snapshot);
 		SetField(controller, "_initialized", initialized);
@@ -241,13 +245,25 @@ public class HotkeyRouterControllerTests
 	[Fact]
 	public void RefreshRegistrations_AutoPersistFalse_DoesNotInvokeSettingsManager()
 	{
+		// The manager is injected, so a save would land on it: the zero proves the
+		// _autoPersist gate held, not that the field happened to be null.
 		var (controller, _, settingsManager, entries, _) = BuildController(autoPersist: false);
 		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V")));
 
-		// Should not throw despite _settingsManager being null, and should not attempt to save.
 		CallRefreshRegistrations(controller);
 
 		Assert.Equal(0, settingsManager.SaveCount);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_AutoPersistFalse_WithNoSettingsManager_DoesNotThrow()
+	{
+		// The settings page's real shape: autoPersist off and settingsManager null.
+		var (controller, _, _, entries, _) =
+			BuildController(autoPersist: false, injectSettingsManager: false);
+		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V")));
+
+		CallRefreshRegistrations(controller);
 	}
 
 	[Fact]

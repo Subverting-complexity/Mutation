@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Mutation.Ui.Core;
 using Xunit;
 
@@ -9,9 +10,9 @@ public class MicrophoneLevelPinServiceTests
 	// A single level endpoint that records every interaction so tests can assert
 	// the pin logic's behavior without real audio hardware. It can be made to
 	// throw on set/get (a stale-proxy failure) or to ignore writes (a device that
-	// silently rejects them, caught by read-back verification). Crucially, it has
-	// no way to change mute state, mirroring the real endpoint — the pin service
-	// can never touch mute.
+	// silently rejects them, caught by read-back verification). It carries no mute
+	// flag, mirroring the real endpoint — see
+	// CaptureLevelEndpoint_ExposesNoMuteMember_SoPinningCanNeverChangeMute.
 	private sealed class FakeCaptureLevelEndpoint : ICaptureLevelEndpoint
 	{
 		public bool Supported { get; set; } = true;
@@ -23,8 +24,6 @@ public class MicrophoneLevelPinServiceTests
 		public bool IgnoreWrites { get; set; }
 		public int SetCount { get; private set; }
 		public float? LastSet { get; private set; }
-		// Stands in for the device's mute flag; the pin service must never alter it.
-		public bool Mute { get; set; }
 
 		public bool IsLevelControlSupported => Supported;
 
@@ -128,15 +127,21 @@ public class MicrophoneLevelPinServiceTests
 	}
 
 	[Fact]
-	public void Pinning_NeverChangesMuteState()
+	public void CaptureLevelEndpoint_ExposesNoMuteMember_SoPinningCanNeverChangeMute()
 	{
-		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.10f, Mute = true };
-		var service = NewService(endpoint);
+		// The real guarantee is structural, not behavioural: the pin service reaches the
+		// device only through ICaptureLevelEndpoint, so as long as that interface has no
+		// mute member there is no code path by which pinning could touch mute. Asserting
+		// on a fake's own mute flag would prove nothing — the service cannot see it.
+		var muteMembers = typeof(ICaptureLevelEndpoint)
+			.GetMembers()
+			.Where(m => m.Name.Contains("Mute", StringComparison.OrdinalIgnoreCase))
+			.Select(m => m.Name)
+			.ToArray();
 
-		service.ReassertPinnedLevel(90);
-		service.ApplyLevel(40);
-
-		Assert.True(endpoint.Mute); // mute left exactly as it was
+		Assert.True(
+			muteMembers.Length == 0,
+			$"ICaptureLevelEndpoint gained a mute member ({string.Join(", ", muteMembers)}), so the pin service can now change mute state.");
 	}
 
 	[Fact]
@@ -186,15 +191,14 @@ public class MicrophoneLevelPinServiceTests
 	}
 
 	[Fact]
-	public void ReadLevelState_DoesNotWriteTheLevelOrTouchMute()
+	public void ReadLevelState_DoesNotWriteTheLevel()
 	{
-		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.30f, Mute = true };
+		var endpoint = new FakeCaptureLevelEndpoint { Level = 0.30f };
 		var service = NewService(endpoint);
 
 		service.ReadLevelState();
 
 		Assert.Equal(0, endpoint.SetCount);
-		Assert.True(endpoint.Mute);
 	}
 
 	[Fact]

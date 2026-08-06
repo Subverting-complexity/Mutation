@@ -12,21 +12,13 @@ namespace Mutation.Tests;
 // value that EnsureSettings would immediately overwrite on next load.
 public class SettingsDefaultsParityTests : IDisposable
 {
-	private readonly string _tempPath;
+	// Pre-create the file so CreateSettingsFileIfNotExists doesn't take the new-file
+	// branch. EnsureSettings will still apply all defaults.
+	private readonly TempSettingsFile _settingsFile = new("defaults", "{}");
 
-	public SettingsDefaultsParityTests()
-	{
-		_tempPath = Path.Combine(Path.GetTempPath(), $"mutation-defaults-{Guid.NewGuid():N}.json");
-		// Pre-create the file so CreateSettingsFileIfNotExists doesn't take the
-		// new-file branch. EnsureSettings will still apply all defaults.
-		File.WriteAllText(_tempPath, "{}");
-	}
+	private string _tempPath => _settingsFile.FilePath;
 
-	public void Dispose()
-	{
-		if (File.Exists(_tempPath))
-			File.Delete(_tempPath);
-	}
+	public void Dispose() => _settingsFile.Dispose();
 
 	private Settings ApplyDefaults()
 	{

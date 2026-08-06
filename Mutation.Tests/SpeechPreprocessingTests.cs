@@ -30,22 +30,27 @@ public class SpeechPreprocessingTests
 		Assert.Equal(string.Empty, TextToSpeechService.PreprocessForSpeech(string.Empty, SpeechPreprocessingOptions.All));
 	}
 
+	// Both overloads are pinned to a literal first, so neither can be satisfied by a
+	// PreprocessForSpeech reduced to "return text" agreeing with itself.
+	private const string AllRulesInput = "# Heading\n\n**bold** see https://example.com now e.g. here";
+	private const string AllRulesExpected = "Heading. bold see link to example.com now for example here";
+
+	[Fact]
+	public void AllRules_ProduceTheExpectedSpokenText()
+	{
+		Assert.Equal(AllRulesExpected, TextToSpeechService.PreprocessForSpeech(AllRulesInput, SpeechPreprocessingOptions.All));
+	}
+
 	[Fact]
 	public void NullOptions_TreatedAsAllRules()
 	{
-		const string input = "# Heading\n\n**bold** see https://example.com now e.g. here";
-		Assert.Equal(
-			TextToSpeechService.PreprocessForSpeech(input, SpeechPreprocessingOptions.All),
-			TextToSpeechService.PreprocessForSpeech(input, null!));
+		Assert.Equal(AllRulesExpected, TextToSpeechService.PreprocessForSpeech(AllRulesInput, null!));
 	}
 
 	[Fact]
 	public void DefaultOverload_MatchesAllRulesOn()
 	{
-		const string input = "# Title\n\n- a bullet with **bold**, `code`, e.g. an example, https://example.com/x ```block```";
-		Assert.Equal(
-			TextToSpeechService.PreprocessForSpeech(input),
-			TextToSpeechService.PreprocessForSpeech(input, SpeechPreprocessingOptions.All));
+		Assert.Equal(AllRulesExpected, TextToSpeechService.PreprocessForSpeech(AllRulesInput));
 	}
 
 	[Fact]

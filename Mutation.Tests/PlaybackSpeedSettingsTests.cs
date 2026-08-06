@@ -10,19 +10,11 @@ namespace Mutation.Tests;
 // supported speed by SettingsManager.EnsureSettings.
 public class PlaybackSpeedSettingsTests : IDisposable
 {
-	private readonly string _tempPath;
+	private readonly TempSettingsFile _settingsFile = new("playbackspeed", "{}");
 
-	public PlaybackSpeedSettingsTests()
-	{
-		_tempPath = Path.Combine(Path.GetTempPath(), $"mutation-playbackspeed-{Guid.NewGuid():N}.json");
-		File.WriteAllText(_tempPath, "{}");
-	}
+	private string _tempPath => _settingsFile.FilePath;
 
-	public void Dispose()
-	{
-		if (File.Exists(_tempPath))
-			File.Delete(_tempPath);
-	}
+	public void Dispose() => _settingsFile.Dispose();
 
 	private Settings Ensure(Settings settings)
 	{

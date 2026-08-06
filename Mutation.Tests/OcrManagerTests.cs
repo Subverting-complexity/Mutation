@@ -638,8 +638,9 @@ public class OcrManagerTests
 			previousIndex = index;
 		}
 
-		Assert.DoesNotContain("Only first", result.Text, StringComparison.OrdinalIgnoreCase);
-		Assert.DoesNotContain("truncat", result.Text, StringComparison.OrdinalIgnoreCase);
+		// (No "nothing was truncated" string assertion here: the output text comes from
+		// the stub, and OcrManager has no truncation notice to look for. The 9 requests
+		// and the 9 ordered page labels above are what prove nothing was dropped.)
 	}
 
 	[Fact]
@@ -739,12 +740,18 @@ public class OcrManagerTests
 		return segment;
 	}
 
+	// The batch gates default to 2 documents / 4 requests in production. Most tests here
+	// map the Nth stub response to the Nth file positionally, which only holds under
+	// sequential dispatch, so the shared fixture pins both to one. The throttles
+	// themselves have dedicated tests that set the knobs explicitly.
 	private static Settings CreateValidSettings() => new()
 	{
 		AzureComputerVisionSettings = new AzureComputerVisionSettings
 		{
 			ApiKey = "key",
-			Endpoint = "https://example.com"
+			Endpoint = "https://example.com",
+			MaxParallelDocuments = 1,
+			MaxParallelRequests = 1
 		}
 	};
 
@@ -894,24 +901,38 @@ public class OcrManagerTests
 			=> Task.FromResult(Image);
 	}
 
+	// OcrManager can fan work out across threads, so the queue and the counter are
+	// guarded even though CreateValidSettings pins the batch gates to one at a time.
+	// An unguarded Queue<T> here would corrupt or throw, and a lost CallCount
+	// increment would show up as a mystery off-by-one rather than a real failure.
 	private sealed class StubOcrService : IOcrService
 	{
+		private readonly object _gate = new();
 		private readonly Queue<Func<Stream, CancellationToken, Task<string>>> _behaviors;
+		private int _callCount;
 
 		public StubOcrService(params object[] behaviors)
 		{
 			_behaviors = new Queue<Func<Stream, CancellationToken, Task<string>>>(behaviors.Select(ConvertBehavior));
 		}
 
-		public int CallCount { get; private set; }
+		public int CallCount => Volatile.Read(ref _callCount);
 
 		public Task<string> ExtractText(OcrReadingOrder ocrReadingOrder, Stream imageStream, CancellationToken overallCancellationToken)
 		{
-			CallCount++;
-			if (_behaviors.Count == 0)
-				throw new InvalidOperationException("No behavior configured for this OCR call.");
+			Func<Stream, CancellationToken, Task<string>> behavior;
+			lock (_gate)
+			{
+				// Counted only once a behaviour is actually handed out, so an
+				// under-configured test fails on the missing behaviour rather than on a
+				// CallCount that includes a call this stub refused to serve.
+				if (_behaviors.Count == 0)
+					throw new InvalidOperationException("No behavior configured for this OCR call.");
 
-			var behavior = _behaviors.Dequeue();
+				behavior = _behaviors.Dequeue();
+				Interlocked.Increment(ref _callCount);
+			}
+
 			return behavior(imageStream, overallCancellationToken);
 		}
 
