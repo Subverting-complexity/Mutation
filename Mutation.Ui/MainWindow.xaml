@@ -801,7 +801,24 @@
                                     </Grid>
                                 </Button>
 
-                                <StackPanel x:Name="OcrDocumentsProgressPanel" Spacing="4" Visibility="Collapsed">
+                                <StackPanel
+                                    x:Name="OcrDocumentsProgressPanel"
+                                    Spacing="4"
+                                    AutomationProperties.Name="OCR documents progress"
+                                    AutomationProperties.AutomationControlType="Group"
+                                    Visibility="Collapsed">
+                                    <!--
+                                        No AutomationProperties.Name on the label: for a TextBlock
+                                        the name IS the text, and a fixed one would replace
+                                        "report.pdf (Page 12 of 40)" with a constant string, hiding
+                                        the very detail this exists to expose. No LiveSetting
+                                        either — WinUI raises a live-region change on every text
+                                        update, and this updates once per page, so a forty-page
+                                        batch would talk without stopping. Announcements come from
+                                        AnnounceOcrDocumentsProgress instead, throttled to one per
+                                        finished document (issue #228). The panel above carries the
+                                        descriptive name.
+                                    -->
                                     <TextBlock
                                         x:Name="OcrDocumentsProgressLabel"
                                         Text="Preparing documents..."
@@ -809,10 +826,18 @@
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     <ProgressBar
                                         x:Name="OcrDocumentsProgressBar"
+                                        AutomationProperties.Name="OCR documents"
                                         Minimum="0"
                                         Maximum="1"
                                         Value="0"
                                         Height="4" />
+                                    <Button
+                                        x:Name="BtnCancelOcrDocuments"
+                                        Content="Cancel OCR"
+                                        HorizontalAlignment="Left"
+                                        Click="BtnCancelOcrDocuments_Click"
+                                        AutomationProperties.Name="Cancel OCR documents"
+                                        ToolTipService.ToolTip="Stop processing the remaining documents" />
                                 </StackPanel>
                             </StackPanel>
 

@@ -268,6 +268,35 @@ public class OcrManagerTests
 		Assert.Equal(0, manager.BeepCount);
 	}
 
+	// A cancel that lands after the last page finished but before the reduce used to fall
+	// straight through to the success path and overwrite the clipboard — the one thing the
+	// user is told cancelling never does.
+	//
+	// The cancel is raised from inside the OCR call, just before it hands back its text:
+	// that guarantees the token is already cancelled when the last page completes, with no
+	// scheduling assumption. The page itself succeeds, so nothing before the reduce has a
+	// cancellation point left to trip on — only the final check can stop this run.
+	[Fact]
+	public async Task ExtractTextFromFilesAsync_DoesNotTouchTheClipboard_WhenCancelledAfterTheLastPage()
+	{
+		var settings = CreateValidSettings();
+		var clipboard = new TestClipboard();
+		using var only = new TempFile(".png");
+		var cts = new CancellationTokenSource();
+		var service = new StubOcrService(new Func<Stream, CancellationToken, Task<string>>((_, _) =>
+		{
+			cts.Cancel();
+			return Task.FromResult("page text");
+		}));
+		var manager = new TestableOcrManager(settings, service, clipboard);
+
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(
+			() => manager.ExtractTextFromFilesAsync(new[] { only.Path }, DefaultOrder, cts.Token));
+
+		Assert.Equal(1, service.CallCount);
+		Assert.Equal(0, clipboard.SetTextCalls);
+	}
+
 	[Fact]
 	public async Task ExtractTextFromFilesAsync_ReportsProgress_Correctly()
 	{
@@ -837,6 +866,77 @@ public class OcrManagerTests
 		Assert.True(result.Success);
 		WaitForBeep(manager, 1);
 		Assert.DoesNotContain(BeepType.End, manager.Beeps);
+	}
+
+	// ---------------------------------------------------------------------
+	// Bitmap lifetime (issue #229)
+	//
+	// A clipboard or screenshot bitmap is unmanaged imaging memory — roughly 30 MB on a
+	// 4K multi-monitor desktop. Leaving it to a finalizer let repeated OCR hotkey presses
+	// grow the working set until an encode failed outright, surfacing to the user as a
+	// generic "OCR failed".
+	// ---------------------------------------------------------------------
+
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_DisposesTheClipboardBitmap()
+	{
+		var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService("recognised text"), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.True(result.Success);
+		AssertDisposed(image);
+	}
+
+	// The unconfigured path returns before any OCR call, and used to leak the same way.
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_DisposesTheClipboardBitmap_WhenOcrIsNotConfigured()
+	{
+		var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var manager = new TestableOcrManager(new Settings(), new StubOcrService(), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		AssertDisposed(image);
+	}
+
+	[Fact]
+	public async Task ExtractTextFromClipboardImageAsync_DisposesTheClipboardBitmap_WhenTheRequestFails()
+	{
+		var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image };
+		var service = new StubOcrService(new InvalidOperationException("service unavailable"));
+		var manager = new TestableOcrManager(CreateValidSettings(), service, clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		AssertDisposed(image);
+	}
+
+	// LockBuffer, not PixelWidth: a closed SoftwareBitmap still answers its metadata
+	// properties, so those cannot tell a disposed bitmap from a live one. Reaching for the
+	// pixels is what fails. The probe itself is pinned by the test below, so a projection
+	// change that stops it throwing cannot quietly turn the leak tests green.
+	private static void AssertDisposed(SoftwareBitmap bitmap)
+	{
+		Assert.Throws<ObjectDisposedException>(() => bitmap.LockBuffer(BitmapBufferAccessMode.Read).Dispose());
+	}
+
+	[Fact]
+	public void TheDisposalProbeDistinguishesADisposedBitmapFromALiveOne()
+	{
+		using var live = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		live.LockBuffer(BitmapBufferAccessMode.Read).Dispose();
+
+		var closed = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		closed.Dispose();
+
+		AssertDisposed(closed);
 	}
 
 	private static void WaitForBeep(TestableOcrManager manager, int expectedCount)

@@ -203,8 +203,11 @@ public sealed partial class RegionSelectionWindow : Window
 
 	public void UpdateBitmap(SoftwareBitmap bitmap)
 	{
-		// Convert SoftwareBitmap directly into a WriteableBitmap to avoid encode/decode latency
-		var converted = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+		// Convert SoftwareBitmap directly into a WriteableBitmap to avoid encode/decode latency.
+		// Convert always allocates a fresh bitmap, and the pixels are copied out into the
+		// WriteableBitmap below, so the conversion is dead the moment the copy is done
+		// (issue #229).
+		using var converted = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
 		WriteableBitmap wb = new(converted.PixelWidth, converted.PixelHeight);
 		converted.CopyToBuffer(wb.PixelBuffer);
 		wb.Invalidate();

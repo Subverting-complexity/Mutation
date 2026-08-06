@@ -75,7 +75,10 @@ public class OcrManager
         }
         try
         {
-            var bitmap = await CaptureScreenshotAsync();
+            // Disposed here: a virtual-screen capture is tens of megabytes of unmanaged
+            // imaging memory, and waiting for a finalizer pass lets repeated hotkey
+            // presses grow the working set until an encode fails outright (issue #229).
+            using var bitmap = await CaptureScreenshotAsync();
             if (bitmap != null)
             {
                 await _clipboard.SetImageAsync(bitmap);
@@ -101,7 +104,7 @@ public class OcrManager
         }
         try
         {
-            var bitmap = await CaptureScreenshotAsync();
+            using var bitmap = await CaptureScreenshotAsync();
             if (bitmap == null)
             {
                 await PlayBeepSafeAsync(BeepType.Failure);
@@ -121,7 +124,7 @@ public class OcrManager
 
     public async Task<OcrResult> ExtractTextFromClipboardImageAsync(OcrReadingOrder order)
     {
-        var bitmap = await _clipboard.TryGetImageAsync();
+        using var bitmap = await _clipboard.TryGetImageAsync();
         if (bitmap == null)
         {
             PlayBeepSafe(BeepType.Failure);
@@ -196,6 +199,12 @@ public class OcrManager
         // Throttle is enforced inside the tasks via the two gates. Task.WhenAll propagates
         // OperationCanceledException so fail-fast cancellation behaviour is preserved.
         FileOcrOutcome[] outcomes = await Task.WhenAll(tasks);
+
+        // A cancel that lands after the last page finished but before the reduce would
+        // otherwise fall through to the success path and overwrite the clipboard — the
+        // one thing the user is told cancelling never does. Checked here so cancelling
+        // means the same thing however late it arrives (issue #227).
+        cancellationToken.ThrowIfCancellationRequested();
 
         // Reduce: combine results on a single thread, in original selection order, so today's
         // output format and ordering are protected against the concurrent execution above.
@@ -782,8 +791,9 @@ public class OcrManager
         try
         {
             var overlay = _cachedOverlay ?? new RegionSelectionWindow();
+            // InitializeAsync already calls UpdateBitmap; calling it again converted and
+            // copied the whole virtual screen a second time for nothing (issue #229).
             await overlay.InitializeAsync(bmp);
-            overlay.UpdateBitmap(bmp);
             _activeOverlay = overlay;
             try
             {

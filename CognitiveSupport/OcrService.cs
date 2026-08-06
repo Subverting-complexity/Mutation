@@ -96,20 +96,7 @@ public class OcrService : IOcrService, IDisposable
 		CancellationToken overallCancellationToken)
 	{
 		// Buffer the stream into a byte array so we can create a new stream for each retry
-		byte[] imageBytes;
-		if (imageStream is MemoryStream ms && ms.TryGetBuffer(out ArraySegment<byte> buffer) && buffer.Array != null)
-		{
-			imageBytes = buffer.Array;
-		}
-		else
-		{
-			using (var tempMs = new MemoryStream())
-			{
-				imageStream.Seek(0, SeekOrigin.Begin);
-				imageStream.CopyTo(tempMs);
-				imageBytes = tempMs.ToArray();
-			}
-		}
+		byte[] imageBytes = BufferImage(imageStream);
 
 		var retryPolicy = CreateRetryPolicy();
 		var context = CreateRetryContext();
@@ -117,11 +104,29 @@ public class OcrService : IOcrService, IDisposable
 		return await retryPolicy.ExecuteAsync(
 			(ctx, overallToken) =>
 			{
-				var ms = new MemoryStream(imageBytes ?? Array.Empty<byte>(), writable: false);
+				var ms = new MemoryStream(imageBytes, writable: false);
 				return ExecuteReadInternal(ocrReadingOrder, ms, ctx, overallToken);
 			},
 			context,
 			overallCancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Copies the image into a byte array that holds exactly the image and nothing else.
+	/// A <see cref="MemoryStream"/>'s backing array is its <em>capacity</em> buffer, so the
+	/// segment's Offset and Count have to be honoured: uploading the raw array would POST
+	/// the unused tail as image payload, and would send the wrong region entirely for a
+	/// stream built over a slice of a larger array (issue #239).
+	/// </summary>
+	private static byte[] BufferImage(Stream imageStream)
+	{
+		if (imageStream is MemoryStream ms && ms.TryGetBuffer(out ArraySegment<byte> buffer) && buffer.Array != null)
+			return buffer.ToArray();
+
+		using var tempMs = new MemoryStream();
+		imageStream.Seek(0, SeekOrigin.Begin);
+		imageStream.CopyTo(tempMs);
+		return tempMs.ToArray();
 	}
 
         private Stream EnsureMinimumImageSize(Stream imageStream)
@@ -342,6 +347,10 @@ public class OcrService : IOcrService, IDisposable
 				}
 			}
 
+			// Not dead code: the test suite invokes this reflectively to clear the shared
+			// static limiter between runs, which is the only way one test's requests can
+			// be kept out of the next one's window. Flagged as unused by issue #239's
+			// notes; it is reachable, so it stays.
 			private void Reset()
 			{
 				lock (_sync)
