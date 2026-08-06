@@ -22,7 +22,10 @@ public static class AudioFileConverter
 	/// <returns>Path to the temporary OGG file. Caller is responsible for cleanup.</returns>
 	public static string ConvertToOgg(string inputPath, SilenceTrimmerOptions? silenceOptions = null)
 	{
-		string tempOggPath = Path.ChangeExtension(Path.GetTempFileName(), ".ogg");
+		// Not Path.GetTempFileName(): that *creates* a zero-byte .tmp on disk, and
+		// ChangeExtension then returns a different path string and walks away from it,
+		// leaking one stray file per call.
+		string tempOggPath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetRandomFileName(), ".ogg"));
 		try
 		{
 			ConvertToOgg(inputPath, tempOggPath, silenceOptions);

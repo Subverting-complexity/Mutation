@@ -8,13 +8,24 @@ namespace CognitiveSupport;
 
 public class AudioRecorder : IAudioRecorder
 {
-	private WaveInEvent? _waveIn;
+	private readonly Func<int, IAudioCaptureSource> _captureSourceFactory;
+	private IAudioCaptureSource? _waveIn;
 	private OpusEncoder? _encoder;
 	private OpusOggWriteStream? _oggStream;
 	private Stream? _fileStream;
 	private SilenceTrimmer? _silenceTrimmer;
 	private readonly object _writeLock = new();
 	private Exception? _captureException;
+	private bool _disposed;
+
+	// Set when the capture source reports that it has finished delivering buffers. Starts
+	// signalled so a StopRecording with nothing running never waits.
+	private readonly ManualResetEventSlim _captureDrained = new(initialState: true);
+
+	// How long StopRecording will wait for the capture thread to hand over its last buffers.
+	// Bounded so a wedged audio driver costs a short pause rather than a hung app; the
+	// real drain takes about one buffer's worth of time.
+	private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(2);
 
 	// After StopRecording, the trimmed speech duration in seconds when silence stripping was
 	// active; null when stripping was disabled (so callers leave the recording untouched).
@@ -34,9 +45,25 @@ public class AudioRecorder : IAudioRecorder
 	private const int SamplesPerFrame = SampleRate * FrameSizeMs / 1000; // 960 samples
 	private const int Channels = 1;
 
+	// Larger buffers from NAudio, to reduce per-callback overhead.
+	private const int BufferMilliseconds = 100;
+
 	// Splits incoming PCM bytes into fixed 960-sample frames. Created per recording in
 	// StartRecording so no partial-frame remainder bleeds from one recording into the next.
 	private PcmFrameSplitter? _pcmFrameSplitter;
+
+	public AudioRecorder()
+		: this(deviceIndex => new WaveInCaptureSource(
+			deviceIndex,
+			new WaveFormat(SampleRate, 16, Channels),
+			BufferMilliseconds))
+	{
+	}
+
+	internal AudioRecorder(Func<int, IAudioCaptureSource> captureSourceFactory)
+	{
+		_captureSourceFactory = captureSourceFactory ?? throw new ArgumentNullException(nameof(captureSourceFactory));
+	}
 
 	public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)
 	{
@@ -49,18 +76,13 @@ public class AudioRecorder : IAudioRecorder
 			TrimmedSpeechSeconds = null;
 			_captureException = null;
 
-			WaveInEvent? waveIn = null;
+			IAudioCaptureSource? waveIn = null;
 			Stream? fileStream = null;
 			OpusEncoder? encoder = null;
 			OpusOggWriteStream? oggStream = null;
 			try
 			{
-				waveIn = new WaveInEvent
-				{
-					DeviceNumber = captureDeviceIndex,
-					WaveFormat = new WaveFormat(SampleRate, 16, Channels),
-					BufferMilliseconds = 100 // Request larger buffers from NAudio to reduce overhead
-				};
+				waveIn = _captureSourceFactory(captureDeviceIndex);
 
 				fileStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
 
@@ -84,6 +106,10 @@ public class AudioRecorder : IAudioRecorder
 				_encoder = encoder;
 				_oggStream = oggStream;
 
+				// Armed only once the source is about to run, so a start that throws leaves the
+				// gate open rather than making the next StopRecording wait out the timeout.
+				_captureDrained.Reset();
+
 				try
 				{
 					_waveIn.StartRecording();
@@ -91,6 +117,7 @@ public class AudioRecorder : IAudioRecorder
 				catch
 				{
 					// Roll back field commits so subsequent calls / Dispose see clean state.
+					_captureDrained.Set();
 					_waveIn = null;
 					_fileStream = null;
 					_encoder = null;
@@ -144,13 +171,48 @@ public class AudioRecorder : IAudioRecorder
 
 	private void OnRecordingStopped(object? sender, StoppedEventArgs e)
 	{
-		// We handle cleanup/finishing in Dispose or explicit Stop
+		// Every buffer the capture thread had in hand has now been delivered, so StopRecording
+		// can safely close the encoder. Cleanup itself happens in Dispose or explicit Stop.
+		_captureDrained.Set();
 	}
 
 	public void StopRecording()
 	{
-		_waveIn?.StopRecording();
-		
+		IAudioCaptureSource? capture;
+		lock (_writeLock)
+		{
+			if (_disposed)
+				return;
+
+			capture = _waveIn;
+		}
+
+		if (capture is not null)
+		{
+			// StopRecording only *signals* the capture thread: buffers it has already filled
+			// are delivered to OnDataAvailable afterwards, on that thread. Finishing the Ogg
+			// stream before they arrive dropped them silently against the null guard in
+			// OnDataAvailable, cutting the last fraction of a second — often the last word —
+			// off every recording. Wait for the drain, outside _writeLock so those deliveries
+			// can still take it.
+			capture.StopRecording();
+			try
+			{
+				_captureDrained.Wait(DrainTimeout);
+
+				// Whether the source reported in or the wait timed out, this recording's
+				// drain is over. Latching it stops the repeat StopRecording that Dispose
+				// makes from sitting through the timeout a second time.
+				_captureDrained.Set();
+			}
+			catch (ObjectDisposedException)
+			{
+				// Another thread disposed the recorder while we were waiting. There is
+				// nothing left to drain into, so fall through and let the checks below
+				// find the encoder already gone.
+			}
+		}
+
 		lock (_writeLock)
 		{
 			if (_oggStream != null)
@@ -187,6 +249,9 @@ public class AudioRecorder : IAudioRecorder
 
 		lock (_writeLock)
 		{
+			if (_disposed)
+				return;
+
 			_waveIn?.Dispose();
 			_waveIn = null;
 
@@ -194,9 +259,16 @@ public class AudioRecorder : IAudioRecorder
 			// The stream is disposed here.
 			_fileStream?.Dispose();
 			_fileStream = null;
-			
+
 			_encoder = null;
 			_oggStream = null;
+
+			_disposed = true;
+
+			// Released the moment nothing can arm it again. A StopRecording that slipped past
+			// the _disposed check and is waiting here catches the ObjectDisposedException.
+			_captureDrained.Set();
+			_captureDrained.Dispose();
 		}
 	}
 }

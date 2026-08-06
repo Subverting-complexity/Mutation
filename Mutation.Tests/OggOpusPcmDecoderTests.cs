@@ -149,4 +149,94 @@ public class OggOpusPcmDecoderTests : IDisposable
 
 		Assert.Throws<InvalidDataException>(() => OggOpusPcmDecoder.DecodeToMonoPcm(wav, _ => { }));
 	}
+
+	// A multiplexed container carries several logical streams side by side — Opus audio next to
+	// Theora video, say. Without serial-number filtering every stream's packets were fed to the
+	// one Opus decoder; those that happened to parse as a plausible TOC byte decoded as noise.
+	[Fact]
+	public void PacketsFromOtherLogicalStreams_AreIgnored()
+	{
+		const uint opusSerial = 7;
+		const uint videoSerial = 8;
+
+		string path = Path.Combine(_workingDirectory, "multiplexed.ogg");
+		using (var stream = File.Create(path))
+		{
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusHead(1) }, serial: opusSerial);
+			// The other stream's own identification header, as a real multiplexed file would have.
+			OggStreamBuilder.WritePage(stream, new[] { Filled(42, 0x80) }, serial: videoSerial);
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusTags() }, serial: opusSerial, pageSequence: 1);
+			OggStreamBuilder.WritePage(stream, new[] { new[] { HybridSwb20MsMonoCode3, SixCbrFrames } }, serial: opusSerial, pageSequence: 2);
+			// Bytes that parse as a perfectly good six-frame Opus packet, but belong to the
+			// other stream. Unfiltered, these decode as another 120 ms of noise.
+			OggStreamBuilder.WritePage(stream, new[] { new[] { HybridSwb20MsMonoCode3, SixCbrFrames } }, serial: videoSerial, pageSequence: 1);
+		}
+
+		// Only the six frames of the one Opus packet: the foreign stream contributes nothing.
+		Assert.Equal(6 * 960, CountSamples(path));
+	}
+
+	// A chained file is several separately encoded sections concatenated, each with its own
+	// OpusHead and its own serial. Only the first chain is decoded, so its pre-skip is not
+	// re-applied to audio it does not belong to.
+	[Fact]
+	public void ChainedStreams_AfterTheFirstAreIgnored()
+	{
+		string path = Path.Combine(_workingDirectory, "chained.ogg");
+		using (var stream = File.Create(path))
+		{
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusHead(1) }, serial: 1);
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusTags() }, serial: 1, pageSequence: 1);
+			OggStreamBuilder.WritePage(stream, new[] { new[] { HybridSwb20MsMonoCode3, SixCbrFrames } }, serial: 1, pageSequence: 2);
+
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusHead(1) }, serial: 2);
+			OggStreamBuilder.WritePage(stream, new[] { OggStreamBuilder.OpusTags() }, serial: 2, pageSequence: 1);
+			OggStreamBuilder.WritePage(stream, new[] { new[] { HybridSwb20MsMonoCode3, SixCbrFrames } }, serial: 2, pageSequence: 2);
+		}
+
+		Assert.Equal(6 * 960, CountSamples(path));
+	}
+
+	[Fact]
+	public void DecodeToPcmStream_ReturnsTwoLittleEndianBytesPerSample()
+	{
+		string path = WriteFixture("bytes.ogg", channels: 1, preSkip: 0,
+			new[] { HybridSwb20MsMonoCode3, SixCbrFrames });
+
+		int sampleCount = CountSamples(path);
+
+		using MemoryStream pcm = OggOpusPcmDecoder.DecodeToPcmStream(path);
+
+		Assert.Equal(0, pcm.Position);
+		Assert.Equal(sampleCount * 2L, pcm.Length);
+
+		// Same bytes the caller-side short-to-byte loop used to produce.
+		var expected = new List<byte>();
+		OggOpusPcmDecoder.DecodeToMonoPcm(path, samples =>
+		{
+			foreach (short sample in samples)
+			{
+				expected.Add((byte)(sample & 0xFF));
+				expected.Add((byte)((sample >> 8) & 0xFF));
+			}
+		});
+
+		Assert.Equal(expected, pcm.ToArray());
+	}
+
+	[Fact]
+	public void DecodeToPcmStream_DoesNotLeaveAStreamBehindWhenTheFileIsUnreadable()
+	{
+		string wav = Path.Combine(_workingDirectory, "bad.wav");
+		File.WriteAllBytes(wav, "RIFF\0\0\0\0WAVEfmt "u8.ToArray());
+
+		Assert.Throws<InvalidDataException>(() => OggOpusPcmDecoder.DecodeToPcmStream(wav));
+	}
+
+	private static byte[] Filled(int length, byte value)
+	{
+		var data = new byte[length];
+		Array.Fill(data, value);
+		return data;
+	}
 }

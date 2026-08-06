@@ -15,7 +15,10 @@ internal static class OggStreamBuilder
 	/// Writes one Ogg page containing the given segments verbatim. CRC is left zero — the
 	/// reader under test does not verify it, which is what lets tests hand-assemble pages.
 	/// </summary>
-	public static void WritePage(Stream stream, IEnumerable<byte[]> segments, bool continued = false, long granule = 0, int pageSequence = 0)
+	/// <summary>The serial number pages get when a test does not care which stream they are in.</summary>
+	public const uint DefaultSerial = 1;
+
+	public static void WritePage(Stream stream, IEnumerable<byte[]> segments, bool continued = false, long granule = 0, int pageSequence = 0, uint serial = DefaultSerial)
 	{
 		var segmentList = new List<byte[]>(segments);
 
@@ -24,7 +27,7 @@ internal static class OggStreamBuilder
 		header[4] = 0; // stream structure version
 		header[5] = (byte)(continued ? 0x01 : 0x00);
 		BitConverter.GetBytes(granule).CopyTo(header, 6);
-		BitConverter.GetBytes(1).CopyTo(header, 14); // serial
+		BitConverter.GetBytes(serial).CopyTo(header, 14);
 		BitConverter.GetBytes(pageSequence).CopyTo(header, 18);
 		header[26] = (byte)segmentList.Count;
 

@@ -58,68 +58,67 @@ public class AudioPlayer : IDisposable
     /// </summary>
     public void Play(string filePath)
     {
-        lock (_playLock)
+        PreparedSource? prepared = null;
+        try
+        {
+            // Reading and decoding happen outside the lock. Decoding a long recording takes
+            // seconds, and doing it under _playLock blocked every Speed change made from the
+            // UI thread for that whole window, freezing the window.
+            prepared = Prepare(filePath);
+            if (prepared is null)
+            {
+                PlaybackFailed?.Invoke(this, "No audio data found in file.");
+                return;
+            }
+
+            lock (_playLock)
+            {
+                // Stopping and publishing happen under one lock, so two overlapping Play calls
+                // cannot leave the loser's output device attached with nothing to release it.
+                StopCore();
+
+                if (_disposed)
+                {
+                    prepared.Dispose();
+                    return;
+                }
+
+                _pcmStream = prepared.Pcm;
+                StartPlayback(prepared.Stream);
+            }
+        }
+        catch (Exception ex)
         {
             Stop();
-
-            try
-            {
-                string extension = Path.GetExtension(filePath).ToLowerInvariant();
-
-                if (extension == ".ogg" || extension == ".opus")
-                {
-                    PlayOgg(filePath);
-                }
-                else
-                {
-                    // For other formats, use NAudio's built-in readers
-                    PlayWithNAudio(filePath, extension);
-                }
-            }
-            catch (Exception ex)
-            {
-                Stop();
-                PlaybackFailed?.Invoke(this, $"Playback failed: {ex.Message}");
-            }
+            prepared?.Dispose();
+            PlaybackFailed?.Invoke(this, $"Playback failed: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Plays an OGG/Opus file by decoding it with <see cref="OggOpusPcmDecoder"/> and playing
-    /// via NAudio. The decoder is shared with the import path so files this app did not record
-    /// itself — WhatsApp voice notes and the like — play back rather than hanging.
+    /// Opens or decodes the file into a source ready to play, without touching any of the
+    /// player's own state. Returns null when the file holds no audio.
     /// </summary>
-    private void PlayOgg(string filePath)
+    private static PreparedSource? Prepare(string filePath)
     {
-        // Read and decode the entire OGG file to PCM
-        var allSamples = new List<short>();
-        OggOpusPcmDecoder.DecodeToMonoPcm(filePath, samples => allSamples.AddRange(samples));
+        string extension = Path.GetExtension(filePath).ToLowerInvariant();
 
-        if (allSamples.Count == 0)
+        // Ogg/Opus is decoded in managed code: Windows Media Foundation has no demuxer for it,
+        // so files this app did not record itself — WhatsApp voice notes and the like — would
+        // otherwise not open at all. The decoder is shared with the import path.
+        if (extension == ".ogg" || extension == ".opus")
         {
-            PlaybackFailed?.Invoke(this, "No audio data found in file.");
-            return;
+            MemoryStream pcm = OggOpusPcmDecoder.DecodeToPcmStream(filePath);
+            if (pcm.Length == 0)
+            {
+                pcm.Dispose();
+                return null;
+            }
+
+            var waveFormat = new WaveFormat(SampleRate, 16, Channels);
+            return new PreparedSource(new RawSourceWaveStream(pcm, waveFormat), pcm);
         }
 
-        // Convert shorts to bytes (16-bit PCM)
-        var pcmBytes = new byte[allSamples.Count * 2];
-        for (int i = 0; i < allSamples.Count; i++)
-        {
-            var sample = allSamples[i];
-            pcmBytes[i * 2] = (byte)(sample & 0xFF);
-            pcmBytes[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
-        }
-
-        _pcmStream = new MemoryStream(pcmBytes);
-        var waveFormat = new WaveFormat(SampleRate, 16, Channels);
-        StartPlayback(new RawSourceWaveStream(_pcmStream, waveFormat));
-    }
-
-    /// <summary>
-    /// Plays other audio formats using NAudio's built-in readers.
-    /// </summary>
-    private void PlayWithNAudio(string filePath, string extension)
-    {
         WaveStream reader = extension switch
         {
             ".wav" => new WaveFileReader(filePath),
@@ -127,7 +126,21 @@ public class AudioPlayer : IDisposable
             _ => new AudioFileReader(filePath) // Generic reader for other formats
         };
 
-        StartPlayback(reader);
+        return new PreparedSource(reader, null);
+    }
+
+    /// <summary>
+    /// A decoded source together with the backing buffer that has to outlive it —
+    /// <c>RawSourceWaveStream</c> does not dispose the stream it reads from. Built outside the
+    /// playback lock, then either published to the player's fields or thrown away whole.
+    /// </summary>
+    private sealed record PreparedSource(WaveStream Stream, MemoryStream? Pcm) : IDisposable
+    {
+        public void Dispose()
+        {
+            try { Stream.Dispose(); } catch { /* Already torn down by Stop. */ }
+            try { Pcm?.Dispose(); } catch { /* Already torn down by Stop. */ }
+        }
     }
 
     /// <summary>
@@ -160,43 +173,70 @@ public class AudioPlayer : IDisposable
         {
             PlaybackEnded?.Invoke(this, EventArgs.Empty);
         }
+
+        // Release the output device and the decoded audio now that the file has run to its
+        // end. Waiting for the next Stop/Dispose meant a recording played to completion kept
+        // an open WinMM output handle and its whole PCM buffer resident for the rest of the
+        // app's life. Stop detaches this handler first, so this cannot recurse.
+        lock (_playLock)
+        {
+            // A PlaybackEnded handler may have started the next file already. That instance
+            // owns the teardown now, and it disposed this one on its way in.
+            if (!ReferenceEquals(sender, _waveOut))
+                return;
+
+            StopCore();
+        }
     }
 
     public void Stop()
     {
         lock (_playLock)
         {
-            try
+            StopCore();
+        }
+    }
+
+    /// <summary>
+    /// Tears down the current playback chain. Callers must already hold <c>_playLock</c>.
+    /// </summary>
+    private void StopCore()
+    {
+        try
+        {
+            if (_waveOut != null)
             {
-                if (_waveOut != null)
-                {
-                    _waveOut.PlaybackStopped -= OnPlaybackStopped;
-                    _waveOut.Stop();
-                    _waveOut.Dispose();
-                    _waveOut = null;
-                }
-
-                _speedProvider = null;
-
-                _sourceStream?.Dispose();
-                _sourceStream = null;
-
-                _pcmStream?.Dispose();
-                _pcmStream = null;
+                _waveOut.PlaybackStopped -= OnPlaybackStopped;
+                _waveOut.Stop();
+                _waveOut.Dispose();
+                _waveOut = null;
             }
-            catch
-            {
-                // Ignore cleanup errors
-            }
+
+            _speedProvider = null;
+
+            _sourceStream?.Dispose();
+            _sourceStream = null;
+
+            _pcmStream?.Dispose();
+            _pcmStream = null;
+        }
+        catch
+        {
+            // Ignore cleanup errors
         }
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        lock (_playLock)
         {
+            if (_disposed)
+                return;
+
+            // Set under the lock so a Play that is still decoding sees it and throws its
+            // prepared source away instead of attaching it to a disposed player.
             _disposed = true;
-            Stop();
+            StopCore();
         }
     }
 }

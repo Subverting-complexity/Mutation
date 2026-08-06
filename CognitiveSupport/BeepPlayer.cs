@@ -43,7 +43,7 @@ public static class BeepPlayer
 	{
 		lock (SyncLock)
 		{
-			DisposePlayers();
+			DisposePlayersCore();
 			var issues = new List<string>();
 			var custom = settings.AudioSettings?.CustomBeepSettings;
 			if (custom?.UseCustomBeeps == true)
@@ -136,14 +136,26 @@ public static class BeepPlayer
 
 	private static bool TryPlayCustomRepeated(BeepType type, int repeatCount)
 	{
-		var player = GetCustomPlayer(type);
-		if (player is null)
-			return false;
+		SoundPlayer player;
+		int generation;
 
-		if (repeatCount == 1)
+		// The player field and the generation counter are read together under the lock so
+		// they cannot disagree: DisposePlayers bumps the generation and disposes in one
+		// locked step, so a stale player never pairs with a still-current generation.
+		lock (SyncLock)
 		{
-			player.Play();
-			return true;
+			var candidate = GetCustomPlayer(type);
+			if (candidate is null)
+				return false;
+
+			if (repeatCount == 1)
+			{
+				PlaySafely(candidate);
+				return true;
+			}
+
+			player = candidate;
+			generation = Volatile.Read(ref _playerGeneration);
 		}
 
 		// PlaySync blocks, so the repeat runs off the caller's thread rather than
@@ -151,7 +163,6 @@ public static class BeepPlayer
 		// running while Initialize/DisposePlayers may replace these players (a Settings
 		// save, or shutdown), so it bails out the moment its generation is superseded
 		// instead of hammering a disposed SoundPlayer.
-		int generation = Volatile.Read(ref _playerGeneration);
 		Task.Run(() =>
 		{
 			for (var i = 0; i < repeatCount; i++)
@@ -175,13 +186,33 @@ public static class BeepPlayer
 
 	private static bool TryPlayCustom(BeepType type)
 	{
-		var player = GetCustomPlayer(type);
-		if (player != null)
+		// The lock covers the Play call, not just the field read. SoundPlayer.Play is
+		// asynchronous — it returns as soon as playback is queued — so holding the lock that
+		// long is cheap, and it is what stops DisposePlayers from disposing this player in
+		// the gap between reading the field and using it.
+		lock (SyncLock)
 		{
-			player.Play();
+			var player = GetCustomPlayer(type);
+			if (player is null)
+				return false;
+
+			PlaySafely(player);
 			return true;
 		}
-		return false;
+	}
+
+	// A beep that will not play must never take down the operation it is reporting on: this
+	// runs inside Polly retry lambdas, where an escaping exception aborts the transcription.
+	private static void PlaySafely(SoundPlayer player)
+	{
+		try
+		{
+			player.Play();
+		}
+		catch
+		{
+			// Nothing useful to do — the user simply does not hear this beep.
+		}
 	}
 
 	private static SoundPlayer? GetCustomPlayer(BeepType type) => type switch
@@ -200,8 +231,10 @@ public static class BeepPlayer
 	// way Console.Beep did (issue #169).
 	private static void PlayDefault(BeepType type, int repeatCount)
 	{
-		SoundPlayer player;
 		var key = (type, ClampRepeatCount(repeatCount));
+
+		// Play stays inside the lock so DisposePlayers cannot dispose the cached player — or
+		// clear the dictionary out from under this lookup — between the two.
 		lock (SyncLock)
 		{
 			if (!_defaultPlayers.TryGetValue(key, out var cached))
@@ -212,9 +245,9 @@ public static class BeepPlayer
 				cached.Player.Load();
 				_defaultPlayers[key] = cached;
 			}
-			player = cached.Player;
+
+			PlaySafely(cached.Player);
 		}
-		player.Play();
 	}
 
 	public static IReadOnlyList<(int Frequency, int Duration)> GetDefaultSequence(BeepType type) => type switch
@@ -256,7 +289,20 @@ public static class BeepPlayer
 		}
 	}
 
+	/// <summary>
+	/// Tears down every cached player. Stays public because the UI project calls it on window
+	/// close; every sibling that touches these statics holds <c>SyncLock</c>, and so does this.
+	/// </summary>
 	public static void DisposePlayers()
+	{
+		lock (SyncLock)
+			DisposePlayersCore();
+	}
+
+	// Callers already holding SyncLock use this, so Initialize does not re-enter the public
+	// entry point. Monitor is re-entrant, but routing through one core keeps it obvious that
+	// nothing here runs unlocked.
+	private static void DisposePlayersCore()
 	{
 		// Signal before disposing, so a repeat loop stops rather than racing the tear-down.
 		Interlocked.Increment(ref _playerGeneration);
