@@ -288,6 +288,36 @@ or pausing one often fixes it for good.</li>
 <li>If you rely on the text landing in another app automatically, set the &quot;send keys
 after&quot; option to <strong>Ctrl+V</strong> so Mutation pastes for you once the copy succeeds.</li>
 </ol>
+<h3 id="mutation-says-it-could-not-send-the-text-to-the-other-app">Mutation says it could not send the text to the other app</h3>
+<p><strong>What's happening.</strong> This is a different problem from the clipboard one above, and it
+has its own message: &quot;The transcript could not be sent to the other application; it may
+be running with higher privileges than Mutation. It is available in the Mutation
+window.&quot; You get a failure beep with it, not the success beep.</p>
+<p>Windows will not let an ordinary program type into a window that is running with
+administrator privileges. It simply throws the keystrokes away. Mutation checks
+whether Windows accepted them and tells you when it did not, rather than announcing
+success for text that never arrived.</p>
+<p><strong>What to do.</strong></p>
+<ol>
+<li>Check the other app first. Once in a while Mutation gets the text through on a
+second route and the warning turns out to be a false alarm, so look before you
+paste again — otherwise you may end up with it twice.</li>
+<li>If it really is missing, your text is not lost. It is in the main window and,
+unless the clipboard also failed, on your clipboard — paste it with <strong>Ctrl+V</strong>.</li>
+<li>The usual cause is an app started with &quot;Run as administrator&quot;, or a system dialog
+that has taken the foreground. Close it, or click into an ordinary window, and
+dictate again.</li>
+<li>Task Manager, the Windows security prompt, and some installer windows behave this
+way too. Nothing is wrong with Mutation or your microphone.</li>
+</ol>
+<h3 id="something-went-wrong-while-delivering-the-transcript">Something went wrong while delivering the transcript</h3>
+<p><strong>What's happening.</strong> Very occasionally the delivery itself fails in a way Mutation did
+not expect — a beep that cannot play, for instance. You hear the failure beep and read
+&quot;Something went wrong while delivering the transcript. It is available in the Mutation
+window.&quot;</p>
+<p><strong>What to do.</strong> Copy the text from the main window. The transcript box goes back to
+being editable straight away, so you can carry on dictating. If it keeps happening,
+the log file has the details — see <strong>Finding the log file</strong> below.</p>
 <h3 id="fast-mode-didnt-actually-run-fast">Fast mode didn't actually run fast</h3>
 <p><strong>What's happening.</strong> Fast mode is a faster setting for AI prompts. If it is not
 available, Mutation does not throw your text away — it quietly runs the prompt again at
