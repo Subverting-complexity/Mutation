@@ -58,26 +58,26 @@ clipboard. There are three choices:
 
 | Choice in the list | What happens |
 |---|---|
-| **Paste** | Mutation copies the text and then presses **Ctrl+V** for you, so it appears in whatever app was in front. |
-| **SendKeys** | Mutation types the text out, one keystroke at a time, as if you had typed it yourself. |
-| **DoNotInsert** | Mutation does nothing further. The text stays in the Mutation window and on the clipboard, and you paste it yourself. |
+| **Paste into 3rd party application** | Mutation copies the text and then presses **Ctrl+V** for you, so it appears in whatever app was in front. |
+| **Send keys to 3rd party application** | Mutation types the text out, one keystroke at a time, as if you had typed it yourself. |
+| **Don't insert into 3rd party application** | Mutation does nothing further. The text stays in the Mutation window and on the clipboard, and you paste it yourself. |
 
-> The three choices are shown using their short internal names — **Paste**,
-> **SendKeys** and **DoNotInsert**. They are not the friendliest labels, but a line of
-> explanation appears underneath the dropdown as soon as you pick one.
+> A line of explanation appears underneath the dropdown as soon as you pick one, and
+> your screen reader reads it out.
 
 **Which should you pick?**
 
-Start with **Paste**. It is the fastest and it handles long text without trouble.
+Start with **Paste into 3rd party application**. It is the fastest and it handles
+long text without trouble.
 
-Switch to **SendKeys** when an app refuses to accept a paste, or mangles it. Some
-older apps, some remote-desktop sessions, and some web forms behave that way. Typing
-is slower and you will see the letters appear one by one, but it works almost
-everywhere.
+Switch to **Send keys to 3rd party application** when an app refuses to accept a
+paste, or mangles it. Some older apps, some remote-desktop sessions, and some web
+forms behave that way. Typing is slower and you will see the letters appear one by
+one, but it works almost everywhere.
 
-Choose **DoNotInsert** when you want to look at the text before it goes anywhere —
-or when you are dictating notes into Mutation itself and don't want stray text
-landing in another window.
+Choose **Don't insert into 3rd party application** when you want to look at the text
+before it goes anywhere — or when you are dictating notes into Mutation itself and
+don't want stray text landing in another window.
 
 One thing worth knowing: if the Mutation window itself is the one in front, nothing
 is inserted anywhere. Mutation won't paste into itself.
@@ -155,7 +155,10 @@ Mutation keeps your recent recordings so you can go back to them.
 - The **older** and **newer** arrow buttons step back and forward through your
   recent sessions.
 - **Play selected session** plays the one you've landed on, so you can hear what
-  you actually said.
+  you actually said. A long recording takes a moment to get ready before the sound
+  starts; if it takes more than a blink, Mutation says "Decoding" and the name of
+  the file, so you know it is working on it. The window stays usable throughout, and
+  pressing the button again stops it — even while it is still getting ready.
 - The **Speed** dropdown changes how fast it plays back, from half speed up to
   three times normal. Voices stay at their natural pitch at every speed — nobody
   turns into a chipmunk.

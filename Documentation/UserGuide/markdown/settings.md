@@ -188,7 +188,7 @@ Small comforts for the main window.
 | Setting | What it does |
 |---|---|
 | Max text-box visible lines | Caps how tall the transcript and OCR boxes grow on the main window. |
-| Dictation insert preference | How your text reaches the app you are in. **Paste** puts it in via the clipboard, **SendKeys** types it out one key at a time, and **DoNotInsert** leaves the text in Mutation only. |
+| Dictation insert preference | How your text reaches the app you are in. **Paste into 3rd party application** puts it in via the clipboard, **Send keys to 3rd party application** types it out one key at a time, and **Don't insert into 3rd party application** leaves the text in Mutation only. |
 | Reset window position | Puts Mutation's window back to its starting position and size. Handy if it has ended up off-screen. |
 
 ### Hotkeys
