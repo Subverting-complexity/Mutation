@@ -265,7 +265,11 @@ internal class SettingsManager : ISettingsManager
 		}
 		foreach (var s in speechToTextSettings.Services)
 		{
-			if (s.Provider == SpeechToTextProviders.None)
+			// Undefined as well as None. A number the enum never declared reaches the
+			// switch that builds the service and throws there — outside the recovery
+			// App.OnLaunched wraps the load in, so the user gets a bare startup crash
+			// with no offer to restore their backup (issue #283).
+			if (!Enum.IsDefined(s.Provider) || s.Provider == SpeechToTextProviders.None)
 				s.Provider = SpeechToTextProviders.OpenAi;
 			// A service's ApiKey is an optional override of the root-level ApiKeys.
 			// Leave it blank by default so the central key is used unless the user
@@ -750,8 +754,22 @@ End of summary.
 			// a blank Name and a blank Provider — which the very next deserialize then
 			// threw on, taking the whole settings file down with it (issue #283). Left
 			// alone, EnsureSettings seeds the proper OpenAI Whisper default instead.
-			if ((speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
-				&& LegacyServiceFieldNames.Any(name => speechSettings[name] is not null))
+			bool hasServicesArray = speechSettings["Services"] is JToken servicesToken
+				&& servicesToken.Type == JTokenType.Array;
+
+			// A Services that is present but is neither an array nor null — an object left
+			// behind by half-deleting the array, say — cannot be deserialized into one
+			// either, and the throw takes the whole file with it. Drop it and let
+			// EnsureSettings seed the default, the same outcome an absent key gets.
+			if (!hasServicesArray
+				&& speechSettings["Services"] is JToken malformedServices
+				&& malformedServices.Type != JTokenType.Null)
+			{
+				speechSettings.Remove("Services");
+				saveRequired = true;
+			}
+
+			if (!hasServicesArray && LegacyServiceFieldNames.Any(name => speechSettings[name] is not null))
 			{
 				// No legacy Service to carry over means the provider is unknown, not blank.
 				// Name it what EnsureSettings would have: the OpenAI default.
@@ -803,22 +821,16 @@ End of summary.
 						? provider.ToString()
 						: string.Empty;
 
-					// The enum was renamed; carry the old name across.
-					if (providerText == "OpenAiWhisper")
-					{
-						service["Provider"] = nameof(SpeechToTextProviders.OpenAi);
+					// Written back as the one spelling the enum actually has. That covers
+					// three faults at once: the old "OpenAiWhisper" name, a value the enum
+					// does not know (blank, null, a hand-typed name), and a value it parses
+					// but never defined — a bare number, or a comma-list, both of which
+					// Enum.TryParse accepts. The first is fatal inside the deserializer and
+					// the last is fatal later, at the switch that builds the service, past
+					// the recovery App.OnLaunched wraps the load in (issue #283).
+					service["Provider"] = NormalizeProviderName(providerText);
+					if (service["Provider"]!.ToString() != providerText)
 						saveRequired = true;
-					}
-					// Anything the enum does not recognise — blank, null, or a hand-typed
-					// name — throws inside the deserializer, and a throw there is fatal to
-					// the whole file rather than to one service. Repair it here, the same
-					// way EnsureSettings repairs a stored None (issue #283).
-					else if (!Enum.TryParse<SpeechToTextProviders>(providerText, ignoreCase: true, out var parsed)
-						|| parsed == SpeechToTextProviders.None)
-					{
-						service["Provider"] = nameof(SpeechToTextProviders.OpenAi);
-						saveRequired = true;
-					}
 				}
 			}
 		}
@@ -1021,6 +1033,20 @@ End of summary.
 			return true;
 		}
 	}
+
+	/// <summary>
+	/// The stored provider spelled the way <see cref="SpeechToTextProviders"/> spells it,
+	/// or the OpenAI default when it names no provider the app can actually build.
+	/// <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/> alone is not enough:
+	/// it happily returns a value of 5 for "5" and 3 for "OpenAi, Deepgram", neither of
+	/// which is defined, so <see cref="Enum.IsDefined{TEnum}(TEnum)"/> has to gate it too.
+	/// </summary>
+	internal static string NormalizeProviderName(string? storedProvider) =>
+		Enum.TryParse<SpeechToTextProviders>(storedProvider, ignoreCase: true, out var provider)
+		&& Enum.IsDefined(provider)
+		&& provider != SpeechToTextProviders.None
+			? provider.ToString()
+			: nameof(SpeechToTextProviders.OpenAi);
 
 	internal static bool IsLegacyTempDirectory(string? tempDirectory)
 	{

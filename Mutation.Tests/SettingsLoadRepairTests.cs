@@ -202,12 +202,20 @@ public class SettingsLoadRepairTests
 
 	// The other half of #283: a Provider the enum does not recognise, however it got
 	// there, must cost that one service its stored value — not the whole settings file.
+	// Numbers and comma-lists are the nastier half of this: Enum.TryParse accepts them
+	// and hands back a value the enum never declared, so they survive deserialization
+	// and only blow up later, at the switch that builds the service — past the recovery
+	// App.OnLaunched wraps the load in, so the user gets a bare crash and no backup offer.
 	[Theory]
 	[InlineData("\"\"")]
 	[InlineData("\"   \"")]
 	[InlineData("\"Whisper\"")]
 	[InlineData("\"None\"")]
 	[InlineData("null")]
+	[InlineData("5")]
+	[InlineData("-1")]
+	[InlineData("\"5\"")]
+	[InlineData("\"OpenAi, Deepgram\"")]
 	public void Load_UnusableProvider_IsRepairedRatherThanFatal(string jsonValue)
 	{
 		var settings = Load($$"""
@@ -222,6 +230,44 @@ public class SettingsLoadRepairTests
 		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
 		// Only the provider is repaired; everything the user did configure is kept.
 		Assert.Equal("My service", service.Name);
+		Assert.Equal("whisper-1", service.ModelId);
+	}
+
+	// Half-deleting the Services array by hand leaves something that is neither an array
+	// nor absent, and the deserializer cannot make a service list out of it either.
+	[Theory]
+	[InlineData("{}")]
+	[InlineData("\"OpenAi\"")]
+	[InlineData("7")]
+	public void Load_ServicesThatIsNotAnArray_StillLoads(string jsonValue)
+	{
+		var settings = Load($$"""
+		{
+			"SpeechToTextSettings": { "Services": {{jsonValue}} },
+			"MainWindowUiSettings": { "MaxTextBoxLineCount": 7 }
+		}
+		""");
+
+		Assert.Equal(7, settings.MainWindowUiSettings!.MaxTextBoxLineCount);
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal(SettingsDefaults.Speech.DefaultServiceName, service.Name);
+	}
+
+	// The loose legacy fields still have to be carried over when the malformed Services
+	// is cleared out of the way — a real pre-Services file must not lose its API key.
+	[Fact]
+	public void Load_ServicesThatIsNotAnArray_StillCarriesTheLegacyFieldsOver()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": { "Services": {}, "ApiKey": "stt-key", "ModelId": "whisper-1" }
+		}
+		""");
+
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal("stt-key", service.ApiKey);
 		Assert.Equal("whisper-1", service.ModelId);
 	}
 

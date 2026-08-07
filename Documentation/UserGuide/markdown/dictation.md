@@ -28,8 +28,9 @@ reads "Transcribing..." and the buttons are greyed out. Press **Shift+Alt+U** on
 more and it gives up on that recording. You hear the failure beep and "Transcription
 cancelled.", the box empties itself, and everything is yours to use again.
 
-Your recording is not lost. It is still in the list of recent sessions, so you can
-select it and press **Retry transcription** whenever you like.
+Your recording is not lost. It is still the session Mutation has selected, so you
+can press **Retry transcription** to send it off again — or step back to it later
+with the **older** and **newer** arrow buttons.
 
 ## Recording and cleaning up in one step
 
