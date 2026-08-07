@@ -1,7 +1,6 @@
 ﻿using CognitiveSupport.Extensions;
 using Deepgram.Models.Listen.v1.REST;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
 using Polly.Timeout;
 using System.Text.RegularExpressions;
 
@@ -39,40 +38,29 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 		List<string> keyterms = ParseKeyterms(speechToTextPrompt);
 
 		var audioBytes = await File.ReadAllBytesAsync(audioffilePath, overallCancellationToken).ConfigureAwait(false);
-		const string AttemptKey = "Attempt";
 
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: 3, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
+		var retry = new RetryAttempts(
+			retryCount: 3,
+			new PredicateBuilder()
+				.Handle<HttpRequestException>()
+				.Handle<TimeoutRejectedException>()
+				.Handle<TaskCanceledException>());
 
-		var context = new Context();
-		context[AttemptKey] = 1;
-		var response = await retryPolicy.ExecuteAsync(async (context, overallToken) =>
+		var response = await retry.Pipeline.ExecuteAsync(async overallToken =>
 		{
-			int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
 			int baseTimeout = timeoutSeconds ?? _timeoutSeconds;
 			// Linear backoff for timeout duration, but respect the requested timeout as a minimum for the first attempt.
 			// Removing the 60s cap to allow for longer file transcriptions.
-			int timeout = baseTimeout * attempt;
+			int timeout = baseTimeout * retry.Attempt;
 			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
 			// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
-			this.Beep(attempt);
+			this.Beep(retry.Attempt);
 
 			return await TranscribeViaDeepgram(keyterms, audioBytes, linkedCts).ConfigureAwait(false);
-		}, context, overallCancellationToken).ConfigureAwait(false);
-	
+		}, overallCancellationToken).ConfigureAwait(false);
+
 		return response?.Results?.Channels?.FirstOrDefault()?.Alternatives?.FirstOrDefault()?.Transcript
 			?? "(no transcript available)";
 

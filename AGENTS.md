@@ -17,3 +17,13 @@ Note: Output files are redirected to the `logs/` directory to keep the root clea
 * Use the .NET 10 SDK already installed in the environment
 * Prefer 'dotnet build' over 'msbuild'
 * Use tabs and not spaces.
+
+## Package versions
+
+Versions are managed centrally in `Directory.Packages.props`. A project's
+`<PackageReference>` carries no `Version` attribute — add or change the
+`<PackageVersion>` entry instead, so every project agrees on one version.
+
+Transitive pinning is on, so a `<PackageVersion>` also settles a package
+nothing references directly. That is how the `Microsoft.Extensions.*` family
+is held on a single 10.0.x band even though a dependency asks for 8.0.x.

@@ -1,6 +1,5 @@
 using OpenAI.Chat;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
 using Polly.Timeout;
 using System.ClientModel;
 using System.ClientModel.Primitives;
@@ -67,34 +66,27 @@ public class LlmService : ILlmService
 		// The OpenAI SDK reports API errors as ClientResultException; only transient statuses
 		// (429, 5xx, connection failures) are retried, so a permanent 4xx such as 401
 		// Unauthorized (bad API key) fails fast instead of after every retry.
-		const string AttemptKey = "Attempt";
-
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: _retryCount, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-			.Or<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status))
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
-
 		async Task<ClientResult<ChatCompletion>> SendAsync(bool useFastMode)
 		{
 			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
-			var context = new Context { [AttemptKey] = 1 };
-			return await retryPolicy.ExecuteAsync(async (ctx) =>
+
+			// Built per send, so the standard-speed retry after a Fast mode fallback starts
+			// counting attempts — and therefore timeouts — from scratch rather than
+			// inheriting where the abandoned Fast mode send left off.
+			var retry = new RetryAttempts(
+				_retryCount,
+				new PredicateBuilder()
+					.Handle<HttpRequestException>()
+					.Handle<TimeoutRejectedException>()
+					.Handle<TaskCanceledException>()
+					.Handle<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status)));
+
+			return await retry.Pipeline.ExecuteAsync(async _ =>
 			{
-				int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;
-				int timeout = _timeoutSeconds * attempt;
+				int timeout = _timeoutSeconds * retry.Attempt;
 				using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 				return await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token).ConfigureAwait(false);
-			}, context).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		ClientResult<ChatCompletion> result = fastMode

@@ -2,7 +2,6 @@
 using Azure;
 using Azure.AI.Vision.ImageAnalysis;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
 using Polly.Timeout;
 using System.Collections.Generic;
 using System.Drawing;
@@ -18,7 +17,6 @@ namespace CognitiveSupport;
 
 public class OcrService : IOcrService, IDisposable
 {
-	private const int RetryDelayMilliseconds = 500;
         private const int MinimumImageWidth = 50;
         private const int MinimumImageHeight = 50;
         private const int MaxTimeoutSeconds = 60;
@@ -48,21 +46,13 @@ public class OcrService : IOcrService, IDisposable
 	private static ImageAnalysisClient CreateImageAnalysisClient(string endpoint, string key) =>
 		 new(new Uri(endpoint), new AzureKeyCredential(key));
 
-	private static Context CreateRetryContext() => new() { ["Attempt"] = 1 };
-
-	private static AsyncPolicy CreateRetryPolicy() =>
-		Policy
-			.Handle<HttpRequestException>()
-			.Or<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500)
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-			.WaitAndRetryAsync(
-				Backoff.LinearBackoff(TimeSpan.FromMilliseconds(RetryDelayMilliseconds), retryCount: 3, factor: 1),
-				onRetry: (_, __, ___, ctx) =>
-				{
-					int attempt = ctx.ContainsKey("Attempt") ? (int)ctx["Attempt"] : 1;
-					ctx["Attempt"] = ++attempt;
-				});
+	private static RetryAttempts CreateRetry() =>
+		new(retryCount: 3,
+			new PredicateBuilder()
+				.Handle<HttpRequestException>()
+				.Handle<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500)
+				.Handle<TimeoutRejectedException>()
+				.Handle<TaskCanceledException>());
 
 	private TimeSpan GetPerRequestTimeout() => TimeSpan.FromSeconds(Math.Max(1, Math.Min(_timeoutSeconds, MaxTimeoutSeconds)));
 
@@ -77,10 +67,9 @@ public class OcrService : IOcrService, IDisposable
 	private async Task<string> ExecuteReadInternal(
 		OcrReadingOrder ocrReadingOrder,
 		Stream imageStream,
-		Context context,
+		int attempt,
 		CancellationToken overallCancellationToken)
 	{
-		int attempt = (int)context["Attempt"];
 		// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
 		this.Beep(attempt);
 
@@ -98,16 +87,14 @@ public class OcrService : IOcrService, IDisposable
 		// Buffer the stream into a byte array so we can create a new stream for each retry
 		byte[] imageBytes = BufferImage(imageStream);
 
-		var retryPolicy = CreateRetryPolicy();
-		var context = CreateRetryContext();
+		var retry = CreateRetry();
 
-		return await retryPolicy.ExecuteAsync(
-			(ctx, overallToken) =>
+		return await retry.Pipeline.ExecuteAsync(
+			async overallToken =>
 			{
 				var ms = new MemoryStream(imageBytes, writable: false);
-				return ExecuteReadInternal(ocrReadingOrder, ms, ctx, overallToken);
+				return await ExecuteReadInternal(ocrReadingOrder, ms, retry.Attempt, overallToken).ConfigureAwait(false);
 			},
-			context,
 			overallCancellationToken).ConfigureAwait(false);
 	}
 

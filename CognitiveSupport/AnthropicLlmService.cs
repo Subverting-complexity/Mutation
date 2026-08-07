@@ -1,5 +1,4 @@
 using Polly;
-using Polly.Contrib.WaitAndRetry;
 using Polly.Timeout;
 using System.Net.Http.Headers;
 using System.Text;
@@ -142,29 +141,16 @@ public class AnthropicLlmService : ILlmService
 		// retryable HttpRequestException; permanent 4xx errors such as 401 Unauthorized
 		// throw NonTransientLlmException, which the policy does not handle, so a bad API
 		// key fails fast instead of after every retry.
-		const string AttemptKey = "Attempt";
+		var retry = new RetryAttempts(
+			_retryCount,
+			new PredicateBuilder()
+				.Handle<HttpRequestException>()
+				.Handle<TimeoutRejectedException>()
+				.Handle<TaskCanceledException>());
 
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: _retryCount, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
-
-		var pollyContext = new Context();
-		pollyContext[AttemptKey] = 1;
-
-		string responseBody = await retryPolicy.ExecuteAsync(async (ctx) =>
+		string responseBody = await retry.Pipeline.ExecuteAsync(async _ =>
 		{
-			int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;
-			int timeout = _timeoutSeconds * attempt;
+			int timeout = _timeoutSeconds * retry.Attempt;
 			using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 
 			// HttpRequestMessage is single-use; rebuild it for each attempt.
@@ -207,7 +193,7 @@ public class AnthropicLlmService : ILlmService
 			}
 
 			return body;
-		}, pollyContext).ConfigureAwait(false);
+		}).ConfigureAwait(false);
 
 		return responseBody;
 	}
