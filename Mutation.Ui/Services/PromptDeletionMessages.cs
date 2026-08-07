@@ -11,7 +11,7 @@ namespace Mutation.Ui.Services;
 internal static class PromptDeletionMessages
 {
 	/// <summary>Fallback label when a prompt has no usable name.</summary>
-	internal const string UnnamedPrompt = "this prompt";
+	internal const string UnnamedPrompt = PromptLabel.Unnamed;
 
 	internal const string ConfirmationTitle = "Delete prompt";
 
@@ -35,10 +35,8 @@ internal static class PromptDeletionMessages
 
 	/// <summary>
 	/// Renders a prompt reference for a sentence: a quoted name when one is
-	/// present, or a neutral fallback when the name is missing or blank.
+	/// present, or a neutral fallback when the name is missing or blank. Shared with the
+	/// buttons that act on a row, so the dialog and the button that opened it agree.
 	/// </summary>
-	private static string Describe(string? name) =>
-		string.IsNullOrWhiteSpace(name)
-			? UnnamedPrompt
-			: $"prompt '{name.Trim()}'";
+	private static string Describe(string? name) => PromptLabel.Describe(name);
 }

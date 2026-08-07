@@ -24,6 +24,13 @@ public class AudioPlayer : IDisposable
     private double _speed = PlaybackSpeedOptions.Default;
     private bool _disposed;
 
+    // Bumped by every request to play and by every Stop. A decode that finishes holding a
+    // stale number has been superseded — the user pressed Stop, or asked for a different
+    // file — and throws its work away instead of starting audio nobody is waiting for any
+    // more. Only meaningful once decoding moved off the calling thread and a request could
+    // outlive the answer.
+    private int _playGeneration;
+
     // Opus parameters matching AudioRecorder
     private const int SampleRate = 48000;
     private const int Channels = 1;
@@ -65,10 +72,12 @@ public class AudioPlayer : IDisposable
     public event EventHandler<string>? PlaybackFailed;
 
     /// <summary>
-    /// Plays an audio file. Supports OGG/Opus, WAV, and MP3 formats.
+    /// Plays an audio file, decoding it on the calling thread. Supports OGG/Opus, WAV, and
+    /// MP3 formats. Prefer <see cref="PlayAsync"/> anywhere the caller is the UI thread.
     /// </summary>
     public void Play(string filePath)
     {
+        int generation = NextGeneration();
         PreparedSource? prepared = null;
         try
         {
@@ -76,33 +85,82 @@ public class AudioPlayer : IDisposable
             // seconds, and doing it under _playLock blocked every Speed change made from the
             // UI thread for that whole window, freezing the window.
             prepared = Prepare(filePath);
-            if (prepared is null)
-            {
-                PlaybackFailed?.Invoke(this, "No audio data found in file.");
-                return;
-            }
-
-            lock (_playLock)
-            {
-                // Stopping and publishing happen under one lock, so two overlapping Play calls
-                // cannot leave the loser's output device attached with nothing to release it.
-                StopCore();
-
-                if (_disposed)
-                {
-                    prepared.Dispose();
-                    return;
-                }
-
-                _pcmStream = prepared.Pcm;
-                StartPlayback(prepared.Stream);
-            }
+            Launch(prepared, generation);
         }
         catch (Exception ex)
         {
             Stop();
             prepared?.Dispose();
             PlaybackFailed?.Invoke(this, $"Playback failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Plays an audio file, decoding it on the thread pool. A whole-file Opus decode takes
+    /// seconds to tens of seconds for a long recording, and on the UI thread that is a frozen
+    /// window and a silent screen reader for the duration (issue #281).
+    /// <para>
+    /// Only the decode moves. The output device is still constructed where the caller was,
+    /// because NAudio's <c>WaveOutEvent</c> captures <c>SynchronizationContext.Current</c> at
+    /// construction and posts <c>PlaybackStopped</c> back to it — build it on a pool thread
+    /// with no context and <see cref="PlaybackEnded"/> would start arriving on NAudio's own
+    /// playback thread, where its listeners touch the UI. Starting is microseconds of work;
+    /// decoding is the part that had to move.
+    /// </para>
+    /// </summary>
+    public async Task PlayAsync(string filePath)
+    {
+        int generation = NextGeneration();
+        PreparedSource? prepared = null;
+        try
+        {
+            // ConfigureAwait(true) is the point of the method, not an oversight: the
+            // continuation has to resume where the caller was so the device is built there.
+            prepared = await Task.Run(() => Prepare(filePath)).ConfigureAwait(true);
+            Launch(prepared, generation);
+        }
+        catch (Exception ex)
+        {
+            Stop();
+            prepared?.Dispose();
+            PlaybackFailed?.Invoke(this, $"Playback failed: {ex.Message}");
+        }
+    }
+
+    private int NextGeneration()
+    {
+        lock (_playLock)
+        {
+            return ++_playGeneration;
+        }
+    }
+
+    /// <summary>
+    /// Publishes a decoded source and starts it, unless something newer has happened since the
+    /// decode began.
+    /// </summary>
+    private void Launch(PreparedSource? prepared, int generation)
+    {
+        if (prepared is null)
+        {
+            PlaybackFailed?.Invoke(this, "No audio data found in file.");
+            return;
+        }
+
+        lock (_playLock)
+        {
+            // Stopping and publishing happen under one lock, so two overlapping Play calls
+            // cannot leave the loser's output device attached with nothing to release it.
+            if (_disposed || generation != _playGeneration)
+            {
+                prepared.Dispose();
+                return;
+            }
+
+            StopCore();
+
+            _pcmStream = prepared.Pcm;
+            StartPlayback(prepared.Stream);
         }
     }
 
@@ -216,6 +274,9 @@ public class AudioPlayer : IDisposable
     {
         lock (_playLock)
         {
+            // Supersede any decode still running, so a file the user has already stopped
+            // does not start playing the moment its decode lands.
+            _playGeneration++;
             StopCore();
         }
     }

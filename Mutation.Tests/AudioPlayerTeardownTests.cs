@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using CognitiveSupport;
@@ -16,7 +16,7 @@ namespace Mutation.Tests;
 public class AudioPlayerTeardownTests : IDisposable
 {
 	private readonly string _workingDirectory = Directory.CreateTempSubdirectory("audio-player-tests").FullName;
-	private readonly List<FakeOutputDevice> _devices = new();
+	private readonly List<FakeAudioOutputDevice> _devices = new();
 
 	public void Dispose()
 	{
@@ -35,7 +35,7 @@ public class AudioPlayerTeardownTests : IDisposable
 	{
 		return new AudioPlayer(() =>
 		{
-			var device = new FakeOutputDevice();
+			var device = new FakeAudioOutputDevice();
 			_devices.Add(device);
 			return device;
 		});
@@ -49,7 +49,7 @@ public class AudioPlayerTeardownTests : IDisposable
 		player.PlaybackEnded += (_, _) => ended = true;
 
 		player.Play(WriteWav("ends.wav"));
-		FakeOutputDevice device = Assert.Single(_devices);
+		FakeAudioOutputDevice device = Assert.Single(_devices);
 		Assert.True(device.IsPlaying);
 
 		device.RaisePlaybackStopped();
@@ -67,7 +67,7 @@ public class AudioPlayerTeardownTests : IDisposable
 		player.PlaybackFailed += (_, message) => failure = message;
 
 		player.Play(WriteWav("fails.wav"));
-		FakeOutputDevice device = Assert.Single(_devices);
+		FakeAudioOutputDevice device = Assert.Single(_devices);
 
 		device.RaisePlaybackStopped(new InvalidOperationException("device lost"));
 
@@ -91,14 +91,14 @@ public class AudioPlayerTeardownTests : IDisposable
 		};
 
 		player.Play(WriteWav("first.wav"));
-		FakeOutputDevice first = _devices[0];
+		FakeAudioOutputDevice first = _devices[0];
 
 		first.RaisePlaybackStopped();
 
 		Assert.Equal(2, _devices.Count);
 		Assert.Equal(1, first.DisposeCount);
 
-		FakeOutputDevice second = _devices[1];
+		FakeAudioOutputDevice second = _devices[1];
 		Assert.Equal(0, second.DisposeCount);
 		Assert.True(second.IsPlaying);
 		Assert.True(player.IsPlaying);
@@ -128,9 +128,9 @@ public class AudioPlayerTeardownTests : IDisposable
 		player.PlaybackEnded += (_, _) => endedCount++;
 
 		player.Play(WriteWav("stale.wav"));
-		FakeOutputDevice stale = _devices[0];
+		FakeAudioOutputDevice stale = _devices[0];
 		player.Play(WriteWav("current.wav"));
-		FakeOutputDevice current = _devices[1];
+		FakeAudioOutputDevice current = _devices[1];
 
 		// The old device's PlaybackStopped, delivered late.
 		stale.RaisePlaybackStopped();
@@ -150,37 +150,5 @@ public class AudioPlayerTeardownTests : IDisposable
 
 		Assert.Equal(1, _devices[0].DisposeCount);
 		Assert.False(player.IsPlaying);
-	}
-
-	private sealed class FakeOutputDevice : IAudioOutputDevice
-	{
-		public int DisposeCount { get; private set; }
-
-		public bool IsPlaying => PlaybackState == PlaybackState.Playing;
-
-		public PlaybackState PlaybackState { get; private set; } = PlaybackState.Stopped;
-
-		public event EventHandler<StoppedEventArgs>? PlaybackStopped;
-
-		public void Init(IWaveProvider waveProvider)
-		{
-		}
-
-		public void Play() => PlaybackState = PlaybackState.Playing;
-
-		public void Stop() => PlaybackState = PlaybackState.Stopped;
-
-		/// <summary>Stands in for the device reporting that the audio ran out, or failed.</summary>
-		public void RaisePlaybackStopped(Exception? exception = null)
-		{
-			PlaybackState = PlaybackState.Stopped;
-			PlaybackStopped?.Invoke(this, new StoppedEventArgs(exception));
-		}
-
-		public void Dispose()
-		{
-			DisposeCount++;
-			PlaybackState = PlaybackState.Stopped;
-		}
 	}
 }

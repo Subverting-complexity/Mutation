@@ -159,7 +159,8 @@ public static class TextFormatter
 	/// <item>A <b>word</b> — "ai" → "AI" — needs the gap back, or the neighbours weld into
 	/// "containAIalso".</item>
 	/// <item>A <b>symbol</b> — "full stop" → ". ", "dash" → "-" — supplies its own spacing or
-	/// deliberately has none, so the gap goes. Every rule Mutation ships is one of these.</item>
+	/// deliberately has none, so the gap goes. Every rule Mutation ships is one of these.
+	/// Which gap goes depends on the symbol: see <see cref="SymbolAttachments"/>.</item>
 	/// <item>A <b>deletion</b> — "um" → "" — closes the gap to a single space, however many
 	/// copies of the word were said in a row.</item>
 	/// </list>
@@ -180,12 +181,16 @@ public static class TextFormatter
 		bool isSymbol = replaceWith.Length > 0 && !replaceWith.Any(char.IsLetterOrDigit);
 		bool isDeletion = replaceWith.Length == 0;
 		bool opensAttached = OpensAttachedToPrecedingWord(replaceWith);
+		SymbolAttachment attachment = SymbolAttachments.Classify(replaceWith);
 
 		// A replacement closing with whitespace already separates itself from what follows, and
 		// carries its own terminator — so the punctuation the match consumed on that side goes
-		// with the gap rather than being stranded after it.
+		// with the gap rather than being stranded after it. Its mirror image is a replacement
+		// that opens with whitespace; re-emitting the gap in front of that one doubles it.
 		bool closesSeparated = replaceWith.Length > 0
 			&& char.IsWhiteSpace(replaceWith[^1]);
+		bool opensSeparated = replaceWith.Length > 0
+			&& char.IsWhiteSpace(replaceWith[0]);
 
 		// Deletions are the one branch that has to look outside its own match. Fillers arrive in
 		// runs — "um, um, I think" — and consecutive matches abut, so the second one's preceding
@@ -202,7 +207,22 @@ public static class TextFormatter
 			string trailingSpaces = match.Groups[6].Value;
 
 			if (isSymbol)
-				return leadingPunctuation + replaceWith;
+			{
+				// A left-attaching symbol closes the gap in front of it and gives back the one
+				// behind it, so "fifty percent last year" ends up "fifty% last year" rather
+				// than welded into "fifty%last year". A right-attaching one is the mirror
+				// image. Connectors — and every symbol the classifier does not recognise —
+				// close both, which is what a symbol rule has always done, so no rule that
+				// works today can be made worse here.
+				string symbolHead = attachment == SymbolAttachment.Right && !opensSeparated
+					? leadingSpaces
+					: string.Empty;
+				string symbolTail = attachment == SymbolAttachment.Left && !closesSeparated
+					? trailingPunctuation + trailingSpaces
+					: string.Empty;
+
+				return leadingPunctuation + symbolHead + replaceWith + symbolTail;
+			}
 
 			if (!isDeletion)
 			{
@@ -244,18 +264,29 @@ public static class TextFormatter
 
 	/// <summary>
 	/// Whether a word replacement still wants to sit hard against the word before it. True of
-	/// one opening with its own spacing — "newline plus text" → "\r\nHere". A replacement that
-	/// merely starts with punctuation and then carries text — "dotnet" → ".NET" — is a word,
-	/// and still needs the gap.
+	/// one opening with its own spacing — "newline plus text" → "\r\nHere" — and of a suffix,
+	/// which belongs to the word in front of it rather than a space away from it. A
+	/// replacement that merely starts with punctuation and then carries text — "dotnet" →
+	/// ".NET" — is a word, and still needs the gap.
 	/// </summary>
 	private static bool OpensAttachedToPrecedingWord(string replaceWith)
 	{
+		if (replaceWith.Length > 0 && IsSuffixMark(replaceWith[0]))
+			return true;
+
 		int index = 0;
 		while (index < replaceWith.Length && IsSentencePunctuation(replaceWith[index]))
 			index++;
 
 		return index == replaceWith.Length || char.IsWhiteSpace(replaceWith[index]);
 	}
+
+	/// <summary>
+	/// An apostrophe opening a replacement makes the whole thing a suffix — "apostrophe s" →
+	/// "'s" — and a possessive belongs against the thing it possesses: "Jacques's", never
+	/// "Jacques 's".
+	/// </summary>
+	private static bool IsSuffixMark(char value) => value is '\'' or '’';
 
 	private static bool IsSentencePunctuation(char value) =>
 		value is '.' or ',' or ';' or ':' or '!' or '?';

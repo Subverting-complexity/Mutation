@@ -413,42 +413,63 @@ public class AudioSessionManager : IDisposable
         StatusMessage?.Invoke(this, "Transcript ready and copied.");
     }
 
-    public Task PlaySelectedSessionAsync()
-    {
-        if (SelectedSession == null) return Task.CompletedTask;
+    /// <summary>
+    /// How long a recording may take to decode before the user is told it is happening. A
+    /// short recording is ready well inside this, so the common case stays quiet; a long one
+    /// would otherwise be silence with no explanation, which for a screen-reader user is
+    /// indistinguishable from a dead button.
+    /// </summary>
+    private static readonly TimeSpan DecodeAnnouncementDelay = TimeSpan.FromMilliseconds(400);
 
-        if (IsPlaying && _playingSession != null && PathsEqual(_playingSession.FilePath, SelectedSession.FilePath))
+    public async Task PlaySelectedSessionAsync()
+    {
+        // Captured once. The method now awaits, so the selection is free to move underneath
+        // it, and every line below has to be talking about the same recording.
+        SpeechSession? session = SelectedSession;
+        if (session == null) return;
+
+        // Asked against the session this class chose to play rather than against the player's
+        // IsPlaying: decoding now happens off the UI thread, so there is a window where a file
+        // is on its way to the speakers without being audible yet. Pressing the button in that
+        // window has to stop it, not queue up a second copy of the same recording.
+        if (_playingSession != null && PathsEqual(_playingSession.FilePath, session.FilePath))
         {
             StopPlayback();
-            return Task.CompletedTask;
+            return;
         }
 
         try
         {
             StopPlayback();
 
-            if (!File.Exists(SelectedSession.FilePath))
+            if (!File.Exists(session.FilePath))
             {
                 StatusMessage?.Invoke(this, "Audio file not found.");
                 RefreshSessions();
-                return Task.CompletedTask;
+                return;
             }
 
-            _playingSession = SelectedSession;
+            _playingSession = session;
             // Start each playback at the persisted speed so a saved preference is
             // honoured on launch and after navigating between sessions.
             _playbackPlayer.Speed = _settings.AudioSettings?.PlaybackSpeed ?? PlaybackSpeedOptions.Default;
-            _playbackPlayer.Play(SelectedSession.FilePath);
-            
+
+            Task playback = _playbackPlayer.PlayAsync(session.FilePath);
+
+            // Raised before the file is audible, because the button it drives is now the way
+            // to stop a decode that is taking too long.
             PlaybackStarted?.Invoke(this, EventArgs.Empty);
+
+            if (await Task.WhenAny(playback, Task.Delay(DecodeAnnouncementDelay)).ConfigureAwait(true) != playback)
+                StatusMessage?.Invoke(this, $"Decoding {session.FileName}...");
+
+            await playback.ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             StopPlayback();
             ErrorOccurred?.Invoke(this, $"Playback failed: {ex.Message}");
         }
-
-        return Task.CompletedTask;
     }
 
     public void StopPlayback()

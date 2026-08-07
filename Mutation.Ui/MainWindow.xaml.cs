@@ -2,6 +2,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -255,8 +256,11 @@ public sealed partial class MainWindow : Window, IDisposable
 		var tooltipManager = new TooltipManager(_settings);
 		tooltipManager.SetupTooltips(TxtRawTranscript, TxtFormatTranscript);
 
-		var insertOptions = Enum.GetValues(typeof(DictationInsertOption)).Cast<DictationInsertOption>().ToList();
+		// Bound to the described options rather than the bare enum, so the reader announces
+		// "Paste into 3rd party application" instead of the identifier "Paste" (issue #243).
+		var insertOptions = DictationInsertOptionItem.All();
 		CmbInsertOption.ItemsSource = insertOptions;
+		CmbInsertOption.DisplayMemberPath = nameof(DictationInsertOptionItem.Description);
 		var persistedInsertPreference = _settings.MainWindowUiSettings?.DictationInsertPreference;
 		if (!string.IsNullOrWhiteSpace(persistedInsertPreference) && Enum.TryParse(persistedInsertPreference, true, out DictationInsertOption persistedOption))
 		{
@@ -266,8 +270,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			_insertOption = DictationInsertOption.Paste;
 		}
-		CmbInsertOption.SelectedItem = _insertOption;
+		CmbInsertOption.SelectedItem = insertOptions.FirstOrDefault(item => item.Option == _insertOption);
 		UpdateThirdPartyExplanation(_insertOption);
+
+		// Only from here on is a change to the explanation something the user did. Restoring
+		// the saved preference is not news, and announcing it would talk over whatever the
+		// screen reader says as the window opens.
+		_announceThirdPartyExplanation = true;
 
 		// After initializing and restoring the active microphone, play a sound
 		// representing the current state (mute/unmute) to reflect actual status.
@@ -2734,8 +2743,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private void CmbInsertOption_SelectionChanged(object sender, SelectionChangedEventArgs e)
 	{
-		if (CmbInsertOption.SelectedItem is DictationInsertOption opt)
+		if (CmbInsertOption.SelectedItem is DictationInsertOptionItem selected)
 		{
+			DictationInsertOption opt = selected.Option;
 			_insertOption = opt;
 			UpdateThirdPartyExplanation(opt);
 			var persistedValue = opt.ToString();
@@ -2747,6 +2757,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
+	// False until the saved preference has been restored. See where it is set.
+	private bool _announceThirdPartyExplanation;
+
 	private void UpdateThirdPartyExplanation(DictationInsertOption option)
 	{
 		string explanation = option switch
@@ -2757,7 +2770,21 @@ public sealed partial class MainWindow : Window, IDisposable
 			_ => string.Empty
 		};
 
+		if (ThirdPartyExplanationText.Text == explanation)
+			return;
+
 		ThirdPartyExplanationText.Text = explanation;
+
+		if (!_announceThirdPartyExplanation)
+			return;
+
+		// The live setting on the TextBlock says the text is worth announcing; it does not
+		// announce it. WinUI raises nothing of its own when a TextBlock's Text changes, so
+		// without this the explanation for the newly chosen mode is silent and the selection
+		// change is the last thing the user hears (issue #243).
+		AutomationPeer? peer = FrameworkElementAutomationPeer.FromElement(ThirdPartyExplanationText)
+			?? FrameworkElementAutomationPeer.CreatePeerForElement(ThirdPartyExplanationText);
+		peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
 	}
 
 	// Reports how far the text actually got. Every path that needs no insert — an empty
