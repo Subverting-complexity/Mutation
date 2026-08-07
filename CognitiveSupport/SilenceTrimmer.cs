@@ -18,10 +18,18 @@ namespace CognitiveSupport;
 /// </summary>
 public sealed class SilenceTrimmer
 {
+	// A removal is only ever recorded once per trimmed gap, so a multi-hour recording
+	// produces a few thousand entries at most. The cap is a backstop against a
+	// pathological stream (rapid speech/silence alternation for hours) growing this
+	// list without bound on the audio capture path; past it, later gaps are still
+	// trimmed, they are just not offered as split points.
+	private const int MaxRecordedRemovals = 100_000;
+
 	private readonly int _thresholdFrames;
 	private readonly int _guardFrames;
 	private readonly double _meanSquareThreshold;
 	private readonly int _capFrames;
+	private readonly double _frameSeconds;
 
 	// First and last frames of the current silence gap. Bounded to _capFrames each so a
 	// long pause does not grow memory without bound; we only ever keep frames adjacent to
@@ -32,8 +40,22 @@ public sealed class SilenceTrimmer
 
 	private bool _hasEmittedSpeech;
 
+	// Frames handed to the emit callback so far. This is the processed timeline, which
+	// is what a removal point has to be expressed in: it shortens as gaps are dropped,
+	// so a position taken from it stays correct however much earlier audio was removed.
+	private long _emittedFrameCount;
+
+	private readonly List<SilenceRemovalPoint> _removedSilences = new();
+
 	/// <summary>Number of speech (non-silent) frames seen so far.</summary>
 	public long SpeechFrameCount { get; private set; }
+
+	/// <summary>
+	/// Every silence period removed so far, in output order, positioned on the
+	/// processed timeline. Used to pick natural cut points when a recording has to be
+	/// split into upload-sized chunks.
+	/// </summary>
+	public IReadOnlyList<SilenceRemovalPoint> RemovedSilences => _removedSilences;
 
 	public SilenceTrimmer(int sampleRate, int frameSize, SilenceTrimmerOptions options)
 	{
@@ -42,6 +64,7 @@ public sealed class SilenceTrimmer
 		if (options is null) throw new ArgumentNullException(nameof(options));
 
 		double frameMs = frameSize * 1000.0 / sampleRate;
+		_frameSeconds = frameSize / (double)sampleRate;
 
 		_thresholdFrames = Math.Max(0, (int)Math.Round(options.MinSilenceSeconds * 1000.0 / frameMs));
 		_guardFrames = Math.Max(0, (int)Math.Round(options.GuardMilliseconds / frameMs));
@@ -67,6 +90,7 @@ public sealed class SilenceTrimmer
 			FlushGap(hasLeftSpeech: _hasEmittedSpeech, hasRightSpeech: true, emit);
 
 		emit(frame);
+		_emittedFrameCount++;
 		_hasEmittedSpeech = true;
 		SpeechFrameCount++;
 	}
@@ -137,12 +161,34 @@ public sealed class SilenceTrimmer
 		}
 
 		for (int i = 0; i < keepStart; i++)
+		{
 			emit(_head[i]);
+			_emittedFrameCount++;
+		}
+
+		// Recorded between the two halves of the kept guard, which is exactly where the
+		// dropped audio used to sit — so the position is the seam in the output, and any
+		// later removal is measured against an output that has already lost this much.
+		RecordRemoval(length - keepStart - keepEnd);
+
 		for (int i = _tail.Count - keepEnd; i < _tail.Count; i++)
+		{
 			emit(_tail[i]);
+			_emittedFrameCount++;
+		}
 
 		_head.Clear();
 		_tail.Clear();
 		_silenceCount = 0;
+	}
+
+	private void RecordRemoval(long droppedFrames)
+	{
+		if (droppedFrames <= 0 || _removedSilences.Count >= MaxRecordedRemovals)
+			return;
+
+		_removedSilences.Add(new SilenceRemovalPoint(
+			TimeSpan.FromSeconds(_emittedFrameCount * _frameSeconds),
+			TimeSpan.FromSeconds(droppedFrames * _frameSeconds)));
 	}
 }

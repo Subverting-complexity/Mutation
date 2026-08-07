@@ -120,6 +120,7 @@ public class SpeechToTextManagerStartGuardTests : IDisposable
 		public bool Disposed { get; private set; }
 
 		public double? TrimmedSpeechSeconds => null;
+		public IReadOnlyList<SilenceRemovalPoint> RemovedSilences => Array.Empty<SilenceRemovalPoint>();
 		public Exception? CaptureException => null;
 
 		public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)

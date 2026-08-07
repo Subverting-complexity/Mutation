@@ -69,6 +69,27 @@ than short ones.
    timeouts for live dictation and for transcribing a file, plus a per-attempt timeout
    on each speech service.
 
+### A long recording takes several rounds to come back
+
+**What's happening.** Transcription services refuse a file over about 25 MB in one
+request. When a recording is bigger than **Maximum upload size (MB)** in **Settings**,
+Mutation splits it and sends the pieces one after the other, then joins the results
+into a single transcript. That is several trips over the internet instead of one, so a
+long meeting recording takes noticeably longer than a short note. Nothing is lost, and
+the pieces are joined back in the order you recorded them.
+
+**What to do.**
+
+1. Wait it out — the pieces are sent automatically and you get one transcript at the
+   end.
+2. Leave **Strip silent gaps from audio** switched on. It makes recordings smaller, so
+   fewer of them need splitting at all, and it gives Mutation the pauses it uses to
+   split between sentences rather than mid-word.
+3. If a message says a piece is still over the upload limit, lower **Maximum upload
+   size (MB)** and try again.
+4. If your service accepts larger uploads than OpenAI does, raise the number, or set
+   it to 0 to never split.
+
 ### OCR returns nothing useful, or the wrong reading order
 
 **What's happening.** OCR reads text out of a picture. If the picture is small,

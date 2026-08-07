@@ -12,6 +12,8 @@ namespace Mutation.Ui.Views.SettingsUi.Pages;
 
 public sealed partial class SpeechSettingsPage : UserControl
 {
+	private const double BytesPerMb = 1024.0 * 1024.0;
+
 	private readonly Settings _settings;
 	private bool _suppressEvents;
 
@@ -65,6 +67,9 @@ public sealed partial class SpeechSettingsPage : UserControl
 			NbMinSilence.Value = stt.MinSilenceSeconds;
 			NbSilenceThreshold.Value = stt.SilenceThresholdDbFs;
 			NbSilenceGuard.Value = stt.SilenceGuardMilliseconds;
+			NbMaxUploadSizeMb.Value = stt.MaxTranscriptionUploadBytes > 0
+				? Math.Round(stt.MaxTranscriptionUploadBytes / BytesPerMb, 1)
+				: 0;
 		}
 		finally { _suppressEvents = false; }
 	}
@@ -188,6 +193,20 @@ public sealed partial class SpeechSettingsPage : UserControl
 
 	private void BtnResetSilenceGuard_Click(object sender, RoutedEventArgs e) =>
 		NbSilenceGuard.Value = SettingsDefaults.Speech.SilenceGuardMilliseconds;
+
+	private void NbMaxUploadSizeMb_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+	{
+		if (_suppressEvents) return;
+		if (double.IsNaN(args.NewValue)) return;
+		// 0 (or less) stores 0 = "never split"; otherwise convert MB -> bytes and clamp,
+		// so the stored value is always one the chunker can act on.
+		long bytes = args.NewValue <= 0 ? 0 : (long)Math.Round(args.NewValue * BytesPerMb);
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).MaxTranscriptionUploadBytes =
+			SpeechToTextSettings.ClampTranscriptionUploadBytes(bytes);
+	}
+
+	private void BtnResetMaxUploadSize_Click(object sender, RoutedEventArgs e) =>
+		NbMaxUploadSizeMb.Value = SettingsDefaults.Speech.MaxTranscriptionUploadBytes / BytesPerMb;
 
 	// Puts the stored temp directory back on screen after the dialog has repaired an
 	// unusable one, so the user is looking at the path that will actually be saved

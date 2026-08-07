@@ -50,6 +50,7 @@
 	<x:String x:Key="Help.Speech.SilenceThreshold">Loudness floor in dBFS. Audio at or below this level counts as silence. Lower (more negative) values are stricter, treating only quieter sounds as silence. Default -40.</x:String>
 	<x:String x:Key="Help.Speech.MinSilence">Shortest silence to keep, in seconds. Pauses shorter than this are left untouched; longer pauses are trimmed down to this length. Default 1.0.</x:String>
 	<x:String x:Key="Help.Speech.SilenceGuard">Audio kept on each side of speech, in milliseconds, so soft word starts, breaths, and word endings are not clipped. Default 200.</x:String>
+	<x:String x:Key="Help.Speech.MaxUploadSize">Largest audio file sent for transcription in one go, in megabytes. Anything bigger is split into pieces, each transcribed in turn and joined back together in order. Splits are made where a long pause was removed, so a break falls between sentences. Default 24, which stays under OpenAI's 25 MB limit. Set 0 to never split. Range 0, then 1 to 1000.</x:String>
 	<x:String x:Key="Help.Speech.Services">Define the transcription services you can choose from. Adding, removing, or editing a service definition takes effect after you restart the app; the per-service prompt and the active-service selection apply immediately.</x:String>
 	<x:String x:Key="Help.Speech.Service.Name">A label for this service, shown in the active-service list. Must be unique.</x:String>
 	<x:String x:Key="Help.Speech.Service.Provider">Which transcription backend this service talks to: OpenAI (Whisper) or Deepgram.</x:String>

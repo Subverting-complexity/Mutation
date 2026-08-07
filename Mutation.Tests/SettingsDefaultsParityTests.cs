@@ -68,6 +68,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Speech.SilenceThresholdDbFs, stt.SilenceThresholdDbFs);
 		Assert.Equal(SettingsDefaults.Speech.MinSilenceSeconds, stt.MinSilenceSeconds);
 		Assert.Equal(SettingsDefaults.Speech.SilenceGuardMilliseconds, stt.SilenceGuardMilliseconds);
+		Assert.Equal(SettingsDefaults.Speech.MaxTranscriptionUploadBytes, stt.MaxTranscriptionUploadBytes);
 
 		Assert.NotNull(stt.Services);
 		Assert.NotEmpty(stt.Services!);
