@@ -2334,8 +2334,10 @@ public sealed partial class MainWindow : Window, IDisposable
             var plan = RecordingUiPlanner.For(activity);
             UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled);
             TxtRawTranscript.IsReadOnly = plan.TranscriptReadOnly;
-            if (plan.TranscriptText is string placeholder)
-                TxtRawTranscript.Text = placeholder;
+            // Null means "leave whatever is in the box"; empty means "clear it", which is
+            // how a cancelled run takes its own "Transcribing..." back out (#295).
+            if (plan.TranscriptText is string transcriptText)
+                TxtRawTranscript.Text = transcriptText;
             if (plan.PlayStartBeep)
                 BeepPlayer.Play(BeepType.Start);
         });

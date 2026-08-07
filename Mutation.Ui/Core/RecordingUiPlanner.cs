@@ -26,6 +26,16 @@ public static class RecordingUiPlanner
 			TranscriptText: TranscribingPlaceholder,
 			PlayStartBeep: false),
 
+		// Idle in every respect, except that the placeholder is cleared. Nothing was
+		// delivered into the box, so what is in it is the "Transcribing..." this run
+		// put there — and a screen reader would read that back as work still running.
+		RecordingActivity.Cancelled => new RecordingUiPlan(
+			ButtonLabel: "Record",
+			ButtonEnabled: true,
+			TranscriptReadOnly: false,
+			TranscriptText: string.Empty,
+			PlayStartBeep: false),
+
 		_ => new RecordingUiPlan(
 			ButtonLabel: "Record",
 			ButtonEnabled: true,

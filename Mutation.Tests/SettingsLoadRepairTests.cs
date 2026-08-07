@@ -176,6 +176,69 @@ public class SettingsLoadRepairTests
 		Assert.All(manager.HotKeyRouterIssues, issue => Assert.Contains("mapping 1", issue));
 	}
 
+	// Issue #283. A SpeechToTextSettings section with no Services array was read as a
+	// pre-Services legacy file and collapsed into one synthesized service — and with no
+	// legacy Service name to carry over, the synthesized Provider was "". The very next
+	// deserialize threw on that empty enum value, so a file the upgrade had just written
+	// could not be loaded at all. Reachable from the dialog's own "Open JSON" button.
+	[Fact]
+	public void Load_SpeechSectionWithNoServicesArray_StillLoads()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": { "TempDirectory": "D:\\MyRecordings" },
+			"MainWindowUiSettings": { "MaxTextBoxLineCount": 7 }
+		}
+		""");
+
+		// Nothing legacy to migrate, so the section is left for EnsureSettings to seed
+		// with the ordinary OpenAI Whisper default — and the rest of the file survives.
+		Assert.Equal(7, settings.MainWindowUiSettings!.MaxTextBoxLineCount);
+		Assert.Equal(@"D:\MyRecordings", settings.SpeechToTextSettings!.TempDirectory);
+		var service = Assert.Single(settings.SpeechToTextSettings.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal(SettingsDefaults.Speech.DefaultServiceName, service.Name);
+	}
+
+	// The other half of #283: a Provider the enum does not recognise, however it got
+	// there, must cost that one service its stored value — not the whole settings file.
+	[Theory]
+	[InlineData("\"\"")]
+	[InlineData("\"   \"")]
+	[InlineData("\"Whisper\"")]
+	[InlineData("\"None\"")]
+	[InlineData("null")]
+	public void Load_UnusableProvider_IsRepairedRatherThanFatal(string jsonValue)
+	{
+		var settings = Load($$"""
+		{
+			"SpeechToTextSettings": {
+				"Services": [ { "Name": "My service", "Provider": {{jsonValue}}, "ModelId": "whisper-1" } ]
+			}
+		}
+		""");
+
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		// Only the provider is repaired; everything the user did configure is kept.
+		Assert.Equal("My service", service.Name);
+		Assert.Equal("whisper-1", service.ModelId);
+	}
+
+	[Fact]
+	public void Load_RecognisedProvider_IsKeptAsIs()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": {
+				"Services": [ { "Name": "Deepgram Nova", "Provider": "Deepgram" } ]
+			}
+		}
+		""");
+
+		Assert.Equal(SpeechToTextProviders.Deepgram, settings.SpeechToTextSettings!.Services!.Single().Provider);
+	}
+
 	[Fact]
 	public void Load_WellFormedRouterMappings_ReportNothing()
 	{

@@ -483,6 +483,64 @@ public class SettingsManagerMigrationTests : IDisposable
 		Assert.Equal("llm-key", result["ApiKeys"]?["OpenAiApiKey"]?.ToString());
 	}
 
+	// Issue #283. A section with no Services array and none of the loose legacy fields
+	// beside it is not a pre-Services file — it is just a short one. Collapsing it wrote
+	// a service with a blank Name and a blank Provider, and the blank Provider then threw
+	// on deserialize, so the upgrade broke the file it had just written.
+	[Fact]
+	public void UpgradeSettings_SpeechSectionWithNothingLegacy_SynthesizesNoService()
+	{
+		JObject result = UpgradeAndReload("""
+			{
+				"SpeechToTextSettings": { "TempDirectory": "D:\\MyRecordings" }
+			}
+			""");
+
+		Assert.Null(result["SpeechToTextSettings"]?["Services"]);
+		Assert.Equal(@"D:\MyRecordings", result["SpeechToTextSettings"]?["TempDirectory"]?.ToString());
+	}
+
+	// Loose legacy fields but no Service naming the provider: there is something to
+	// carry over, so the collapse still runs — with the OpenAI default standing in for
+	// the provider nobody recorded, rather than an empty string no enum can parse.
+	[Fact]
+	public void UpgradeSettings_LegacyFieldsWithNoServiceName_DefaultsTheProviderToOpenAi()
+	{
+		JObject result = UpgradeAndReload("""
+			{
+				"SpeechToTextSettings": {
+					"ApiKey": "stt-key",
+					"ModelId": "whisper-1"
+				}
+			}
+			""");
+
+		var services = (JArray)result["SpeechToTextSettings"]!["Services"]!;
+		var service = Assert.Single(services);
+		Assert.Equal(nameof(SpeechToTextProviders.OpenAi), service["Provider"]?.ToString());
+		Assert.Equal("stt-key", service["ApiKey"]?.ToString());
+		Assert.Equal("whisper-1", service["ModelId"]?.ToString());
+	}
+
+	[Theory]
+	[InlineData("\"\"")]
+	[InlineData("\"Whisper\"")]
+	[InlineData("null")]
+	public void UpgradeSettings_UnrecognisedProvider_IsRewrittenToOpenAi(string jsonValue)
+	{
+		JObject result = UpgradeAndReload($$"""
+			{
+				"SpeechToTextSettings": {
+					"Services": [ { "Name": "My service", "Provider": {{jsonValue}} } ]
+				}
+			}
+			""");
+
+		var services = (JArray)result["SpeechToTextSettings"]!["Services"]!;
+		Assert.Equal(nameof(SpeechToTextProviders.OpenAi), services[0]?["Provider"]?.ToString());
+		Assert.Equal("My service", services[0]?["Name"]?.ToString());
+	}
+
 	// Chain test: a JSON containing every legacy key still recognised by UpgradeSettings.
 	// Verifies that all migrations run in one pass without interfering with each other,
 	// and (critically) that ordering produces correct A->B->C chains where one block reads

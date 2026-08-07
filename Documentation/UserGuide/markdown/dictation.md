@@ -21,6 +21,16 @@ If you prefer clicking, the **Speech to Text** card on the main window has a
 > **Shift+Alt+U** is just the default. Every shortcut in Mutation can be changed.
 > Open **Settings** with **Ctrl+Comma** and look on the **Hotkeys** tab.
 
+## Changed your mind while it is transcribing
+
+While Mutation is turning your recording into text, the **Raw Transcript** box
+reads "Transcribing..." and the buttons are greyed out. Press **Shift+Alt+U** once
+more and it gives up on that recording. You hear the failure beep and "Transcription
+cancelled.", the box empties itself, and everything is yours to use again.
+
+Your recording is not lost. It is still in the list of recent sessions, so you can
+select it and press **Retry transcription** whenever you like.
+
 ## Recording and cleaning up in one step
 
 There is a second shortcut, **Shift+Alt+I** by default, that records *and* then

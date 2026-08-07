@@ -19,6 +19,15 @@ internal class SettingsManager : ISettingsManager
 		Converters = new List<JsonConverter> { new StringEnumConverter() }
 	};
 
+	/// <summary>
+	/// The fields a pre-<c>Services</c> settings file kept loose on the
+	/// <c>SpeechToTextSettings</c> section, one set per single configured provider.
+	/// Their presence is what identifies such a file; <see cref="UpgradeSettings"/>
+	/// collapses them into <c>Services[0]</c> and removes them.
+	/// </summary>
+	private static readonly string[] LegacyServiceFieldNames =
+		{ "Service", "ApiKey", "BaseDomain", "ModelId", "SpeechToTextPrompt" };
+
 	public string SettingsFilePath { get; }
 	private string SettingsFileFullPath => Path.GetFullPath(SettingsFilePath);
 
@@ -734,9 +743,22 @@ End of summary.
 				saveRequired = true;
 			}
 
-			if (speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
+			// A section with no Services array predates the array, so the loose fields
+			// beside it are collapsed into a single synthesized service. Only do that when
+			// at least one of them is actually there: a section carrying none of them is
+			// not a legacy file at all, and synthesizing from nothing wrote a service with
+			// a blank Name and a blank Provider — which the very next deserialize then
+			// threw on, taking the whole settings file down with it (issue #283). Left
+			// alone, EnsureSettings seeds the proper OpenAI Whisper default instead.
+			if ((speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
+				&& LegacyServiceFieldNames.Any(name => speechSettings[name] is not null))
 			{
-				string providerName = speechSettings.Value<string>("Service") ?? string.Empty;
+				// No legacy Service to carry over means the provider is unknown, not blank.
+				// Name it what EnsureSettings would have: the OpenAI default.
+				string legacyService = speechSettings.Value<string>("Service") ?? string.Empty;
+				string providerName = string.IsNullOrWhiteSpace(legacyService)
+					? nameof(SpeechToTextProviders.OpenAi)
+					: legacyService;
 
 				JObject serviceObj = new JObject
 				{
@@ -750,11 +772,8 @@ End of summary.
 
 				JArray createdServicesArray = new JArray { serviceObj };
 
-				speechSettings.Remove("Service");
-				speechSettings.Remove("ApiKey");
-				speechSettings.Remove("BaseDomain");
-				speechSettings.Remove("ModelId");
-				speechSettings.Remove("SpeechToTextPrompt");
+				foreach (string name in LegacyServiceFieldNames)
+					speechSettings.Remove(name);
 
 				// Only seed ActiveSpeechToTextService if the typo-fix above didn't already
 				// populate it from a legacy ActiveSpeetchToTextService.
@@ -777,9 +796,27 @@ End of summary.
 			{
 				foreach (var service in servicesArray)
 				{
-					if (service["Provider"]?.ToString() == "OpenAiWhisper")
+					if (service["Provider"] is not JToken provider)
+						continue;
+
+					string providerText = provider.Type is JTokenType.String or JTokenType.Integer
+						? provider.ToString()
+						: string.Empty;
+
+					// The enum was renamed; carry the old name across.
+					if (providerText == "OpenAiWhisper")
 					{
-						service["Provider"] = "OpenAi";
+						service["Provider"] = nameof(SpeechToTextProviders.OpenAi);
+						saveRequired = true;
+					}
+					// Anything the enum does not recognise — blank, null, or a hand-typed
+					// name — throws inside the deserializer, and a throw there is fatal to
+					// the whole file rather than to one service. Repair it here, the same
+					// way EnsureSettings repairs a stored None (issue #283).
+					else if (!Enum.TryParse<SpeechToTextProviders>(providerText, ignoreCase: true, out var parsed)
+						|| parsed == SpeechToTextProviders.None)
+					{
+						service["Provider"] = nameof(SpeechToTextProviders.OpenAi);
 						saveRequired = true;
 					}
 				}
