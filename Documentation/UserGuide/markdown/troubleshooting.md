@@ -75,8 +75,8 @@ than short ones.
 request. When a recording is bigger than **Maximum upload size (MB)** in **Settings**,
 Mutation splits it and sends the pieces one after the other, then joins the results
 into a single transcript. That is several trips over the internet instead of one, so a
-long meeting recording takes noticeably longer than a short note. Nothing is lost, and
-the pieces are joined back in the order you recorded them.
+long meeting recording takes noticeably longer than a short note. No audio is skipped,
+and the pieces are joined back in the order you recorded them.
 
 **What to do.**
 

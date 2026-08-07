@@ -201,8 +201,25 @@ public sealed partial class SpeechSettingsPage : UserControl
 		// 0 (or less) stores 0 = "never split"; otherwise convert MB -> bytes and clamp,
 		// so the stored value is always one the chunker can act on.
 		long bytes = args.NewValue <= 0 ? 0 : (long)Math.Round(args.NewValue * BytesPerMb);
-		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).MaxTranscriptionUploadBytes =
-			SpeechToTextSettings.ClampTranscriptionUploadBytes(bytes);
+		long clamped = SpeechToTextSettings.ClampTranscriptionUploadBytes(bytes);
+		(_settings.SpeechToTextSettings ??= new SpeechToTextSettings()).MaxTranscriptionUploadBytes = clamped;
+
+		// The box allows 0 as "never split", so it also allows a fraction of a megabyte,
+		// which the clamp raises to 1 MB. Put the value that was actually stored back on
+		// screen rather than leaving the box — and the screen reader — announcing a
+		// number nothing will act on.
+		ShowUploadSize(sender, clamped);
+	}
+
+	private void ShowUploadSize(NumberBox box, long bytes)
+	{
+		double display = bytes > 0 ? Math.Round(bytes / BytesPerMb, 1) : 0;
+		if (Math.Abs(display - box.Value) < 0.0001)
+			return;
+
+		_suppressEvents = true;
+		try { box.Value = display; }
+		finally { _suppressEvents = false; }
 	}
 
 	private void BtnResetMaxUploadSize_Click(object sender, RoutedEventArgs e) =>

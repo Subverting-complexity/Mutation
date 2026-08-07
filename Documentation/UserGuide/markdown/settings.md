@@ -106,7 +106,9 @@ a word.
 
 24 is the default and suits OpenAI. Set it to 0 if you never want a recording split,
 for example with a service that accepts larger uploads. Otherwise the box takes
-anything from 1 to 1000.
+anything from 1 to 1000. If you type something smaller than 1, Mutation puts 1 back
+in the box, because a piece any smaller than that is no use to a transcription
+service.
 
 ### API keys
 

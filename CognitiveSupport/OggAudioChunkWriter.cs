@@ -47,14 +47,22 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 	// nonsensical setting from producing one file per frame.
 	private const long MinimumChunkSamples = SampleRate;
 
-	/// <summary>Length of the audio in an Ogg/Opus file.</summary>
-	public static TimeSpan MeasureDuration(string audioFilePath)
+	/// <summary>
+	/// Length of the audio in an Ogg/Opus file. This decodes the whole file, which on the
+	/// multi-hour recordings this class exists for takes real time — hence the token.
+	/// </summary>
+	public static TimeSpan MeasureDuration(string audioFilePath, CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(audioFilePath))
 			throw new ArgumentException("Audio file path cannot be empty.", nameof(audioFilePath));
 
 		long samples = 0;
-		OggOpusPcmDecoder.DecodeToMonoPcm(audioFilePath, decoded => samples += decoded.Length);
+		OggOpusPcmDecoder.DecodeToMonoPcm(audioFilePath, decoded =>
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			samples += decoded.Length;
+		});
+
 		return TimeSpan.FromSeconds(samples / (double)SampleRate);
 	}
 
@@ -79,14 +87,12 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 		if (!OggOpusPcmDecoder.IsOggOpus(source))
 		{
 			string converted = Path.Combine(outputDirectory, ConvertedSourceFileName);
-			AudioFileConverter.ConvertToOgg(source, converted, silenceOptions: null);
+			AudioFileConverter.ConvertToOgg(source, converted, silenceOptions: null, cancellationToken);
 			source = converted;
 		}
 
-		cancellationToken.ThrowIfCancellationRequested();
-
 		var ranges = AudioChunkPlanner.Plan(
-			MeasureDuration(source), maxChunkBytes, EncodedBytesPerSecondEstimate, removalPoints);
+			MeasureDuration(source, cancellationToken), maxChunkBytes, EncodedBytesPerSecondEstimate, removalPoints);
 
 		return WritePlannedChunks(source, ranges, maxChunkBytes, outputDirectory, cancellationToken);
 	}

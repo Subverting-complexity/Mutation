@@ -186,4 +186,28 @@ public class OggAudioChunkWriterTests : IDisposable
 			new OggAudioChunkWriter().WriteChunks(
 				source, Array.Empty<SilenceRemovalPoint>(), LimitForSeconds(2), OutputDirectory("cancelled-out"), cts.Token));
 	}
+
+	[Fact]
+	public void MeasureDuration_GivesUpWhenCancelled()
+	{
+		// Measuring decodes the whole file, which on the multi-hour recordings this class
+		// exists for is minutes of work with the recorder lock held. A cancel has to land
+		// here, not only once the chunks start being written.
+		string source = WriteFixture("cancelled-measure.ogg");
+		using var cts = new CancellationTokenSource();
+		cts.Cancel();
+
+		Assert.ThrowsAny<OperationCanceledException>(() => OggAudioChunkWriter.MeasureDuration(source, cts.Token));
+	}
+
+	[Fact]
+	public void ConvertingANonOggSource_GivesUpWhenCancelled()
+	{
+		string source = WriteFixture("cancelled-convert.ogg");
+		using var cts = new CancellationTokenSource();
+		cts.Cancel();
+
+		Assert.ThrowsAny<OperationCanceledException>(() =>
+			AudioFileConverter.ConvertToOgg(source, Path.Combine(OutputDirectory("cancelled-convert-out"), "out.ogg"), null, cts.Token));
+	}
 }

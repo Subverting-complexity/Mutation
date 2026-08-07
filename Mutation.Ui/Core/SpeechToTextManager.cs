@@ -420,7 +420,10 @@ public class SpeechToTextManager : IDisposable
 		if (AudioFileConverter.IsVideoFile(sourcePath) || silenceOptions is not null)
 		{
 			string destinationPath = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
-			var removedSilences = await Task.Run(() => AudioFileConverter.ConvertToOgg(sourcePath, destinationPath, silenceOptions), token).ConfigureAwait(false);
+			// The token goes into the conversion itself, not just Task.Run: a long video
+			// takes minutes to decode, and cancelling only the scheduling would leave the
+			// user watching a job they already gave up on.
+			var removedSilences = await Task.Run(() => AudioFileConverter.ConvertToOgg(sourcePath, destinationPath, silenceOptions, token), token).ConfigureAwait(false);
 
 			// The caller transcribes this session next, so the pauses just stripped out of
 			// it are still the right ones to cut at if it turns out to be too big to send.
