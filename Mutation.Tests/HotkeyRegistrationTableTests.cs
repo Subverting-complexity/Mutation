@@ -253,6 +253,46 @@ public class HotkeyRegistrationTableTests
 	}
 
 	[Fact]
+	public void IdsIn_lists_a_groups_registrations_in_the_order_they_were_made()
+	{
+		var (table, _) = NewTable();
+		var first = table.Register(Chord(VirtualKey.R), () => { }, HotkeyGroup.Router);
+		table.Register(Chord(VirtualKey.X), () => { }, HotkeyGroup.Core);
+		var second = table.Register(Chord(VirtualKey.S), () => { }, HotkeyGroup.Router);
+		var third = table.Register(Chord(VirtualKey.T), () => { }, HotkeyGroup.Router);
+
+		Assert.Equal(new[] { first.Id, second.Id, third.Id }, table.IdsIn(HotkeyGroup.Router));
+	}
+
+	[Fact]
+	public void A_table_needs_something_to_register_against()
+	{
+		Assert.Throws<ArgumentNullException>(() => new HotkeyRegistrationTable(null!));
+	}
+
+	[Fact]
+	public void A_registration_without_a_callback_is_refused_at_the_point_it_is_made()
+	{
+		var (table, platform) = NewTable();
+
+		// Left to Windows, a null callback binds fine and only fails the first time the user
+		// presses the chord — inside the WM_HOTKEY pump, far from the mistake.
+		Assert.Throws<ArgumentNullException>(() => table.Register(Chord(VirtualKey.M), null!, HotkeyGroup.Core));
+		Assert.Empty(platform.Bound);
+	}
+
+	[Fact]
+	public void A_callback_that_throws_is_not_swallowed()
+	{
+		var (table, _) = NewTable();
+		var registered = table.Register(Chord(VirtualKey.M), () => throw new InvalidOperationException("boom"), HotkeyGroup.Core);
+
+		// Documents where the failure surfaces: the table does not catch, so the exception
+		// reaches WndProc. Anything quieter would lose a hotkey action with no trace.
+		Assert.Throws<InvalidOperationException>(() => table.Dispatch(registered.Id));
+	}
+
+	[Fact]
 	public void IsRegistered_reports_what_is_currently_bound()
 	{
 		var (table, _) = NewTable();
@@ -271,6 +311,22 @@ public class HotkeyRegistrationTableTests
 		var chord = new Hotkey { Win = true, Alt = true, Shift = true, Control = true, Key = VirtualKey.F1 };
 
 		Assert.Equal("CTRL+SHIFT+ALT+WIN+F1", NormalizeHotkey(chord));
+	}
+
+	[Fact]
+	public void NormalizeHotkey_leaves_a_bare_key_bare()
+	{
+		// No modifiers means no separator — a trailing "+" here would make an unmodified key
+		// compare unequal to itself under any other spelling.
+		Assert.Equal("F1", NormalizeHotkey(new Hotkey { Key = VirtualKey.F1 }));
+	}
+
+	[Fact]
+	public void NormalizeHotkey_keeps_each_modifier_in_its_own_slot()
+	{
+		Assert.Equal("SHIFT+A", NormalizeHotkey(new Hotkey { Shift = true, Key = VirtualKey.A }));
+		Assert.Equal("ALT+A", NormalizeHotkey(new Hotkey { Alt = true, Key = VirtualKey.A }));
+		Assert.Equal("WIN+A", NormalizeHotkey(new Hotkey { Win = true, Key = VirtualKey.A }));
 	}
 
 	[Theory]

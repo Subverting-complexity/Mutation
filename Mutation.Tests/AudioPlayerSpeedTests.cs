@@ -74,15 +74,28 @@ public class AudioPlayerSpeedTests : IDisposable
 		return DrainByteCount(Assert.IsAssignableFrom<IWaveProvider>(device.Provider));
 	}
 
+	// The measured ratios are exact — the source is a synthesized tone and SoundTouch.Net is
+	// pinned — so the tolerance is a guard against the library moving, not against the machine.
+	// It has to stay tighter than the gap to the neighbouring supported speeds, or a
+	// regression that snapped 2.0 to 1.75 or 2.25 would pass: those give 0.571 and 0.444.
+	private const double RatioTolerance = 0.05;
+
+	private static void AssertRatio(long measured, long baseline, double expectedRatio)
+	{
+		Assert.True(baseline > 0, "The normal-speed chain produced no audio at all.");
+		Assert.InRange(
+			measured / (double)baseline,
+			expectedRatio - RatioTolerance,
+			expectedRatio + RatioTolerance);
+	}
+
 	[Fact]
 	public async Task Playing_at_double_speed_produces_about_half_as_much_audio()
 	{
 		long atNormal = await PlayAndMeasureAsync(1.0);
 		long atDouble = await PlayAndMeasureAsync(2.0);
 
-		Assert.True(atNormal > 0, "The normal-speed chain produced no audio at all.");
-		// Half, with room for SoundTouch's own buffering rather than a tight ratio.
-		Assert.InRange(atDouble, atNormal * 0.4, atNormal * 0.6);
+		AssertRatio(atDouble, atNormal, 0.5);
 	}
 
 	[Fact]
@@ -91,22 +104,11 @@ public class AudioPlayerSpeedTests : IDisposable
 		long atNormal = await PlayAndMeasureAsync(1.0);
 		long atHalf = await PlayAndMeasureAsync(0.5);
 
-		Assert.InRange(atHalf, atNormal * 1.7, atNormal * 2.3);
+		AssertRatio(atHalf, atNormal, 2.0);
 	}
 
 	[Fact]
-	public async Task A_speed_set_before_the_file_is_opened_still_reaches_the_chain()
-	{
-		long atNormal = await PlayAndMeasureAsync(1.0);
-		long atDouble = await PlayAndMeasureAsync(2.0);
-
-		// The speed is set while no file is loaded, so it has to be remembered and applied
-		// when the chain is built — not dropped because there was nothing to apply it to.
-		Assert.True(atDouble < atNormal);
-	}
-
-	[Fact]
-	public async Task A_speed_changed_mid_playback_retunes_the_audio_that_is_already_playing()
+	public async Task A_speed_changed_mid_playback_reaches_audio_that_is_already_in_flight()
 	{
 		using var player = NewPlayer();
 		await player.PlayAsync(WriteTone("mid-playback.wav"));
@@ -118,16 +120,35 @@ public class AudioPlayerSpeedTests : IDisposable
 		Assert.True(consumed > 0);
 
 		player.Speed = 2.0;
-		long remainderAtDouble = consumed + DrainByteCount(provider);
+		long total = consumed + DrainByteCount(provider);
 
 		_devices.Clear();
 		long straightThrough = await PlayAndMeasureAsync(1.0);
 
-		// Changing speed must not restart the file or lose the position — the rest simply
-		// arrives faster, so the total is shorter than an unchanged play of the same file.
+		// The rest of the file arrives faster, so the whole play is shorter than an unchanged
+		// one. This says the change reached a chain that was already running — it does NOT say
+		// the read position survived it; the byte counts cannot tell a continue from a restart
+		// at the new speed, which is what the next test is for.
 		Assert.True(
-			remainderAtDouble < straightThrough,
-			$"Expected the sped-up remainder ({remainderAtDouble}) to be shorter than a normal-speed play ({straightThrough}).");
+			total < straightThrough,
+			$"Expected the sped-up play ({total}) to be shorter than a normal-speed play ({straightThrough}).");
+	}
+
+	[Fact]
+	public async Task A_speed_change_does_not_rewind_the_file()
+	{
+		using var player = NewPlayer();
+		await player.PlayAsync(WriteTone("no-rewind.wav"));
+		var provider = Assert.IsAssignableFrom<IWaveProvider>(Assert.Single(_devices).Provider);
+
+		Assert.True(DrainByteCount(provider) > 0);
+
+		player.Speed = 2.0;
+
+		// The file has already been played to its end. If changing speed rebuilt or rewound the
+		// chain, there would be a second copy of the recording waiting here — the user would
+		// hear it start again from the top on every speed change.
+		Assert.Equal(0, DrainByteCount(provider));
 	}
 
 	[Theory]
@@ -141,7 +162,6 @@ public class AudioPlayerSpeedTests : IDisposable
 		player.Speed = requested;
 
 		Assert.Equal(expected, player.Speed);
-		Assert.Contains(player.Speed, PlaybackSpeedOptions.Speeds);
 	}
 
 	[Fact]
@@ -164,22 +184,29 @@ public class AudioPlayerSpeedTests : IDisposable
 		_devices.Clear();
 		long normal = await PlayAndMeasureAsync(1.0);
 
-		Assert.InRange(second, normal * 0.4, normal * 0.6);
+		AssertRatio(second, normal, 0.5);
 	}
 
 	[Fact]
-	public async Task A_speed_set_after_playback_ends_is_kept_for_the_next_file()
+	public async Task A_speed_set_after_playback_ends_still_applies_to_the_next_file()
 	{
 		using var player = NewPlayer();
 		await player.PlayAsync(WriteTone("ended.wav"));
+		Assert.Single(_devices).RaisePlaybackStopped();
 
-		var device = Assert.Single(_devices);
-		device.RaisePlaybackStopped();
-
-		// The chain is gone; the setting is not. Setting it must not throw against a torn-down
-		// provider, and must still apply to whatever is played next.
+		// The chain has been torn down by the end of the file, so there is no provider to
+		// retune. Setting the speed here must not throw, and must still be waiting when the
+		// next recording is played.
 		player.Speed = 0.5;
-
 		Assert.Equal(0.5, player.Speed);
+
+		_devices.Clear();
+		await player.PlayAsync(WriteTone("next.wav"));
+		long atHalf = DrainByteCount(Assert.IsAssignableFrom<IWaveProvider>(Assert.Single(_devices).Provider));
+
+		_devices.Clear();
+		long normal = await PlayAndMeasureAsync(1.0);
+
+		AssertRatio(atHalf, normal, 2.0);
 	}
 }

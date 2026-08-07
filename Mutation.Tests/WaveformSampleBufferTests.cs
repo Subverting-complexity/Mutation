@@ -194,9 +194,35 @@ public class WaveformSampleBufferTests
 	}
 
 	[Fact]
+	public void A_write_needs_something_to_write()
+	{
+		var buffer = new WaveformSampleBuffer(4);
+
+		Assert.Throws<ArgumentNullException>(() => buffer.Write(null!, 4));
+	}
+
+	[Fact]
+	public void MeasureLevels_needs_a_window_to_measure()
+	{
+		Assert.Throws<ArgumentNullException>(() => WaveformSampleBuffer.MeasureLevels(null!, 4));
+	}
+
+	[Fact]
 	public void MeasureLevels_reports_zero_for_a_window_with_no_audio_in_it()
 	{
 		var levels = WaveformSampleBuffer.MeasureLevels(new double[4], validSamples: 0);
+
+		Assert.Equal(0, levels.Peak);
+		Assert.Equal(0, levels.Rms);
+	}
+
+	[Fact]
+	public void MeasureLevels_reports_zero_for_a_window_that_no_longer_exists()
+	{
+		// The shape left behind after the controller is disposed. The old code guarded on the
+		// render buffer being empty; the guard has to survive the extraction or a disposed
+		// visualization divides by zero on its next frame.
+		var levels = WaveformSampleBuffer.MeasureLevels(Array.Empty<double>(), validSamples: 4);
 
 		Assert.Equal(0, levels.Peak);
 		Assert.Equal(0, levels.Rms);

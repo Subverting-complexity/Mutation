@@ -1,4 +1,4 @@
-using CognitiveSupport;
+﻿using CognitiveSupport;
 using Microsoft.UI.Xaml;
 using Mutation.Ui.Core;
 using System;
@@ -95,14 +95,10 @@ public class HotkeyManager : IDisposable
 	[DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 	[DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 	[DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
-	[DllImport("user32.dll")] static extern uint MapVirtualKey(uint uCode, uint uMapType);
-
-	private const uint MAPVK_VK_TO_VSC = 0x0;
 
 	private const int INPUT_KEYBOARD = 1;
 	private const uint KEYEVENTF_KEYUP = 0x0002;
 	private const uint KEYEVENTF_UNICODE = 0x0004;
-	private const uint KEYEVENTF_SCANCODE = 0x0008;
 	private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -272,7 +268,7 @@ public class HotkeyManager : IDisposable
 
         public void ClearPromptHotkeys()
         {
-                _registrations.ClearGroup(HotkeyRegistrationTable.HotkeyGroup.Prompt);
+            _registrations.ClearGroup(HotkeyRegistrationTable.HotkeyGroup.Prompt);
         }
 
         public void UnregisterAll()

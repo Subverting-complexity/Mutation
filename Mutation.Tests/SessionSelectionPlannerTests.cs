@@ -87,6 +87,41 @@ public class SessionSelectionPlannerTests
 	}
 
 	[Fact]
+	public void A_preferred_path_that_has_been_deleted_falls_back_to_the_newest_even_when_something_is_selected()
+	{
+		var deleted = Session("deleted.ogg");
+		var newest = Session("newest.ogg");
+
+		var chosen = SessionSelectionPlanner.ChooseSelection(
+			List(newest, Session("older.ogg")),
+			currentSelection: deleted,
+			preferredPath: deleted.FilePath);
+
+		// The path AudioSessionManager actually takes: NavigateSessionsAsync always passes the
+		// current selection as the preferred one, so when retention cleanup has removed that
+		// file, the lookup misses and the fallback has to run rather than leaving the deleted
+		// recording selected.
+		Assert.Same(newest, chosen);
+	}
+
+	[Fact]
+	public void A_preferred_path_that_has_been_deleted_selects_nothing_when_the_list_is_now_empty()
+	{
+		var deleted = Session("deleted.ogg");
+
+		var chosen = SessionSelectionPlanner.ChooseSelection(List(), deleted, deleted.FilePath);
+
+		Assert.Null(chosen);
+	}
+
+	[Fact]
+	public void ChooseSelection_refuses_a_missing_session_list()
+	{
+		Assert.Throws<ArgumentNullException>(() =>
+			SessionSelectionPlanner.ChooseSelection(null!, null, null));
+	}
+
+	[Fact]
 	public void A_preferred_path_is_matched_however_it_is_spelled()
 	{
 		var session = Session("Recording.ogg");
@@ -209,6 +244,17 @@ public class SessionSelectionPlannerTests
 	{
 		Assert.Null(SessionSelectionPlanner.NextIndex(count: 1, currentIndex: 0, direction: 1));
 		Assert.Null(SessionSelectionPlanner.NextIndex(count: 1, currentIndex: 0, direction: -1));
+	}
+
+	[Theory]
+	[InlineData(-1)]
+	[InlineData(1)]
+	public void An_index_past_the_end_of_the_list_stops_rather_than_selecting_out_of_range(int direction)
+	{
+		// A selection index that outran the list would otherwise index past the end. Refusing
+		// the move is the safe answer, even though it means navigation goes quiet until the
+		// selection is re-established.
+		Assert.Null(SessionSelectionPlanner.NextIndex(count: 3, currentIndex: 7, direction));
 	}
 
 	[Fact]
