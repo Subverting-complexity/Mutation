@@ -2235,7 +2235,11 @@ public sealed partial class MainWindow : Window, IDisposable
         var session = _audioSessionManager.SelectedSession;
         bool hasRecording = session != null && File.Exists(session.FilePath);
         bool busy = _audioSessionManager.IsRecording || _audioSessionManager.IsTranscribing;
-        bool isPlaying = _audioSessionManager.IsPlaying;
+        // Asked of the session rather than the speakers: a long recording spends seconds
+        // decoding before it is audible, and during that window the Play button is already a
+        // Stop button. Reading IsPlaying here left Retry and Upload announced as available for
+        // the whole of that stretch.
+        bool isPlaying = _audioSessionManager.IsPlaybackActive;
 
         BtnPlayLatestRecording.IsEnabled = isPlaying || (hasRecording && !busy);
         BtnRetrySpeechToText.IsEnabled = session != null && _activeSpeechService != null && !busy && !isPlaying;

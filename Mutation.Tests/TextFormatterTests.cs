@@ -189,6 +189,10 @@ public class TextFormatterTests
 	[Theory]
 	[InlineData("back in the nineties we did", "nineties", "'90s", "back in the '90s we did")]
 	[InlineData("he said quoted thing today", "quoted thing", "'quoted thing'", "he said 'quoted thing' today")]
+	// "'em" and "'n" open with an apostrophe and are two letters long, but they are whole
+	// words — "give it to 'em", not "give it to'em".
+	[InlineData("give it to them today", "them", "'em", "give it to 'em today")]
+	[InlineData("fish and chips please", "and", "'n", "fish 'n chips please")]
 	public void FormatWithRule_Smart_WordOpeningWithAnApostrophe_KeepsTheGap(
 		string input, string find, string replaceWith, string expected)
 	{

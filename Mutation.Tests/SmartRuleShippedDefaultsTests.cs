@@ -5,13 +5,20 @@ using static CognitiveSupport.TranscriptFormatRule;
 namespace Mutation.Tests;
 
 /// <summary>
-/// Pins the output of every Smart rule Mutation seeds into a new settings file. Issue #293
-/// required that teaching the formatter which side a symbol attaches to leave these
+/// A before-and-after pin on the Smart rules Mutation seeds into a new settings file. Issue
+/// #293 required that teaching the formatter which side a symbol attaches to leave these
 /// byte-identical, and they are the rules almost every user is actually running.
 /// <para>
-/// The expectations here were taken from the behaviour before the change, so a future edit to
-/// the classification that shifts one of them fails here rather than in someone's transcript.
-/// Keep this list in step with the seeding in <c>SettingsManager</c>.
+/// This is a pin, not a check of the classification: every one of these rules falls into a
+/// shape the classes cannot move — either it carries no classifiable punctuation at all, or it
+/// supplies its own trailing space, which suppresses the side that changed. That is exactly
+/// why they are safe, and why emptying the class lists would not fail anything here.
+/// <see cref="SymbolAttachmentsTests"/> and the symbol cases in <see cref="TextFormatterTests"/>
+/// are what cover the classification itself.
+/// </para>
+/// <para>
+/// The find/replace pairs are copied from the seeding in <c>SettingsManager</c> rather than
+/// read from it, so a rule added there needs a line added here.
 /// </para>
 /// </summary>
 public class SmartRuleShippedDefaultsTests

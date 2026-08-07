@@ -191,7 +191,7 @@ footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); colo
 </tbody>
 </table>
 </div>
-<p>Anything it does not recognise joins both sides, which is the safe answer for a symbol. Straight quote marks (<code>&quot;</code> and <code>'</code>) are left alone on purpose, because they do not say whether they open or close.</p>
+<p>Anything it does not recognise joins both sides, which is the safe answer for a symbol. Quote marks are left alone on purpose. A straight <code>&quot;</code> or <code>'</code> does not say whether it opens or closes, and the curly <code>’</code> is also the apostrophe in &quot;John’s&quot;, so guessing would get it wrong as often as right.</p>
 <p>An ending like <code>'s</code> or <code>'re</code> also goes tight against the word before it, so a rule replacing &quot;apostrophe s&quot; with <code>'s</code> gives you &quot;Jacques's&quot; rather than &quot;Jacques 's&quot;. Longer replacements that happen to start with an apostrophe — <code>'90s</code>, or a quoted phrase — are treated as ordinary words and keep their space.</p>
 <p><strong>RegEx</strong> treats the Find box as a pattern written in a special pattern language for advanced users. If you do not know what this is, you do not need it. (If a pattern is malformed, Mutation shows the error in red under the row so you can fix it.)</p>
 <hr />

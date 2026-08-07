@@ -282,28 +282,25 @@ public static class TextFormatter
 	}
 
 	/// <summary>
-	/// Whether the replacement is an English suffix: an apostrophe and the one or two letters
-	/// that follow it, and nothing else — "'s", "'re", "'ll", "'ve". A possessive belongs
-	/// against the thing it possesses ("Jacques's", never "Jacques 's").
+	/// The endings that belong to the word in front of them rather than a space away from it:
+	/// the possessive and the English contractions. "Jacques's", never "Jacques 's".
 	/// <para>
-	/// Deliberately narrow. "Starts with an apostrophe" would catch a decade — "nineties" →
-	/// "'90s" — and weld it to the word before, and it would catch a quoting rule such as
-	/// "'quoted'" too. Those are words, and words keep their gap.
+	/// Spelled out rather than described as "an apostrophe and a letter or two", because that
+	/// description also covers "'em" and "'n", which are whole words and want their gap. And
+	/// "starts with an apostrophe" — the first attempt — covered a decade ("nineties" →
+	/// "'90s") and any quoted phrase as well.
 	/// </para>
 	/// </summary>
+	private static readonly string[] WordSuffixes = { "s", "d", "m", "t", "ll", "re", "ve" };
+
 	private static bool IsWordSuffix(string replaceWith)
 	{
-		if (replaceWith.Length is < 2 or > 3)
+		if (replaceWith.Length < 2 || replaceWith[0] is not ('\'' or '’'))
 			return false;
 
-		if (replaceWith[0] is not ('\'' or '’'))
-			return false;
+		string ending = replaceWith[1..];
 
-		for (int index = 1; index < replaceWith.Length; index++)
-			if (!char.IsLetter(replaceWith[index]))
-				return false;
-
-		return true;
+		return WordSuffixes.Contains(ending, StringComparer.OrdinalIgnoreCase);
 	}
 
 	private static bool IsSentencePunctuation(char value) =>

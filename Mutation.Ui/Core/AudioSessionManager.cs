@@ -56,7 +56,15 @@ public class AudioSessionManager : IDisposable
         }
     }
 
-    public bool IsPlaying => _playbackPlayer.IsPlaying;
+    /// <summary>
+    /// Whether a recording is playing <em>or on its way there</em>. Decoding happens off the
+    /// UI thread now, so there are seconds between the user pressing Play and
+    /// <see cref="IsPlaying"/> becoming true — and for that whole window the session is
+    /// committed and the Play button is a Stop button. Anything deciding what to enable
+    /// during playback wants this, not <see cref="IsPlaying"/>, or it leaves controls live
+    /// for exactly the stretch this feature exists to make usable.
+    /// </summary>
+    public bool IsPlaybackActive => _playingSession != null;
     public bool IsRecording => _speechManager.Recording;
     public bool IsTranscribing => _speechManager.Transcribing;
 
@@ -476,13 +484,6 @@ public class AudioSessionManager : IDisposable
             }
 
             await playback.ConfigureAwait(true);
-
-            // The same state, re-asserted now that the audio is actually running. The handler
-            // reads IsPlaying to decide what stays enabled while a recording plays, and at the
-            // point PlaybackStarted was first raised the decode had not finished, so it read
-            // false and left Retry and Upload enabled for the whole of playback.
-            if (IsStillPlaying(session))
-                PlaybackStarted?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {

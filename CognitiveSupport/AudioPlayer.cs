@@ -107,16 +107,22 @@ public class AudioPlayer : IDisposable
         }
         catch (Exception ex)
         {
-            prepared?.Dispose();
-
-            // A superseded request stays quiet and touches nothing. The player belongs to a
-            // newer file by now, and Stop here would cut off audio that is already playing
-            // while PlaybackFailed pops an error dialog about a file the user has moved on
-            // from — the failing decode is seconds behind the request that replaced it.
+            // A superseded request stays quiet and touches nothing but its own work. The
+            // player belongs to a newer file by now, and Stop here would cut off audio that is
+            // already playing while PlaybackFailed pops an error dialog about a file the user
+            // moved on from — the failing decode is seconds behind the request that replaced
+            // it.
             if (!IsCurrent(generation))
+            {
+                prepared?.Dispose();
                 return;
+            }
 
+            // Stop first, then release the buffers. StartPlayback can throw after it has
+            // published the source and attached the output device, and disposing the stream
+            // the device is reading from before detaching the device is the wrong order.
             Stop();
+            prepared?.Dispose();
             PlaybackFailed?.Invoke(this, $"Playback failed: {ex.Message}");
         }
     }

@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CognitiveSupport;
+using Concentus.Enums;
+using Concentus.Oggfile;
+using Concentus.Structs;
 
 namespace Mutation.Tests;
 
@@ -39,6 +43,39 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 		string path = Path.Combine(_workingDirectory, fileName);
 		File.WriteAllBytes(path, BeepToneSynthesizer.SynthesizeWav(new[] { (440, 200) }));
 		return path;
+	}
+
+	/// <summary>
+	/// A real Ogg/Opus file carrying its two header pages and no audio — what a recording
+	/// interrupted before it captured anything leaves on disk. It decodes to zero samples,
+	/// which is the only way to reach the "no audio data" branch that decides what a
+	/// superseded empty decode is allowed to say.
+	/// </summary>
+	private string WriteHeadersOnlyOgg(string fileName)
+	{
+		using var complete = new MemoryStream();
+#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 requires the concrete OpusEncoder type.
+		var encoder = new OpusEncoder(48000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
+#pragma warning restore CS0618
+		// Finish pads the part-filled buffer out and encodes it, so even a stream nothing was
+		// written to ends up with one frame of silence. The audio starts at the third page.
+		new OpusOggWriteStream(encoder, complete, new OpusTags()).Finish();
+
+		byte[] bytes = complete.ToArray();
+		int audioPage = PageOffsets(bytes).Skip(2).First();
+
+		string path = Path.Combine(_workingDirectory, fileName);
+		File.WriteAllBytes(path, bytes[..audioPage]);
+		return path;
+	}
+
+	/// <summary>Where each Ogg page starts: every "OggS" capture pattern in the file.</summary>
+	private static IEnumerable<int> PageOffsets(byte[] bytes)
+	{
+		for (int index = 0; index + 3 < bytes.Length; index++)
+			if (bytes[index] == (byte)'O' && bytes[index + 1] == (byte)'g'
+				&& bytes[index + 2] == (byte)'g' && bytes[index + 3] == (byte)'S')
+				yield return index;
 	}
 
 	private AudioPlayer NewPlayer(Action<string>? beforePrepare = null)
@@ -136,6 +173,45 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 		Assert.Equal(0, current.DisposeCount);
 		Assert.True(player.IsPlaying);
 		Assert.Null(failure);
+	}
+
+	// A file that decodes to nothing is reported, not started.
+	[Fact]
+	public async Task PlayAsync_reports_a_file_that_holds_no_audio()
+	{
+		using var player = NewPlayer();
+		string? failure = null;
+		player.PlaybackFailed += (_, message) => failure = message;
+
+		await player.PlayAsync(WriteHeadersOnlyOgg("empty.ogg"));
+
+		Assert.Equal("No audio data found in file.", failure);
+		Assert.Empty(_devices);
+	}
+
+	// ...and once superseded it is not reported either, for the same reason a failing stale
+	// decode is not: the message would stop the recording that is playing now.
+	[Fact]
+	public async Task A_stale_decode_that_holds_no_audio_says_nothing()
+	{
+		using var gate = new DecodeGate();
+		using var player = NewPlayer(gate.Wait);
+		string? failure = null;
+		player.PlaybackFailed += (_, message) => failure = message;
+
+		Task stale = player.PlayAsync(WriteHeadersOnlyOgg("stale-empty.ogg"));
+		gate.WaitUntilDecodeStarted();
+
+		gate.LetTheNextOneThrough();
+		await player.PlayAsync(WriteWav("current.wav"));
+		FakeAudioOutputDevice current = Assert.Single(_devices);
+
+		gate.Release();
+		await stale;
+
+		Assert.Null(failure);
+		Assert.True(current.IsPlaying);
+		Assert.Equal(0, current.DisposeCount);
 	}
 
 	// Superseding is per-request, not a latch: the next Play after a Stop still plays.

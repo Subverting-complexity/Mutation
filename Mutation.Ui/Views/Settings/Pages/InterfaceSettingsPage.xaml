@@ -44,7 +44,7 @@
 				<ComboBox x:Name="CmbDictationInsert"
 						  AutomationProperties.Name="Dictation insert preference"
 						  AutomationProperties.HelpText="{StaticResource Help.Interface.DictationInsert}"
-						  Width="220"
+						  MinWidth="220"
 						  SelectionChanged="CmbDictationInsert_SelectionChanged" />
 				<Button x:Name="BtnResetDictation" Click="BtnResetDictation_Click"
 						AutomationProperties.Name="Reset dictation insert preference">

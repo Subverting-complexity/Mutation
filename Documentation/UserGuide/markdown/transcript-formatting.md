@@ -38,7 +38,7 @@ Smart also knows that different symbols sit differently in a sentence. If you re
 | An opening symbol, like `#` `(` `[` `$` | Tight against the word after it | "issue hash 42" becomes "issue #42" |
 | A joining symbol, like `-` `/` `_` `@` | Tight against both | "and slash or" becomes "and/or" |
 
-Anything it does not recognise joins both sides, which is the safe answer for a symbol. Straight quote marks (`"` and `'`) are left alone on purpose, because they do not say whether they open or close.
+Anything it does not recognise joins both sides, which is the safe answer for a symbol. Quote marks are left alone on purpose. A straight `"` or `'` does not say whether it opens or closes, and the curly `’` is also the apostrophe in "John’s", so guessing would get it wrong as often as right.
 
 An ending like `'s` or `'re` also goes tight against the word before it, so a rule replacing "apostrophe s" with `'s` gives you "Jacques's" rather than "Jacques 's". Longer replacements that happen to start with an apostrophe — `'90s`, or a quoted phrase — are treated as ordinary words and keep their space.
 
