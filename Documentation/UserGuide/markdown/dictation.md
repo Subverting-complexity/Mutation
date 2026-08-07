@@ -55,13 +55,13 @@ Which prompt runs is up to you: it's the one you have marked as **Auto-Run**. Se
 
 The AI step happens after the transcription, and it can take a lot longer. If the
 service is down, Mutation keeps trying — giving each attempt a longer window than the
-last — for about **ten minutes** before it gives up, or up to twenty if the prompt
-asked for Fast mode. So this is the wait you are most likely to want out of.
+last — for about **ten minutes** before it gives up. So this is the wait you are most
+likely to want out of.
 
-While it runs, the **Raw Transcript** box reads "Processing with LLM...", and both
-**Record** and **Record and Format** stay available, renamed to **Stop LLM
-processing**. Press either button, or press **Shift+Alt+I** or **Shift+Alt+U** again.
-Any of those gives up on the AI step.
+While it runs, the **Raw Transcript** box reads "Processing with LLM..." — LLM is just
+the app's short name for the AI. Both **Record** and **Record and Format** stay
+available, renamed to **Stop LLM processing**. Press either button, or press
+**Shift+Alt+I** or **Shift+Alt+U** again. Any of those gives up on the AI step.
 
 You hear the failure beep and "Cancelling LLM processing..." Then, once the request has
 let go, the success beep and "LLM processing cancelled. Transcript ready." Press again

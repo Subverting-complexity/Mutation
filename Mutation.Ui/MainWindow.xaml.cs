@@ -2080,6 +2080,17 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Nothing to run into, and nothing left to announce it on.
 			if (_isClosing) return;
 
+			// The dictation flow owns its own slot, and both write the Formatted Transcript
+			// box and paste into the focused app. Starting a prompt on top of a dictation's
+			// model call gave two concurrent requests fighting over both. Refused rather
+			// than cancelled: that call belongs to a different flow the user started
+			// deliberately, and the record buttons are right there offering to stop it.
+			if (_audioSessionManager.IsProcessingWithLlm)
+			{
+				ShowStatus("Processing", "Still finishing the dictation's LLM step — try again shortly.", InfoBarSeverity.Warning);
+				return;
+			}
+
 			// A press while a request is in flight means "stop", not "run another". A model
 			// call can take minutes — the retry ladder escalates its timeout on every
 			// attempt — so without this the user had no way out of it (issue #256). Checked
@@ -2108,7 +2119,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 
 			BeepPlayer.Play(BeepType.Start);
-			TxtFormatTranscript.Text = "Processing...";
+			TxtFormatTranscript.Text = ProcessingPlaceholder;
 
 			// Claimed here, before the first await, so two presses in quick succession
 			// cannot both get past the guard above and then fight over the slot — the
@@ -2125,7 +2136,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (string.IsNullOrWhiteSpace(raw))
 			{
 				ShowStatus("Processing", "Clipboard is empty.", InfoBarSeverity.Warning);
-				TxtFormatTranscript.Text = string.Empty;
+				ClearProcessingPlaceholder();
 				return;
 			}
 
@@ -2177,7 +2188,7 @@ public sealed partial class MainWindow : Window, IDisposable
              // Asked for, not a failure: no error dialog, and the "Processing..."
              // placeholder is taken back out of the box rather than left standing there
              // telling a screen-reader user work is still running (issue #295).
-             TxtFormatTranscript.Text = string.Empty;
+             ClearProcessingPlaceholder();
              ShowStatus("Processing", CancellationMessages.LlmCompleted, InfoBarSeverity.Informational);
         }
         catch (Exception ex)
@@ -2187,12 +2198,29 @@ public sealed partial class MainWindow : Window, IDisposable
              // the error dialog, the Error severity and the log entry it has always had.
              // Reading it as the user's own cancel is how a dead provider came to be
              // reported as something they had asked for, silently.
+             //
+             // Only the placeholder is cleared. This catch also covers everything after the
+             // result lands in the box — the paste injection, the beep, the automation peer
+             // ShowStatus builds (the throw #234 was filed about) — and clearing
+             // unconditionally would take a result the user had waited minutes for and
+             // leave them an empty box and an error.
+             ClearProcessingPlaceholder();
              // ShowErrorDialog logs it; a second call here would duplicate the entry.
-             TxtFormatTranscript.Text = string.Empty;
              ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }
+
+    // Takes the "Processing..." placeholder back out of the box, and only that. Left
+    // standing it tells a screen-reader user work is still running (issue #295); cleared
+    // blindly it would throw away a result that had already been delivered into the box.
+    private void ClearProcessingPlaceholder()
+    {
+        if (TxtFormatTranscript.Text == ProcessingPlaceholder)
+            TxtFormatTranscript.Text = string.Empty;
+    }
+
+    private const string ProcessingPlaceholder = "Processing...";
 
     // Names the prompt that is being stopped. Pressing prompt B's shortcut while prompt A
     // is in flight stops A — there is one slot — and without the name a blind user is left
@@ -2300,7 +2328,13 @@ public sealed partial class MainWindow : Window, IDisposable
         
         bool canMoveNewer = hasSessions && index > 0;
         bool canMoveOlder = hasSessions && index >= 0 && index < _audioSessionManager.SessionHistory.Count - 1;
-        bool busy = _audioSessionManager.IsRecording || _audioSessionManager.IsTranscribing;
+        // IsProcessingWithLlm counts as busy here, and it has to: the audio session refuses
+        // to navigate during the model call, and a button announced as available that does
+        // nothing at all reads to a screen-reader user as a dead control. The model call is
+        // the longest wait in the flow, so this is not a window anyone tabs past quickly.
+        bool busy = _audioSessionManager.IsRecording
+            || _audioSessionManager.IsTranscribing
+            || _audioSessionManager.IsProcessingWithLlm;
 
         BtnSessionNewer.IsEnabled = canMoveNewer && !busy;
         BtnSessionOlder.IsEnabled = canMoveOlder && !busy;
@@ -2317,7 +2351,12 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         var session = _audioSessionManager.SelectedSession;
         bool hasRecording = session != null && File.Exists(session.FilePath);
-        bool busy = _audioSessionManager.IsRecording || _audioSessionManager.IsTranscribing;
+        // Same reason as UpdateSessionNavigationAvailability: Retry and Upload both refuse
+        // during the model call, so leaving them enabled offered the user an action that
+        // could only answer "finish the current operation first".
+        bool busy = _audioSessionManager.IsRecording
+            || _audioSessionManager.IsTranscribing
+            || _audioSessionManager.IsProcessingWithLlm;
         // Asked of the session rather than the speakers: a long recording spends seconds
         // decoding before it is audible, and during that window the Play button is already a
         // Stop button. Reading IsPlaying here left Retry and Upload announced as available for

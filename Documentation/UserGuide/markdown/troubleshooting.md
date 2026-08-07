@@ -90,14 +90,19 @@ and the pieces are joined back in the order you recorded them.
 4. If your service accepts larger uploads than OpenAI does, raise the number, or set
    it to 0 to never split.
 
-### An AI prompt seems stuck on "Processing with LLM..."
+### The AI seems stuck on "Processing..."
 
 **What's happening.** The AI runs over the internet too, and Mutation retries a failed
-request, giving each attempt a longer window than the last. Unlike transcription, the
-retries are silent — there is no beep per attempt — so a long wait sounds exactly like
-nothing happening. With the standard settings an AI service that has gone down keeps
-Mutation waiting about **ten minutes**, or up to twenty if the prompt asked for Fast
-mode. Nothing is broken; it is still trying.
+request, giving each attempt a longer window than the last. The retries are silent, so a
+long wait sounds exactly like nothing happening. With the standard settings an AI service
+that has gone down keeps Mutation waiting about **ten minutes** before it admits defeat —
+and up to twenty if the prompt asked for Fast mode and the service turns it away for being
+busy, because Mutation then tries the whole thing again at normal speed. Nothing is broken;
+it is still trying.
+
+A prompt you started yourself puts "Processing..." in the **Formatted Transcript** box. The
+AI step after a dictation says "Processing with LLM..." in the **Raw Transcript** box
+instead.
 
 **What to do.**
 
@@ -108,9 +113,9 @@ mode. Nothing is broken; it is still trying.
 2. Listen for the two messages. "Cancelling LLM processing..." means your press landed;
    "LLM processing cancelled." means the request has actually let go. In between, a
    further press answers "Already stopping." rather than doing anything new.
-3. Cancelling a dictation's AI step keeps the dictation. You hear "LLM processing
-   cancelled. Transcript ready." and your words are in both boxes and on the clipboard
-   — you lose the tidying up, never what you said.
+3. Cancelling a dictation's AI step keeps the dictation. You hear the success beep and
+   "LLM processing cancelled. Transcript ready.", and your words are in both boxes and on
+   the clipboard — you lose the tidying up, never what you said.
 4. Closing the Mutation window also stops an AI request, so you never have to wait for
    one to finish before you can quit.
 5. If it happens often, lower **Request timeout** or **Retries** under **AI

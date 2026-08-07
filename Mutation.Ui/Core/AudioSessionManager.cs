@@ -176,8 +176,13 @@ public class AudioSessionManager : IDisposable
     {
         // IsProcessingWithLlm included: stepping to another session during the model call
         // would move the selection out from under the transcript it is about to deliver.
+        // Answered rather than returning in silence — the buttons are disabled for this
+        // stretch, but a caller that gets here anyway deserves a reason.
         if (IsRecording || IsTranscribing || IsProcessingWithLlm)
+        {
+            StatusMessage?.Invoke(this, "Finish the current operation before changing sessions.");
             return;
+        }
 
         RefreshSessions(preferredSelection: SelectedSession);
 
@@ -441,8 +446,6 @@ public class AudioSessionManager : IDisposable
         }
     }
 
-    private const string TranscriptDeliveredMessage = "Transcript ready and copied.";
-
     private async Task ProcessTranscriptAsync(string text, LlmSettings.LlmPrompt? llmPrompt, CancellationToken cancellationToken)
     {
         // Always run rules-based formatting first
@@ -459,11 +462,6 @@ public class AudioSessionManager : IDisposable
             try
             {
                 StatusMessage?.Invoke(this, "Processing with LLM...");
-                // Its own activity, so the window stops naming the step that has already
-                // finished and the button that started this can offer to stop it. Raised
-                // before the call and corrected by the finally in StartStopRecordingAsync,
-                // which is still the only place a terminal state comes from.
-                StateChanged?.Invoke(this, RecordingActivity.ProcessingWithLlm);
                 string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
                 ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}, fastMode={llmPrompt.FastMode}).");
                 var requestOptions = new LlmRequestOptions
@@ -476,6 +474,13 @@ public class AudioSessionManager : IDisposable
                 // releases the slot only while this run still owns it.
                 using var run = _llmOperation.Begin(cancellationToken);
                 llmToken = run.Token;
+                // Its own activity, so the window stops naming the step that has already
+                // finished and the buttons that started this can offer to stop it. Raised
+                // after the slot is claimed — the handler asks IsProcessingWithLlm to decide
+                // what to enable, and it has to be true by the time that question is put.
+                // Corrected by the finally in StartStopRecordingAsync, still the only place
+                // a terminal state comes from.
+                StateChanged?.Invoke(this, RecordingActivity.ProcessingWithLlm);
                 // Pass the rules-formatted text to the LLM
                 llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName, requestOptions, run.Token);
             }
@@ -520,7 +525,11 @@ public class AudioSessionManager : IDisposable
         // FinalizeTranscript does not re-apply rules to LLM output. The cancel rides along
         // rather than being announced here, for the same reason the Fast mode notice does.
         TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText, fastModeNotice, llmCancelled));
-        StatusMessage?.Invoke(this, TranscriptDeliveredMessage);
+        // No delivery announcement from here. The handler that delivers the transcript
+        // raises its own, and it is the side that knows whether the text actually landed —
+        // raising one here too meant the user heard the delivery announced twice, and left
+        // a race for which of the two came last. When the model step was cancelled, losing
+        // that race meant losing the cancel confirmation folded into the other one.
     }
 
     /// <summary>
