@@ -34,11 +34,10 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	private readonly SingleTimerSlot<DispatcherQueueTimer> _waveformTimer;
 	private WaveInEvent? _waveformCapture;
 	private Signal? _waveformSignal;
-	private double[] _waveformBuffer = Array.Empty<double>();
-	private double[] _waveformRenderBuffer = Array.Empty<double>();
-	private int _waveformBufferIndex;
-	private bool _waveformBufferFilled;
-	private readonly object _waveformBufferLock = new();
+
+	// Null until Initialize() runs, and again after Dispose() — the capture callback and the
+	// render tick both check it rather than inspecting array lengths.
+	private WaveformSampleBuffer? _samples;
 	private double _waveformPeak;
 	private double _waveformRms;
 	private double _waveformPulse;
@@ -89,14 +88,11 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	public void Initialize()
 	{
-		_waveformBuffer = new double[WaveformWindowSampleCount];
-		_waveformRenderBuffer = new double[WaveformWindowSampleCount];
-		_waveformBufferIndex = 0;
-		_waveformBufferFilled = false;
+		_samples = new WaveformSampleBuffer(WaveformWindowSampleCount);
 
 		var plot = _waveformPlot.Plot;
 		plot.Clear();
-		_waveformSignal = plot.Add.Signal(_waveformRenderBuffer);
+		_waveformSignal = plot.Add.Signal(_samples.RenderBuffer);
 		plot.Axes.SetLimitsX(0, Math.Max(1, WaveformWindowSampleCount - 1));
 		plot.Axes.SetLimitsY(-1, 1);
 		plot.HideGrid();
@@ -112,20 +108,12 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	public void StartCapture()
 	{
-		if (_waveformRenderBuffer.Length == 0)
+		if (_samples is null)
 			return;
 
 		StopCapture();
 
-		lock (_waveformBufferLock)
-		{
-			if (_waveformBuffer.Length > 0)
-				Array.Clear(_waveformBuffer, 0, _waveformBuffer.Length);
-			if (_waveformRenderBuffer.Length > 0)
-				Array.Clear(_waveformRenderBuffer, 0, _waveformRenderBuffer.Length);
-			_waveformBufferIndex = 0;
-			_waveformBufferFilled = false;
-		}
+		_samples.Reset();
 
 		// Render the reset-to-flat state once even before the first samples arrive.
 		_waveformRenderGate.MarkDataArrived();
@@ -226,10 +214,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		_waveformTimer.Stop();
 
 		_waveformSignal = null;
-		_waveformBuffer = Array.Empty<double>();
-		_waveformRenderBuffer = Array.Empty<double>();
-		_waveformBufferIndex = 0;
-		_waveformBufferFilled = false;
+		_samples = null;
 	}
 
 	private void WaveformTimer_Tick(DispatcherQueueTimer sender, object args)
@@ -260,75 +245,23 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		if (!_waveformRenderGate.ConsumeShouldRender())
 			return;
 
-		int validSamples = PopulateWaveformRenderBuffer();
+		if (_samples is null)
+			return;
 
-		double peak = 0;
-		double sumSquares = 0;
-		if (validSamples > 0)
-		{
-			int samplesToProcess = Math.Min(validSamples, _waveformRenderBuffer.Length);
-			int startIndex = _waveformRenderBuffer.Length - samplesToProcess;
-			for (int i = startIndex; i < _waveformRenderBuffer.Length; i++)
-			{
-				double value = _waveformRenderBuffer[i];
-				double abs = Math.Abs(value);
-				if (abs > peak)
-					peak = abs;
-				sumSquares += value * value;
-			}
-			_waveformRms = Math.Sqrt(sumSquares / Math.Max(1, samplesToProcess));
-		}
-		else
-		{
-			_waveformRms = 0;
-		}
+		int validSamples = _samples.Snapshot();
+		var levels = WaveformSampleBuffer.MeasureLevels(_samples.RenderBuffer, validSamples);
 
-		_waveformPeak = peak;
+		_waveformRms = levels.Rms;
+		_waveformPeak = levels.Peak;
 
 		if (_waveformSignal != null)
 			_waveformPlot.Refresh();
 
-		UpdateMicLevelMeter(peak, _waveformRms);
+		UpdateMicLevelMeter(levels.Peak, levels.Rms);
 
-		_waveformPulse = Math.Max(_waveformPulse * 0.85, Math.Min(1.0, peak));
+		_waveformPulse = Math.Max(_waveformPulse * 0.85, Math.Min(1.0, levels.Peak));
 		if (_pulseOverlay != null)
 			_pulseOverlay.Opacity = _waveformPulse * 0.35;
-	}
-
-	private int PopulateWaveformRenderBuffer()
-	{
-		if (_waveformRenderBuffer.Length == 0 || _waveformBuffer.Length == 0)
-			return 0;
-
-		lock (_waveformBufferLock)
-		{
-			if (!_waveformBufferFilled && _waveformBufferIndex == 0)
-			{
-				Array.Clear(_waveformRenderBuffer, 0, _waveformRenderBuffer.Length);
-				return 0;
-			}
-
-			if (_waveformBufferFilled)
-			{
-				int bufferLen = _waveformRenderBuffer.Length;
-				int index = _waveformBufferIndex;
-				if (index > bufferLen)
-					index = bufferLen;
-				int tailLength = bufferLen - index;
-				if (tailLength > 0)
-					Array.Copy(_waveformBuffer, index, _waveformRenderBuffer, 0, tailLength);
-				if (index > 0)
-					Array.Copy(_waveformBuffer, 0, _waveformRenderBuffer, tailLength, index);
-				return bufferLen;
-			}
-
-			int validCount = _waveformBufferIndex;
-			int leadingZeros = _waveformRenderBuffer.Length - validCount;
-			if (leadingZeros > 0)
-				Array.Clear(_waveformRenderBuffer, 0, leadingZeros);
-			Array.Copy(_waveformBuffer, 0, _waveformRenderBuffer, Math.Max(0, leadingZeros), validCount);
-			return validCount;
-		}
 	}
 
 	private void UpdateMicLevelMeter(double peak, double rms)
@@ -351,27 +284,8 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	private void OnWaveformDataAvailable(object? sender, WaveInEventArgs e)
 	{
-		if (_waveformBuffer.Length == 0 || e.BytesRecorded <= 0)
+		if (_samples is null || _samples.Write(e.Buffer, e.BytesRecorded) == 0)
 			return;
-
-		int sampleCount = e.BytesRecorded / 2;
-		if (sampleCount <= 0)
-			return;
-
-		lock (_waveformBufferLock)
-		{
-			for (int i = 0; i < sampleCount; i++)
-			{
-				short sample = BitConverter.ToInt16(e.Buffer, i * 2);
-				double value = sample / 32768d;
-				_waveformBuffer[_waveformBufferIndex++] = value;
-				if (_waveformBufferIndex >= _waveformBuffer.Length)
-				{
-					_waveformBufferIndex = 0;
-					_waveformBufferFilled = true;
-				}
-			}
-		}
 
 		// New samples are in the ring buffer — let the next render tick draw them.
 		_waveformRenderGate.MarkDataArrived();

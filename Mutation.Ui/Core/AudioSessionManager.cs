@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -132,25 +131,9 @@ public class AudioSessionManager : IDisposable
             SessionHistory.Add(session);
         }
 
-        string? path = preferredPath;
-        if (preferredSelection != null)
-        {
-            path = preferredSelection.FilePath;
-        }
+        string? path = preferredSelection != null ? preferredSelection.FilePath : preferredPath;
 
-        if (!string.IsNullOrWhiteSpace(path))
-        {
-            SelectedSession = SessionHistory.FirstOrDefault(s => PathsEqual(s.FilePath, path));
-        }
-        
-        if (SelectedSession == null && SessionHistory.Count > 0)
-        {
-            SelectedSession = SessionHistory.FirstOrDefault();
-        }
-        else if (SessionHistory.Count == 0)
-        {
-            SelectedSession = null;
-        }
+        SelectedSession = SessionSelectionPlanner.ChooseSelection(SessionHistory, SelectedSession, path);
     }
 
     public async Task NavigateSessionsAsync(int direction)
@@ -160,15 +143,8 @@ public class AudioSessionManager : IDisposable
 
         RefreshSessions(preferredSelection: SelectedSession);
 
-        if (SessionHistory.Count == 0)
-            return;
-
         int currentIndex = SelectedSession != null ? SessionHistory.IndexOf(SelectedSession) : -1;
-        if (currentIndex < 0)
-            currentIndex = 0;
-
-        int targetIndex = direction < 0 ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= SessionHistory.Count)
+        if (SessionSelectionPlanner.NextIndex(SessionHistory.Count, currentIndex, direction) is not int targetIndex)
             return;
 
         var targetSession = SessionHistory[targetIndex];
@@ -565,10 +541,5 @@ public class AudioSessionManager : IDisposable
         }
     }
 
-    private static bool PathsEqual(string? p1, string? p2)
-    {
-        if (string.IsNullOrWhiteSpace(p1) || string.IsNullOrWhiteSpace(p2))
-            return false;
-        return string.Equals(Path.GetFullPath(p1), Path.GetFullPath(p2), StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool PathsEqual(string? p1, string? p2) => SessionSelectionPlanner.PathsEqual(p1, p2);
 }
