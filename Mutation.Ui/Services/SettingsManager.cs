@@ -19,6 +19,15 @@ internal class SettingsManager : ISettingsManager
 		Converters = new List<JsonConverter> { new StringEnumConverter() }
 	};
 
+	/// <summary>
+	/// The fields a pre-<c>Services</c> settings file kept loose on the
+	/// <c>SpeechToTextSettings</c> section, one set per single configured provider.
+	/// Their presence is what identifies such a file; <see cref="UpgradeSettings"/>
+	/// collapses them into <c>Services[0]</c> and removes them.
+	/// </summary>
+	private static readonly string[] LegacyServiceFieldNames =
+		{ "Service", "ApiKey", "BaseDomain", "ModelId", "SpeechToTextPrompt" };
+
 	public string SettingsFilePath { get; }
 	private string SettingsFileFullPath => Path.GetFullPath(SettingsFilePath);
 
@@ -256,7 +265,11 @@ internal class SettingsManager : ISettingsManager
 		}
 		foreach (var s in speechToTextSettings.Services)
 		{
-			if (s.Provider == SpeechToTextProviders.None)
+			// Undefined as well as None. A number the enum never declared reaches the
+			// switch that builds the service and throws there — outside the recovery
+			// App.OnLaunched wraps the load in, so the user gets a bare startup crash
+			// with no offer to restore their backup (issue #283).
+			if (!Enum.IsDefined(s.Provider) || s.Provider == SpeechToTextProviders.None)
 				s.Provider = SpeechToTextProviders.OpenAi;
 			// A service's ApiKey is an optional override of the root-level ApiKeys.
 			// Leave it blank by default so the central key is used unless the user
@@ -734,9 +747,36 @@ End of summary.
 				saveRequired = true;
 			}
 
-			if (speechSettings["Services"] is not JToken servicesToken || servicesToken.Type != JTokenType.Array)
+			// A section with no Services array predates the array, so the loose fields
+			// beside it are collapsed into a single synthesized service. Only do that when
+			// at least one of them is actually there: a section carrying none of them is
+			// not a legacy file at all, and synthesizing from nothing wrote a service with
+			// a blank Name and a blank Provider — which the very next deserialize then
+			// threw on, taking the whole settings file down with it (issue #283). Left
+			// alone, EnsureSettings seeds the proper OpenAI Whisper default instead.
+			bool hasServicesArray = speechSettings["Services"] is JToken servicesToken
+				&& servicesToken.Type == JTokenType.Array;
+
+			// A Services that is present but is neither an array nor null — an object left
+			// behind by half-deleting the array, say — cannot be deserialized into one
+			// either, and the throw takes the whole file with it. Drop it and let
+			// EnsureSettings seed the default, the same outcome an absent key gets.
+			if (!hasServicesArray
+				&& speechSettings["Services"] is JToken malformedServices
+				&& malformedServices.Type != JTokenType.Null)
 			{
-				string providerName = speechSettings.Value<string>("Service") ?? string.Empty;
+				speechSettings.Remove("Services");
+				saveRequired = true;
+			}
+
+			if (!hasServicesArray && LegacyServiceFieldNames.Any(name => speechSettings[name] is not null))
+			{
+				// No legacy Service to carry over means the provider is unknown, not blank.
+				// Name it what EnsureSettings would have: the OpenAI default.
+				string legacyService = speechSettings.Value<string>("Service") ?? string.Empty;
+				string providerName = string.IsNullOrWhiteSpace(legacyService)
+					? nameof(SpeechToTextProviders.OpenAi)
+					: legacyService;
 
 				JObject serviceObj = new JObject
 				{
@@ -750,11 +790,8 @@ End of summary.
 
 				JArray createdServicesArray = new JArray { serviceObj };
 
-				speechSettings.Remove("Service");
-				speechSettings.Remove("ApiKey");
-				speechSettings.Remove("BaseDomain");
-				speechSettings.Remove("ModelId");
-				speechSettings.Remove("SpeechToTextPrompt");
+				foreach (string name in LegacyServiceFieldNames)
+					speechSettings.Remove(name);
 
 				// Only seed ActiveSpeechToTextService if the typo-fix above didn't already
 				// populate it from a legacy ActiveSpeetchToTextService.
@@ -777,11 +814,23 @@ End of summary.
 			{
 				foreach (var service in servicesArray)
 				{
-					if (service["Provider"]?.ToString() == "OpenAiWhisper")
-					{
-						service["Provider"] = "OpenAi";
+					if (service["Provider"] is not JToken provider)
+						continue;
+
+					string providerText = provider.Type is JTokenType.String or JTokenType.Integer
+						? provider.ToString()
+						: string.Empty;
+
+					// Written back as the one spelling the enum actually has. That covers
+					// three faults at once: the old "OpenAiWhisper" name, a value the enum
+					// does not know (blank, null, a hand-typed name), and a value it parses
+					// but never defined — a bare number, or a comma-list, both of which
+					// Enum.TryParse accepts. The first is fatal inside the deserializer and
+					// the last is fatal later, at the switch that builds the service, past
+					// the recovery App.OnLaunched wraps the load in (issue #283).
+					service["Provider"] = NormalizeProviderName(providerText);
+					if (service["Provider"]!.ToString() != providerText)
 						saveRequired = true;
-					}
 				}
 			}
 		}
@@ -984,6 +1033,20 @@ End of summary.
 			return true;
 		}
 	}
+
+	/// <summary>
+	/// The stored provider spelled the way <see cref="SpeechToTextProviders"/> spells it,
+	/// or the OpenAI default when it names no provider the app can actually build.
+	/// <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/> alone is not enough:
+	/// it happily returns a value of 5 for "5" and 3 for "OpenAi, Deepgram", neither of
+	/// which is defined, so <see cref="Enum.IsDefined{TEnum}(TEnum)"/> has to gate it too.
+	/// </summary>
+	internal static string NormalizeProviderName(string? storedProvider) =>
+		Enum.TryParse<SpeechToTextProviders>(storedProvider, ignoreCase: true, out var provider)
+		&& Enum.IsDefined(provider)
+		&& provider != SpeechToTextProviders.None
+			? provider.ToString()
+			: nameof(SpeechToTextProviders.OpenAi);
 
 	internal static bool IsLegacyTempDirectory(string? tempDirectory)
 	{

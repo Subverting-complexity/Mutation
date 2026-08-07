@@ -22,4 +22,14 @@ public enum RecordingActivity
 
 	/// <summary>Capture is over and the audio is being turned into text.</summary>
 	Transcribing,
+
+	/// <summary>
+	/// A transcription was abandoned before it produced anything. Everything
+	/// <see cref="Idle"/> means, plus the one thing it deliberately does not do: the
+	/// "Transcribing..." placeholder is taken back out of the transcript box. Idle
+	/// leaves the box alone because the normal path has just delivered a transcript
+	/// into it — a cancel has nothing to deliver, so leaving it alone left the box
+	/// telling a screen-reader user work was still running (issue #295).
+	/// </summary>
+	Cancelled,
 }

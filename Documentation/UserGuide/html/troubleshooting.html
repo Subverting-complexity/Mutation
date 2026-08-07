@@ -419,6 +419,17 @@ naming the mapping.</p>
 <p><strong>What to do.</strong> Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong>, go to <strong>Hotkeys</strong>, and either
 fill in the missing shortcut or delete the row. A mapping with a blank side simply
 does nothing until you finish it.</p>
+<h3 id="a-speech-service-came-back-set-to-openai">A speech service came back set to OpenAI</h3>
+<p><strong>What's happening.</strong> Every speech service in the settings file records which company
+does the transcribing — OpenAI or Deepgram. If that entry is missing, blank, or
+misspelt, Mutation cannot tell which one you meant. Rather than refuse to start, it
+sets that service to OpenAI while starting up and keeps everything else you had
+configured. This normally only happens after editing the file by hand — the
+<strong>Advanced</strong> switch in <strong>Settings</strong> reveals an <strong>Open Mutation.json</strong> button that
+opens it.</p>
+<p><strong>What to do.</strong> Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong>, go to <strong>Speech to Text</strong>, and
+pick the service you actually wanted from the list. If you use Deepgram, check the
+service is set back to Deepgram before you dictate again.</p>
 <h3 id="screen-capture-appears-to-be-blocked">Screen capture appears to be blocked</h3>
 <p><strong>What's happening.</strong> Some managed work PCs disable screen capture by policy, and some
 privacy and DRM-protected windows cannot be captured at all. Mutation tests this before

@@ -239,6 +239,7 @@ public class AudioSessionManager : IDisposable
                 // and greet a stop with the start beep and "Recording..." (issue #271).
                 StateChanged?.Invoke(this, RecordingActivity.Transcribing);
 
+                bool cancelled = false;
                 try
                 {
                     // The end beep is raised from inside the stop, not from here: it has to
@@ -254,6 +255,7 @@ public class AudioSessionManager : IDisposable
                 }
                 catch (OperationCanceledException)
                 {
+                    cancelled = true;
                     StatusMessage?.Invoke(this, "Transcription cancelled.");
                 }
                 catch (NoSpeechDetectedException)
@@ -263,7 +265,11 @@ public class AudioSessionManager : IDisposable
                 }
                 finally
                 {
-                    StateChanged?.Invoke(this, RecordingActivity.Idle);
+                    // Cancelled rather than Idle when nothing was delivered, so the
+                    // "Transcribing..." placeholder is cleared instead of left standing
+                    // (issue #295). Still raised from the finally, and still exactly one
+                    // state change, so the ordering guarantees above are untouched.
+                    StateChanged?.Invoke(this, cancelled ? RecordingActivity.Cancelled : RecordingActivity.Idle);
                 }
             }
         }
@@ -315,6 +321,7 @@ public class AudioSessionManager : IDisposable
             return;
         }
 
+        bool cancelled = false;
         try
         {
             StopPlayback();
@@ -329,6 +336,7 @@ public class AudioSessionManager : IDisposable
         }
         catch (OperationCanceledException)
         {
+            cancelled = true;
             StatusMessage?.Invoke(this, "Transcription cancelled.");
         }
         catch (Exception ex)
@@ -337,7 +345,7 @@ public class AudioSessionManager : IDisposable
         }
         finally
         {
-            StateChanged?.Invoke(this, RecordingActivity.Idle);
+            StateChanged?.Invoke(this, cancelled ? RecordingActivity.Cancelled : RecordingActivity.Idle);
         }
     }
 
@@ -349,6 +357,7 @@ public class AudioSessionManager : IDisposable
             return;
         }
 
+        bool cancelled = false;
         try
         {
             StopPlayback();
@@ -364,6 +373,7 @@ public class AudioSessionManager : IDisposable
         }
         catch (OperationCanceledException)
         {
+            cancelled = true;
             StatusMessage?.Invoke(this, "Transcription cancelled.");
         }
         catch (Exception ex)
@@ -372,7 +382,7 @@ public class AudioSessionManager : IDisposable
         }
         finally
         {
-            StateChanged?.Invoke(this, RecordingActivity.Idle);
+            StateChanged?.Invoke(this, cancelled ? RecordingActivity.Cancelled : RecordingActivity.Idle);
         }
     }
 

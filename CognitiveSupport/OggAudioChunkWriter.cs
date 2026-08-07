@@ -48,14 +48,27 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 	private const long MinimumChunkSamples = SampleRate;
 
 	/// <summary>
-	/// Length of the audio in an Ogg/Opus file. This decodes the whole file, which on the
-	/// multi-hour recordings this class exists for takes real time — hence the token.
+	/// Length of the audio in an Ogg/Opus file.
+	///
+	/// The container states this outright, so that is where it is read from. Only a file
+	/// whose tail cannot be trusted to answer falls back to decoding the whole thing —
+	/// which on the multi-hour recordings this class exists for takes real time, hence
+	/// the token.
 	/// </summary>
 	public static TimeSpan MeasureDuration(string audioFilePath, CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(audioFilePath))
 			throw new ArgumentException("Audio file path cannot be empty.", nameof(audioFilePath));
 
+		// Checked before the fast path too: a caller that has already been cancelled must
+		// stop here whether or not this happens to be cheap now (see #289).
+		cancellationToken.ThrowIfCancellationRequested();
+
+		return OggStreamDuration.TryRead(audioFilePath) ?? MeasureDurationByDecoding(audioFilePath, cancellationToken);
+	}
+
+	private static TimeSpan MeasureDurationByDecoding(string audioFilePath, CancellationToken cancellationToken)
+	{
 		long samples = 0;
 		OggOpusPcmDecoder.DecodeToMonoPcm(audioFilePath, decoded =>
 		{

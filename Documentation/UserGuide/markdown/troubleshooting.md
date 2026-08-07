@@ -334,6 +334,20 @@ naming the mapping.
 fill in the missing shortcut or delete the row. A mapping with a blank side simply
 does nothing until you finish it.
 
+### A speech service came back set to OpenAI
+
+**What's happening.** Every speech service in the settings file records which company
+does the transcribing — OpenAI or Deepgram. If that entry is missing, blank, or
+misspelt, Mutation cannot tell which one you meant. Rather than refuse to start, it
+sets that service to OpenAI while starting up and keeps everything else you had
+configured. This normally only happens after editing the file by hand — the
+**Advanced** switch in **Settings** reveals an **Open Mutation.json** button that
+opens it.
+
+**What to do.** Open **Settings** with **Ctrl+Comma**, go to **Speech to Text**, and
+pick the service you actually wanted from the list. If you use Deepgram, check the
+service is set back to Deepgram before you dictate again.
+
 ### Screen capture appears to be blocked
 
 **What's happening.** Some managed work PCs disable screen capture by policy, and some

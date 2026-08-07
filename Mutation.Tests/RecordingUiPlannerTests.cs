@@ -1,3 +1,4 @@
+using System;
 using Mutation.Ui.Core;
 
 namespace Mutation.Tests;
@@ -66,11 +67,45 @@ public class RecordingUiPlannerTests
 		Assert.Null(RecordingUiPlanner.For(RecordingActivity.Idle).TranscriptText);
 	}
 
+	// Issue #295. Cancelling has no transcript to put in the box, so the box kept the
+	// "Transcribing..." the run had set — a screen reader read work as still running
+	// long after the user had heard "Transcription cancelled."
+	[Fact]
+	public void Cancelled_TakesTheTranscribingPlaceholderBackOut()
+	{
+		var plan = RecordingUiPlanner.For(RecordingActivity.Cancelled);
+
+		Assert.Equal(string.Empty, plan.TranscriptText);
+		Assert.NotEqual(RecordingUiPlanner.TranscribingPlaceholder, plan.TranscriptText);
+	}
+
+	// Clearing the box is the only thing that separates a cancel from going idle: the
+	// user is back where they started and everything must be theirs to drive again.
+	[Fact]
+	public void Cancelled_OtherwiseLooksExactlyLikeIdle()
+	{
+		var cancelled = RecordingUiPlanner.For(RecordingActivity.Cancelled);
+		var idle = RecordingUiPlanner.For(RecordingActivity.Idle);
+
+		Assert.Equal(idle.ButtonLabel, cancelled.ButtonLabel);
+		Assert.Equal(idle.ButtonEnabled, cancelled.ButtonEnabled);
+		Assert.Equal(idle.TranscriptReadOnly, cancelled.TranscriptReadOnly);
+		Assert.Equal(idle.PlayStartBeep, cancelled.PlayStartBeep);
+	}
+
+	// Guards the other half of #295: clearing on a cancel must not turn into clearing on
+	// the ordinary idle, which would wipe the transcript FinalizeTranscript just delivered.
+	[Fact]
+	public void OnlyCancelled_ClearsTheTranscriptBox()
+	{
+		Assert.Single(
+			Enum.GetValues<RecordingActivity>(),
+			a => RecordingUiPlanner.For(a).TranscriptText == string.Empty);
+	}
+
 	[Fact]
 	public void OnlyRecording_SoundsTheStartBeep()
 	{
-		Assert.Single(
-			new[] { RecordingActivity.Idle, RecordingActivity.Recording, RecordingActivity.Transcribing },
-			a => RecordingUiPlanner.For(a).PlayStartBeep);
+		Assert.Single(Enum.GetValues<RecordingActivity>(), a => RecordingUiPlanner.For(a).PlayStartBeep);
 	}
 }

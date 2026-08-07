@@ -176,6 +176,115 @@ public class SettingsLoadRepairTests
 		Assert.All(manager.HotKeyRouterIssues, issue => Assert.Contains("mapping 1", issue));
 	}
 
+	// Issue #283. A SpeechToTextSettings section with no Services array was read as a
+	// pre-Services legacy file and collapsed into one synthesized service — and with no
+	// legacy Service name to carry over, the synthesized Provider was "". The very next
+	// deserialize threw on that empty enum value, so a file the upgrade had just written
+	// could not be loaded at all. Reachable from the dialog's own "Open JSON" button.
+	[Fact]
+	public void Load_SpeechSectionWithNoServicesArray_StillLoads()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": { "TempDirectory": "D:\\MyRecordings" },
+			"MainWindowUiSettings": { "MaxTextBoxLineCount": 7 }
+		}
+		""");
+
+		// Nothing legacy to migrate, so the section is left for EnsureSettings to seed
+		// with the ordinary OpenAI Whisper default — and the rest of the file survives.
+		Assert.Equal(7, settings.MainWindowUiSettings!.MaxTextBoxLineCount);
+		Assert.Equal(@"D:\MyRecordings", settings.SpeechToTextSettings!.TempDirectory);
+		var service = Assert.Single(settings.SpeechToTextSettings.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal(SettingsDefaults.Speech.DefaultServiceName, service.Name);
+	}
+
+	// The other half of #283: a Provider the enum does not recognise, however it got
+	// there, must cost that one service its stored value — not the whole settings file.
+	// Numbers and comma-lists are the nastier half of this: Enum.TryParse accepts them
+	// and hands back a value the enum never declared, so they survive deserialization
+	// and only blow up later, at the switch that builds the service — past the recovery
+	// App.OnLaunched wraps the load in, so the user gets a bare crash and no backup offer.
+	[Theory]
+	[InlineData("\"\"")]
+	[InlineData("\"   \"")]
+	[InlineData("\"Whisper\"")]
+	[InlineData("\"None\"")]
+	[InlineData("null")]
+	[InlineData("5")]
+	[InlineData("-1")]
+	[InlineData("\"5\"")]
+	[InlineData("\"OpenAi, Deepgram\"")]
+	public void Load_UnusableProvider_IsRepairedRatherThanFatal(string jsonValue)
+	{
+		var settings = Load($$"""
+		{
+			"SpeechToTextSettings": {
+				"Services": [ { "Name": "My service", "Provider": {{jsonValue}}, "ModelId": "whisper-1" } ]
+			}
+		}
+		""");
+
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		// Only the provider is repaired; everything the user did configure is kept.
+		Assert.Equal("My service", service.Name);
+		Assert.Equal("whisper-1", service.ModelId);
+	}
+
+	// Half-deleting the Services array by hand leaves something that is neither an array
+	// nor absent, and the deserializer cannot make a service list out of it either.
+	[Theory]
+	[InlineData("{}")]
+	[InlineData("\"OpenAi\"")]
+	[InlineData("7")]
+	public void Load_ServicesThatIsNotAnArray_StillLoads(string jsonValue)
+	{
+		var settings = Load($$"""
+		{
+			"SpeechToTextSettings": { "Services": {{jsonValue}} },
+			"MainWindowUiSettings": { "MaxTextBoxLineCount": 7 }
+		}
+		""");
+
+		Assert.Equal(7, settings.MainWindowUiSettings!.MaxTextBoxLineCount);
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal(SettingsDefaults.Speech.DefaultServiceName, service.Name);
+	}
+
+	// The loose legacy fields still have to be carried over when the malformed Services
+	// is cleared out of the way — a real pre-Services file must not lose its API key.
+	[Fact]
+	public void Load_ServicesThatIsNotAnArray_StillCarriesTheLegacyFieldsOver()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": { "Services": {}, "ApiKey": "stt-key", "ModelId": "whisper-1" }
+		}
+		""");
+
+		var service = Assert.Single(settings.SpeechToTextSettings!.Services!);
+		Assert.Equal(SpeechToTextProviders.OpenAi, service.Provider);
+		Assert.Equal("stt-key", service.ApiKey);
+		Assert.Equal("whisper-1", service.ModelId);
+	}
+
+	[Fact]
+	public void Load_RecognisedProvider_IsKeptAsIs()
+	{
+		var settings = Load("""
+		{
+			"SpeechToTextSettings": {
+				"Services": [ { "Name": "Deepgram Nova", "Provider": "Deepgram" } ]
+			}
+		}
+		""");
+
+		Assert.Equal(SpeechToTextProviders.Deepgram, settings.SpeechToTextSettings!.Services!.Single().Provider);
+	}
+
 	[Fact]
 	public void Load_WellFormedRouterMappings_ReportNothing()
 	{
