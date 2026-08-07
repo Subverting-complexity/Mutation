@@ -331,7 +331,15 @@ The log is capped in size. When it gets too big, the old contents are moved to
 while back, check the `.old` file too.
 
 Your API keys are stripped out of the log before anything is written, so it is safe to
-share.
+share. The same applies to anything Mutation shows you on screen or reads out — an error
+message never contains one of your keys.
+
+### When an error message appears
+
+An error message tells you what went wrong in a sentence or two, then points at the log
+file. The long technical detail — the part only a developer can use — goes to the log and
+not to the screen, so the message stays short enough to read or listen to. If you are
+reporting the problem, copy the message and then open the log for the rest.
 
 ## Reporting a problem
 

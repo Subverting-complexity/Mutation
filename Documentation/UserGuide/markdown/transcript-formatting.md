@@ -18,6 +18,8 @@ A rule has three parts.
 
 Rules run from top to bottom, so the order can matter. The up and down arrow buttons on each row let you rearrange them, and **Delete** removes a rule.
 
+Mutation starts you off with a set of ready-made rules the first time it runs. They are yours to change or throw away. If you delete every rule and save, the list stays empty next time you open Mutation — that is how you turn find-and-replace off altogether.
+
 ---
 
 ## The three match types

@@ -9,6 +9,10 @@ namespace Mutation.Tests;
 // The SettingsManager half of the custom-beep check: what it does to the settings, and
 // what it hands the caller to show the user. The rule itself lives in
 // CustomBeepFileValidatorTests.
+//
+// Loading and saving settings replaces ErrorLogger's process-wide secret snapshot, so
+// this class shares the collection that serialises those statics (issue #250).
+[Collection(ErrorLoggerCollection.Name)]
 public class CustomBeepIssueReportingTests : IDisposable
 {
 	private readonly string _dir;

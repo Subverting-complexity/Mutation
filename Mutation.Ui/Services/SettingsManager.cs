@@ -474,8 +474,19 @@ End of summary.
 		if (PromptIdBackfill.Apply(llmSettings.Prompts))
 			somethingWasMissing = true;
 
-		if (settings.TranscriptFormatRules == null || !settings.TranscriptFormatRules.Any())
+		// Seed the starter rules on a brand-new settings file only — the same
+		// deliberate guard the router mappings use below. An existing file holding an
+		// empty list is a user who deleted every rule on the Transcript formatting
+		// page; re-seeding it put the defaults back in memory on every launch while
+		// the file still said [], so the feature could never be turned off and the
+		// state never converged (issue #220). A null list is still repaired, because the
+		// rest of the app expects a list — and because that is how LoadAndEnsureSettings
+		// signals a file that has no TranscriptFormatRules key at all, which is a user
+		// upgrading from before the feature rather than one who switched it off.
+		if (settings.TranscriptFormatRules == null
+			|| (isNewFile && !settings.TranscriptFormatRules.Any()))
 		{
+			somethingWasMissing = true;
 			settings.TranscriptFormatRules = new List<TranscriptFormatRule>
 			{
 				new TranscriptFormatRule
@@ -944,6 +955,25 @@ End of summary.
 		}
 	}
 
+	/// <summary>
+	/// True when the settings JSON actually carries a <c>TranscriptFormatRules</c> key —
+	/// including an explicit <c>null</c> or an empty array. False means the file predates
+	/// the feature, which is the one case that still deserves the starter rules.
+	/// Never throws: an unparseable file is reported as declaring the key, so the loaded
+	/// settings are left exactly as they came out of the deserializer.
+	/// </summary>
+	internal static bool DeclaresTranscriptFormatRules(string json)
+	{
+		try
+		{
+			return JObject.Parse(json)["TranscriptFormatRules"] is not null;
+		}
+		catch
+		{
+			return true;
+		}
+	}
+
 	internal static bool IsLegacyTempDirectory(string? tempDirectory)
 	{
 		if (string.IsNullOrWhiteSpace(tempDirectory))
@@ -1013,6 +1043,16 @@ End of summary.
 
         string json = File.ReadAllText(SettingsFileFullPath);
         Settings settings = JsonConvert.DeserializeObject<Settings>(json, _jsonSerializerSettings) ?? new Settings();
+
+        // Settings.TranscriptFormatRules is declared with a `= new List<>()` initialiser,
+        // so a file written before transcript formatting existed — one carrying no
+        // TranscriptFormatRules key at all — deserialises to exactly what a user who
+        // deleted every rule leaves behind: an empty list. Only the JSON can tell those
+        // two apart, and only the first should get the starter rules. Handing the null
+        // to EnsureSettings seeds them once and writes them out, after which the key is
+        // present and an empty list stays empty (issue #220).
+        if (!DeclaresTranscriptFormatRules(json))
+            settings.TranscriptFormatRules = null!;
 
         bool hadLegacyTempDirectory = IsLegacyTempDirectory(settings.SpeechToTextSettings?.TempDirectory);
 

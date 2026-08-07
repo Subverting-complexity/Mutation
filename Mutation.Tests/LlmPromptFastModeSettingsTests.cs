@@ -14,6 +14,9 @@ namespace Mutation.Tests;
 /// upgrade step clobbering a saved value, and the settings working copy dropping it on
 /// the way back to the live settings object.
 /// </summary>
+// Loading and saving settings replaces ErrorLogger's process-wide secret snapshot, so
+// this class shares the collection that serialises those statics (issue #250).
+[Collection(ErrorLoggerCollection.Name)]
 public class LlmPromptFastModeSettingsTests : IDisposable
 {
 	private readonly TempSettingsFile _settingsFile = new("fastmode");

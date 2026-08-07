@@ -2040,7 +2040,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
-			ErrorLogger.LogError("Process with LLM", ex);
+			// ShowErrorDialog logs it; a second call here would duplicate the entry.
 			ShowStatus("Processing", ex.Message, InfoBarSeverity.Error);
 			await ShowErrorDialog("Process with LLM Error", ex);
 		}
@@ -2106,7 +2106,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-             ErrorLogger.LogError("Process with LLM", ex);
+             // ShowErrorDialog logs it; a second call here would duplicate the entry.
              ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
@@ -2422,6 +2422,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
         private void ShowStatus(string title, string message, InfoBarSeverity severity)
         {
+		// Several callers pass an exception's own message straight through, so the
+		// InfoBar is the same redaction bypass the error dialog was (issue #242).
+		// Redacting once here covers the bar, its HelpText, and the announcement. It
+		// is a no-op for the literal strings most callers pass.
+		message = ErrorLogger.RedactSecrets(message ?? string.Empty);
+
                 void Update()
                 {
 			StatusInfoBar.Title = title;
@@ -2494,7 +2500,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	public async Task ShowErrorDialog(string title, Exception ex)
 	{
-		string message = $"An error occurred:\n{ex.Message}\n\n{ex}";
+		// The full exception chain goes to the log and nowhere else. The log is
+		// redacted and stays on the machine; this text is read aloud and pasted into
+		// bug reports, so it gets the exception's own message, redacted, plus where
+		// to find the rest (issue #242). Logging here also means every caller of this
+		// method leaves a record without having to remember to.
+		ErrorLogger.LogError(title, ex);
+		string message = ErrorDialogMessage.ForException(ex, ErrorLogger.PrimaryLogPath);
 		var dialog = new ContentDialog
 		{
 			Title = title,
