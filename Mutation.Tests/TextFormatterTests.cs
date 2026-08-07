@@ -61,21 +61,165 @@ public class TextFormatterTests
 			"Please ai is great.",
 			Rule("ai", "AI", MatchTypeEnum.Smart));
 
-		Assert.Contains("AI", result);
-		Assert.DoesNotContain(" ai ", result);
+		Assert.Equal("Please AI is great.", result);
 	}
 
 	[Fact]
 	public void FormatWithRule_Smart_OnlyMatchesAtWordBoundary()
 	{
-		// Pins down current behavior: standalone "ai" is replaced; the "ai"
-		// embedded inside "contain" is not. The Smart pattern consumes adjacent
-		// whitespace as part of the match.
+		// Standalone "ai" is replaced; the "ai" embedded inside "contain" is not.
+		// The spacing either side of the match survives — it used to be swallowed,
+		// welding the neighbours into "containAIalso paint" (issue #222).
 		string result = TextFormatter.FormatWithRule(
 			"contain ai also paint",
 			Rule("ai", "AI", MatchTypeEnum.Smart));
 
-		Assert.Equal("containAIalso paint", result);
+		Assert.Equal("contain AI also paint", result);
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_KeepsPunctuationFollowingTheMatch()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I like ai, mostly",
+			Rule("ai", "AI", MatchTypeEnum.Smart));
+
+		Assert.Equal("I like AI, mostly", result);
+	}
+
+	// The shipped default rules are dictated punctuation, and they rely on the replacement
+	// supplying its own spacing: re-emitting the gap the match consumed would push the
+	// period away from the word it closes.
+	[Theory]
+	[InlineData("Hello full stop next word", "full stop", ". ", "Hello. next word")]
+	[InlineData("one comma two", "comma", ", ", "one, two")]
+	[InlineData("done question mark really", "question mark", "? ", "done? really")]
+	public void FormatWithRule_Smart_PunctuationReplacement_AttachesToThePrecedingWord(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_NewLineReplacement_DoesNotStrandTheOriginalSpacing()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"first new line second",
+			Rule("new line", Environment.NewLine, MatchTypeEnum.Smart));
+
+		Assert.Equal("first" + Environment.NewLine + "second", result);
+	}
+
+	// A symbol replacement is spacing-neutral: it wants to weld its neighbours, which is the
+	// one case where swallowing the gap was right all along.
+	[Theory]
+	[InlineData("state dash of dash the dash art", "dash", "-", "state-of-the-art")]
+	[InlineData("and slash or", "slash", "/", "and/or")]
+	[InlineData("jacques at sign example", "at sign", "@", "jacques@example")]
+	[InlineData("my underscore var here", "underscore", "_", "my_var here")]
+	public void FormatWithRule_Smart_SymbolReplacement_ClosesTheGap(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// A replacement that opens with punctuation but carries text is a word, not punctuation,
+	// and still needs the gap in front of it.
+	[Fact]
+	public void FormatWithRule_Smart_WordOpeningWithPunctuation_KeepsTheGap()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"built on dotnet today",
+			Rule("dotnet", ".NET", MatchTypeEnum.Smart));
+
+		Assert.Equal("built on .NET today", result);
+	}
+
+	// Deleting a word should close the gap to a single space, not to none — and not to one
+	// space per copy when the word was said twice in a row.
+	[Theory]
+	[InlineData("so um yeah", "so yeah")]
+	[InlineData("so um um yeah", "so yeah")]
+	[InlineData("so um um um yeah", "so yeah")]
+	[InlineData("so um  yeah", "so yeah")]
+	[InlineData("um yeah", "yeah")]
+	public void FormatWithRule_Smart_EmptyReplacement_ClosesToOneSpace(string input, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule("um", string.Empty, MatchTypeEnum.Smart)));
+	}
+
+	// The deleted word may be carrying the sentence's full stop. Dropping it as well loses the
+	// sentence break; leaving it after the gap strands it before the next word.
+	[Fact]
+	public void FormatWithRule_Smart_EmptyReplacement_KeepsPunctuationTheDeletedWordCarried()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I think um. Next one",
+			Rule("um", string.Empty, MatchTypeEnum.Smart));
+
+		Assert.Equal("I think. Next one", result);
+	}
+
+	// ...but with no word in front of it, that punctuation has nothing to attach to. A line
+	// that opens with a run of punctuated fillers must not open with their leftover commas.
+	[Theory]
+	[InlineData("um, um, I think", "um", "I think")]
+	[InlineData("um, um, um, I think", "um", "I think")]
+	[InlineData("um. um. I think", "um", "I think")]
+	[InlineData("you know, you know, I think", "you know", "I think")]
+	[InlineData("so um, um, I think", "um", "so, I think")]
+	public void FormatWithRule_Smart_EmptyReplacement_LeadingFillerRun_LeavesNoStrayPunctuation(
+		string input, string find, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, string.Empty, MatchTypeEnum.Smart)));
+	}
+
+	// The text after the deleted word may already start with a space of its own.
+	[Fact]
+	public void FormatWithRule_Smart_EmptyReplacement_DoesNotDoubleAnExistingSpace()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I think um , next",
+			Rule("um", string.Empty, MatchTypeEnum.Smart));
+
+		Assert.Equal("I think , next", result);
+	}
+
+	// Smart is the literal match type. Regex metacharacters in Find used to reach the engine
+	// raw: "C++" compiled to a nested quantifier and threw, aborting the whole formatting run
+	// rather than just that rule (issue #222).
+	[Theory]
+	[InlineData("I know C++ well", "C++", "C plus plus", "I know C plus plus well")]
+	[InlineData("type ( here", "(", "open bracket", "type open bracket here")]
+	[InlineData("type [ here", "[", "left square", "type left square here")]
+	[InlineData(@"a \ b", @"\", "backslash", "a backslash b")]
+	public void FormatWithRule_Smart_RegexMetacharactersInFind_AreMatchedLiterally(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_DollarInReplaceWith_IsInsertedLiterally()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"the cost is amount today",
+			Rule("amount", "$1", MatchTypeEnum.Smart));
+
+		Assert.Equal("the cost is $1 today", result);
+	}
+
+	// One bad rule used to take the whole run down with it, so every later rule was lost too.
+	[Fact]
+	public void FormatWithRules_SmartRuleWithMetacharacters_DoesNotAbortLaterRules()
+	{
+		var rules = new List<TranscriptFormatRule>
+		{
+			Rule("C++", "C plus plus", MatchTypeEnum.Smart),
+			Rule("dotnet", ".NET", MatchTypeEnum.Smart),
+		};
+
+		Assert.Equal("C plus plus and .NET", "C++ and dotnet".FormatWithRules(rules));
 	}
 
 	// ----- FormatWithRule: error paths -----

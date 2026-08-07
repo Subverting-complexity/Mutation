@@ -34,7 +34,8 @@ public class AnthropicLlmService : ILlmService
 		int retryCount = 3)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
-		if (models is null) throw new ArgumentNullException(nameof(models));
+
+		var modelList = LlmModelIndex.Validate(models, nameof(models));
 
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
@@ -44,7 +45,7 @@ public class AnthropicLlmService : ILlmService
 		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 		_retryCount = retryCount < 0 ? 0 : retryCount;
-		_modelConfigs = models.ToDictionary(m => m.Name, m => m, StringComparer.OrdinalIgnoreCase);
+		_modelConfigs = modelList.ToDictionary(m => m.Name, m => m, LlmModelIndex.NameComparer);
 	}
 
 	public async Task<string> CreateChatCompletion(

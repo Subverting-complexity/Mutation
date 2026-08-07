@@ -288,6 +288,13 @@ help. Leave them alone unless something is timing out on you.</p>
 Mutation. The per-service prompt and your choice of active service apply straight
 away. You choose which service is active from the main window.</p>
 </blockquote>
+<p>If the service you are using is Deepgram, the prompt can also carry a list of words you
+want it to listen out for. Put them on a line of their own that starts with <code>keyterms:</code>
+and separate them with commas, like this:</p>
+<pre><code>keyterms: Dr. Bosch, Mutation, WinUI
+</code></pre>
+<p>Everything to the end of that line is the list, so full stops inside a name are safe. A
+full stop at the very end is optional and is not treated as part of the last word.</p>
 <p>If you clear the <strong>Temp directory</strong> box, or type a folder name on its own like
 <code>Recordings</code>, Mutation cannot save yet. It puts its own folder back in the box, plays
 the failure beep, and tells you what it did. Press <strong>Save</strong> again to accept that
@@ -361,6 +368,9 @@ the key here is the one used.</p>
 </tbody>
 </table>
 </div>
+<p>Capital letters in a model name do not matter, so <code>GPT-4.1</code> and <code>gpt-4.1</code> are the same
+model. Each name may only appear once in the list, though — if two rows have the same
+name, Mutation tells you which one is duplicated instead of quietly picking one.</p>
 <p>Your prompts themselves are edited on the main window, not here.</p>
 <h3 id="text-to-speech">Text to Speech</h3>
 <p>How Mutation reads text out loud. Voice, rate and volume live on the main window;

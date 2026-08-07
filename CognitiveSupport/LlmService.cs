@@ -25,14 +25,11 @@ public class LlmService : ILlmService
 		PipelineTransport? transport = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
-		if (models is null) throw new ArgumentNullException(nameof(models));
 
-		var modelList = models.ToList();
-		if (modelList.Count == 0)
-			throw new ArgumentException("At least one model must be configured.", nameof(models));
+		var modelList = LlmModelIndex.Validate(models, nameof(models));
 
-		_chatClients = new Dictionary<string, ChatClient>();
-		_modelConfigs = new Dictionary<string, LlmModelConfig>();
+		_chatClients = new Dictionary<string, ChatClient>(LlmModelIndex.NameComparer);
+		_modelConfigs = new Dictionary<string, LlmModelConfig>(LlmModelIndex.NameComparer);
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 		_retryCount = retryCount < 0 ? 0 : retryCount;
 

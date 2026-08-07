@@ -86,6 +86,17 @@ Where your dictation gets turned into text.
 > Mutation. The per-service prompt and your choice of active service apply straight
 > away. You choose which service is active from the main window.
 
+If the service you are using is Deepgram, the prompt can also carry a list of words you
+want it to listen out for. Put them on a line of their own that starts with `keyterms:`
+and separate them with commas, like this:
+
+```
+keyterms: Dr. Bosch, Mutation, WinUI
+```
+
+Everything to the end of that line is the list, so full stops inside a name are safe. A
+full stop at the very end is optional and is not treated as part of the last word.
+
 If you clear the **Temp directory** box, or type a folder name on its own like
 `Recordings`, Mutation cannot save yet. It puts its own folder back in the box, plays
 the failure beep, and tells you what it did. Press **Save** again to accept that
@@ -133,6 +144,10 @@ The AI models Mutation can send your text to.
 | Request timeout (seconds) | How long to wait for the model to answer before giving up. |
 | Retries | How many times to try again after a failed request. Retries help the very first request after a reboot succeed while the network warms up. Three by default. |
 | Models | Your list of models. Each row has a name, a provider, and an optional temperature — which controls how random the answers are. Leave temperature empty to use the provider's own setting. |
+
+Capital letters in a model name do not matter, so `GPT-4.1` and `gpt-4.1` are the same
+model. Each name may only appear once in the list, though — if two rows have the same
+name, Mutation tells you which one is duplicated instead of quietly picking one.
 
 Your prompts themselves are edited on the main window, not here.
 

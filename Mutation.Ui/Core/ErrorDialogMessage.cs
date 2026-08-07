@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using CognitiveSupport;
 
 namespace Mutation.Ui.Core;
@@ -11,9 +13,9 @@ namespace Mutation.Ui.Core;
 /// key can never appear in a dialog — dialogs are read aloud and routinely
 /// screenshotted into bug reports, and the redaction seam was previously applied only
 /// when writing the log file. Second, the dialog carries the exception's own message
-/// and a pointer to the log, not the whole <c>ToString()</c> chain: the stack and the
-/// inner-exception detail are what tend to echo request identifiers and header
-/// fragments, and they are no use to a reader anyway (issue #242).
+/// and a pointer to the log, not the whole <c>ToString()</c> chain: the stack is what
+/// tends to echo request identifiers and header fragments, and it is no use to a reader
+/// anyway (issue #242).
 /// </para>
 /// Pure apart from the redactor, so the wording is testable without a window.
 /// </summary>
@@ -21,6 +23,16 @@ public static class ErrorDialogMessage
 {
 	/// <summary>Lead-in for the log pointer, so tests and callers agree on one wording.</summary>
 	public const string LogPointerLead = "Full technical details are in the log file:";
+
+	/// <summary>
+	/// How many distinct messages from the exception chain the summary reads out.
+	/// <para>
+	/// The dialog is read aloud, so this is a listening budget rather than a screen one:
+	/// four lines is about as much as stays a headline. Anything past it is covered by the
+	/// log pointer, and chains that deep are rare (issue #288).
+	/// </para>
+	/// </summary>
+	public const int MaxChainMessages = 4;
 
 	/// <param name="exception">The failure being reported; null yields a neutral placeholder.</param>
 	/// <param name="logPath">Where the full detail was written — normally <see cref="ErrorLogger.PrimaryLogPath"/>.</param>
@@ -41,27 +53,33 @@ public static class ErrorDialogMessage
 	/// </summary>
 	public static string ForMessage(string? message) => Redact(message ?? string.Empty);
 
-	// The outer message is what names the operation; the innermost one is usually what
-	// actually went wrong, and wrappers like AggregateException say nothing on their own.
-	// Everything between the two is the part a reader cannot use.
+	// The outer message names the operation and the innermost is usually the raw cause, but
+	// the sentence that tells the reader what to do about it is often neither. A provider call
+	// that fails with a 401 wraps it as "Speech to text failed." over "…401 (Unauthorized)."
+	// over a socket error: report only the ends and the reader hears a dropped connection and
+	// never learns their API key is wrong. So every level speaks, up to the cap.
 	private static string Describe(Exception? exception)
 	{
 		if (exception is null)
 			return "No further detail is available.";
 
-		string outer = Blank(exception.Message) ? exception.GetType().Name : exception.Message.Trim();
+		var messages = new List<string>();
+		for (Exception? level = exception; level is not null; level = level.InnerException)
+		{
+			string message = Blank(level.Message) ? level.GetType().Name : level.Message.Trim();
 
-		Exception innermost = exception;
-		while (innermost.InnerException is not null)
-			innermost = innermost.InnerException;
+			// Wrappers that restate what they wrap are common enough that without this the
+			// summary reads as a stutter — and hearing the same sentence twice suggests two
+			// failures rather than one.
+			if (messages.Contains(message, StringComparer.Ordinal))
+				continue;
 
-		if (ReferenceEquals(innermost, exception))
-			return outer;
+			messages.Add(message);
+			if (messages.Count == MaxChainMessages)
+				break;
+		}
 
-		string inner = Blank(innermost.Message) ? innermost.GetType().Name : innermost.Message.Trim();
-		return string.Equals(inner, outer, StringComparison.Ordinal)
-			? outer
-			: $"{outer}{Environment.NewLine}{inner}";
+		return string.Join(Environment.NewLine, messages);
 	}
 
 	private static bool Blank(string? value) => string.IsNullOrWhiteSpace(value);
