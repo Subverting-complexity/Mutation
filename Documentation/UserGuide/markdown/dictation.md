@@ -82,11 +82,15 @@ landing in another window.
 One thing worth knowing: if the Mutation window itself is the one in front, nothing
 is inserted anywhere. Mutation won't paste into itself.
 
-Whichever choice you make, Mutation waits to see whether the text actually arrived
-before it tells you it worked. If Windows refused the keystrokes — which it does
-when the app in front is running as an administrator — you get the failure beep and
-a message saying so, instead of a success beep for text that never landed. The
-transcript stays in the Mutation window either way, so nothing is lost.
+Whichever choice you make, Mutation waits for the typing or pasting to finish before
+it tells you the result, and checks that Windows accepted the keystrokes. If Windows
+turned them down, you get the failure beep and a message saying the text could not be
+sent, instead of a success beep for text that never landed. The transcript stays in
+the Mutation window either way, so nothing is lost.
+
+Windows does not always admit that it refused, so this catch is not a guarantee. If a
+success beep is ever followed by an empty window in the other app, the text is still
+in Mutation — paste it yourself with **Ctrl+V**.
 
 ### Sending a shortcut afterwards
 

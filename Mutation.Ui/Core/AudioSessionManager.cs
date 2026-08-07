@@ -178,9 +178,14 @@ public class AudioSessionManager : IDisposable
             {
                 _speechManager.CancelTranscription();
                 BeepPlayer.Play(BeepType.Failure);
-                // Cancellation has only been requested; the in-flight transcription is
-                // still unwinding and raises its own Idle from its finally.
-                StateChanged?.Invoke(this, RecordingActivity.Transcribing);
+                // No state change is raised here. Nothing has changed yet — only a
+                // cancellation has been asked for — and the transcription that owns the
+                // state raises its own Idle from its finally when it unwinds. Raising a
+                // Transcribing here would race that Idle: both are delivered through the
+                // dispatcher, and if the Idle landed first the window would settle on a
+                // stale Transcribing with nothing left to correct it, leaving the buttons
+                // disabled and the transcript box read-only for the rest of the session.
+                // The beep and the status message are this branch's whole signal.
                 StatusMessage?.Invoke(this, "Transcription cancelled.");
                 return;
             }
@@ -256,12 +261,18 @@ public class AudioSessionManager : IDisposable
         }
         catch (RecorderBusyException)
         {
+            // Busy means a *different* operation owns the recorder and the session state.
+            // This one changed nothing, so it raises nothing: the owner will announce its
+            // own Idle when it finishes, and a state change from here would race it.
             BeepPlayer.Play(BeepType.Failure);
             StatusMessage?.Invoke(this, "Still finishing the previous operation — try again shortly.");
-            StateChanged?.Invoke(this, CurrentActivity);
         }
         catch (Exception ex)
         {
+            // Any other failure belongs to this operation — the busy case, the only one
+            // where another operation could be running concurrently, is caught above — so
+            // there is no competing raise to race with and the recorder's own flags are
+            // the best account of where the failure left things.
             ErrorOccurred?.Invoke(this, ex.Message);
             StateChanged?.Invoke(this, CurrentActivity);
         }

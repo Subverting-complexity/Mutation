@@ -23,13 +23,17 @@ public static class GuardedUiOperation
 	/// thread.
 	/// </param>
 	/// <param name="restore">
-	/// Gives the window back. Runs exactly once, whether or not anything threw.
+	/// Gives the window back. Runs exactly once, whether or not anything threw. Put the
+	/// state the user needs back first: a failure part-way through is reported through
+	/// <paramref name="onReportFailed"/> and swallowed, so the statements before it have
+	/// still taken effect.
 	/// </param>
 	/// <param name="onReportFailed">
-	/// Receives a failure raised by <paramref name="onFailure"/> itself — the beep
-	/// player or an automation peer failing while reporting the first failure. It is
-	/// logged rather than rethrown, because restoring the window still has to happen
-	/// and a second exception here would take the whole guard down with it.
+	/// Receives a failure raised by <paramref name="onFailure"/> or by
+	/// <paramref name="restore"/> itself — the beep player or an automation peer failing
+	/// while reporting or clearing up. It is logged rather than rethrown. Nothing at all
+	/// escapes this method: the callers are <c>async void</c>, so an escaping exception
+	/// would go straight back to the global handler this exists to keep them out of.
 	/// </param>
 	public static async Task RunAsync(
 		Func<Task> work,
@@ -58,7 +62,14 @@ public static class GuardedUiOperation
 		}
 		finally
 		{
-			restore();
+			try
+			{
+				restore();
+			}
+			catch (Exception restoreFailure)
+			{
+				onReportFailed?.Invoke(restoreFailure);
+			}
 		}
 	}
 }

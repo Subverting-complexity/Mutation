@@ -2152,26 +2152,29 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private void UpdateSpeechButtonVisuals(string label, string glyph, bool isEnabled = true)
 	{
+		// isEnabled is honoured in every branch. It used to be read only by the last
+		// one, which made the caller's choice silently inert for the Record and Stop
+		// states — a plan could say "disabled" and the window would not agree.
 		if (label == "Record")
 		{
 			// Idle state
 			BtnSpeechToTextIcon.Glyph = RecordGlyph;
-			BtnSpeechToText.IsEnabled = true;
+			BtnSpeechToText.IsEnabled = isEnabled;
 			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Record", "Record");
 
 			BtnSpeechToTextWithFormatIcon.Glyph = MagicGlyph;
-			BtnSpeechToTextWithFormat.IsEnabled = true;
+			BtnSpeechToTextWithFormat.IsEnabled = isEnabled;
 			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Record and Format", "Record and Format");
 		}
 		else if (label == "Stop")
 		{
 			// Recording state
 			BtnSpeechToTextIcon.Glyph = StopGlyph;
-			BtnSpeechToText.IsEnabled = true;
+			BtnSpeechToText.IsEnabled = isEnabled;
 			ConfigureButtonHotkey(BtnSpeechToText, null, _settings.SpeechToTextSettings?.SpeechToTextHotKey, "Stop", "Stop");
 
 			BtnSpeechToTextWithFormatIcon.Glyph = StopGlyph;
-			BtnSpeechToTextWithFormat.IsEnabled = true;
+			BtnSpeechToTextWithFormat.IsEnabled = isEnabled;
 			ConfigureButtonHotkey(BtnSpeechToTextWithFormat, null, _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey, "Stop and Format", "Stop and Format");
 		}
 		else

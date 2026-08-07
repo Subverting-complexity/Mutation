@@ -184,18 +184,21 @@ be running with higher privileges than Mutation. It is available in the Mutation
 window." You get a failure beep with it, not the success beep.
 
 Windows will not let an ordinary program type into a window that is running with
-administrator privileges. It does not warn anybody — it simply throws the keystrokes
-away. Mutation now checks whether Windows accepted them and tells you when it did not,
-rather than announcing success for text that never arrived.
+administrator privileges. It simply throws the keystrokes away. Mutation checks
+whether Windows accepted them and tells you when it did not, rather than announcing
+success for text that never arrived.
 
 **What to do.**
 
-1. Your text is not lost. It is in the main window and, unless the clipboard also
-   failed, on your clipboard — so you can paste it yourself with **Ctrl+V**.
-2. The usual cause is an app started with "Run as administrator", or a system dialog
+1. Check the other app first. Once in a while Mutation gets the text through on a
+   second route and the warning turns out to be a false alarm, so look before you
+   paste again — otherwise you may end up with it twice.
+2. If it really is missing, your text is not lost. It is in the main window and,
+   unless the clipboard also failed, on your clipboard — paste it with **Ctrl+V**.
+3. The usual cause is an app started with "Run as administrator", or a system dialog
    that has taken the foreground. Close it, or click into an ordinary window, and
    dictate again.
-3. Task Manager, the Windows security prompt, and some installer windows behave this
+4. Task Manager, the Windows security prompt, and some installer windows behave this
    way too. Nothing is wrong with Mutation or your microphone.
 
 ### Something went wrong while delivering the transcript

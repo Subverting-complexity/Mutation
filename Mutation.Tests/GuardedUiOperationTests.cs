@@ -109,6 +109,47 @@ public class GuardedUiOperationTests
 		Assert.True(run.IsCompletedSuccessfully);
 	}
 
+	// Restoration touches the window too, so it can fail for the same reasons the work
+	// did. Letting it escape would fault the task and hand the async void caller's
+	// exception to the global handler — the very route out of the app this guard exists
+	// to close.
+	[Fact]
+	public async Task DoesNotPropagate_WhenRestoreItselfThrows()
+	{
+		Exception? reported = null;
+
+		var run = GuardedUiOperation.RunAsync(
+			work: () => Task.CompletedTask,
+			onFailure: _ => { },
+			restore: () => throw new InvalidOperationException("the window is being torn down"),
+			onReportFailed: ex => reported = ex);
+
+		await run;
+
+		Assert.True(run.IsCompletedSuccessfully);
+		Assert.Equal("the window is being torn down", reported?.Message);
+	}
+
+	// A restore that gives the user their text box back and then fails on the tidying
+	// after it still has to leave the box usable.
+	[Fact]
+	public async Task RestorePartlyDone_KeepsWhatItManagedBeforeThrowing()
+	{
+		bool readOnlyCleared = false;
+
+		await GuardedUiOperation.RunAsync(
+			work: () => throw new InvalidOperationException("delivery failed"),
+			onFailure: _ => { },
+			restore: () =>
+			{
+				readOnlyCleared = true;
+				throw new InvalidOperationException("session cleanup failed");
+			},
+			onReportFailed: _ => { });
+
+		Assert.True(readOnlyCleared);
+	}
+
 	[Fact]
 	public async Task RestoresExactlyOnce()
 	{

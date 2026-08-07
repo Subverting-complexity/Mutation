@@ -294,13 +294,16 @@ has its own message: &quot;The transcript could not be sent to the other applica
 be running with higher privileges than Mutation. It is available in the Mutation
 window.&quot; You get a failure beep with it, not the success beep.</p>
 <p>Windows will not let an ordinary program type into a window that is running with
-administrator privileges. It does not warn anybody — it simply throws the keystrokes
-away. Mutation now checks whether Windows accepted them and tells you when it did not,
-rather than announcing success for text that never arrived.</p>
+administrator privileges. It simply throws the keystrokes away. Mutation checks
+whether Windows accepted them and tells you when it did not, rather than announcing
+success for text that never arrived.</p>
 <p><strong>What to do.</strong></p>
 <ol>
-<li>Your text is not lost. It is in the main window and, unless the clipboard also
-failed, on your clipboard — so you can paste it yourself with <strong>Ctrl+V</strong>.</li>
+<li>Check the other app first. Once in a while Mutation gets the text through on a
+second route and the warning turns out to be a false alarm, so look before you
+paste again — otherwise you may end up with it twice.</li>
+<li>If it really is missing, your text is not lost. It is in the main window and,
+unless the clipboard also failed, on your clipboard — paste it with <strong>Ctrl+V</strong>.</li>
 <li>The usual cause is an app started with &quot;Run as administrator&quot;, or a system dialog
 that has taken the foreground. Close it, or click into an ordinary window, and
 dictate again.</li>
