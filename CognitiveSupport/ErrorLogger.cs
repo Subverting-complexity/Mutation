@@ -212,22 +212,36 @@ public static class ErrorLogger
 	/// <paramref name="maxLogFileSizeBytes"/>, so the log cannot grow without
 	/// bound. Mirrors HotkeyManager's rotation. The rotate + append run under
 	/// the shared lock so two threads cannot both move the file at once.
+	///
+	/// Rotation is best-effort and cannot take the entry down with it: if the
+	/// caller has <c>.old</c> open in an editor, <c>File.Delete</c> throws on every
+	/// subsequent write and logging would be permanently dead for both locations,
+	/// exactly when a crash log matters most. An over-sized log still tells the
+	/// user what went wrong; a missing entry does not (issue #244).
 	/// </summary>
 	internal static void AppendWithRotation(string logPath, string entry, long maxLogFileSizeBytes)
 	{
 		lock (s_gate)
 		{
-			if (maxLogFileSizeBytes > 0 && File.Exists(logPath))
+			try
 			{
-				var fileInfo = new FileInfo(logPath);
-				if (fileInfo.Length > maxLogFileSizeBytes)
+				if (maxLogFileSizeBytes > 0 && File.Exists(logPath))
 				{
-					string backupPath = logPath + ".old";
-					if (File.Exists(backupPath))
-						File.Delete(backupPath);
-					File.Move(logPath, backupPath);
+					var fileInfo = new FileInfo(logPath);
+					if (fileInfo.Length > maxLogFileSizeBytes)
+					{
+						string backupPath = logPath + ".old";
+						if (File.Exists(backupPath))
+							File.Delete(backupPath);
+						File.Move(logPath, backupPath);
+					}
 				}
 			}
+			catch
+			{
+				// Rotation failed; keep the over-sized log and append to it anyway.
+			}
+
 			File.AppendAllText(logPath, entry, Encoding.UTF8);
 		}
 	}

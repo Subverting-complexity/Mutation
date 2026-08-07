@@ -11,6 +11,9 @@ namespace Mutation.Tests;
 /// Loading is where the repair has to happen: the app must never hold two prompts that
 /// look like the same prompt, whatever a hand-edited Mutation.json says.
 /// </summary>
+// Loading and saving settings replaces ErrorLogger's process-wide secret snapshot, so
+// this class shares the collection that serialises those statics (issue #250).
+[Collection(ErrorLoggerCollection.Name)]
 public class SettingsManagerPromptIdTests : IDisposable
 {
 	private readonly TempSettingsFile _settingsFile = new("promptid");

@@ -14,6 +14,9 @@ using PdfSharp.Pdf;
 
 namespace Mutation.Tests;
 
+// Several tests here reflectively swap OcrService's private static SharedRateLimiter.
+// The collection keeps that swap from being visible to another class (issue #250).
+[Collection(OcrServiceStaticsCollection.Name)]
 public class OcrServiceTests
 {
 	[Fact]

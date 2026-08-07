@@ -413,7 +413,13 @@ file, in case the first location is unavailable.</p>
 <code>Mutation_Errors.log.old</code> and a fresh file is started — so if the problem happened a
 while back, check the <code>.old</code> file too.</p>
 <p>Your API keys are stripped out of the log before anything is written, so it is safe to
-share.</p>
+share. The same applies to anything Mutation shows you on screen or reads out — an error
+message never contains one of your keys.</p>
+<h3 id="when-an-error-message-appears">When an error message appears</h3>
+<p>An error message tells you what went wrong in a sentence or two, then points at the log
+file. The long technical detail — the part only a developer can use — goes to the log and
+not to the screen, so the message stays short enough to read or listen to. If you are
+reporting the problem, copy the message and then open the log for the rest.</p>
 <h2 id="reporting-a-problem">Reporting a problem</h2>
 <p>If none of the above fixes it, please report it. The project's issues page is at
 <a href="https://github.com/Subverting-complexity/Mutation/issues">github.com/Subverting-complexity/Mutation</a>.</p>

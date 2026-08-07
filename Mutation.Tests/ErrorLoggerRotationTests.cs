@@ -72,4 +72,44 @@ public class ErrorLoggerRotationTests : IDisposable
 		Assert.Equal(new string('y', 200), File.ReadAllText(_backupPath));
 		Assert.Equal("latest\n", File.ReadAllText(_logPath));
 	}
+
+	[Fact]
+	public void AppendWithRotation_BackupLocked_StillWritesTheEntry()
+	{
+		// The user has Mutation_Errors.log.old open in an editor holding a share
+		// lock, so File.Delete throws. Before issue #244 that took the entry down
+		// with it and logging stayed dead for the rest of the run.
+		File.WriteAllText(_backupPath, "stale backup");
+		string bulk = new string('z', 200);
+		File.WriteAllText(_logPath, bulk);
+
+		using (new FileStream(_backupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+		{
+			ErrorLogger.AppendWithRotation(_logPath, "must survive\n", maxLogFileSizeBytes: 100);
+		}
+
+		// Rotation could not happen, so the entry lands on the end of the
+		// over-sized log rather than being discarded.
+		Assert.Equal(bulk + "must survive\n", File.ReadAllText(_logPath));
+		Assert.Equal("stale backup", File.ReadAllText(_backupPath));
+	}
+
+	[Fact]
+	public void AppendWithRotation_BackupUnlocked_RotatesOnTheNextEntry()
+	{
+		// The failure above must not be sticky: once the lock is gone, the next
+		// entry rotates as normal instead of growing the log forever.
+		File.WriteAllText(_backupPath, "stale backup");
+		File.WriteAllText(_logPath, new string('z', 200));
+
+		using (new FileStream(_backupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+		{
+			ErrorLogger.AppendWithRotation(_logPath, "during lock\n", maxLogFileSizeBytes: 100);
+		}
+
+		ErrorLogger.AppendWithRotation(_logPath, "after lock\n", maxLogFileSizeBytes: 100);
+
+		Assert.Equal("after lock\n", File.ReadAllText(_logPath));
+		Assert.Equal(new string('z', 200) + "during lock\n", File.ReadAllText(_backupPath));
+	}
 }

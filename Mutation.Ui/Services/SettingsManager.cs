@@ -474,8 +474,17 @@ End of summary.
 		if (PromptIdBackfill.Apply(llmSettings.Prompts))
 			somethingWasMissing = true;
 
-		if (settings.TranscriptFormatRules == null || !settings.TranscriptFormatRules.Any())
+		// Seed the starter rules on a brand-new settings file only — the same
+		// deliberate guard the router mappings use below. An existing file holding an
+		// empty list is a user who deleted every rule on the Transcript formatting
+		// page; re-seeding it put the defaults back in memory on every launch while
+		// the file still said [], so the feature could never be turned off and the
+		// state never converged (issue #220). An explicit null in the file is still
+		// repaired, because the rest of the app expects a list.
+		if (settings.TranscriptFormatRules == null
+			|| (isNewFile && !settings.TranscriptFormatRules.Any()))
 		{
+			somethingWasMissing = true;
 			settings.TranscriptFormatRules = new List<TranscriptFormatRule>
 			{
 				new TranscriptFormatRule

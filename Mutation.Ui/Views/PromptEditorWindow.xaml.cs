@@ -1,6 +1,7 @@
 using CognitiveSupport;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
@@ -185,12 +186,19 @@ public sealed partial class PromptEditorWindow : Window
         }
         catch (Exception ex)
         {
-            ShowError($"Test failed: {ex.Message}");
+            // Keep the full chain in the log and show the reader the short form,
+            // for the same reason as MainWindow's error dialog (issue #242).
+            ErrorLogger.LogError("Prompt test", ex);
+            ShowError(ErrorDialogMessage.ForException(ex, ErrorLogger.PrimaryLogPath));
         }
     }
 
     private async void ShowError(string message)
     {
+        // This text is read aloud and pasted into bug reports, so it goes through the
+        // same redactor the error log uses. A no-op for the validation messages above.
+        message = ErrorDialogMessage.ForMessage(message);
+
         var dialog = new ContentDialog
         {
             Title = "Error",
