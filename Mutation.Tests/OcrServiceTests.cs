@@ -106,13 +106,17 @@ public class OcrServiceTests
 
 		// The window rolling over is the observable fact; asserting it directly beats
 		// timing the next grant, which a GC pause on a loaded agent can blow past.
+		// This one only gets more true under load — the wait was already past the
+		// window, so a slow machine cannot make it fail.
 		var expired = (OcrService.OcrRequestWindowState)getSnapshot.Invoke(limiter, Array.Empty<object>())!;
 		Assert.Equal(0, expired.RequestsInWindow);
 
 		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 
+		// A grant against an empty window cannot block, so the count of grants is the
+		// whole proof. Deliberately not asserting RequestsInWindow here: that would go
+		// stale the moment the window rolled again, putting the clock back in the test.
 		var afterGrant = (OcrService.OcrRequestWindowState)getSnapshot.Invoke(limiter, Array.Empty<object>())!;
-		Assert.Equal(1, afterGrant.RequestsInWindow);
 		Assert.Equal(3, afterGrant.TotalRequestsGranted);
 	}
 
@@ -260,11 +264,10 @@ public class OcrServiceTests
 				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 			}
 
-			// A second full batch fits in the now-empty window. The state says so
-			// outright — three fresh entries on top of three already granted — so no
-			// wall-clock budget is needed to prove nothing was throttled.
+			// The window was asserted empty just above and the limit is 3, so those
+			// three grants could not have blocked. Six cumulative grants is therefore
+			// the whole proof, and unlike an elapsed-time budget it cannot go stale.
 			OcrService.OcrRequestWindowState freshBatch = OcrService.GetSharedRequestWindowState();
-			Assert.Equal(3, freshBatch.RequestsInWindow);
 			Assert.Equal(6, freshBatch.TotalRequestsGranted);
 		}
 		finally

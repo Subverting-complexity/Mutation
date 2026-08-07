@@ -1050,7 +1050,8 @@ public class OcrManagerTests
 	}
 
 	// Records the peak number of overlapping ExtractText calls so concurrency throttles are
-	// observable. The delay keeps each call in flight long enough for overlap to occur.
+	// observable. Two ways to keep a call in flight long enough to overlap: a plain delay,
+	// which only makes overlap likely, or a rendezvous, which makes it required.
 	private sealed class ConcurrencyTrackingOcrService : IOcrService
 	{
 		private static readonly TimeSpan RendezvousTimeout = TimeSpan.FromSeconds(10);
@@ -1071,7 +1072,9 @@ public class OcrManagerTests
 		/// this many callers have arrived, then all of them are released together. That
 		/// makes the overlap a fact the throttle has to produce rather than something the
 		/// test hopes will happen inside a delay window, so the observed concurrency is
-		/// exact instead of load-dependent.</param>
+		/// exact instead of load-dependent. The expected call count must be a whole
+		/// multiple of this, or the final part-filled group waits out the timeout and
+		/// sets <see cref="RendezvousTimedOut"/>.</param>
 		public ConcurrencyTrackingOcrService(int delayMs = 50, int rendezvousSize = 0)
 		{
 			_delayMs = delayMs;
@@ -1118,6 +1121,12 @@ public class OcrManagerTests
 		// group holding the rest up forever.
 		private async Task ArriveAtRendezvousAsync(CancellationToken token)
 		{
+			// Once one group has timed out the throttle is already proven wrong, so let
+			// the rest through immediately rather than paying the timeout N more times
+			// and turning a failing test into a multi-minute one.
+			if (RendezvousTimedOut)
+				return;
+
 			TaskCompletionSource group;
 			lock (_sync)
 			{
@@ -1137,9 +1146,11 @@ public class OcrManagerTests
 			}
 			catch (TimeoutException)
 			{
-				// Never hang the suite on a broken throttle: record it and let the test
-				// report it as a plain assertion failure.
+				// Never hang the suite on a broken throttle: record it, release anyone
+				// else stuck on this gate, and let the test report a plain assertion
+				// failure instead of a deadlock.
 				Interlocked.Exchange(ref _rendezvousTimedOut, 1);
+				group.TrySetResult();
 			}
 		}
 	}
