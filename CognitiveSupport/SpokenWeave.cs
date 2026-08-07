@@ -66,7 +66,7 @@ public readonly struct SpokenWeaveMap
 
 	private readonly int _baseDelta;
 	private readonly int _realLength;
-	private readonly IReadOnlyList<Entry> _markers;
+	private readonly IReadOnlyList<Entry>? _markers;
 
 	public SpokenWeaveMap(int baseDelta, int realLength, IReadOnlyList<Entry> markers)
 	{
@@ -75,15 +75,26 @@ public readonly struct SpokenWeaveMap
 		_markers = markers ?? Array.Empty<Entry>();
 	}
 
+	// A map with nothing woven in, for a field or local that has no read in flight yet.
+	// `default(SpokenWeaveMap)` behaves identically — every member below tolerates the
+	// null marker list a defaulted struct leaves behind — but naming it says so out loud.
+	public static SpokenWeaveMap Empty => default;
+
+	// Marker count, treating a defaulted struct (which bypasses the constructor and so
+	// never gets the empty list) as having none. Both members below go through this
+	// rather than touching _markers.Count, which would throw on a defaulted map — on the
+	// synthesizer's callback thread, where an unhandled exception ends the process.
+	private int MarkerCount => _markers?.Count ?? 0;
+
 	// Map a spoken-string position back to a real-text offset. Positions before the
 	// first marker shift by the base delta; each marker crossed adds its length to
 	// the shift; a position inside a marker maps to that marker's boundary.
 	public int ToReal(int spokenPosition)
 	{
 		int real = spokenPosition + _baseDelta;
-		for (int i = 0; i < _markers.Count; i++)
+		for (int i = 0; i < MarkerCount; i++)
 		{
-			Entry m = _markers[i];
+			Entry m = _markers![i];
 			if (spokenPosition < m.SpokenStart) break;
 			if (spokenPosition < m.SpokenStart + m.Length) return m.RealOffset;
 			real -= m.Length;
@@ -98,9 +109,9 @@ public readonly struct SpokenWeaveMap
 	public int HighestMarkerPercentAtOrBefore(int realPosition)
 	{
 		int best = 0;
-		for (int i = 0; i < _markers.Count; i++)
+		for (int i = 0; i < MarkerCount; i++)
 		{
-			Entry m = _markers[i];
+			Entry m = _markers![i];
 			if (m.RealOffset <= realPosition && m.Percent > best)
 				best = m.Percent;
 		}

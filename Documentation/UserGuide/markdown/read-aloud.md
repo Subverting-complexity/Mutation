@@ -171,6 +171,13 @@ silently. You will hear one of these:
 Each of these also appears as a message on the main window, and plays the failure
 beep.
 
+A reading can also fail once it has started — most often because the voice it was
+told to use is no longer installed on Windows. Mutation plays the failure beep,
+puts the reason on the main window, and opens a dialog with the details. If the
+missing voice is the cause, the message names it, so you know which one to pick a
+replacement for on the **Voice & Speech** card. A shortcut that fails this way
+never just goes quiet on you.
+
 ## Where to next
 
 - [Screenshots and reading text from images](screen-capture-and-ocr.md) — get text

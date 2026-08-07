@@ -206,6 +206,25 @@ installed.
    bold and italic marks, heading marks, bullet markers, code blocks, and for
    shortening long web links.
 
+### Reading aloud fails, or the voice you chose has gone
+
+**What's happening.** The voice Mutation was told to use is no longer installed —
+a Windows update removed it, or the settings came from another computer that had it.
+Reading can also fail if the audio device it was playing to has been unplugged.
+
+Mutation plays the failure beep, puts the reason on the main window, and opens a
+dialog with the details. When the chosen voice is the problem, the message names
+it. This happens whether you started the reading with the button or the shortcut,
+so a shortcut press never simply does nothing.
+
+**What to do.**
+
+1. Open the **Voice** list on the **Voice & Speech** card and pick a voice that is
+   there now. If the list is short, install more through Windows Settings and
+   restart Mutation.
+2. If the voice is fine, check the speakers or headphones you were listening
+   through are still connected, then press the shortcut again.
+
 ### Settings won't save
 
 **What's happening.** Mutation writes your settings to a file. If that write fails —

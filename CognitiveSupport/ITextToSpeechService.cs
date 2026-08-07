@@ -2,6 +2,13 @@ namespace CognitiveSupport;
 
 public interface ITextToSpeechService : IDisposable
 {
+	// Raised when a read fails after Speak has already returned. Speak hands the work to a
+	// background thread and comes straight back, so there is no call left for the failure
+	// to come out of; without this a read that died is silent and indistinguishable from
+	// one that finished (issue #236). Raised off the UI thread — marshal before touching
+	// any control.
+	event EventHandler<Exception>? SpeakFailed;
+
 	bool IsSpeaking { get; }
 
 	// True only while a read is frozen by Pause(); false when stopped or actively speaking.

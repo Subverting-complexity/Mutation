@@ -28,7 +28,7 @@ namespace CognitiveSupport
 		// woven markers degrades to a single scalar shift, identical to the old
 		// _spokenToCurrentDelta; a read with progress markers carries one breakpoint
 		// per marker so OnSpeakProgress still reports the real position.
-		private SpokenWeaveMap _spokenMap;
+		private SpokenWeaveMap _spokenMap = SpokenWeaveMap.Empty;
 		private List<int>? _sentenceStarts;
 		// Authoritative navigation cursor: which sentence index we are on. Driven
 		// explicitly by SkipSentence and nudged forward by playback progress, so
@@ -54,7 +54,9 @@ namespace CognitiveSupport
 		private int _pendingSkipIndex;
 		private bool _speakingAnnouncement;
 		private bool _disposed;
-		private CancellationTokenSource? _opCts;
+		// The token for whatever is currently being spoken. Always handed over inside
+		// _gate so a superseded read cannot slip past the handover (issue #236).
+		private readonly SupersedingOperation _operation = new();
 
 		// Configurable announcement behaviour, pushed in from settings. Defaults mirror
 		// the settings defaults so the service behaves sensibly before it is configured.
@@ -69,9 +71,8 @@ namespace CognitiveSupport
 		// skip/resume never re-announces a threshold the listener already heard, and
 		// backward navigation does not re-announce a passed threshold.
 		private int _lastAnnouncedPercent;
-		// Bumped whenever a new top-level operation begins (read, stop, skip, spoken
-		// announcement) so a stale deferred task can detect it was superseded.
-		private long _playbackEpoch;
+
+		public event EventHandler<Exception>? SpeakFailed;
 
 		public bool IsSpeaking
 		{
@@ -119,31 +120,43 @@ namespace CognitiveSupport
 		{
 			if (string.IsNullOrEmpty(text)) return;
 
-			CancellationTokenSource? oldCts;
-			CancellationTokenSource newCts = new();
+			CancellationToken token;
 			lock (_gate)
 			{
-				if (_disposed) { newCts.Dispose(); return; }
+				if (_disposed) return;
 				EnsureSynth();
 				CancelAllAndClearPause();
 				_speakingAnnouncement = false;
-				oldCts = _opCts;
-				_opCts = newCts;
+				token = _operation.Begin();
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
 
-			CancellationToken token = newCts.Token;
-			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, resumeRewindWordCount, options, token));
+			// The read itself runs off the caller's thread — preprocessing a long article
+			// is not instant and this is called from the UI thread. Nothing awaits it, but
+			// a failure is not lost either: the continuation reports it, so a read that
+			// died (a voice that vanished, an audio endpoint that went away) is not
+			// indistinguishable from one that finished.
+			Task.Run(() => RunSpeak(text, rate, volume, voiceName, resumeIfSame, preprocess, resumeRewindWordCount, options, token))
+				.ContinueWith(
+					t => ReportSpeakFailure(t.Exception!.GetBaseException()),
+					CancellationToken.None,
+					TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+					TaskScheduler.Default);
+		}
+
+		// Hand a failed read to whoever is listening. Raised on a thread-pool thread, so
+		// a UI subscriber has to marshal it. A listener that throws must not replace the
+		// original failure with an unobserved one of its own.
+		private void ReportSpeakFailure(Exception ex)
+		{
+			try { SpeakFailed?.Invoke(this, ex); }
+			catch { }
 		}
 
 		private void RunSpeak(string text, int rate, int volume, string? voiceName, bool resumeIfSame, bool preprocess, int resumeRewindWordCount, SpeechPreprocessingOptions? options, CancellationToken token)
 		{
 			if (token.IsCancellationRequested) return;
 
-			string processed;
-			try { processed = preprocess ? PreprocessForSpeech(text, options ?? SpeechPreprocessingOptions.All) : text; }
-			catch { return; }
+			string processed = preprocess ? PreprocessForSpeech(text, options ?? SpeechPreprocessingOptions.All) : text;
 
 			if (token.IsCancellationRequested || string.IsNullOrEmpty(processed)) return;
 
@@ -153,7 +166,6 @@ namespace CognitiveSupport
 				if (_synth is null) return;
 
 				ApplyVoiceParams(rate, volume, voiceName);
-				_playbackEpoch++;
 
 				bool sameContent = string.Equals(processed, _currentText, StringComparison.Ordinal);
 				bool canResume = resumeIfSame && sameContent
@@ -194,25 +206,18 @@ namespace CognitiveSupport
 
 		public void SkipSentence(int direction, int rate, int volume, string? voiceName, int graceWindowMs)
 		{
-			CancellationTokenSource? oldCts;
-			CancellationTokenSource newCts = new();
 			lock (_gate)
 			{
-				if (_disposed) { newCts.Dispose(); return; }
+				if (_disposed) return;
 				if (_currentText is null || _sentenceStarts is null || _sentenceStarts.Count == 0)
-				{
-					newCts.Dispose();
 					return;
-				}
 
 				EnsureSynth();
 				CancelAllAndClearPause();
 				_speakingAnnouncement = false;
-				oldCts = _opCts;
-				_opCts = newCts;
+				_operation.Begin();
 
 				ApplyVoiceParams(rate, volume, voiceName);
-				_playbackEpoch++;
 
 				int lastIndex = _sentenceStarts.Count - 1;
 				long now = Environment.TickCount64;
@@ -253,8 +258,6 @@ namespace CognitiveSupport
 					_currentPrompt = _synth!.SpeakAsync(BuildWovenSpeech(targetPos, string.Empty));
 				}
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
 		}
 
 		// Move the navigation cursor onto a sentence and reset the grace-window timer.
@@ -314,23 +317,17 @@ namespace CognitiveSupport
 		{
 			if (string.IsNullOrEmpty(text)) return;
 
-			CancellationTokenSource? oldCts;
-			CancellationTokenSource newCts = new();
 			lock (_gate)
 			{
-				if (_disposed) { newCts.Dispose(); return; }
+				if (_disposed) return;
 				EnsureSynth();
 				CancelAllAndClearPause();
-				oldCts = _opCts;
-				_opCts = newCts;
+				_operation.Begin();
 
 				ApplyVoiceParams(rate, volume, voiceName);
 				_speakingAnnouncement = true;
-				_playbackEpoch++;
 				_currentPrompt = _synth!.SpeakAsync(text);
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
 		}
 
 		public ReadingPosition GetReadingPosition()
@@ -366,12 +363,9 @@ namespace CognitiveSupport
 
 		public void Stop()
 		{
-			CancellationTokenSource? oldCts;
 			lock (_gate)
 			{
-				oldCts = _opCts;
-				_opCts = null;
-				_playbackEpoch++;
+				_operation.Cancel();
 				if (_synth is null) return;
 				try { _synth.SpeakAsyncCancelAll(); } catch { }
 				// If the read was frozen by Pause(), the engine is still in its Paused state with
@@ -384,8 +378,6 @@ namespace CognitiveSupport
 				_speakingAnnouncement = false;
 				_currentPrompt = null;
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
 		}
 
 		public void Pause(int rate, int volume, string? voiceName)
@@ -427,7 +419,6 @@ namespace CognitiveSupport
 				// Beyond the threshold: cancel the frozen utterance and respeak from a rewound
 				// position so the listener regains context. Mirrors RunSpeak's resume branch.
 				ApplyVoiceParams(rate, volume, voiceName);
-				_playbackEpoch++;
 
 				int resumePos = ComputeResumePosition(_currentText, _currentPosition, resumeRewindWordCount, rewind: true);
 				_currentPosition = resumePos;
@@ -634,13 +625,11 @@ namespace CognitiveSupport
 
 		public void Dispose()
 		{
-			CancellationTokenSource? oldCts;
 			lock (_gate)
 			{
 				if (_disposed) return;
 				_disposed = true;
-				oldCts = _opCts;
-				_opCts = null;
+				_operation.Dispose();
 				if (_synth is not null)
 				{
 					try { _synth.SpeakAsyncCancelAll(); } catch { }
@@ -660,8 +649,6 @@ namespace CognitiveSupport
 				_sentenceStarts = null;
 				_currentPrompt = null;
 			}
-			oldCts?.Cancel();
-			oldCts?.Dispose();
 		}
 
 		private static readonly Regex SentenceEndRegex = new(
