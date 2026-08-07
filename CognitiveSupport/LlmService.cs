@@ -1,6 +1,5 @@
 using OpenAI.Chat;
 using Polly;
-using Polly.Timeout;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 
@@ -11,7 +10,7 @@ public class LlmService : ILlmService
 	private readonly Dictionary<string, ChatClient> _chatClients;
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
-	private readonly int _retryCount;
+	private readonly ResiliencePipeline _retryPipeline;
 
 	/// <param name="transport">
 	/// Test seam only; null in production. See <see cref="OpenAiClientOptionsFactory.Create"/>.
@@ -30,7 +29,14 @@ public class LlmService : ILlmService
 		_chatClients = new Dictionary<string, ChatClient>(LlmModelIndex.NameComparer);
 		_modelConfigs = new Dictionary<string, LlmModelConfig>(LlmModelIndex.NameComparer);
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
-		_retryCount = retryCount < 0 ? 0 : retryCount;
+
+		// The OpenAI SDK reports API errors as ClientResultException; only transient
+		// statuses (429, 5xx, connection failures) are retried, so a permanent 4xx such as
+		// 401 Unauthorized (bad API key) fails fast instead of after every retry.
+		_retryPipeline = TransientRetry.Pipeline(
+			retryCount,
+			TransientRetry.Transient()
+				.Handle<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status)));
 
 		foreach (var model in modelList)
 		{
@@ -60,30 +66,22 @@ public class LlmService : ILlmService
 		requestOptions ??= LlmRequestOptions.Default;
 		bool fastMode = requestOptions.FastMode;
 
-		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
-		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
-		// attempts instead of an unhandled failure. If _retryCount == 0 the body still runs once.
-		// The OpenAI SDK reports API errors as ClientResultException; only transient statuses
-		// (429, 5xx, connection failures) are retried, so a permanent 4xx such as 401
-		// Unauthorized (bad API key) fails fast instead of after every retry.
+		// The retry shape lives in TransientRetry.cs, shared with the other four remote
+		// services, so the cold-start path (slow DNS/TLS/JIT warmup on the first call after
+		// a reboot) gets a few escalating-timeout attempts instead of an unhandled failure.
+		// A retry count of 0 still runs the body once.
+		//
+		// Each send counts its own attempts, so the standard-speed retry after a Fast mode
+		// fallback starts from 1 rather than inheriting the abandoned send's stretched
+		// timeout — the attempt lives in Polly's per-execution context, not in the shared
+		// pipeline.
 		async Task<ClientResult<ChatCompletion>> SendAsync(bool useFastMode)
 		{
 			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
 
-			// Built per send, so the standard-speed retry after a Fast mode fallback starts
-			// counting attempts — and therefore timeouts — from scratch rather than
-			// inheriting where the abandoned Fast mode send left off.
-			var retry = new RetryAttempts(
-				_retryCount,
-				new PredicateBuilder()
-					.Handle<HttpRequestException>()
-					.Handle<TimeoutRejectedException>()
-					.Handle<TaskCanceledException>()
-					.Handle<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status)));
-
-			return await retry.Pipeline.ExecuteAsync(async _ =>
+			return await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, _) =>
 			{
-				int timeout = _timeoutSeconds * retry.Attempt;
+				int timeout = _timeoutSeconds * attempt;
 				using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 				return await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token).ConfigureAwait(false);
 			}).ConfigureAwait(false);

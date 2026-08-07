@@ -46,13 +46,11 @@ public class OcrService : IOcrService, IDisposable
 	private static ImageAnalysisClient CreateImageAnalysisClient(string endpoint, string key) =>
 		 new(new Uri(endpoint), new AzureKeyCredential(key));
 
-	private static RetryAttempts CreateRetry() =>
-		new(retryCount: 3,
-			new PredicateBuilder()
-				.Handle<HttpRequestException>()
-				.Handle<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500)
-				.Handle<TimeoutRejectedException>()
-				.Handle<TaskCanceledException>());
+	// Holds no call state, so one pipeline serves every read, concurrent or not.
+	private static readonly ResiliencePipeline RetryPipeline = TransientRetry.Pipeline(
+		retryCount: 3,
+		TransientRetry.Transient()
+			.Handle<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500));
 
 	private TimeSpan GetPerRequestTimeout() => TimeSpan.FromSeconds(Math.Max(1, Math.Min(_timeoutSeconds, MaxTimeoutSeconds)));
 
@@ -87,13 +85,11 @@ public class OcrService : IOcrService, IDisposable
 		// Buffer the stream into a byte array so we can create a new stream for each retry
 		byte[] imageBytes = BufferImage(imageStream);
 
-		var retry = CreateRetry();
-
-		return await retry.Pipeline.ExecuteAsync(
-			async overallToken =>
+		return await RetryPipeline.ExecuteWithAttemptAsync(
+			async (attempt, overallToken) =>
 			{
 				var ms = new MemoryStream(imageBytes, writable: false);
-				return await ExecuteReadInternal(ocrReadingOrder, ms, retry.Attempt, overallToken).ConfigureAwait(false);
+				return await ExecuteReadInternal(ocrReadingOrder, ms, attempt, overallToken).ConfigureAwait(false);
 			},
 			overallCancellationToken).ConfigureAwait(false);
 	}

@@ -1,13 +1,16 @@
 ﻿using CognitiveSupport.Extensions;
 using OpenAI.Audio;
 using Polly;
-using Polly.Timeout;
 
 namespace CognitiveSupport;
 
 public class OpenAiSpeechToTextService : ISpeechToTextService
 {
 	public string ServiceName { get; init; }
+
+	// Holds no call state, so one pipeline serves every transcription, concurrent or not.
+	private static readonly ResiliencePipeline RetryPipeline =
+		TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient());
 
 	private readonly AudioClient _audioClient;
 	private readonly int _timeoutSeconds;
@@ -31,22 +34,15 @@ public class OpenAiSpeechToTextService : ISpeechToTextService
 		if (string.IsNullOrEmpty(audioffilePath))
 			throw new ArgumentException($"'{nameof(audioffilePath)}' cannot be null or empty.", nameof(audioffilePath));
 
-		var retry = new RetryAttempts(
-			retryCount: 3,
-			new PredicateBuilder()
-				.Handle<HttpRequestException>()
-				.Handle<TimeoutRejectedException>()
-				.Handle<TaskCanceledException>());
-
-		var response = await retry.Pipeline.ExecuteAsync(async overallToken =>
+		var response = await RetryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
 			int baseTimeout = timeoutSeconds ?? _timeoutSeconds;
-			int timeout = baseTimeout * retry.Attempt;
+			int timeout = baseTimeout * attempt;
 			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
 			// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
-			this.Beep(retry.Attempt);
+			this.Beep(attempt);
 
 			return await TranscribeViaWhisper(speechToTextPrompt, audioffilePath, linkedCts.Token).ConfigureAwait(false);
 		}, overallCancellationToken).ConfigureAwait(false);

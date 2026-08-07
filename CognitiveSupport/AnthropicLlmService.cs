@@ -1,5 +1,4 @@
 using Polly;
-using Polly.Timeout;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -23,7 +22,7 @@ public class AnthropicLlmService : ILlmService
 	private readonly HttpClient _httpClient;
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
-	private readonly int _retryCount;
+	private readonly ResiliencePipeline _retryPipeline;
 
 	public AnthropicLlmService(
 		string apiKey,
@@ -43,7 +42,7 @@ public class AnthropicLlmService : ILlmService
 		// CreateChatCompletion is the sole timeout authority.
 		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
-		_retryCount = retryCount < 0 ? 0 : retryCount;
+		_retryPipeline = TransientRetry.Pipeline(retryCount, TransientRetry.Transient());
 		_modelConfigs = modelList.ToDictionary(m => m.Name, m => m, LlmModelIndex.NameComparer);
 	}
 
@@ -134,23 +133,21 @@ public class AnthropicLlmService : ILlmService
 	{
 		string jsonBody = Serialize(request, fastMode);
 
-		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
-		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
-		// attempts instead of an unhandled failure.
-		// Only transient failures (network/timeout, 429, 5xx) are surfaced as the
+		// The retry shape lives in TransientRetry.cs, shared with the other four remote
+		// services, so the cold-start path (slow DNS/TLS/JIT warmup on the first call
+		// after a reboot) gets a few escalating-timeout attempts instead of an unhandled
+		// failure. Only transient failures (network/timeout, 429, 5xx) are surfaced as the
 		// retryable HttpRequestException; permanent 4xx errors such as 401 Unauthorized
-		// throw NonTransientLlmException, which the policy does not handle, so a bad API
+		// throw NonTransientLlmException, which the pipeline does not handle, so a bad API
 		// key fails fast instead of after every retry.
-		var retry = new RetryAttempts(
-			_retryCount,
-			new PredicateBuilder()
-				.Handle<HttpRequestException>()
-				.Handle<TimeoutRejectedException>()
-				.Handle<TaskCanceledException>());
-
-		string responseBody = await retry.Pipeline.ExecuteAsync(async _ =>
+		//
+		// Each send counts its own attempts, so the standard-speed retry after a Fast mode
+		// fallback starts from 1 rather than inheriting the abandoned send's stretched
+		// timeout — the attempt lives in Polly's per-execution context, not in the shared
+		// pipeline.
+		string responseBody = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, _) =>
 		{
-			int timeout = _timeoutSeconds * retry.Attempt;
+			int timeout = _timeoutSeconds * attempt;
 			using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 
 			// HttpRequestMessage is single-use; rebuild it for each attempt.

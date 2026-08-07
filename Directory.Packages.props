@@ -1,68 +1,86 @@
 <Project>
-  <PropertyGroup>
-    <!--
-      One version per package for the whole solution. Projects keep their
-      <PackageReference> lines but drop the Version attribute; the versions live here.
-    -->
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!--
-      Lets the versions below also settle packages we never reference directly. Without
-      it, NuGet takes whichever version the deepest dependency happens to ask for, which
-      is how the Microsoft.Extensions.* graph ended up mixing 8.0.x and 10.0.x on a
-      .NET 10 target (issue #259).
-    -->
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-  </PropertyGroup>
+	<PropertyGroup>
+		<!--
+			One version per package for the whole solution. Projects keep their
+			<PackageReference> lines but drop the Version attribute; the versions live here.
+		-->
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+		<!--
+			Lets the versions below also settle packages we never reference directly. Without
+			it, NuGet takes whichever version the deepest dependency happens to ask for, which
+			is how the Microsoft.Extensions.* graph ended up mixing 8.0.x and 10.0.x on a
+			.NET 10 target (issue #259).
+		-->
+		<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+	</PropertyGroup>
 
-  <!-- Packages the projects reference directly. -->
-  <ItemGroup>
-    <PackageVersion Include="Azure.AI.Vision.ImageAnalysis" Version="1.0.0" />
-    <PackageVersion Include="Concentus" Version="2.2.2" />
-    <PackageVersion Include="Concentus.Oggfile" Version="1.0.6" />
-    <PackageVersion Include="CoreAudio" Version="1.40.0" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="Deepgram" Version="6.6.1" />
-    <PackageVersion Include="Markdig" Version="0.44.0" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
-    <PackageVersion Include="NAudio" Version="2.2.1" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageVersion Include="OpenAI" Version="2.12.0" />
-    <PackageVersion Include="PDFsharp" Version="6.2.3" />
-    <!-- Polly 7 is out of support; 8.x is the supported line. See RetryAttempts.cs. -->
-    <PackageVersion Include="Polly" Version="8.7.0" />
-    <PackageVersion Include="ScottPlot.WinUI" Version="5.1.57" />
-    <PackageVersion Include="SoundTouch.Net" Version="2.3.2" />
-    <PackageVersion Include="System.Speech" Version="10.0.0" />
-    <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-  </ItemGroup>
+	<!-- Packages the projects reference directly. -->
+	<ItemGroup>
+		<PackageVersion Include="Azure.AI.Vision.ImageAnalysis" Version="1.0.0" />
+		<PackageVersion Include="Concentus" Version="2.2.2" />
+		<PackageVersion Include="Concentus.Oggfile" Version="1.0.6" />
+		<PackageVersion Include="CoreAudio" Version="1.40.0" />
+		<PackageVersion Include="coverlet.collector" Version="6.0.4" />
+		<PackageVersion Include="Deepgram" Version="6.6.1" />
+		<PackageVersion Include="Markdig" Version="0.44.0" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+		<PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
+		<PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
+		<PackageVersion Include="NAudio" Version="2.2.1" />
+		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageVersion Include="OpenAI" Version="2.12.0" />
+		<PackageVersion Include="PDFsharp" Version="6.2.3" />
+		<!-- Polly 7 is out of support; 8.x is the supported line. See RetryAttempts.cs. -->
+		<PackageVersion Include="Polly" Version="8.7.0" />
+		<PackageVersion Include="ScottPlot.WinUI" Version="5.1.57" />
+		<PackageVersion Include="SoundTouch.Net" Version="2.3.2" />
+		<PackageVersion Include="System.Speech" Version="10.0.0" />
+		<PackageVersion Include="xunit" Version="2.9.3" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+	</ItemGroup>
 
-  <!--
-    Pinned transitively, not referenced directly. Deepgram pulls in the 8.0.x
-    Microsoft.Extensions.Http stack, which on a net10.0 target left the solution loading
-    two generations of the same libraries side by side. Holding the whole family on one
-    10.0.x band keeps it to one.
-  -->
-  <ItemGroup>
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
-  </ItemGroup>
+	<!--
+		Pinned transitively, not referenced directly. Deepgram pulls in the 8.0.x
+		Microsoft.Extensions.Http stack, which on a net10.0 target left the solution loading
+		two generations of the same libraries side by side. Holding the whole family on one
+		10.0.x band keeps it to one.
+
+		Every Microsoft.Extensions.* package the solution resolves is listed, including the
+		ones only Microsoft.Extensions.Hosting drags in. Those already land on 10.0.10 by way
+		of Hosting's own exact pins, so naming them changes nothing today — it means a future
+		Hosting bump, or dropping the Hosting reference, cannot quietly reopen the split this
+		change closed.
+	-->
+	<ItemGroup>
+		<PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.CommandLine" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Diagnostics" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.FileProviders.Physical" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
+	</ItemGroup>
 </Project>
