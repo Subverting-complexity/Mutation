@@ -8,14 +8,27 @@ namespace Mutation.Tests;
 // every status change by design (issue #164), so nothing deduplicated them and a
 // screen-reader user heard the same sentence twice, as though a second thing had been
 // cancelled.
+//
+// The *wiring* — which message each moment raises, and that a repeat press says something
+// else again — is asserted in DictationPressPlannerTests, because that is where the bug
+// lived. What is left here is the one property the strings themselves have to hold.
 public class CancellationMessagesTests
 {
 	[Fact]
-	public void TheRequestAndTheCompletionDoNotSayTheSameThing()
+	public void EveryCancelMessageIsDistinct()
 	{
-		Assert.NotEqual(
+		// The whole of issue #299 in one assertion: no two moments of a cancel, and no two
+		// operations that can be cancelled from the same key, may say the same words.
+		string[] messages =
+		[
 			CancellationMessages.TranscriptionRequested,
-			CancellationMessages.TranscriptionCompleted);
+			CancellationMessages.TranscriptionCompleted,
+			CancellationMessages.LlmRequested,
+			CancellationMessages.LlmCompleted,
+			CancellationMessages.AlreadyStopping,
+		];
+
+		Assert.Equal(messages.Length, messages.Distinct().Count());
 	}
 
 	[Fact]
@@ -31,22 +44,26 @@ public class CancellationMessagesTests
 	}
 
 	[Fact]
-	public void LlmAndTranscriptionCancelsNameDifferentThings()
+	public void TheLlmMessagesUseTheWordTheWindowShows()
 	{
-		// Both can be cancelled from the same key, one after the other, so "cancelled"
-		// alone would leave the user unsure which step gave up.
-		Assert.NotEqual(CancellationMessages.TranscriptionRequested, CancellationMessages.LlmRequested);
-		Assert.NotEqual(CancellationMessages.TranscriptionCompleted, CancellationMessages.LlmCompleted);
+		// A screen-reader user navigates by the labels they hear. The button is
+		// "Process with LLM" and the step announces "Processing with LLM...", so a cancel
+		// that spoke of "language model processing" named nothing they could find.
+		Assert.Contains("LLM", CancellationMessages.LlmRequested);
+		Assert.Contains("LLM", CancellationMessages.LlmCompleted);
+		Assert.Equal(
+			RecordingUiPlanner.ProcessingWithLlmPlaceholder,
+			"Processing with LLM...");
 	}
 
 	[Fact]
 	public void LlmCancelRidesWithTheDeliveryAnnouncement_SoNeitherIsTalkedOver()
 	{
-		// Status supersedes rather than queues, so a cancel raised on its own would be
-		// wiped by the delivery line that follows it a moment later.
-		string composed = CancellationMessages.LlmCancelledThen("Transcript ready and copied.");
+		// Status supersedes rather than queues, so a cancel raised on its own would be wiped
+		// by the delivery line that follows it a moment later. Folding it in keeps both.
+		string composed = CancellationMessages.LlmCancelledThen("Transcript ready.");
 
 		Assert.StartsWith(CancellationMessages.LlmCompleted, composed);
-		Assert.EndsWith("Transcript ready and copied.", composed);
+		Assert.EndsWith("Transcript ready.", composed);
 	}
 }

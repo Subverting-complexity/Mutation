@@ -32,6 +32,10 @@ transcription..." — that is Mutation telling you your keypress arrived. Then, 
 transcription has actually let go, "Transcription cancelled." The box empties itself
 and everything is yours to use again.
 
+If you press again in between, you hear "Already stopping." Nothing has gone wrong —
+your first press landed, and Mutation is waiting for the transcription service to let
+go of the request.
+
 Your recording is not lost. It is still the session Mutation has selected, so you
 can press **Retry transcription** to send it off again — or step back to it later
 with the **older** and **newer** arrow buttons.
@@ -49,14 +53,20 @@ Which prompt runs is up to you: it's the one you have marked as **Auto-Run**. Se
 
 ## Changed your mind while the AI is tidying up
 
-The AI step happens after the transcription, and it can take longer — occasionally
-much longer, if the service is busy and Mutation is quietly trying again in the
-background. The status line reads "Processing with LLM..." while that is going on.
+The AI step happens after the transcription, and it can take a lot longer. If the
+service is down, Mutation keeps trying — giving each attempt a longer window than the
+last — for about **ten minutes** before it gives up, or up to twenty if the prompt
+asked for Fast mode. So this is the wait you are most likely to want out of.
 
-Press **Shift+Alt+I** once more and it gives up on the AI step. (**Shift+Alt+U** does
-the same thing here — either shortcut will stop it.) You hear the failure beep and
-"Cancelling language model processing...", then "Language model processing cancelled.
-Transcript ready and copied."
+While it runs, the **Raw Transcript** box reads "Processing with LLM...", and both
+**Record** and **Record and Format** stay available, renamed to **Stop LLM
+processing**. Press either button, or press **Shift+Alt+I** or **Shift+Alt+U** again.
+Any of those gives up on the AI step.
+
+You hear the failure beep and "Cancelling LLM processing..." Then, once the request has
+let go, the success beep and "LLM processing cancelled. Transcript ready." Press again
+while it is still winding down and you hear "Already stopping." — the first press
+did register; the AI is just taking a moment to let go.
 
 Your dictation is not thrown away with it. Everything you said is still transcribed,
 still in both boxes, and still on your clipboard — just without the AI's tidying up.

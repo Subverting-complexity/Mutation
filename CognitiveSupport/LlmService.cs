@@ -74,11 +74,11 @@ public class LlmService : ILlmService
 		var retryPolicy = Policy
 			.Handle<HttpRequestException>()
 			.Or<TimeoutRejectedException>()
-			// A per-attempt timeout and an outside cancellation both arrive here as
-			// TaskCanceledException, and only the first of them is worth another try.
-			// Without the guard the caller's cancel is read as a transient blip and the
-			// escalation the cancel exists to escape carries on regardless (issue #256).
-			.Or<TaskCanceledException>(_ => !cancellationToken.IsCancellationRequested)
+			// Still unconditional: a per-attempt timeout arrives as TaskCanceledException
+			// too, and that one is exactly what the escalating ladder exists to retry. An
+			// outside cancellation is not filtered out here because it never reaches the
+			// predicate — see the ExecuteAsync call below.
+			.Or<TaskCanceledException>()
 			.Or<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status))
 				.WaitAndRetryAsync(
 					delay,
@@ -93,9 +93,11 @@ public class LlmService : ILlmService
 		{
 			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
 			var context = new Context { [AttemptKey] = 1 };
-			// The token goes to ExecuteAsync as well as into the attempt, so a cancel that
-			// lands during the wait between two attempts is acted on then rather than
-			// sitting out the sleep.
+			// Handing the token to ExecuteAsync is what makes the ladder escapable, and it
+			// is the whole mechanism: Polly checks it at the head of every attempt and
+			// waits on it during the backoff, so an outside cancel ends the retry loop
+			// there rather than being re-read as one more transient blip (issue #256).
+			// Mirrors OpenAiSpeechToTextService, which has always been shaped this way.
 			return await retryPolicy.ExecuteAsync(async (ctx, overallToken) =>
 			{
 				int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;

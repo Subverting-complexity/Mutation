@@ -87,6 +87,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	// flow, because the two are started by different keys and each cancels its own
 	// (issue #256).
 	private readonly Mutation.Ui.Core.LlmOperationState _promptLlmOperation = new();
+	// Which prompt the in-flight run belongs to, so a cancel can name it.
+	private string? _runningPromptName;
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	// Shows modal dialogs one at a time; a dialog requested while another
@@ -255,7 +257,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 _transcriptFormatter,
                 LstPrompts,
                 ExecutePrompt,
-                failures => _ = ShowHotkeyBindingFailuresAsync(failures));
+                failures => _ = ShowHotkeyBindingFailuresAsync(failures),
+                _shutdownCts.Token);
             _promptLibrary.Initialize();
 
 		var tooltipManager = new TooltipManager(_settings);
@@ -2061,6 +2064,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private async void ExecutePrompt(LlmSettings.LlmPrompt prompt)
     {
+        // Declared out here so the catch filters below can tell the three ways this can end
+        // in an OperationCanceledException apart: the user's own cancel, the window
+        // closing, and a provider that never answered.
+        CancellationToken llmToken = default;
         try
         {
              // Marshaling to UI thread if called from hotkey background thread
@@ -2070,20 +2077,50 @@ public sealed partial class MainWindow : Window, IDisposable
                  return;
              }
 
-			// A second press while a request is in flight means "stop", not "run another".
-			// A model call can take minutes — the retry ladder escalates its timeout on
-			// every attempt — so without this the user had no way out of it (issue #256).
-			// Checked before the start beep so a cancel never sounds like a fresh start.
+			// Nothing to run into, and nothing left to announce it on.
+			if (_isClosing) return;
+
+			// A press while a request is in flight means "stop", not "run another". A model
+			// call can take minutes — the retry ladder escalates its timeout on every
+			// attempt — so without this the user had no way out of it (issue #256). Checked
+			// before the start beep so a cancel never sounds like a fresh start.
+			//
+			// One slot for the whole library, so a *different* prompt's press stops the one
+			// that is running rather than queueing behind it. That is the honest reading of
+			// the press — two model calls at once is not what anybody asked for — but it is
+			// only honest if the message names what stopped, or the user is left wondering
+			// why prompt B did nothing.
 			if (_promptLlmOperation.Running)
 			{
+				if (_promptLlmOperation.CancelRequested)
+				{
+					// A repeat press on a stop already asked for. Answered rather than
+					// ignored: silence from a shortcut reads as one that did not register.
+					// No second beep — the first press already acknowledged audibly.
+					ShowStatus("Processing", CancellationMessages.AlreadyStopping, InfoBarSeverity.Informational);
+					return;
+				}
+
 				_promptLlmOperation.Cancel();
 				BeepPlayer.Play(BeepType.Failure);
-				ShowStatus("Processing", CancellationMessages.LlmRequested, InfoBarSeverity.Informational);
+				ShowStatus("Processing", ComposePromptCancelMessage(), InfoBarSeverity.Informational);
 				return;
 			}
 
 			BeepPlayer.Play(BeepType.Start);
 			TxtFormatTranscript.Text = "Processing...";
+
+			// Claimed here, before the first await, so two presses in quick succession
+			// cannot both get past the guard above and then fight over the slot — the
+			// first to unwind used to release the claim the second one was relying on,
+			// and both calls died. The handle releases the slot only while this run still
+			// owns it, and it is linked to the shutdown token so closing the window
+			// abandons the request instead of leaving it climbing the retry ladder with
+			// nobody to read it.
+			using var run = _promptLlmOperation.Begin(_shutdownCts.Token);
+			llmToken = run.Token;
+			_runningPromptName = prompt.Name;
+
 			string raw = await _clipboard.GetTextAsync();
 			if (string.IsNullOrWhiteSpace(raw))
 			{
@@ -2099,18 +2136,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				FastMode = prompt.FastMode,
 				OnFastModeFallback = f => fastModeFallback = f,
 			};
-			// Linked to the shutdown token so closing the window abandons the request
-			// instead of leaving it climbing the retry ladder with nobody to read it.
-			CancellationToken llmToken = _promptLlmOperation.Begin(_shutdownCts.Token);
-			string processed;
-			try
-			{
-				processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions, llmToken);
-			}
-			finally
-			{
-				_promptLlmOperation.End();
-			}
+			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions, run.Token);
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
@@ -2139,7 +2165,14 @@ public sealed partial class MainWindow : Window, IDisposable
 					InfoBarSeverity.Error);
 			}
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_isClosing || _shutdownCts.IsCancellationRequested)
+        {
+             // The window is on its way out. Nothing to announce and nothing left to
+             // announce it on — ShowStatus would build an automation peer and start a timer
+             // on a window that has already been torn down.
+             ErrorLogger.LogInfo("LLM", "Prompt run abandoned because the window is closing.");
+        }
+        catch (OperationCanceledException) when (llmToken.IsCancellationRequested)
         {
              // Asked for, not a failure: no error dialog, and the "Processing..."
              // placeholder is taken back out of the box rather than left standing there
@@ -2149,11 +2182,25 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
+             // A per-attempt timeout arrives here as an OperationCanceledException too,
+             // once the ladder is exhausted — and nobody cancelled anything, so it keeps
+             // the error dialog, the Error severity and the log entry it has always had.
+             // Reading it as the user's own cancel is how a dead provider came to be
+             // reported as something they had asked for, silently.
              // ShowErrorDialog logs it; a second call here would duplicate the entry.
+             TxtFormatTranscript.Text = string.Empty;
              ShowStatus("Processing Failed", ex.Message, InfoBarSeverity.Error);
              await ShowErrorDialog($"Error executing prompt '{prompt.Name}'", ex);
         }
     }
+
+    // Names the prompt that is being stopped. Pressing prompt B's shortcut while prompt A
+    // is in flight stops A — there is one slot — and without the name a blind user is left
+    // with a generic "cancelling" and no clue why the prompt they asked for did nothing.
+    private string ComposePromptCancelMessage() =>
+        string.IsNullOrWhiteSpace(_runningPromptName)
+            ? CancellationMessages.LlmRequested
+            : $"Cancelling LLM processing for '{_runningPromptName}'...";
 
 	/// <summary>
 	/// Whether this Fast mode fallback should be told to the user, given they may
@@ -2383,6 +2430,10 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         RecordingActivity.Recording => StopGlyph,
         RecordingActivity.Transcribing => ProcessingGlyph,
+        // A stop, because that is what pressing it now does. Falling through to the default
+        // would have shown the record glyph on a button whose accessible name says "Stop
+        // LLM processing" — the icon and the name disagreeing about the same control.
+        RecordingActivity.ProcessingWithLlm => StopGlyph,
         _ => RecordGlyph,
     };
 
@@ -2390,7 +2441,16 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            FinalizeTranscript(result.RawText, "Transcript ready.", result.FormattedText, result.FastModeNotice);
+            FinalizeTranscript(
+                result.RawText,
+                // The cancel is folded into the delivery line rather than announced on its
+                // own, because this is the last status the run raises — anything said
+                // earlier is superseded by it and heard by nobody.
+                result.LlmCancelled
+                    ? CancellationMessages.LlmCancelledThen("Transcript ready.")
+                    : "Transcript ready.",
+                result.FormattedText,
+                result.FastModeNotice);
         });
     }
 

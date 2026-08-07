@@ -53,7 +53,7 @@ Three pointers for writing a good one:
 
 There is a **Test Run** button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.
 
-If a test run is taking longer than you want to wait, closing the **Edit Prompt** window stops it. Save your work first if you want to keep it — closing the window closes the editor too.
+If a test run is taking longer than you want to wait, press **Test Run** again. Mutation gives up on the request, you hear the failure beep, and a "Test run cancelled." box appears when it has let go. Pressing **Save** or **Cancel**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
 
 Then press **Save**, or **Cancel** to throw it away.
 
@@ -109,13 +109,15 @@ Under **AI assistance** in **Settings** there are two knobs worth knowing about.
 
 **Retries** is how many times Mutation quietly tries again after a failed request, before telling you it did not work. The default of three is there for a good reason: it helps the very first request after you reboot succeed while your network is still warming up.
 
-Those two multiply. With the default timeout and three retries, a service that has gone down keeps Mutation waiting for several minutes before it gives up — so it is worth knowing how to stop it.
+Those two multiply. With the standard 60 seconds and three retries, a service that has gone down keeps Mutation waiting about **ten minutes** before it gives up — and up to twenty if the prompt asked for Fast mode, because Mutation then tries the whole thing again at normal speed. So it is worth knowing how to stop it.
 
 ### Stopping a prompt that is taking too long
 
-Run the same prompt again and Mutation gives up on the request instead of starting a second one. Press its shortcut a second time, or press **Run** on the same row again, or press **Process with LLM** again — whichever way you started it.
+Mutation runs one AI request at a time, so **starting any prompt while one is already running stops the one that is running** instead of queueing behind it. Press its shortcut again, press **Run** on any row, or press **Process with LLM** — all of them stop the request in flight.
 
-You hear the failure beep and "Cancelling language model processing...", then "Language model processing cancelled." once the request has let go. The **Formatted Transcript** box empties itself.
+You hear the failure beep and a message naming what stopped — "Cancelling LLM processing for 'Fix Grammar'..." — then "LLM processing cancelled." once the request has let go, and the **Formatted Transcript** box empties itself. Press again while it is still winding down and you hear "Already stopping."
+
+Because any prompt stops the running one, the prompt you just pressed does **not** then run. Press it once more, after you hear that the first one has stopped, to actually run it.
 
 Nothing is lost. Your original text is still on the clipboard where you copied it from, so you can try again whenever you like — or pick a different prompt.
 

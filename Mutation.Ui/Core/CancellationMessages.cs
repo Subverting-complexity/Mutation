@@ -22,11 +22,26 @@ internal static class CancellationMessages
 	/// <summary>Completion: the transcription has let go and nothing was delivered.</summary>
 	internal const string TranscriptionCompleted = "Transcription cancelled.";
 
-	/// <summary>Progress: the cancel has been asked for and the model call is winding down.</summary>
-	internal const string LlmRequested = "Cancelling language model processing...";
+	/// <summary>
+	/// Progress: the cancel has been asked for and the model call is winding down.
+	/// "LLM" rather than "language model" because that is the word the window already
+	/// uses — the <b>Process with LLM</b> button, the <b>LLM Prompts</b> card, and the
+	/// "Processing with LLM..." line this cancel interrupts. A screen-reader user
+	/// navigates by the labels they hear, so the announcement has to use them.
+	/// </summary>
+	internal const string LlmRequested = "Cancelling LLM processing...";
 
 	/// <summary>Completion: the model call has let go.</summary>
-	internal const string LlmCompleted = "Language model processing cancelled.";
+	internal const string LlmCompleted = "LLM processing cancelled.";
+
+	/// <summary>
+	/// The answer to a repeat press on a stop already asked for. Cancelling is not
+	/// instant — the call unwinds when the request it is waiting on lets go — and a user
+	/// who hears nothing presses again. Answered rather than ignored, because silence from
+	/// a shortcut reads as one that did not register; and answered with something
+	/// different, because repeating the request line is how issue #299 sounded.
+	/// </summary>
+	internal const string AlreadyStopping = "Already stopping.";
 
 	/// <summary>
 	/// Cancelling the language-model step does not throw the dictation away — the
@@ -35,6 +50,13 @@ internal static class CancellationMessages
 	/// announcement instead of being raised on its own: status supersedes rather than
 	/// queues, and a separate line would be talked straight over by the delivery.
 	/// </summary>
+	/// <remarks>
+	/// It has to be folded into the announcement the transcript *delivery* ends on, not
+	/// the one the audio session raises. The session's line is superseded a moment later
+	/// by the delivery's own "Transcript ready.", so a cancel folded in there is heard by
+	/// nobody. This is the same trap the FastModeNotice comment on TranscriptResult warns
+	/// about, and the reason both notices travel with the transcript.
+	/// </remarks>
 	internal static string LlmCancelledThen(string deliveryMessage) =>
 		$"{LlmCompleted} {deliveryMessage}";
 }

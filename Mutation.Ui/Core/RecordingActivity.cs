@@ -24,6 +24,17 @@ public enum RecordingActivity
 	Transcribing,
 
 	/// <summary>
+	/// The transcript exists and the language model is working on it. Its own activity
+	/// because it is its own wait — often the longest one, since the retry ladder
+	/// escalates its timeout on every attempt. Reported as <see cref="Transcribing"/> it
+	/// named the wrong step for minutes at a time, and left the record buttons disabled,
+	/// so the cancel added in issue #256 existed only on the shortcut: a screen-reader
+	/// user tabbing the window found a dimmed button saying "Transcribing..." and no way
+	/// to stop what was actually running.
+	/// </summary>
+	ProcessingWithLlm,
+
+	/// <summary>
 	/// A transcription was abandoned before it produced anything. Everything
 	/// <see cref="Idle"/> means, plus the one thing it deliberately does not do: the
 	/// "Transcribing..." placeholder is taken back out of the transcript box. Idle

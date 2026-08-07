@@ -9,6 +9,7 @@ public static class RecordingUiPlanner
 {
 	public const string RecordingPlaceholder = "Recording...";
 	public const string TranscribingPlaceholder = "Transcribing...";
+	public const string ProcessingWithLlmPlaceholder = "Processing with LLM...";
 
 	public static RecordingUiPlan For(RecordingActivity activity) => activity switch
 	{
@@ -24,6 +25,18 @@ public static class RecordingUiPlanner
 			ButtonEnabled: false,
 			TranscriptReadOnly: true,
 			TranscriptText: TranscribingPlaceholder,
+			PlayStartBeep: false),
+
+		// The one busy state that leaves its button live. The model call is the longest
+		// wait in the flow and the only one the user may well want out of, so the button
+		// that started it stays enabled and says what pressing it now does — otherwise the
+		// cancel exists only on the shortcut (issue #256). The box names the step that is
+		// really running rather than leaving "Transcribing..." standing over it.
+		RecordingActivity.ProcessingWithLlm => new RecordingUiPlan(
+			ButtonLabel: "Stop LLM processing",
+			ButtonEnabled: true,
+			TranscriptReadOnly: true,
+			TranscriptText: ProcessingWithLlmPlaceholder,
 			PlayStartBeep: false),
 
 		// Idle in every respect, except that the placeholder is cleared. Nothing was

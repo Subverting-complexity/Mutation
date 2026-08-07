@@ -209,6 +209,59 @@ public class LlmCancellationTests : IDisposable
 		Assert.Equal("done", result);
 	}
 
+	// ----- The other direction: a per-attempt timeout must STILL be retried.
+
+	[Fact]
+	public async Task Anthropic_APerAttemptTimeout_IsStillRetried_NotMistakenForACancel()
+	{
+		// The retry policy handles TaskCanceledException because that is what the escalating
+		// per-attempt timeout surfaces, and retrying it is what gets the cold-start path
+		// (slow DNS/TLS/JIT on the first call after a reboot) to succeed. Threading an
+		// external token through must not cost that: nobody cancelled anything here.
+		var handler = new ScriptedHandler(HttpStatusCode.OK, AnthropicSuccess)
+		{
+			StallOnRequest = 1,
+			StallFor = TimeSpan.FromSeconds(30),
+		};
+
+		var service = new AnthropicLlmService(
+			"test-key",
+			new[] { new LlmModelConfig(AnthropicModel, LlmProvider.Anthropic, customTemperature: null) },
+			Track(handler),
+			timeoutSeconds: 1,
+			retryCount: 1);
+
+		string result = await service.CreateChatCompletion(Messages(), AnthropicModel);
+
+		Assert.Equal("done", result);
+		Assert.Equal(2, handler.RequestCount);
+	}
+
+	// ----- Cancelling the second climb, which is where the twenty minutes actually goes.
+
+	[Fact]
+	public async Task Anthropic_CancelDuringTheStandardSpeedLeg_StopsTheSecondClimbToo()
+	{
+		using var cts = new CancellationTokenSource();
+		// 529 twice exhausts Fast mode's ladder and triggers the standard-speed fallback;
+		// request 3 is the first attempt of that second climb. Cancelling there is the case
+		// that matters, because the second climb is what doubles a ten-minute wait.
+		var handler = new ScriptedHandler((HttpStatusCode)529)
+		{
+			CancelOnRequest = 3,
+			CancelWith = cts,
+			HonourTokenAfterCancelling = true,
+		};
+
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+			CreateAnthropic(handler, retryCount: 1).CreateChatCompletion(
+				Messages(), AnthropicModel, new LlmRequestOptions { FastMode = true }, cts.Token));
+
+		// Two on the fast ladder, one on the standard-speed leg, and then it stopped —
+		// rather than climbing the second ladder to the top.
+		Assert.Equal(3, handler.RequestCount);
+	}
+
 	// Routing the token through CompositeLlmService is covered by
 	// CompositeLlmServiceTests, alongside the rest of what that layer forwards.
 
@@ -233,6 +286,12 @@ public class LlmCancellationTests : IDisposable
 		/// <summary>1-based request number to cancel on; 0 never cancels.</summary>
 		internal int CancelOnRequest { get; init; }
 
+		/// <summary>1-based request number to stall on; 0 never stalls.</summary>
+		internal int StallOnRequest { get; init; }
+
+		/// <summary>How long to stall, honouring the token — i.e. how a slow provider looks.</summary>
+		internal TimeSpan StallFor { get; init; } = TimeSpan.FromSeconds(5);
+
 		internal CancellationTokenSource? CancelWith { get; init; }
 
 		/// <summary>
@@ -242,11 +301,12 @@ public class LlmCancellationTests : IDisposable
 		/// </summary>
 		internal bool HonourTokenAfterCancelling { get; init; }
 
-		protected override Task<HttpResponseMessage> SendAsync(
+		protected override async Task<HttpResponseMessage> SendAsync(
 			HttpRequestMessage request,
 			CancellationToken cancellationToken)
 		{
 			RequestCount++;
+			bool stall = StallOnRequest > 0 && RequestCount == StallOnRequest;
 
 			if (CancelOnRequest > 0 && RequestCount == CancelOnRequest)
 			{
@@ -255,10 +315,14 @@ public class LlmCancellationTests : IDisposable
 					cancellationToken.ThrowIfCancellationRequested();
 			}
 
-			return Task.FromResult(new HttpResponseMessage(_status)
+			// A real handler always yields; stalling is how the per-attempt timeout is
+			// provoked, and honouring the token is what makes it surface as a cancellation.
+			await Task.Delay(stall ? StallFor : TimeSpan.Zero, cancellationToken).ConfigureAwait(false);
+
+			return new HttpResponseMessage(_status)
 			{
 				Content = new StringContent(_body, Encoding.UTF8, "application/json"),
-			});
+			};
 		}
 	}
 }
