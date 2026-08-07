@@ -20,6 +20,7 @@
     <Grid Background="{ThemeResource AppBackgroundBrush}">
         <Grid.Resources>
             <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
+            <converters:PromptActionNameConverter x:Key="PromptActionNameConverter" />
         </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -507,9 +508,15 @@
                                                 <TextBlock Text="{Binding ModelName}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                             </StackPanel>
 
-                                            <Button Grid.Column="1" Content="Run" Click="BtnRunPrompt_Click" Tag="{Binding}" Style="{StaticResource OutlinedButtonStyle}" />
-                                            <Button Grid.Column="2" Content="Edit" Click="BtnEditPrompt_Click" Tag="{Binding}" />
-                                            <Button Grid.Column="3" Content="Delete" Click="BtnDeletePrompt_Click" Tag="{Binding}" />
+                                            <!-- The accessible names carry the row's prompt name. The visible
+                                                 Content is the same three words on every row, so without this a
+                                                 screen reader says "Delete" all the way down the list. -->
+                                            <Button Grid.Column="1" Content="Run" Click="BtnRunPrompt_Click" Tag="{Binding}" Style="{StaticResource OutlinedButtonStyle}"
+                                                    AutomationProperties.Name="{Binding Name, Converter={StaticResource PromptActionNameConverter}, ConverterParameter='Run'}" />
+                                            <Button Grid.Column="2" Content="Edit" Click="BtnEditPrompt_Click" Tag="{Binding}"
+                                                    AutomationProperties.Name="{Binding Name, Converter={StaticResource PromptActionNameConverter}, ConverterParameter='Edit'}" />
+                                            <Button Grid.Column="3" Content="Delete" Click="BtnDeletePrompt_Click" Tag="{Binding}"
+                                                    AutomationProperties.Name="{Binding Name, Converter={StaticResource PromptActionNameConverter}, ConverterParameter='Delete'}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
@@ -602,9 +609,12 @@
                                     AutomationProperties.HelpText="{StaticResource Help.Main.ThirdPartyInteraction}"
                                     ToolTipService.ToolTip="Choose how formatted text is inserted"
                                     SelectionChanged="CmbInsertOption_SelectionChanged" />
+                                <!-- A live region: picking a different mode changes this line, and the
+                                     change is the only feedback there is that the choice took effect. -->
                                 <TextBlock
                                     x:Name="ThirdPartyExplanationText"
                                     TextWrapping="Wrap"
+                                    AutomationProperties.LiveSetting="Polite"
                                     Style="{StaticResource CaptionTextStyle}"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>

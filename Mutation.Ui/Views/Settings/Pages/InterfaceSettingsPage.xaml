@@ -44,12 +44,8 @@
 				<ComboBox x:Name="CmbDictationInsert"
 						  AutomationProperties.Name="Dictation insert preference"
 						  AutomationProperties.HelpText="{StaticResource Help.Interface.DictationInsert}"
-						  Width="220"
-						  SelectionChanged="CmbDictationInsert_SelectionChanged">
-					<x:String>Paste</x:String>
-					<x:String>Type</x:String>
-					<x:String>DoNotInsert</x:String>
-				</ComboBox>
+						  MinWidth="220"
+						  SelectionChanged="CmbDictationInsert_SelectionChanged" />
 				<Button x:Name="BtnResetDictation" Click="BtnResetDictation_Click"
 						AutomationProperties.Name="Reset dictation insert preference">
 					<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12"

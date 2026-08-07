@@ -111,9 +111,9 @@ One small but important setting: it controls where your finished transcripts are
 
 There are three choices, and the line of text underneath the dropdown explains whichever one you have picked:
 
-- **Paste** — copies the transcript and pastes it into the active application.
-- **SendKeys** — types the transcript into the active app as if you entered it yourself.
-- **DoNotInsert** — keeps the transcript inside Mutation without sending it anywhere.
+- **Paste into 3rd party application** — copies the transcript and pastes it into the active application.
+- **Send keys to 3rd party application** — types the transcript into the active app as if you entered it yourself.
+- **Don't insert into 3rd party application** — keeps the transcript inside Mutation without sending it anywhere.
 
 Full details: [Dictation: turning speech into text](dictation.md).
 

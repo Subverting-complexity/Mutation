@@ -123,6 +123,95 @@ public class TextFormatterTests
 		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
 	}
 
+	// Closing punctuation finishes the word in front of it and lets the next word start
+	// normally. Welding both sides — which is what every symbol used to get — ran the
+	// following word straight into the mark (issue #293).
+	[Theory]
+	[InlineData("fifty percent last year", "percent", "%", "fifty% last year")]
+	[InlineData("the total close bracket then", "close bracket", ")", "the total) then")]
+	[InlineData("item close square then", "close square", "]", "item] then")]
+	public void FormatWithRule_Smart_ClosingSymbol_HugsTheWordOnItsLeft(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// Opening punctuation is the mirror image: it leans onto what follows and leaves the
+	// gap in front of it alone.
+	[Theory]
+	[InlineData("issue hash 42 is open", "hash", "#", "issue #42 is open")]
+	[InlineData("type open bracket here", "open bracket", "(", "type (here")]
+	[InlineData("costs dollar 40 today", "dollar", "$", "costs $40 today")]
+	public void FormatWithRule_Smart_OpeningSymbol_HugsTheWordOnItsRight(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// A closing symbol at the end of a sentence still takes the punctuation that followed it,
+	// so the mark it closes with is not stranded a space away.
+	[Fact]
+	public void FormatWithRule_Smart_ClosingSymbol_KeepsTrailingPunctuationAttached()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"we hit fifty percent. Then more",
+			Rule("percent", "%", MatchTypeEnum.Smart));
+
+		Assert.Equal("we hit fifty%. Then more", result);
+	}
+
+	// The shipped defaults are all left-attaching and all supply their own trailing space.
+	// Handing them back the gap the match consumed as well would double it.
+	[Theory]
+	[InlineData("Hello full stop next word", "full stop", ". ", "Hello. next word")]
+	[InlineData("one new colon two", "new colon", ": ", "one: two")]
+	[InlineData("wait ellipsis then", "ellipsis", "... ", "wait... then")]
+	public void FormatWithRule_Smart_ClosingSymbolSupplyingItsOwnSpace_DoesNotDoubleIt(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// A possessive belongs to the word it possesses. It carries a letter, so it is a word
+	// replacement rather than a symbol, but it still has to close the gap on its left.
+	[Theory]
+	[InlineData("that is Jacques apostrophe s laptop", "apostrophe s", "'s", "that is Jacques's laptop")]
+	[InlineData("they are they apostrophe re here", "apostrophe re", "'re", "they are they're here")]
+	[InlineData("we curly apostrophe s done", "curly apostrophe s", "’s", "we’s done")]
+	public void FormatWithRule_Smart_ApostropheSuffix_AttachesToThePrecedingWord(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// "Starts with an apostrophe" is not the same thing as "is a suffix". A decade and a
+	// quotation both open with one and are both ordinary words that keep their gap.
+	[Theory]
+	[InlineData("back in the nineties we did", "nineties", "'90s", "back in the '90s we did")]
+	[InlineData("he said quoted thing today", "quoted thing", "'quoted thing'", "he said 'quoted thing' today")]
+	// "'em" and "'n" open with an apostrophe and are two letters long, but they are whole
+	// words — "give it to 'em", not "give it to'em".
+	[InlineData("give it to them today", "them", "'em", "give it to 'em today")]
+	[InlineData("fish and chips please", "and", "'n", "fish 'n chips please")]
+	public void FormatWithRule_Smart_WordOpeningWithAnApostrophe_KeepsTheGap(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// U+2019 is the right single quote and the typographic apostrophe at the same time.
+	// Treating it as closing punctuation would break the far more common of the two uses,
+	// so it keeps the both-sides behaviour it has always had.
+	[Fact]
+	public void FormatWithRule_Smart_CurlyApostropheSymbol_StillWeldsBothSides()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"that is John apostrophe s laptop",
+			Rule("apostrophe", "’", MatchTypeEnum.Smart));
+
+		Assert.Equal("that is John’s laptop", result);
+	}
+
 	// A replacement that opens with punctuation but carries text is a word, not punctuation,
 	// and still needs the gap in front of it.
 	[Fact]

@@ -30,6 +30,18 @@ Each rule also has a **Match type**, which decides how the Find text is interpre
 
 **Smart** matches the word properly, tidying up the spaces and punctuation around it as it goes. This is the one most people want, and it is especially good for removing a spoken word cleanly without leaving a double space or a stranded comma behind. Whatever you type in the Find box is taken exactly as you typed it, so symbols are fine — a rule finding `C++` looks for `C++`.
 
+Smart also knows that different symbols sit differently in a sentence. If you replace a spoken word with a symbol, it works out which side the symbol belongs on.
+
+| You replace with | Where it sits | Example |
+|---|---|---|
+| A closing symbol, like `%` `)` `]` `.` `?` | Tight against the word before it | "fifty percent last year" becomes "fifty% last year" |
+| An opening symbol, like `#` `(` `[` `$` | Tight against the word after it | "issue hash 42" becomes "issue #42" |
+| A joining symbol, like `-` `/` `_` `@` | Tight against both | "and slash or" becomes "and/or" |
+
+Anything it does not recognise joins both sides, which is the safe answer for a symbol. Quote marks are left alone on purpose. A straight `"` or `'` does not say whether it opens or closes, and the curly `’` is also the apostrophe in "John’s", so guessing would get it wrong as often as right.
+
+An ending like `'s` or `'re` also goes tight against the word before it, so a rule replacing "apostrophe s" with `'s` gives you "Jacques's" rather than "Jacques 's". Longer replacements that happen to start with an apostrophe — `'90s`, or a quoted phrase — are treated as ordinary words and keep their space.
+
 **RegEx** treats the Find box as a pattern written in a special pattern language for advanced users. If you do not know what this is, you do not need it. (If a pattern is malformed, Mutation shows the error in red under the row so you can fix it.)
 
 ---

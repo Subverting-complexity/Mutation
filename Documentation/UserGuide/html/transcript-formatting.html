@@ -163,6 +163,36 @@ footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); colo
 <p>Each rule also has a <strong>Match type</strong>, which decides how the Find text is interpreted.</p>
 <p><strong>Plain</strong> swaps the exact text wherever it turns up, including in the middle of longer words.</p>
 <p><strong>Smart</strong> matches the word properly, tidying up the spaces and punctuation around it as it goes. This is the one most people want, and it is especially good for removing a spoken word cleanly without leaving a double space or a stranded comma behind. Whatever you type in the Find box is taken exactly as you typed it, so symbols are fine — a rule finding <code>C++</code> looks for <code>C++</code>.</p>
+<p>Smart also knows that different symbols sit differently in a sentence. If you replace a spoken word with a symbol, it works out which side the symbol belongs on.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th scope="col">You replace with</th>
+<th scope="col">Where it sits</th>
+<th scope="col">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A closing symbol, like <code>%</code> <code>)</code> <code>]</code> <code>.</code> <code>?</code></td>
+<td>Tight against the word before it</td>
+<td>&quot;fifty percent last year&quot; becomes &quot;fifty% last year&quot;</td>
+</tr>
+<tr>
+<td>An opening symbol, like <code>#</code> <code>(</code> <code>[</code> <code>$</code></td>
+<td>Tight against the word after it</td>
+<td>&quot;issue hash 42&quot; becomes &quot;issue #42&quot;</td>
+</tr>
+<tr>
+<td>A joining symbol, like <code>-</code> <code>/</code> <code>_</code> <code>@</code></td>
+<td>Tight against both</td>
+<td>&quot;and slash or&quot; becomes &quot;and/or&quot;</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Anything it does not recognise joins both sides, which is the safe answer for a symbol. Quote marks are left alone on purpose. A straight <code>&quot;</code> or <code>'</code> does not say whether it opens or closes, and the curly <code>’</code> is also the apostrophe in &quot;John’s&quot;, so guessing would get it wrong as often as right.</p>
+<p>An ending like <code>'s</code> or <code>'re</code> also goes tight against the word before it, so a rule replacing &quot;apostrophe s&quot; with <code>'s</code> gives you &quot;Jacques's&quot; rather than &quot;Jacques 's&quot;. Longer replacements that happen to start with an apostrophe — <code>'90s</code>, or a quoted phrase — are treated as ordinary words and keep their space.</p>
 <p><strong>RegEx</strong> treats the Find box as a pattern written in a special pattern language for advanced users. If you do not know what this is, you do not need it. (If a pattern is malformed, Mutation shows the error in red under the row so you can fix it.)</p>
 <hr />
 <h2 id="some-worked-examples">Some worked examples</h2>

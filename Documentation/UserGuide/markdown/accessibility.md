@@ -22,6 +22,14 @@ attached announce the shortcut as part of their name, so you hear something like
 — a button that becomes Unmute announces itself as Unmute, not as the name it had at
 startup.
 
+Where a list repeats the same buttons on every row, the announced name says which row
+it belongs to. In the **LLM Prompts** list you hear "Delete prompt 'Summarise'" rather
+than just "Delete", so you know what you are about to remove before you press it.
+
+Dropdowns read out proper wording, not shorthand. The **Third-party interaction**
+dropdown announces "Paste into 3rd party application", and when you pick a different
+one, the line of explanation underneath is read out straight after.
+
 The help text for settings is written once and used twice. The sentence your screen
 reader reads out for a setting is exactly the sentence that appears in the tooltip
 when you hover it with the mouse. There is no short visual label with a longer hidden
