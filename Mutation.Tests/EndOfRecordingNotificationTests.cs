@@ -161,6 +161,7 @@ public class EndOfRecordingNotificationTests : IDisposable
 		public RecordingAudioRecorder(List<string> events) => _events = events;
 
 		public double? TrimmedSpeechSeconds => null;
+		public IReadOnlyList<SilenceRemovalPoint> RemovedSilences => Array.Empty<SilenceRemovalPoint>();
 		public Exception? CaptureException => null;
 
 		public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)
@@ -194,6 +195,7 @@ public class EndOfRecordingNotificationTests : IDisposable
 		public Action? OnStop { get; init; }
 
 		public double? TrimmedSpeechSeconds => TrimmedSeconds;
+		public IReadOnlyList<SilenceRemovalPoint> RemovedSilences => Array.Empty<SilenceRemovalPoint>();
 		public Exception? CaptureException => CaptureError;
 
 		public void StartRecording(int captureDeviceIndex, string outputFile, SilenceTrimmerOptions? silenceOptions = null)

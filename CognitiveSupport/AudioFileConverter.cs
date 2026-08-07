@@ -3,8 +3,11 @@ using Concentus.Oggfile;
 using Concentus.Structs;
 using NAudio.Wave;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace CognitiveSupport;
 
@@ -46,7 +49,16 @@ public static class AudioFileConverter
 	/// </summary>
 	/// <param name="inputPath">Path to the input file (MP4, MP3, OGG/Opus, etc.)</param>
 	/// <param name="outputOggPath">Path where the OGG file will be written.</param>
-	public static void ConvertToOgg(string inputPath, string outputOggPath, SilenceTrimmerOptions? silenceOptions = null)
+	/// <param name="cancellationToken">
+	/// Checked per frame. Decoding and re-encoding a long recording takes real time, and a
+	/// caller waiting on it — the chunker, or an import — has to be able to give up.
+	/// </param>
+	/// <returns>
+	/// Every silence period stripped out, positioned on the written file's own timeline.
+	/// Empty when <paramref name="silenceOptions"/> is null. The chunker uses these to cut
+	/// an oversized file at a pause rather than mid-word.
+	/// </returns>
+	public static IReadOnlyList<SilenceRemovalPoint> ConvertToOgg(string inputPath, string outputOggPath, SilenceTrimmerOptions? silenceOptions = null, CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(inputPath))
 			throw new ArgumentException("Input path cannot be empty", nameof(inputPath));
@@ -77,6 +89,8 @@ public static class AudioFileConverter
 
 		void WriteFrame(short[] pcmSamples)
 		{
+			cancellationToken.ThrowIfCancellationRequested();
+
 			if (trimmer is null)
 				oggStream.WriteSamples(pcmSamples, 0, pcmSamples.Length);
 			else
@@ -97,6 +111,10 @@ public static class AudioFileConverter
 		trimmer?.Flush(f => oggStream.WriteSamples(f, 0, f.Length));
 
 		oggStream.Finish();
+
+		return trimmer is null
+			? Array.Empty<SilenceRemovalPoint>()
+			: trimmer.RemovedSilences.ToArray();
 	}
 
 	private static void DecodeOggOpus(string inputPath, PcmFrameSplitter splitter, Action<short[]> writeFrame)

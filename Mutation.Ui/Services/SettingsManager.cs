@@ -334,6 +334,17 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		// Same treatment for the per-request upload cap: a missing field keeps the 24 MB
+		// initializer default, and an explicit value is clamped to [1 MB, 1000 MB] so a
+		// hand-edited file cannot ask for chunks no service would accept. 0 stays 0 and
+		// means "never split".
+		long clampedUpload = SpeechToTextSettings.ClampTranscriptionUploadBytes(speechToTextSettings.MaxTranscriptionUploadBytes);
+		if (clampedUpload != speechToTextSettings.MaxTranscriptionUploadBytes)
+		{
+			speechToTextSettings.MaxTranscriptionUploadBytes = clampedUpload;
+			somethingWasMissing = true;
+		}
+
 		var duplicateGroups = speechToTextSettings.Services
 			 .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
 			 .Where(g => g.Count() > 1)

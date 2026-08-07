@@ -276,6 +276,10 @@ help. Leave them alone unless something is timing out on you.</p>
 <td>Strip silent gaps from audio</td>
 <td>Removes long silences before the audio is sent, so pauses while you think do not bloat the recording.</td>
 </tr>
+<tr>
+<td>Maximum upload size (MB)</td>
+<td>The biggest audio file Mutation sends in one go. Anything larger is broken into pieces and sent one after the other. 24 by default.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -292,6 +296,18 @@ always gives you a full path.</p>
 <p>The three silence numbers underneath (minimum silence, threshold, edge guard) fine
 tune that trimming. The defaults are good; each has hover help if you want to
 experiment.</p>
+<p>Under <strong>Large recordings</strong> is <strong>Maximum upload size (MB)</strong>. Transcription services
+refuse anything over about 25 MB in one request, which a long meeting recording will
+sail past. When a recording is bigger than the number in this box, Mutation splits it
+into pieces, sends them one after the other, and joins the results back together in
+order, so you still get one transcript. It picks the splitting points where a long
+pause was taken out, so a break falls between sentences rather than in the middle of
+a word.</p>
+<p>24 is the default and suits OpenAI. Set it to 0 if you never want a recording split,
+for example with a service that accepts larger uploads. Otherwise the box takes
+anything from 1 to 1000. If you type something smaller than 1, Mutation puts 1 back
+in the box, because a piece any smaller than that is no use to a transcription
+service.</p>
 <h3 id="api-keys">API keys</h3>
 <p>Your keys in one place. An API key is a long password that lets Mutation talk to a
 service on your behalf.</p>

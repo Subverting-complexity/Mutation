@@ -3,6 +3,7 @@ using Concentus.Oggfile;
 using Concentus.Structs;
 using NAudio.Wave;
 using System.IO;
+using System.Linq;
 
 namespace CognitiveSupport;
 
@@ -30,6 +31,11 @@ public class AudioRecorder : IAudioRecorder
 	// After StopRecording, the trimmed speech duration in seconds when silence stripping was
 	// active; null when stripping was disabled (so callers leave the recording untouched).
 	public double? TrimmedSpeechSeconds { get; private set; }
+
+	// After StopRecording, the silences the trimmer stripped out, positioned on the
+	// written file's timeline. Captured before the trimmer is dropped so the chunker can
+	// still cut at a pause once the recording is closed.
+	public IReadOnlyList<SilenceRemovalPoint> RemovedSilences { get; private set; } = Array.Empty<SilenceRemovalPoint>();
 
 	// First exception (if any) that occurred while encoding audio on NAudio's capture
 	// thread. Captured rather than thrown there, where it would escape as an unhandled
@@ -74,6 +80,7 @@ public class AudioRecorder : IAudioRecorder
 				: new SilenceTrimmer(SampleRate, SamplesPerFrame, silenceOptions);
 			_pcmFrameSplitter = new PcmFrameSplitter(SamplesPerFrame);
 			TrimmedSpeechSeconds = null;
+			RemovedSilences = Array.Empty<SilenceRemovalPoint>();
 			_captureException = null;
 
 			// A source left over from a previous recording still holds the microphone open, and
@@ -233,6 +240,10 @@ public class AudioRecorder : IAudioRecorder
 					{
 						_silenceTrimmer.Flush(WriteFrame);
 						TrimmedSpeechSeconds = _silenceTrimmer.SpeechFrameCount * SamplesPerFrame / (double)SampleRate;
+
+						// Copied out: the trimmer is dropped in the finally below, and the
+						// list it hands back is the one it keeps appending to.
+						RemovedSilences = _silenceTrimmer.RemovedSilences.ToArray();
 					}
 
 					_oggStream.Finish();

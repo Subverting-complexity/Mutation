@@ -62,6 +62,11 @@ internal static class SettingsDefaults
 		public const double SilenceThresholdDbFs = -40.0;
 		public const double MinSilenceSeconds = 1.0;
 		public const double SilenceGuardMilliseconds = 200.0;
+		// Upload size cap: default and UI bounds mirror the domain so the dialog, the
+		// load-time clamp, and the chunker all agree on one source of truth.
+		public const long MaxTranscriptionUploadBytes = SpeechToTextSettings.DefaultMaxTranscriptionUploadBytes;
+		public const long MinTranscriptionUploadBytes = SpeechToTextSettings.MinTranscriptionUploadBytes;
+		public const long MaxTranscriptionUploadBytesLimit = SpeechToTextSettings.MaxTranscriptionUploadBytesLimit;
 	}
 
 	public static class Tts

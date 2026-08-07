@@ -188,6 +188,24 @@ public class SpeechToTextSettings
 
         // Audio preserved on each side of speech to avoid clipping word edges (milliseconds).
         public double SilenceGuardMilliseconds { get; set; } = 200.0;
+
+	// Largest audio file sent in a single transcription request. Anything bigger is
+	// split into chunks that are transcribed in order and stitched back together.
+	//
+	// The default sits just under OpenAI's 25 MB request limit; the margin absorbs the
+	// multipart envelope and leaves room for a chunk that encodes slightly denser than
+	// planned. 0 disables splitting entirely, so the whole file is always sent as-is.
+	public const long DefaultMaxTranscriptionUploadBytes = 24L * 1024 * 1024;
+	public const long MinTranscriptionUploadBytes = 1L * 1024 * 1024;
+	public const long MaxTranscriptionUploadBytesLimit = 1000L * 1024 * 1024;
+
+	public long MaxTranscriptionUploadBytes { get; set; } = DefaultMaxTranscriptionUploadBytes;
+
+	// Clamp an upload limit into the supported range. Applied on load and again before
+	// use so a hand-edited JSON value cannot produce chunks no service would accept.
+	// 0 or less is preserved as "no limit" rather than clamped up, matching the OCR cap.
+	public static long ClampTranscriptionUploadBytes(long value) =>
+		value <= 0 ? 0 : Math.Clamp(value, MinTranscriptionUploadBytes, MaxTranscriptionUploadBytesLimit);
 }
 
 public class SpeechToTextServiceSettings

@@ -80,6 +80,7 @@ Where your dictation gets turned into text.
 | Temp directory | The folder your recordings are written to while they are being made. It has to be a full path that starts with a drive, like `D:\Recordings`. |
 | Send hotkey after transcription | Optional keystrokes sent to the app you are in once your text arrives, for example **Ctrl+V** to paste. |
 | Strip silent gaps from audio | Removes long silences before the audio is sent, so pauses while you think do not bloat the recording. |
+| Maximum upload size (MB) | The biggest audio file Mutation sends in one go. Anything larger is broken into pieces and sent one after the other. 24 by default. |
 
 > Adding, removing, or editing a service definition takes effect after you restart
 > Mutation. The per-service prompt and your choice of active service apply straight
@@ -94,6 +95,20 @@ always gives you a full path.
 The three silence numbers underneath (minimum silence, threshold, edge guard) fine
 tune that trimming. The defaults are good; each has hover help if you want to
 experiment.
+
+Under **Large recordings** is **Maximum upload size (MB)**. Transcription services
+refuse anything over about 25 MB in one request, which a long meeting recording will
+sail past. When a recording is bigger than the number in this box, Mutation splits it
+into pieces, sends them one after the other, and joins the results back together in
+order, so you still get one transcript. It picks the splitting points where a long
+pause was taken out, so a break falls between sentences rather than in the middle of
+a word.
+
+24 is the default and suits OpenAI. Set it to 0 if you never want a recording split,
+for example with a service that accepts larger uploads. Otherwise the box takes
+anything from 1 to 1000. If you type something smaller than 1, Mutation puts 1 back
+in the box, because a piece any smaller than that is no use to a transcription
+service.
 
 ### API keys
 

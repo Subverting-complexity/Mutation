@@ -23,6 +23,8 @@ public class SpeechToTextManager : IDisposable
 	private readonly Settings _settings;
 	private readonly SpeechToTextState _state;
 	private readonly Func<IAudioRecorder> _recorderFactory;
+	private readonly ChunkedTranscriber _transcriber;
+	private readonly SilenceRemovalLog _silenceRemovalLog = new();
 	private IAudioRecorder? _audioRecorder;
 	private readonly object _sessionLock = new();
 	private SpeechSession? _currentRecordingSession;
@@ -35,9 +37,17 @@ public class SpeechToTextManager : IDisposable
 	// Test seam: injects the recorder so a start can be made to fail on demand
 	// without real NAudio hardware.
 	internal SpeechToTextManager(Settings settings, Func<IAudioRecorder> recorderFactory)
+		: this(settings, recorderFactory, new ChunkedTranscriber())
+	{
+	}
+
+	// Test seam: injects the transcriber so the split-and-upload path can be driven
+	// without a codec or a network.
+	internal SpeechToTextManager(Settings settings, Func<IAudioRecorder> recorderFactory, ChunkedTranscriber transcriber)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_recorderFactory = recorderFactory ?? throw new ArgumentNullException(nameof(recorderFactory));
+		_transcriber = transcriber ?? throw new ArgumentNullException(nameof(transcriber));
 		_state = new SpeechToTextState(() => _audioRecorder);
 	}
 
@@ -71,6 +81,31 @@ public class SpeechToTextManager : IDisposable
 			stt.MinSilenceSeconds,
 			stt.SilenceGuardMilliseconds);
 	}
+
+	// Read at transcription time (and clamped defensively) so a changed setting takes
+	// effect without an app restart, and a hand-edited out-of-range value cannot ask for
+	// a chunk size the service would reject.
+	private long MaxUploadBytes => SpeechToTextSettings.ClampTranscriptionUploadBytes(
+		_settings.SpeechToTextSettings?.MaxTranscriptionUploadBytes
+		?? SpeechToTextSettings.DefaultMaxTranscriptionUploadBytes);
+
+	private string ChunkWorkingDirectory => _settings.SpeechToTextSettings?.TempDirectory ?? Path.GetTempPath();
+
+	/// <summary>
+	/// Sends a processed recording for transcription, splitting it first if it is over the
+	/// configured upload limit. Cuts prefer the pauses the trimmer removed from this very
+	/// file, so a chunk boundary lands between sentences rather than mid-word.
+	/// </summary>
+	private Task<string> TranscribeAsync(ISpeechToTextService service, string prompt, string audioFilePath, int timeoutSeconds, CancellationToken token) =>
+		_transcriber.TranscribeAsync(
+			service,
+			prompt,
+			audioFilePath,
+			_silenceRemovalLog.PointsFor(audioFilePath),
+			MaxUploadBytes,
+			ChunkWorkingDirectory,
+			timeoutSeconds,
+			token);
 
 	public bool HasRecordedAudio()
 	{
@@ -240,16 +275,21 @@ public class SpeechToTextManager : IDisposable
 				// flushes the encoder to disk. Run off the calling thread so a slow or
 				// wedged audio driver cannot freeze the window — and the screen reader
 				// with it — while the user waits to hear the end-of-recording beep.
-				(double? trimmedSpeechSeconds, Exception? captureError) = await Task.Run(() =>
+				(double? trimmedSpeechSeconds, Exception? captureError, IReadOnlyList<SilenceRemovalPoint> removedSilences) = await Task.Run(() =>
 				{
 					IAudioRecorder? recorder = _audioRecorder;
 					_audioRecorder = null;
 					recorder?.StopRecording();
 					var trimmed = recorder?.TrimmedSpeechSeconds;
 					var error = recorder?.CaptureException;
+					var removed = recorder?.RemovedSilences ?? Array.Empty<SilenceRemovalPoint>();
 					recorder?.Dispose();
-					return (trimmed, error);
+					return (trimmed, error, removed);
 				});
+
+				// Recorded before the checks below so the points are available to the
+				// chunker no matter which way this call goes on from here.
+				_silenceRemovalLog.Record(recordingSession.FilePath, removedSilences);
 
 				// Before the cancellation and capture-error checks below: capture has
 				// ended however this call turns out, so the end-of-recording signal is
@@ -268,7 +308,7 @@ public class SpeechToTextManager : IDisposable
 					throw new NoSpeechDetectedException("No speech detected after trimming silence.");
 
 				int liveTimeout = _settings.SpeechToTextSettings?.LiveTranscriptionTimeoutSeconds ?? 60;
-				return await service.ConvertAudioToText(prompt, recordingSession.FilePath, transcribeToken, liveTimeout).ConfigureAwait(false);
+				return await TranscribeAsync(service, prompt, recordingSession.FilePath, liveTimeout, transcribeToken).ConfigureAwait(false);
 			}
 			finally
 			{
@@ -322,7 +362,7 @@ public class SpeechToTextManager : IDisposable
 			try
 			{
 				int timeout = _settings.SpeechToTextSettings?.FileTranscriptionTimeoutSeconds ?? 300;
-				text = await service.ConvertAudioToText(prompt, session.FilePath, transcribeToken, timeout).ConfigureAwait(false);
+				text = await TranscribeAsync(service, prompt, session.FilePath, timeout, transcribeToken).ConfigureAwait(false);
 			}
 			finally
 			{
@@ -380,7 +420,14 @@ public class SpeechToTextManager : IDisposable
 		if (AudioFileConverter.IsVideoFile(sourcePath) || silenceOptions is not null)
 		{
 			string destinationPath = await CreateSessionFileAsync(".ogg").ConfigureAwait(false);
-			await Task.Run(() => AudioFileConverter.ConvertToOgg(sourcePath, destinationPath, silenceOptions), token).ConfigureAwait(false);
+			// The token goes into the conversion itself, not just Task.Run: a long video
+			// takes minutes to decode, and cancelling only the scheduling would leave the
+			// user watching a job they already gave up on.
+			var removedSilences = await Task.Run(() => AudioFileConverter.ConvertToOgg(sourcePath, destinationPath, silenceOptions, token), token).ConfigureAwait(false);
+
+			// The caller transcribes this session next, so the pauses just stripped out of
+			// it are still the right ones to cut at if it turns out to be too big to send.
+			_silenceRemovalLog.Record(destinationPath, removedSilences);
 
 			if (!TryCreateSession(destinationPath, out var convertedSession))
 				throw new InvalidOperationException($"Unable to parse converted session '{Path.GetFileName(destinationPath)}'.");

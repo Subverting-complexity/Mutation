@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace CognitiveSupport;
 
@@ -15,6 +16,14 @@ public interface IAudioRecorder : IDisposable
 	/// when silence stripping was active; null when stripping was disabled.
 	/// </summary>
 	double? TrimmedSpeechSeconds { get; }
+
+	/// <summary>
+	/// After <see cref="StopRecording"/>, every silence period stripped out of the
+	/// recording, positioned on the recorded file's own timeline. Empty when stripping
+	/// was disabled. Used to cut a long recording into upload-sized chunks at a pause
+	/// rather than mid-word.
+	/// </summary>
+	IReadOnlyList<SilenceRemovalPoint> RemovedSilences { get; }
 
 	/// <summary>
 	/// First exception (if any) that occurred while encoding audio on the capture
