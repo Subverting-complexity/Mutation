@@ -97,6 +97,63 @@ public class TranscriptFormatRuleSeedingTests
 		Assert.NotEmpty(RulesInFile(file.FilePath)!);
 	}
 
+	// The other half of the issue's acceptance criterion. Once the file has settled, an
+	// empty rule list is not a gap, so a launch that finds one has nothing to repair and
+	// must leave the file alone. A re-seed — or any other needless rewrite — shows up
+	// here as a changed timestamp.
+	[Fact]
+	public void Load_SettledFileWithNoRules_IsNotRewrittenOnTheNextLaunch()
+	{
+		using var file = new TempSettingsFile("rule-seed");
+
+		var manager = new SettingsManager(file.FilePath);
+		var settings = manager.LoadAndEnsureSettings();
+		settings.TranscriptFormatRules.Clear();
+		manager.SaveSettingsToFile(settings);
+		var beforeMtime = System.IO.File.GetLastWriteTimeUtc(file.FilePath);
+
+		new SettingsManager(file.FilePath).LoadAndEnsureSettings();
+
+		Assert.Equal(beforeMtime, System.IO.File.GetLastWriteTimeUtc(file.FilePath));
+		Assert.Empty(RulesInFile(file.FilePath)!);
+	}
+
+	// The upgrade path. Settings.TranscriptFormatRules is declared with a
+	// `= new List<>()` initialiser, so a file written before the feature existed — one
+	// with no TranscriptFormatRules key at all — deserialises to an EMPTY list, not a
+	// null one. Left to the in-memory check alone, those users would silently lose the
+	// starter rules on the upgrade, which is the same disappearing-choice fault as #220
+	// pointing the other way.
+	[Fact]
+	public void Load_FileWithNoRuleKeyAtAll_StillGetsTheStarterRules()
+	{
+		using var file = new TempSettingsFile("rule-seed", """{ "LlmSettings": { "Prompts": [] } }""");
+
+		var settings = new SettingsManager(file.FilePath).LoadAndEnsureSettings();
+
+		Assert.NotEmpty(settings.TranscriptFormatRules);
+		Assert.Contains(settings.TranscriptFormatRules, r => r.Find == "full stop");
+		Assert.NotEmpty(RulesInFile(file.FilePath)!);
+	}
+
+	// ...and having been seeded once, the key is now present, so deleting every rule
+	// still sticks. The upgrade repair must not become a permanent re-seed.
+	[Fact]
+	public void Load_AfterTheUpgradeSeed_DeletingEveryRuleStillSticks()
+	{
+		using var file = new TempSettingsFile("rule-seed", """{ "LlmSettings": { "Prompts": [] } }""");
+
+		var manager = new SettingsManager(file.FilePath);
+		var seeded = manager.LoadAndEnsureSettings();
+		seeded.TranscriptFormatRules.Clear();
+		manager.SaveSettingsToFile(seeded);
+
+		var reloaded = new SettingsManager(file.FilePath).LoadAndEnsureSettings();
+
+		Assert.Empty(reloaded.TranscriptFormatRules);
+		Assert.Empty(RulesInFile(file.FilePath)!);
+	}
+
 	[Fact]
 	public void Load_CustomRules_AreLeftAlone()
 	{
