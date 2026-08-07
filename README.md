@@ -128,9 +128,15 @@ Mutation can read text aloud — either whatever is on your clipboard or text yo
 | `SpeakClipboard` | `Ctrl+Shift+Alt+Q` | Copy text anywhere, then press this to read your clipboard aloud. |
 | `SpeakSelectionHotKey` | `Ctrl+Shift+Q` | Highlight text in any app and press this — Mutation reads the selection without you having to copy first. |
 
-If your clipboard is empty or holds something that can't be read (such as an image), Mutation announces that out loud rather than staying silent. For very long text (over ~5,000 characters) it first announces roughly how many minutes the reading will take.
+If your clipboard is empty or holds something that can't be read (such as an image), Mutation announces that out loud rather than staying silent. When the reading will run longer than a minute it first announces roughly how many minutes it will take, and on a reading longer than two minutes it calls out progress every 25% along the way. Both announcements are configurable, and both can be turned off.
 
-**Pause and resume:** The `SpeakClipboard` hotkey doubles as pause/resume. Press it while reading to **pause**; press it again to **resume**, backing up a few words first for context (5 words by default, configurable). If you copied new text while paused, pressing it reads the new clipboard instead of resuming.
+**Stopping and starting again:** Press `SpeakClipboard` while it is reading and the reading **stops**. Press it again and it picks up from where it stopped, backing up a few words first for context (5 words by default, configurable). If you copied different text in the meantime, that press reads the new clipboard instead.
+
+**Pause and resume** is separate, and keeps your exact place:
+
+| Hotkey | Default | Description |
+|--------|---------|-------------|
+| `PauseResumeHotKey` | `Ctrl+Shift+Space` | Freeze the reading mid-word (Mutation says "Paused"); press again to carry on. A pause longer than 10 seconds backs up a few words first for context. With nothing playing it says "Nothing to resume" — it never starts a fresh reading. |
 
 **Moving around the text** (sentence by sentence, like a media player's skip buttons):
 
@@ -139,6 +145,15 @@ If your clipboard is empty or holds something that can't be read (such as an ima
 | `SkipSentenceForwardHotKey` | `Ctrl+Shift+K` | Skip forward one sentence. Past the last sentence, announces "End of text." |
 | `SkipSentenceBackwardHotKey` | `Ctrl+Shift+J` | Skip back one sentence. Just landed on a sentence? Back jumps to the previous one; settled in for a moment? Back restarts the current sentence. Before the first sentence, announces "Beginning of text." |
 | `RestartFromBeginningHotKey` | `Ctrl+Shift+B` | Restart from the very beginning of the text. |
+| `SpeakPositionHotKey` | `Ctrl+Shift+P` | Say where you are — how far through the text, and which sentence. |
+
+**Saving a reading to a file:**
+
+| Hotkey | Default | Description |
+|--------|---------|-------------|
+| `SpeakToFileHotKey` | *(none set)* | Save the clipboard text as a spoken WAV file instead of playing it. Give it a hotkey yourself in the settings file or the **Hotkeys** tab; there is no default. The **Speak to file** button on the main window does the same thing. |
+
+If a reading fails — most often because the voice it was told to use is no longer installed — Mutation plays the failure beep, puts the reason in the status bar and shows it in a dialog, and names the missing voice so you know which one to replace.
 
 **Voice, rate, and volume:** The main window's **Voice & Speech** card lets you pick any voice installed on Windows (a short sample plays when you choose one), set the reading **Rate** from `-10` (slow) to `+10` (fast, default `8`), and set the **Volume** from 0–100%. To add more voices, install them through Windows' own speech settings and they'll appear in the dropdown.
 
@@ -245,7 +260,37 @@ All hotkeys are global and fully customisable. Below is an example covering ever
   ],
 
   "TextToSpeechSettings": {
-    "SpeakClipboard": "Ctrl+Shift+P"
+    "SpeakClipboard": "CTRL+SHIFT+ALT+Q",
+    "SpeakSelectionHotKey": "CTRL+SHIFT+Q",
+    "RestartFromBeginningHotKey": "CTRL+SHIFT+B",
+    "SkipSentenceBackwardHotKey": "CTRL+SHIFT+J",
+    "SkipSentenceForwardHotKey": "CTRL+SHIFT+K",
+    "SpeakPositionHotKey": "CTRL+SHIFT+P",
+    "PauseResumeHotKey": "CTRL+SHIFT+SPACE",
+    "SpeakToFileHotKey": null,
+
+    "VoiceName": null,
+    "Rate": 8,
+    "Volume": 100,
+
+    "EnableSpeechPreprocessing": true,
+    "PreprocessRemoveCodeBlocks": true,
+    "PreprocessStripBoldItalicCode": true,
+    "PreprocessStripHeadingMarks": true,
+    "PreprocessShortenWebLinks": true,
+    "PreprocessStripBulletMarkers": true,
+    "PreprocessExpandAbbreviations": true,
+    "PreprocessNormaliseWhitespace": true,
+
+    "SkipSentenceGraceWindowMs": 1500,
+    "ResumeRewindWordCount": 5,
+    "ResumeRewindAfterPauseSeconds": 10,
+
+    "AnnounceReadingTimeAtStart": true,
+    "AnnounceReadingTimeMinimumMinutes": 1,
+    "AnnounceProgressEnabled": true,
+    "AnnounceProgressEveryPercent": 25,
+    "AnnounceProgressMinimumMinutes": 2
   },
 
   "HotKeyRouterSettings": {
@@ -260,6 +305,8 @@ All hotkeys are global and fully customisable. Below is an example covering ever
   }
 }
 ```
+
+> **Note on `TextToSpeechSettings`:** unlike the other sections above, every value shown is the actual default, so you only need to write the ones you want to change. `SpeakToFileHotKey` and `VoiceName` are the exceptions — they have no default. Leave `VoiceName` as `null` to use whichever voice Windows defaults to, and give `SpeakToFileHotKey` a shortcut if you want to save readings to a WAV file without reaching for the button. The `Preprocess*` switches each turn off one cleanup rule applied before speaking; `EnableSpeechPreprocessing` turns all of them off at once.
 
 > **Note on transcript formatting rules:** `TranscriptFormatRules` is a top-level setting. Rules run as a pre-processing pass on the transcript before any LLM processing is applied.
 

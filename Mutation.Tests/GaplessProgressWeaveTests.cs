@@ -186,4 +186,37 @@ public class GaplessProgressWeaveTests
 		Assert.Equal(50, map.HighestMarkerPercentAtOrBefore(60)); // second reached
 		Assert.Equal(50, map.HighestMarkerPercentAtOrBefore(100));
 	}
+
+	// ---- A defaulted map: no read in flight, and no NullReferenceException ----
+
+	// The struct's constructor is what substitutes an empty list for a null one, and a
+	// defaulted struct never runs it. TextToSpeechService holds one of these in a field
+	// read from the synthesizer's progress callback, where a throw would take the whole
+	// process down, so the defaulted value has to answer like an empty map (issue #241).
+	[Fact]
+	public void DefaultMap_MapsEveryPositionToZero_RatherThanThrowing()
+	{
+		SpokenWeaveMap map = default;
+
+		Assert.Equal(0, map.ToReal(0));
+		Assert.Equal(0, map.ToReal(50));
+	}
+
+	[Fact]
+	public void DefaultMap_HasReachedNoMarkers()
+	{
+		SpokenWeaveMap map = default;
+
+		Assert.Equal(0, map.HighestMarkerPercentAtOrBefore(0));
+		Assert.Equal(0, map.HighestMarkerPercentAtOrBefore(1000));
+	}
+
+	[Fact]
+	public void EmptyMap_BehavesLikeTheDefaultedOne()
+	{
+		SpokenWeaveMap empty = SpokenWeaveMap.Empty;
+
+		Assert.Equal(0, empty.ToReal(50));
+		Assert.Equal(0, empty.HighestMarkerPercentAtOrBefore(1000));
+	}
 }

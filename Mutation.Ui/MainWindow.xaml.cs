@@ -183,6 +183,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _audioSessionManager.SelectedSessionChanged += AudioSessionManager_SelectedSessionChanged;
         _audioSessionManager.PlaybackStarted += AudioSessionManager_PlaybackStarted;
         _audioSessionManager.PlaybackStopped += AudioSessionManager_PlaybackStopped;
+        _textToSpeech.SpeakFailed += TextToSpeech_SpeakFailed;
 
         InitializeComponent();
 
@@ -502,7 +503,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		if (!string.IsNullOrWhiteSpace(tts?.SpeakSelectionHotKey))
 			TryRegister(hk, failures, "Speak selection", tts.SpeakSelectionHotKey!, () =>
-				DispatcherQueue.TryEnqueue(() => SpeakActiveSelectionAsync()));
+				DispatcherQueue.TryEnqueue(() => BtnSpeakSelection_Click(null!, null!)));
 
 		if (!string.IsNullOrWhiteSpace(tts?.RestartFromBeginningHotKey))
 			TryRegister(hk, failures, "Restart speech from beginning", tts.RestartFromBeginningHotKey!, () =>
@@ -694,6 +695,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		// sequence has stopped the recorder, and a device change arriving in that window
 		// would reach for this window's DispatcherQueue after it has been closed.
 		_audioDeviceManager.CaptureDeviceListChanged -= AudioDeviceManager_CaptureDeviceListChanged;
+		// Same reasoning for a read that is still running: its failure would otherwise
+		// arrive here and reach for a DispatcherQueue that no longer has a window.
+		_textToSpeech.SpeakFailed -= TextToSpeech_SpeakFailed;
 		// Signal shutdown to any in-flight transcription HTTP requests so they
 		// observe cancellation rather than running until their server timeout.
 		try { _shutdownCts.Cancel(); } catch (ObjectDisposedException) { }
@@ -1255,111 +1259,185 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
-	private async void ShowMessage(string title, string message)
+	/// <summary>
+	/// Reports a text-to-speech action that threw. Every one of these can be fired from a
+	/// global hotkey as well as a button, and a hotkey press has no other feedback at all:
+	/// an escaping exception reaches App.OnUnhandledException, which logs it and marks it
+	/// handled, so the press just does nothing and there is no way to find out why
+	/// (issue #235). The beep comes first because it is the only part that lands
+	/// immediately, whatever else the app is doing.
+	/// </summary>
+	private async Task ReportTextToSpeechFailureAsync(string action, Exception ex)
 	{
-		var dialog = new ContentDialog
-		{
-			Title = title,
-			Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-			CloseButtonText = "OK",
-			XamlRoot = this.Content.XamlRoot // important in WinUI 3
-		};
-		AutomationProperties.SetName(dialog, title);
-		AutomationProperties.SetHelpText(dialog, message);
+		BeepPlayer.Play(BeepType.Failure);
+		ShowStatus("Text to Speech", ComposeTextToSpeechFailureMessage(ex), InfoBarSeverity.Error);
+		await ShowErrorDialog($"{action} Error", ex);
+	}
 
-		await ShowDialogAsync(dialog);
+	/// <summary>
+	/// The engine's message, plus a pointer to the voice picker when the configured voice
+	/// has gone missing — the usual cause, and one the raw exception never names.
+	/// </summary>
+	private string ComposeTextToSpeechFailureMessage(Exception ex)
+	{
+		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+
+		IReadOnlyList<string> voices;
+		try { voices = _textToSpeech.GetVoiceNames(); }
+		catch { voices = Array.Empty<string>(); }
+
+		return TextToSpeechFailureMessage.Compose(ex.Message, tts.VoiceName, voices);
+	}
+
+	/// <summary>
+	/// A read that failed after Speak had already returned. The work runs on a background
+	/// thread, so this arrives off the UI thread and has to be marshalled before anything
+	/// here touches a control (issue #236).
+	/// </summary>
+	private void TextToSpeech_SpeakFailed(object? sender, Exception ex)
+	{
+		DispatcherQueue?.TryEnqueue(async () =>
+		{
+			try { await ReportTextToSpeechFailureAsync("Speak", ex); }
+			catch (Exception reportFailure)
+			{
+				System.Diagnostics.Debug.WriteLine($"Reporting a speech failure failed: {reportFailure.Message}");
+			}
+		});
 	}
 
 	public async void BtnTextToSpeech_Click(object? sender, RoutedEventArgs? e)
 	{
-		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		var (kind, clipboardText) = await _clipboard.InspectAsync();
-		string trimmed = (clipboardText ?? string.Empty).Trim();
-
-		if (_textToSpeech.IsSpeaking)
+		try
 		{
-			string? wasSpeaking = _textToSpeech.CurrentText;
-			_textToSpeech.Stop();
+			var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+			var (kind, clipboardText) = await _clipboard.InspectAsync();
+			string trimmed = (clipboardText ?? string.Empty).Trim();
 
-			bool clipboardChanged = kind == ClipboardKind.Text
-				&& trimmed.Length > 0
-				&& !string.Equals(trimmed, wasSpeaking, StringComparison.Ordinal);
+			if (_textToSpeech.IsSpeaking)
+			{
+				string? wasSpeaking = _textToSpeech.CurrentText;
+				_textToSpeech.Stop();
 
-			if (clipboardChanged)
+				bool clipboardChanged = kind == ClipboardKind.Text
+					&& trimmed.Length > 0
+					&& !string.Equals(trimmed, wasSpeaking, StringComparison.Ordinal);
+
+				if (clipboardChanged)
+				{
+					_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
+						resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing,
+						options: SpeechPreprocessingOptions.FromSettings(tts));
+					ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
+				}
+				else
+				{
+					ShowStatus("Text to Speech", "Stopped.", InfoBarSeverity.Informational);
+				}
+				return;
+			}
+
+			if (kind == ClipboardKind.Text && trimmed.Length > 0)
 			{
 				_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
-					resumeIfSame: false, preprocess: tts.EnableSpeechPreprocessing,
+					resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing,
+					resumeRewindWordCount: tts.ResumeRewindWordCount,
 					options: SpeechPreprocessingOptions.FromSettings(tts));
-				ShowStatus("Text to Speech", "Speaking new clipboard text.", InfoBarSeverity.Informational);
+				ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
+				return;
 			}
-			else
-			{
-				ShowStatus("Text to Speech", "Stopped.", InfoBarSeverity.Informational);
-			}
-			return;
-		}
 
-		if (kind == ClipboardKind.Text && trimmed.Length > 0)
+			AnnounceUnreadableClipboard(kind, tts);
+		}
+		catch (Exception ex)
 		{
-			_textToSpeech.Speak(trimmed, tts.Rate, tts.Volume, tts.VoiceName,
-				resumeIfSame: true, preprocess: tts.EnableSpeechPreprocessing,
-				resumeRewindWordCount: tts.ResumeRewindWordCount,
-				options: SpeechPreprocessingOptions.FromSettings(tts));
-			ShowStatus("Text to Speech", "Speaking…", InfoBarSeverity.Informational);
-			return;
+			await ReportTextToSpeechFailureAsync("Speak Clipboard", ex);
 		}
-
-		AnnounceUnreadableClipboard(kind, tts);
 	}
 
 	public async void BtnRestartTts_Click(object? sender, RoutedEventArgs? e)
 	{
-		await ReadClipboardFreshAsync();
+		try
+		{
+			await ReadClipboardFreshAsync();
+		}
+		catch (Exception ex)
+		{
+			await ReportTextToSpeechFailureAsync("Restart Speech", ex);
+		}
 	}
 
-	public void BtnSkipSentenceBack_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnSkipSentenceBack_Click(object? sender, RoutedEventArgs? e)
 	{
-		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
+		try
+		{
+			var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+			_textToSpeech.SkipSentence(-1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
+		}
+		catch (Exception ex)
+		{
+			await ReportTextToSpeechFailureAsync("Skip Sentence", ex);
+		}
 	}
 
-	public void BtnSkipSentenceForward_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnSkipSentenceForward_Click(object? sender, RoutedEventArgs? e)
 	{
-		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
+		try
+		{
+			var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+			_textToSpeech.SkipSentence(1, tts.Rate, tts.Volume, tts.VoiceName, tts.SkipSentenceGraceWindowMs);
+		}
+		catch (Exception ex)
+		{
+			await ReportTextToSpeechFailureAsync("Skip Sentence", ex);
+		}
 	}
 
-	public void BtnSpeakPosition_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnSpeakPosition_Click(object? sender, RoutedEventArgs? e)
 	{
-		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		ReadingPosition position = _textToSpeech.GetReadingPosition();
-		string announcement = ReadingAnnouncements.Position(position);
-		_textToSpeech.SpeakAnnouncement(announcement, tts.Rate, tts.Volume, tts.VoiceName);
-		ShowStatus("Text to Speech", announcement, InfoBarSeverity.Informational);
+		try
+		{
+			var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+			ReadingPosition position = _textToSpeech.GetReadingPosition();
+			string announcement = ReadingAnnouncements.Position(position);
+			_textToSpeech.SpeakAnnouncement(announcement, tts.Rate, tts.Volume, tts.VoiceName);
+			ShowStatus("Text to Speech", announcement, InfoBarSeverity.Informational);
+		}
+		catch (Exception ex)
+		{
+			await ReportTextToSpeechFailureAsync("Announce Position", ex);
+		}
 	}
 
 	// Toggle pause/resume on its own hotkey, distinct from Stop. While speaking, freeze the
 	// read in place (the service speaks a brief "Paused" cue). While paused, resume it. When
 	// nothing is playing, announce that there is nothing to resume — this never starts a fresh
 	// read; that remains the job of the speak hotkey.
-	public void BtnPauseResume_Click(object? sender, RoutedEventArgs? e)
+	public async void BtnPauseResume_Click(object? sender, RoutedEventArgs? e)
 	{
-		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
-		if (_textToSpeech.IsPaused)
+		try
 		{
-			_textToSpeech.Resume(tts.Rate, tts.Volume, tts.VoiceName,
-				tts.ResumeRewindWordCount, tts.ResumeRewindAfterPauseSeconds);
-			ShowStatus("Text to Speech", "Resuming.", InfoBarSeverity.Informational);
+			var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
+			if (_textToSpeech.IsPaused)
+			{
+				_textToSpeech.Resume(tts.Rate, tts.Volume, tts.VoiceName,
+					tts.ResumeRewindWordCount, tts.ResumeRewindAfterPauseSeconds);
+				ShowStatus("Text to Speech", "Resuming.", InfoBarSeverity.Informational);
+			}
+			else if (_textToSpeech.IsSpeaking)
+			{
+				_textToSpeech.Pause(tts.Rate, tts.Volume, tts.VoiceName);
+				ShowStatus("Text to Speech", "Paused.", InfoBarSeverity.Informational);
+			}
+			else
+			{
+				_textToSpeech.SpeakAnnouncement("Nothing to resume.", tts.Rate, tts.Volume, tts.VoiceName);
+				ShowStatus("Text to Speech", "Nothing to resume.", InfoBarSeverity.Informational);
+			}
 		}
-		else if (_textToSpeech.IsSpeaking)
+		catch (Exception ex)
 		{
-			_textToSpeech.Pause(tts.Rate, tts.Volume, tts.VoiceName);
-			ShowStatus("Text to Speech", "Paused.", InfoBarSeverity.Informational);
-		}
-		else
-		{
-			_textToSpeech.SpeakAnnouncement("Nothing to resume.", tts.Rate, tts.Volume, tts.VoiceName);
-			ShowStatus("Text to Speech", "Nothing to resume.", InfoBarSeverity.Informational);
+			await ReportTextToSpeechFailureAsync("Pause or Resume", ex);
 		}
 	}
 
@@ -1367,24 +1445,25 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
 
-		var (kind, clipboardText) = await _clipboard.InspectAsync();
-		if (kind != ClipboardKind.Text)
-		{
-			AnnounceUnreadableClipboard(kind, tts);
-			return;
-		}
-
-		if (!TtsFileExport.TryResolveExportText(clipboardText, out string text, out string resolveError))
-		{
-			_textToSpeech.SpeakAnnouncement(resolveError, tts.Rate, tts.Volume, tts.VoiceName);
-			BeepPlayer.Play(BeepType.Failure);
-			ShowStatus("Speak to file", resolveError, InfoBarSeverity.Warning);
-			return;
-		}
-
+		string text;
 		StorageFile? file;
 		try
 		{
+			var (kind, clipboardText) = await _clipboard.InspectAsync();
+			if (kind != ClipboardKind.Text)
+			{
+				AnnounceUnreadableClipboard(kind, tts);
+				return;
+			}
+
+			if (!TtsFileExport.TryResolveExportText(clipboardText, out text, out string resolveError))
+			{
+				_textToSpeech.SpeakAnnouncement(resolveError, tts.Rate, tts.Volume, tts.VoiceName);
+				BeepPlayer.Play(BeepType.Failure);
+				ShowStatus("Speak to file", resolveError, InfoBarSeverity.Warning);
+				return;
+			}
+
 			var picker = new FileSavePicker
 			{
 				SuggestedStartLocation = PickerLocationId.MusicLibrary,
@@ -1397,8 +1476,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
-			ShowStatus("Speak to file", ex.Message, InfoBarSeverity.Error);
-			await ShowErrorDialog("Speak to File Error", ex);
+			await ReportTextToSpeechFailureAsync("Speak to File", ex);
 			return;
 		}
 
@@ -1418,8 +1496,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 		catch (Exception ex)
 		{
-			ShowStatus("Speak to file", ex.Message, InfoBarSeverity.Error);
-			await ShowErrorDialog("Speak to File Error", ex);
+			await ReportTextToSpeechFailureAsync("Speak to File", ex);
 		}
 		finally
 		{
@@ -1427,7 +1504,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
-	public async void SpeakActiveSelectionAsync()
+	// Awaitable rather than async void: this is not an event handler, and an async void
+	// method that throws takes the process down with it instead of merely failing the
+	// action. Every caller is a handler that owns the try/catch (issue #235).
+	private async Task SpeakActiveSelectionAsync()
 	{
 		var tts = _settings.TextToSpeechSettings ?? new TextToSpeechSettings();
 
@@ -1508,7 +1588,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		ShowStatus("Text to Speech", message, InfoBarSeverity.Warning);
 	}
 
-	public void BtnSpeakSelection_Click(object? sender, RoutedEventArgs? e) => SpeakActiveSelectionAsync();
+	public async void BtnSpeakSelection_Click(object? sender, RoutedEventArgs? e)
+	{
+		try
+		{
+			await SpeakActiveSelectionAsync();
+		}
+		catch (Exception ex)
+		{
+			await ReportTextToSpeechFailureAsync("Speak Selection", ex);
+		}
+	}
 
 	private async Task ReadClipboardFreshAsync()
 	{
@@ -3020,6 +3110,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		// Already unsubscribed by MainWindow_Closed on the normal path; repeated here so
 		// a Dispose that did not come through it still detaches the handler.
 		_audioDeviceManager.CaptureDeviceListChanged -= AudioDeviceManager_CaptureDeviceListChanged;
+		_textToSpeech.SpeakFailed -= TextToSpeech_SpeakFailed;
 		_audioSessionManager?.Dispose();
 		_microphoneVisualization?.Dispose();
 		_formatDebounceCts?.Dispose();

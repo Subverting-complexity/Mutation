@@ -30,8 +30,13 @@ clipboard** and **Speak selection** buttons that do the same thing.
 There are two ways to interrupt a reading, and they behave slightly differently.
 
 **Pause properly: Ctrl+Shift+Space.** This is the real pause button. Press it while
-Mutation is reading and it says "Paused." Press it again and it says "Resuming." and
-carries on. If nothing is being read, it tells you "Nothing to resume."
+Mutation is reading and it says "Paused." out loud. Press it again and the reading
+carries on, with "Resuming." in the status area. If nothing is being read, it says
+"Nothing to resume." out loud.
+
+Some of these replies are spoken in the reading voice and some appear in the status
+area instead. Either way you hear them: the status area is announced to your screen
+reader as it changes.
 
 When it resumes, it rewinds a few words first — five by default — so you get your
 bearings instead of being dropped mid-sentence. That rewind only happens if your
@@ -44,13 +49,13 @@ and "Rewind on resume after (seconds)" (set it to 0 to always rewind, however br
 the pause).
 
 **Stop with the same key you started with: Ctrl+Shift+Alt+Q.** Pressing the speak
-shortcut again while it is reading stops it, and Mutation says "Stopped." Press it
-once more and it picks the same text up again from where it left off — so in
-everyday use it works like a play/stop button on the one key.
+shortcut again while it is reading stops it, and "Stopped." appears in the status
+area. Press it once more and it picks the same text up again from where it left off —
+so in everyday use it works like a play/stop button on the one key.
 
 One handy detail: if you copy something new before pressing it again, Mutation
 notices and reads the *new* clipboard text instead of carrying on with the old one.
-It tells you so: "Speaking new clipboard text."
+The status area says so: "Speaking new clipboard text."
 
 ## Moving around the text
 
@@ -170,6 +175,13 @@ silently. You will hear one of these:
 
 Each of these also appears as a message on the main window, and plays the failure
 beep.
+
+A reading can also fail once it has started — most often because the voice it was
+told to use is no longer installed on Windows. Mutation plays the failure beep,
+puts the reason on the main window, and opens a dialog with the details. If the
+missing voice is the cause, the message names it, so you know which one to pick a
+replacement for on the **Voice & Speech** card. A shortcut that fails this way
+never just goes quiet on you.
 
 ## Where to next
 
