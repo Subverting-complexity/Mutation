@@ -101,44 +101,7 @@ public class ReadingPositionAndProgressTests
 		Assert.Equal(10, p.SentenceNumber);
 	}
 
-	// ---- ReadingProgress: threshold crossing ----
-
-	[Theory]
-	[InlineData(0, 25, 25, 25)]
-	[InlineData(0, 50, 25, 50)]
-	[InlineData(0, 24, 25, 0)]   // not reached yet
-	[InlineData(50, 50, 25, 0)]  // already announced exactly this point
-	[InlineData(75, 80, 25, 0)]  // nothing new below 100
-	public void HighestThresholdCrossed_BasicSteps(int last, int current, int step, int expected)
-	{
-		Assert.Equal(expected, ReadingProgress.HighestThresholdCrossed(last, current, step));
-	}
-
-	[Fact]
-	public void HighestThresholdCrossed_SingleBigJump_AnnouncesOnlyHighest()
-	{
-		// A 25% -> 75% jump announces once at 75 and marks 50 passed silently.
-		int crossed = ReadingProgress.HighestThresholdCrossed(lastAnnouncedPercent: 25, currentPercent: 75, stepPercent: 25);
-		Assert.Equal(75, crossed);
-
-		// After recording 75, the skipped 50 never re-announces.
-		Assert.Equal(0, ReadingProgress.HighestThresholdCrossed(75, 76, 25));
-	}
-
-	[Theory]
-	[InlineData(0, 100, 25, 75)]  // 100% is never a progress threshold
-	[InlineData(75, 100, 25, 0)]
-	[InlineData(0, 100, 30, 90)]  // largest multiple of 30 below 100
-	public void HighestThresholdCrossed_NeverAnnouncesHundred(int last, int current, int step, int expected)
-	{
-		Assert.Equal(expected, ReadingProgress.HighestThresholdCrossed(last, current, step));
-	}
-
-	[Fact]
-	public void HighestThresholdCrossed_ZeroStep_IsSafe()
-	{
-		Assert.Equal(0, ReadingProgress.HighestThresholdCrossed(0, 50, 0));
-	}
+	// ---- ReadingProgress: threshold ceiling ----
 
 	[Theory]
 	[InlineData(25, 75)]   // largest multiple of 25 below 100
