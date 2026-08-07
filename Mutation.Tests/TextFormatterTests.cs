@@ -61,21 +61,101 @@ public class TextFormatterTests
 			"Please ai is great.",
 			Rule("ai", "AI", MatchTypeEnum.Smart));
 
-		Assert.Contains("AI", result);
-		Assert.DoesNotContain(" ai ", result);
+		Assert.Equal("Please AI is great.", result);
 	}
 
 	[Fact]
 	public void FormatWithRule_Smart_OnlyMatchesAtWordBoundary()
 	{
-		// Pins down current behavior: standalone "ai" is replaced; the "ai"
-		// embedded inside "contain" is not. The Smart pattern consumes adjacent
-		// whitespace as part of the match.
+		// Standalone "ai" is replaced; the "ai" embedded inside "contain" is not.
+		// The spacing either side of the match survives — it used to be swallowed,
+		// welding the neighbours into "containAIalso paint" (issue #222).
 		string result = TextFormatter.FormatWithRule(
 			"contain ai also paint",
 			Rule("ai", "AI", MatchTypeEnum.Smart));
 
-		Assert.Equal("containAIalso paint", result);
+		Assert.Equal("contain AI also paint", result);
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_KeepsPunctuationFollowingTheMatch()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I like ai, mostly",
+			Rule("ai", "AI", MatchTypeEnum.Smart));
+
+		Assert.Equal("I like AI, mostly", result);
+	}
+
+	// The shipped default rules are dictated punctuation, and they rely on the replacement
+	// supplying its own spacing: re-emitting the gap the match consumed would push the
+	// period away from the word it closes.
+	[Theory]
+	[InlineData("Hello full stop next word", "full stop", ". ", "Hello. next word")]
+	[InlineData("one comma two", "comma", ", ", "one, two")]
+	[InlineData("done question mark really", "question mark", "? ", "done? really")]
+	public void FormatWithRule_Smart_PunctuationReplacement_AttachesToThePrecedingWord(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_NewLineReplacement_DoesNotStrandTheOriginalSpacing()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"first new line second",
+			Rule("new line", Environment.NewLine, MatchTypeEnum.Smart));
+
+		Assert.Equal("first" + Environment.NewLine + "second", result);
+	}
+
+	// Deleting a word should close the gap to a single space, not to none.
+	[Fact]
+	public void FormatWithRule_Smart_EmptyReplacement_LeavesOneSpace()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"so um yeah",
+			Rule("um", string.Empty, MatchTypeEnum.Smart));
+
+		Assert.Equal("so yeah", result);
+	}
+
+	// Smart is the literal match type. Regex metacharacters in Find used to reach the engine
+	// raw: "C++" compiled to a nested quantifier and threw, aborting the whole formatting run
+	// rather than just that rule (issue #222).
+	[Theory]
+	[InlineData("I know C++ well", "C++", "C plus plus", "I know C plus plus well")]
+	[InlineData("type ( here", "(", "open bracket", "type open bracket here")]
+	[InlineData("type [ here", "[", "left square", "type left square here")]
+	[InlineData(@"a \ b", @"\", "backslash", "a backslash b")]
+	public void FormatWithRule_Smart_RegexMetacharactersInFind_AreMatchedLiterally(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	[Fact]
+	public void FormatWithRule_Smart_DollarInReplaceWith_IsInsertedLiterally()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"the cost is amount today",
+			Rule("amount", "$1", MatchTypeEnum.Smart));
+
+		Assert.Equal("the cost is $1 today", result);
+	}
+
+	// One bad rule used to take the whole run down with it, so every later rule was lost too.
+	[Fact]
+	public void FormatWithRules_SmartRuleWithMetacharacters_DoesNotAbortLaterRules()
+	{
+		var rules = new List<TranscriptFormatRule>
+		{
+			Rule("C++", "C plus plus", MatchTypeEnum.Smart),
+			Rule("dotnet", ".NET", MatchTypeEnum.Smart),
+		};
+
+		Assert.Equal("C plus plus and .NET", "C++ and dotnet".FormatWithRules(rules));
 	}
 
 	// ----- FormatWithRule: error paths -----

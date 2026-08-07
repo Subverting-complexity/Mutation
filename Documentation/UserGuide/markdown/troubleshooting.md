@@ -336,10 +336,14 @@ message never contains one of your keys.
 
 ### When an error message appears
 
-An error message tells you what went wrong in a sentence or two, then points at the log
-file. The long technical detail — the part only a developer can use — goes to the log and
-not to the screen, so the message stays short enough to read or listen to. If you are
-reporting the problem, copy the message and then open the log for the rest.
+An error message tells you what went wrong in up to four short lines, then points at the
+log file. The lines run from the thing you were doing down to the underlying cause, so a
+failed dictation might read "Speech to text failed." and then "401 (Unauthorized)" — the
+second line being the one that tells you to go and check your API key.
+
+The long technical detail — the part only a developer can use — goes to the log and not to
+the screen, so the message stays short enough to read or listen to. If you are reporting
+the problem, copy the message and then open the log for the rest.
 
 ## Reporting a problem
 

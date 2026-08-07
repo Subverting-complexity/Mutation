@@ -28,7 +28,7 @@ Each rule also has a **Match type**, which decides how the Find text is interpre
 
 **Plain** swaps the exact text wherever it turns up, including in the middle of longer words.
 
-**Smart** matches the word properly, tidying up the spaces and punctuation around it as it goes. This is the one most people want, and it is especially good for removing a spoken word cleanly without leaving a double space or a stranded comma behind.
+**Smart** matches the word properly, tidying up the spaces and punctuation around it as it goes. This is the one most people want, and it is especially good for removing a spoken word cleanly without leaving a double space or a stranded comma behind. Whatever you type in the Find box is taken exactly as you typed it, so symbols are fine — a rule finding `C++` looks for `C++`.
 
 **RegEx** treats the Find box as a pattern written in a special pattern language for advanced users. If you do not know what this is, you do not need it. (If a pattern is malformed, Mutation shows the error in red under the row so you can fix it.)
 

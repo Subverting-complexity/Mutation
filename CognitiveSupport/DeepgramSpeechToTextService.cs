@@ -38,7 +38,7 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 
 		List<string> keyterms = ParseKeyterms(speechToTextPrompt);
 
-		var audioBytes = await File.ReadAllBytesAsync(audioffilePath).ConfigureAwait(false);
+		var audioBytes = await File.ReadAllBytesAsync(audioffilePath, overallCancellationToken).ConfigureAwait(false);
 		const string AttemptKey = "Attempt";
 
 		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: 3, factor: 1);
@@ -100,13 +100,25 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 		return response;
 	}
 
-	private static List<string> ParseKeyterms(string speechToTextPrompt)
+	/// <summary>
+	/// Reads the comma-separated keyterms out of a prompt line beginning <c>keyterms:</c>.
+	/// <para>
+	/// The list runs to the end of its line, with one optional full stop allowed to close it.
+	/// It used to stop at the first period anywhere, which meant "keyterms: Dr. Bosch, Mutation."
+	/// yielded the single term "Dr" — and keyterms exist precisely to help with names and jargon,
+	/// the text most likely to contain an abbreviation period. A prompt with no closing period
+	/// dropped every term instead (issue #245).
+	/// </para>
+	/// </summary>
+	internal static List<string> ParseKeyterms(string speechToTextPrompt)
 	{
 		if (speechToTextPrompt == null)
 			speechToTextPrompt = string.Empty;
 
-		string pattern = @"(?<=\bkeyterms:\s*).*?(?=\.)";
-		Match match = Regex.Match(speechToTextPrompt, pattern, RegexOptions.IgnoreCase);
+		// Multiline `$` matches before the `\n` of a CRLF, so the `\r` has to be spelled out
+		// or the lazy match swallows it — and with it the closing period it was meant to trim.
+		string pattern = @"(?<=\bkeyterms:[ \t]*).*?(?=\.?[ \t]*\r?$)";
+		Match match = Regex.Match(speechToTextPrompt, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
 		if (match.Success)
 		{
 			string keytermsString = match.Value.Trim();
