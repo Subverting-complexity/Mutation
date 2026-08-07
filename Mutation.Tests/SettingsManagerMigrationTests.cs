@@ -97,13 +97,15 @@ public class SettingsManagerMigrationTests : IDisposable
 			}
 			""";
 		File.WriteAllText(_tempPath, json);
-		var beforeMtime = File.GetLastWriteTimeUtc(_tempPath);
+		// Compare the bytes, not the mtime: Windows file times advance only on the
+		// ~15.6 ms system clock tick, so a rewrite inside one tick is invisible. The
+		// bytes are also a stronger check, since a rewrite would reindent the JSON.
+		byte[] before = File.ReadAllBytes(_tempPath);
 
 		var manager = new SettingsManager(_tempPath);
 		manager.UpgradeSettings();
 
-		var afterMtime = File.GetLastWriteTimeUtc(_tempPath);
-		Assert.Equal(beforeMtime, afterMtime);
+		Assert.Equal(before, File.ReadAllBytes(_tempPath));
 	}
 
 	[Fact]
@@ -335,13 +337,14 @@ public class SettingsManagerMigrationTests : IDisposable
 			}
 			""";
 		File.WriteAllText(_tempPath, json);
-		var beforeMtime = File.GetLastWriteTimeUtc(_tempPath);
+		// Byte comparison rather than mtime — see the note in
+		// UpgradeSettings_AlreadyMigratedFile_IsIdempotent.
+		byte[] before = File.ReadAllBytes(_tempPath);
 
 		var manager = new SettingsManager(_tempPath);
 		manager.UpgradeSettings();
 
-		var afterMtime = File.GetLastWriteTimeUtc(_tempPath);
-		Assert.Equal(beforeMtime, afterMtime);
+		Assert.Equal(before, File.ReadAllBytes(_tempPath));
 	}
 
 	[Fact]

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Mutation.Ui.Core;
@@ -29,6 +30,29 @@ public class DebouncerTests
 		public int Count
 		{
 			get { lock (_lock) return _pending.Count; }
+		}
+
+		// Gates that elapsed normally. Each one, and only each one, may let a run
+		// reach the action — so asserting on this pins down how many runs are even
+		// possible, without waiting out a stretch of real time to see if an extra
+		// one shows up.
+		public int CompletedCount
+		{
+			get
+			{
+				lock (_lock)
+					return _pending.Count(p => p.Tcs.Task.Status == TaskStatus.RanToCompletion);
+			}
+		}
+
+		// Gates cancelled by a newer trigger or by Dispose. These can never run the action.
+		public int CancelledCount
+		{
+			get
+			{
+				lock (_lock)
+					return _pending.Count(p => p.Tcs.Task.IsCanceled);
+			}
 		}
 
 		// Complete the most recently scheduled delay as if its quiet period elapsed.
@@ -62,8 +86,10 @@ public class DebouncerTests
 		clock.CompleteLast();
 
 		Assert.True(ran.Wait(TimeSpan.FromSeconds(5)), "Action should run after the last trigger settles.");
-		// Let any wrongly-scheduled run have a chance to fire; the count must stay at one.
-		Thread.Sleep(50);
+		// Exactly one gate elapsed and the two superseded ones were cancelled, so there
+		// is no second run left to wait for — the count is final, not merely current.
+		Assert.Equal(1, clock.CompletedCount);
+		Assert.Equal(2, clock.CancelledCount);
 		Assert.Equal(1, Volatile.Read(ref runs));
 	}
 
@@ -102,9 +128,12 @@ public class DebouncerTests
 		debouncer.Trigger();
 		debouncer.Dispose();
 
-		// Even if the quiet period "elapses" after disposal, the pending run was cancelled.
+		// Even if the quiet period "elapses" after disposal, the pending run was cancelled:
+		// CompleteLast cannot revive an already-cancelled gate, so no gate ever elapsed
+		// and nothing can reach the action. No run is pending, so no sleep is needed.
 		clock.CompleteLast();
-		Thread.Sleep(50);
+		Assert.Equal(1, clock.CancelledCount);
+		Assert.Equal(0, clock.CompletedCount);
 		Assert.Equal(0, Volatile.Read(ref runs));
 	}
 
@@ -197,7 +226,10 @@ public class DebouncerTests
 		clock.CompleteLast();
 
 		Assert.True(ran.Wait(TimeSpan.FromSeconds(5)), "The surviving run should fire.");
-		Thread.Sleep(50);
+		// The superseded gate was cancelled, not faulted, so there is no second run
+		// still in flight that could report an error later.
+		Assert.Equal(1, clock.CompletedCount);
+		Assert.Equal(1, clock.CancelledCount);
 		Assert.Equal(0, Volatile.Read(ref reports));
 	}
 

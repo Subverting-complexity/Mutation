@@ -75,7 +75,10 @@ public class OcrServiceTests
 		using var cts = new CancellationTokenSource();
 		cts.CancelAfter(TimeSpan.FromMilliseconds(50));
 
-		await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+		// ThrowsAny, not ThrowsAsync<TaskCanceledException>: cancellation usually lands
+		// inside Task.Delay, but if it fires while the limiter is between the lock and
+		// the delay, ThrowIfCancellationRequested throws a plain OperationCanceledException.
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
 		{
 			await ((Task)waitAsync.Invoke(limiter, new object[] { cts.Token })!);
 		});
@@ -90,17 +93,27 @@ public class OcrServiceTests
 		Assert.NotNull(limiter);
 		MethodInfo? waitAsync = limiterType!.GetMethod("WaitAsync", BindingFlags.Public | BindingFlags.Instance);
 		Assert.NotNull(waitAsync);
+		MethodInfo? getSnapshot = limiterType.GetMethod("GetSnapshot", BindingFlags.Public | BindingFlags.Instance);
+		Assert.NotNull(getSnapshot);
 
 		await ((Task)waitAsync!.Invoke(limiter, new object[] { CancellationToken.None })!);
 		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
 
+		var saturated = (OcrService.OcrRequestWindowState)getSnapshot!.Invoke(limiter, Array.Empty<object>())!;
+		Assert.Equal(2, saturated.RequestsInWindow);
+
 		await Task.Delay(TimeSpan.FromMilliseconds(120));
 
-		var stopwatch = Stopwatch.StartNew();
-		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
-		stopwatch.Stop();
+		// The window rolling over is the observable fact; asserting it directly beats
+		// timing the next grant, which a GC pause on a loaded agent can blow past.
+		var expired = (OcrService.OcrRequestWindowState)getSnapshot.Invoke(limiter, Array.Empty<object>())!;
+		Assert.Equal(0, expired.RequestsInWindow);
 
-		Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(40));
+		await ((Task)waitAsync.Invoke(limiter, new object[] { CancellationToken.None })!);
+
+		var afterGrant = (OcrService.OcrRequestWindowState)getSnapshot.Invoke(limiter, Array.Empty<object>())!;
+		Assert.Equal(1, afterGrant.RequestsInWindow);
+		Assert.Equal(3, afterGrant.TotalRequestsGranted);
 	}
 
 	[Fact]
@@ -242,14 +255,17 @@ public class OcrServiceTests
 			OcrService.OcrRequestWindowState afterWait = OcrService.GetSharedRequestWindowState();
 			Assert.Equal(0, afterWait.RequestsInWindow);
 
-			var stopwatch = Stopwatch.StartNew();
 			for (int i = 0; i < 3; i++)
 			{
 				await ((Task)waitAsync!.Invoke(testLimiter, new object[] { CancellationToken.None })!);
 			}
-			stopwatch.Stop();
 
-			Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(90));
+			// A second full batch fits in the now-empty window. The state says so
+			// outright — three fresh entries on top of three already granted — so no
+			// wall-clock budget is needed to prove nothing was throttled.
+			OcrService.OcrRequestWindowState freshBatch = OcrService.GetSharedRequestWindowState();
+			Assert.Equal(3, freshBatch.RequestsInWindow);
+			Assert.Equal(6, freshBatch.TotalRequestsGranted);
 		}
 		finally
 		{

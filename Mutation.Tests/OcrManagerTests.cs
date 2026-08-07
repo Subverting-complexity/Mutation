@@ -589,7 +589,9 @@ public class OcrManagerTests
 		settings.AzureComputerVisionSettings!.MaxParallelDocuments = 100;
 		settings.AzureComputerVisionSettings!.MaxParallelRequests = 2;
 		var clipboard = new TestClipboard();
-		var service = new ConcurrencyTrackingOcrService(delayMs: 50);
+		// Calls are released in pairs, so the overlap is enforced rather than hoped for
+		// inside a delay window.
+		var service = new ConcurrencyTrackingOcrService(rendezvousSize: 2);
 		var files = Enumerable.Range(0, 8).Select(_ => new TempFile(".png")).ToList();
 		try
 		{
@@ -599,8 +601,8 @@ public class OcrManagerTests
 
 			Assert.True(result.Success);
 			Assert.Equal(8, service.CallCount);
-			Assert.True(service.MaxConcurrency <= 2, $"Observed {service.MaxConcurrency} concurrent OCR calls; expected at most 2.");
-			Assert.True(service.MaxConcurrency >= 2, $"Expected the throttle to allow up to 2 concurrent calls; observed {service.MaxConcurrency}.");
+			Assert.False(service.RendezvousTimedOut, "Two OCR calls never ran at once; the throttle admitted fewer than 2 concurrently.");
+			Assert.Equal(2, service.MaxConcurrency);
 		}
 		finally
 		{
@@ -617,7 +619,7 @@ public class OcrManagerTests
 		// Request gate wide open so the document gate is the only binding constraint.
 		settings.AzureComputerVisionSettings!.MaxParallelRequests = 100;
 		var clipboard = new TestClipboard();
-		var service = new ConcurrencyTrackingOcrService(delayMs: 50);
+		var service = new ConcurrencyTrackingOcrService(rendezvousSize: 2);
 		var files = Enumerable.Range(0, 8).Select(_ => new TempFile(".png")).ToList();
 		try
 		{
@@ -629,8 +631,8 @@ public class OcrManagerTests
 			Assert.Equal(8, service.CallCount);
 			// Each single-page file makes exactly one OCR call while holding the document gate,
 			// so concurrent OCR calls equal concurrent documents here.
-			Assert.True(service.MaxConcurrency <= 2, $"Observed {service.MaxConcurrency} concurrent documents; expected at most 2.");
-			Assert.True(service.MaxConcurrency >= 2, $"Expected up to 2 concurrent documents; observed {service.MaxConcurrency}.");
+			Assert.False(service.RendezvousTimedOut, "Two documents never ran at once; the throttle admitted fewer than 2 concurrently.");
+			Assert.Equal(2, service.MaxConcurrency);
 		}
 		finally
 		{
@@ -1051,18 +1053,37 @@ public class OcrManagerTests
 	// observable. The delay keeps each call in flight long enough for overlap to occur.
 	private sealed class ConcurrencyTrackingOcrService : IOcrService
 	{
+		private static readonly TimeSpan RendezvousTimeout = TimeSpan.FromSeconds(10);
+
 		private readonly int _delayMs;
+		private readonly int _rendezvousSize;
+		private readonly object _sync = new();
+		private TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		private int _waiting;
 		private int _current;
 		private int _maxConcurrency;
 		private int _callCount;
+		private int _rendezvousTimedOut;
 
-		public ConcurrencyTrackingOcrService(int delayMs = 50)
+		/// <param name="delayMs">How long each call occupies its slot. Ignored when
+		/// <paramref name="rendezvousSize"/> is set.</param>
+		/// <param name="rendezvousSize">When greater than zero, each call blocks until
+		/// this many callers have arrived, then all of them are released together. That
+		/// makes the overlap a fact the throttle has to produce rather than something the
+		/// test hopes will happen inside a delay window, so the observed concurrency is
+		/// exact instead of load-dependent.</param>
+		public ConcurrencyTrackingOcrService(int delayMs = 50, int rendezvousSize = 0)
 		{
 			_delayMs = delayMs;
+			_rendezvousSize = rendezvousSize;
 		}
 
 		public int CallCount => Volatile.Read(ref _callCount);
 		public int MaxConcurrency => Volatile.Read(ref _maxConcurrency);
+
+		// True when a caller waited out the timeout without enough peers arriving —
+		// i.e. the throttle admitted fewer concurrent calls than the test expected.
+		public bool RendezvousTimedOut => Volatile.Read(ref _rendezvousTimedOut) != 0;
 
 		public async Task<string> ExtractText(OcrReadingOrder ocrReadingOrder, Stream imageStream, CancellationToken overallCancellationToken)
 		{
@@ -1079,12 +1100,46 @@ public class OcrManagerTests
 
 			try
 			{
-				await Task.Delay(_delayMs, overallCancellationToken);
+				if (_rendezvousSize > 0)
+					await ArriveAtRendezvousAsync(overallCancellationToken);
+				else
+					await Task.Delay(_delayMs, overallCancellationToken);
+
 				return "ocr text";
 			}
 			finally
 			{
 				Interlocked.Decrement(ref _current);
+			}
+		}
+
+		// A barrier that recycles: every group of _rendezvousSize arrivals is released
+		// together, so a run of N files passes through in groups rather than the first
+		// group holding the rest up forever.
+		private async Task ArriveAtRendezvousAsync(CancellationToken token)
+		{
+			TaskCompletionSource group;
+			lock (_sync)
+			{
+				group = _gate;
+				if (++_waiting == _rendezvousSize)
+				{
+					_waiting = 0;
+					// Swap in a fresh gate for the next group before releasing this one.
+					_gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+					group.TrySetResult();
+				}
+			}
+
+			try
+			{
+				await group.Task.WaitAsync(RendezvousTimeout, token);
+			}
+			catch (TimeoutException)
+			{
+				// Never hang the suite on a broken throttle: record it and let the test
+				// report it as a plain assertion failure.
+				Interlocked.Exchange(ref _rendezvousTimedOut, 1);
 			}
 		}
 	}
