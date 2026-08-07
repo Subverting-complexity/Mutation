@@ -271,7 +271,7 @@ public static class TextFormatter
 	/// </summary>
 	private static bool OpensAttachedToPrecedingWord(string replaceWith)
 	{
-		if (replaceWith.Length > 0 && IsSuffixMark(replaceWith[0]))
+		if (IsWordSuffix(replaceWith))
 			return true;
 
 		int index = 0;
@@ -282,11 +282,29 @@ public static class TextFormatter
 	}
 
 	/// <summary>
-	/// An apostrophe opening a replacement makes the whole thing a suffix — "apostrophe s" →
-	/// "'s" — and a possessive belongs against the thing it possesses: "Jacques's", never
-	/// "Jacques 's".
+	/// Whether the replacement is an English suffix: an apostrophe and the one or two letters
+	/// that follow it, and nothing else — "'s", "'re", "'ll", "'ve". A possessive belongs
+	/// against the thing it possesses ("Jacques's", never "Jacques 's").
+	/// <para>
+	/// Deliberately narrow. "Starts with an apostrophe" would catch a decade — "nineties" →
+	/// "'90s" — and weld it to the word before, and it would catch a quoting rule such as
+	/// "'quoted'" too. Those are words, and words keep their gap.
+	/// </para>
 	/// </summary>
-	private static bool IsSuffixMark(char value) => value is '\'' or '’';
+	private static bool IsWordSuffix(string replaceWith)
+	{
+		if (replaceWith.Length is < 2 or > 3)
+			return false;
+
+		if (replaceWith[0] is not ('\'' or '’'))
+			return false;
+
+		for (int index = 1; index < replaceWith.Length; index++)
+			if (!char.IsLetter(replaceWith[index]))
+				return false;
+
+		return true;
+	}
 
 	private static bool IsSentencePunctuation(char value) =>
 		value is '.' or ',' or ';' or ':' or '!' or '?';

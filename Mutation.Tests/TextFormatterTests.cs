@@ -174,14 +174,38 @@ public class TextFormatterTests
 
 	// A possessive belongs to the word it possesses. It carries a letter, so it is a word
 	// replacement rather than a symbol, but it still has to close the gap on its left.
+	[Theory]
+	[InlineData("that is Jacques apostrophe s laptop", "apostrophe s", "'s", "that is Jacques's laptop")]
+	[InlineData("they are they apostrophe re here", "apostrophe re", "'re", "they are they're here")]
+	[InlineData("we curly apostrophe s done", "curly apostrophe s", "’s", "we’s done")]
+	public void FormatWithRule_Smart_ApostropheSuffix_AttachesToThePrecedingWord(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// "Starts with an apostrophe" is not the same thing as "is a suffix". A decade and a
+	// quotation both open with one and are both ordinary words that keep their gap.
+	[Theory]
+	[InlineData("back in the nineties we did", "nineties", "'90s", "back in the '90s we did")]
+	[InlineData("he said quoted thing today", "quoted thing", "'quoted thing'", "he said 'quoted thing' today")]
+	public void FormatWithRule_Smart_WordOpeningWithAnApostrophe_KeepsTheGap(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// U+2019 is the right single quote and the typographic apostrophe at the same time.
+	// Treating it as closing punctuation would break the far more common of the two uses,
+	// so it keeps the both-sides behaviour it has always had.
 	[Fact]
-	public void FormatWithRule_Smart_ApostropheSuffix_AttachesToThePrecedingWord()
+	public void FormatWithRule_Smart_CurlyApostropheSymbol_StillWeldsBothSides()
 	{
 		string result = TextFormatter.FormatWithRule(
-			"that is Jacques apostrophe s laptop",
-			Rule("apostrophe s", "'s", MatchTypeEnum.Smart));
+			"that is John apostrophe s laptop",
+			Rule("apostrophe", "’", MatchTypeEnum.Smart));
 
-		Assert.Equal("that is Jacques's laptop", result);
+		Assert.Equal("that is John’s laptop", result);
 	}
 
 	// A replacement that opens with punctuation but carries text is a word, not punctuation,

@@ -38,11 +38,16 @@ public static class SymbolAttachments
 {
 	/// <summary>
 	/// Punctuation that finishes something and so sits hard against the word it finishes.
-	/// The curly quotes are here because they say which end they are; the straight
-	/// <c>"</c> and <c>'</c> do not, so they are deliberately left out and fall through to
-	/// <see cref="SymbolAttachment.Both"/> — their existing behaviour.
+	/// <para>
+	/// The quote characters that are left out are left out on purpose. The straight <c>"</c>
+	/// and <c>'</c> do not say which end of a quotation they are. Neither, in practice, does
+	/// the curly <c>’</c>: it is the right single quotation mark and the typographic
+	/// apostrophe, the same character, so classifying it as closing would turn a perfectly
+	/// ordinary <c>apostrophe</c> → <c>’</c> rule into "John’ s". All three fall through to
+	/// <see cref="SymbolAttachment.Both"/>, which is the behaviour they have always had.
+	/// </para>
 	/// </summary>
-	private const string ClosingSymbols = ".,;:!?)]}%’”»";
+	private const string ClosingSymbols = ".,;:!?)]}%”»";
 
 	/// <summary>Punctuation that starts something and so leans onto what follows it.</summary>
 	private const string OpeningSymbols = "([{$#‘“«";

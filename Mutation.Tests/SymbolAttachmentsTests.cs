@@ -20,7 +20,6 @@ public class SymbolAttachmentsTests
 	[InlineData("]")]
 	[InlineData("}")]
 	[InlineData("%")]
-	[InlineData("’")]
 	[InlineData("”")]
 	public void Closing_punctuation_attaches_on_the_left(string replaceWith)
 	{
@@ -52,12 +51,15 @@ public class SymbolAttachmentsTests
 		Assert.Equal(SymbolAttachment.Both, SymbolAttachments.Classify(replaceWith));
 	}
 
-	// A straight quote does not say which end of the quotation it is. Guessing would be wrong
-	// half the time, so it keeps the behaviour every symbol had before there were classes.
+	// A straight quote does not say which end of the quotation it is, and the curly single
+	// quote is also the typographic apostrophe — "John’s" is far more common than a quotation.
+	// Guessing would be wrong at least half the time, so all three keep the behaviour every
+	// symbol had before there were classes.
 	[Theory]
 	[InlineData("\"")]
 	[InlineData("'")]
-	public void Straight_quotes_are_left_alone(string replaceWith)
+	[InlineData("’")]
+	public void Ambiguous_quotes_are_left_alone(string replaceWith)
 	{
 		Assert.Equal(SymbolAttachment.Both, SymbolAttachments.Classify(replaceWith));
 	}

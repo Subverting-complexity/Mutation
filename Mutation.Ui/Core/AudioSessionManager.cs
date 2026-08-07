@@ -460,10 +460,29 @@ public class AudioSessionManager : IDisposable
             // to stop a decode that is taking too long.
             PlaybackStarted?.Invoke(this, EventArgs.Empty);
 
-            if (await Task.WhenAny(playback, Task.Delay(DecodeAnnouncementDelay)).ConfigureAwait(true) != playback)
-                StatusMessage?.Invoke(this, $"Decoding {session.FileName}...");
+            using (var announcement = new CancellationTokenSource())
+            {
+                Task waited = await Task.WhenAny(playback, Task.Delay(DecodeAnnouncementDelay, announcement.Token))
+                    .ConfigureAwait(true);
+                // Cancelled either way: a decode that beat the delay leaves a timer running
+                // for every recording ever played otherwise.
+                announcement.Cancel();
+
+                // Only speak for a decode that is still the one the user is waiting for. Stop,
+                // or a jump to another session, can land inside the delay — and announcing
+                // then names a file that was cancelled, over the top of the one now playing.
+                if (waited != playback && !playback.IsCompleted && IsStillPlaying(session))
+                    StatusMessage?.Invoke(this, $"Decoding {session.FileName}...");
+            }
 
             await playback.ConfigureAwait(true);
+
+            // The same state, re-asserted now that the audio is actually running. The handler
+            // reads IsPlaying to decide what stays enabled while a recording plays, and at the
+            // point PlaybackStarted was first raised the decode had not finished, so it read
+            // false and left Retry and Upload enabled for the whole of playback.
+            if (IsStillPlaying(session))
+                PlaybackStarted?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -471,6 +490,13 @@ public class AudioSessionManager : IDisposable
             ErrorOccurred?.Invoke(this, $"Playback failed: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Whether the request that started this session is still the live one. False once Stop,
+    /// a jump to another session, or the file reaching its end has cleared it.
+    /// </summary>
+    private bool IsStillPlaying(SpeechSession session) =>
+        ReferenceEquals(_playingSession, session);
 
     public void StopPlayback()
     {

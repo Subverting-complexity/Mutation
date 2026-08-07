@@ -14,8 +14,14 @@ namespace Mutation.Tests;
 /// <para>
 /// Two things had to stay true through that move. The output device must still be built where
 /// the caller was, since NAudio captures that thread's synchronization context to post
-/// playback notifications back to. And a recording the user has already stopped must not
-/// start playing when its decode finally lands.
+/// playback notifications back to. And a request that has been superseded — the user pressed
+/// Stop, or picked another file — must do nothing at all when it finally lands, whether it
+/// succeeded or failed.
+/// </para>
+/// <para>
+/// The superseded cases are driven through the player's <c>beforePrepare</c> seam rather than
+/// by racing the thread pool: a test that only wins by scheduling luck is a test that passes
+/// when the fix is reverted.
 /// </para>
 /// </summary>
 public class AudioPlayerAsyncPlaybackTests : IDisposable
@@ -28,21 +34,23 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 		try { Directory.Delete(_workingDirectory, recursive: true); } catch { }
 	}
 
-	private string WriteWav(string fileName, int milliseconds = 200)
+	private string WriteWav(string fileName)
 	{
 		string path = Path.Combine(_workingDirectory, fileName);
-		File.WriteAllBytes(path, BeepToneSynthesizer.SynthesizeWav(new[] { (440, milliseconds) }));
+		File.WriteAllBytes(path, BeepToneSynthesizer.SynthesizeWav(new[] { (440, 200) }));
 		return path;
 	}
 
-	private AudioPlayer NewPlayer()
+	private AudioPlayer NewPlayer(Action<string>? beforePrepare = null)
 	{
-		return new AudioPlayer(() =>
-		{
-			var device = new FakeAudioOutputDevice();
-			_devices.Add(device);
-			return device;
-		});
+		return new AudioPlayer(
+			() =>
+			{
+				var device = new FakeAudioOutputDevice();
+				_devices.Add(device);
+				return device;
+			},
+			beforePrepare);
 	}
 
 	[Fact]
@@ -82,18 +90,52 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 
 	// Pressing Play and then Stop while a long recording is still decoding used to be
 	// impossible, because the window was frozen for the whole decode. Now that it is not, the
-	// stop has to win: without it the audio starts anyway, seconds after the user stopped it,
-	// with the button already reading "Play".
+	// stop has to win: without this the audio starts anyway, seconds after the user stopped
+	// it, with the button already reading "Play".
 	[Fact]
 	public async Task Stopping_while_a_file_is_still_decoding_keeps_it_silent()
 	{
-		using var player = NewPlayer();
+		using var gate = new DecodeGate();
+		using var player = NewPlayer(gate.Wait);
 
-		Task playback = player.PlayAsync(WriteWav("stopped-mid-decode.wav", milliseconds: 3000));
+		Task playback = player.PlayAsync(WriteWav("stopped-mid-decode.wav"));
+		gate.WaitUntilDecodeStarted();
+
 		player.Stop();
+		gate.Release();
 		await playback;
 
+		Assert.Empty(_devices);
 		Assert.False(player.IsPlaying);
+	}
+
+	// A decode that fails after it has been superseded belongs to nobody. Reporting it stops
+	// whatever is playing now and puts a modal error dialog in front of the user about a file
+	// they moved on from seconds ago.
+	[Fact]
+	public async Task A_stale_decode_that_fails_leaves_the_current_recording_playing()
+	{
+		using var gate = new DecodeGate();
+		using var player = NewPlayer(gate.Wait);
+		string? failure = null;
+		player.PlaybackFailed += (_, message) => failure = message;
+
+		// The stale request: held at the gate, and rigged to throw when it is let go.
+		Task stale = player.PlayAsync(Path.Combine(_workingDirectory, "deleted-mid-decode.wav"));
+		gate.WaitUntilDecodeStarted();
+
+		// The user moves on. This one is not gated, so it decodes and starts normally.
+		gate.LetTheNextOneThrough();
+		await player.PlayAsync(WriteWav("current.wav"));
+		FakeAudioOutputDevice current = Assert.Single(_devices);
+
+		gate.Release();
+		await stale;
+
+		Assert.True(current.IsPlaying);
+		Assert.Equal(0, current.DisposeCount);
+		Assert.True(player.IsPlaying);
+		Assert.Null(failure);
 	}
 
 	// Superseding is per-request, not a latch: the next Play after a Stop still plays.
@@ -124,21 +166,63 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 		Assert.Empty(_devices);
 	}
 
-	// Two overlapping requests: the newer one owns the player, and the older one throws its
-	// decoded audio away instead of stealing the device back.
+	// Two overlapping requests. Exactly one device is ever opened — the older request throws
+	// its decoded audio away rather than opening a second one and stealing the player back.
 	[Fact]
 	public async Task The_last_file_asked_for_is_the_one_that_plays()
 	{
-		using var player = NewPlayer();
+		using var gate = new DecodeGate();
+		using var player = NewPlayer(gate.Wait);
 
-		Task first = player.PlayAsync(WriteWav("older.wav", milliseconds: 3000));
-		Task second = player.PlayAsync(WriteWav("newer.wav"));
-		await Task.WhenAll(first, second);
+		Task older = player.PlayAsync(WriteWav("older.wav"));
+		gate.WaitUntilDecodeStarted();
 
+		gate.LetTheNextOneThrough();
+		Task newer = player.PlayAsync(WriteWav("newer.wav"));
+		await newer;
+
+		gate.Release();
+		await older;
+
+		FakeAudioOutputDevice only = Assert.Single(_devices);
+		Assert.True(only.IsPlaying);
+		Assert.Equal(0, only.DisposeCount);
 		Assert.True(player.IsPlaying);
-		FakeAudioOutputDevice last = _devices[^1];
-		Assert.True(last.IsPlaying);
-		Assert.Equal(0, last.DisposeCount);
+	}
+
+	/// <summary>
+	/// Holds the first decode open until the test says otherwise, so the test can act while a
+	/// request is genuinely in flight instead of hoping the thread pool is slow enough.
+	/// </summary>
+	private sealed class DecodeGate : IDisposable
+	{
+		private readonly ManualResetEventSlim _started = new(false);
+		private readonly ManualResetEventSlim _released = new(false);
+		private int _passThrough;
+
+		/// <summary>Runs on the decoding thread. Blocks unless it has been waved past.</summary>
+		public void Wait(string filePath)
+		{
+			if (Interlocked.Exchange(ref _passThrough, 0) != 0)
+				return;
+
+			_started.Set();
+			_released.Wait(TimeSpan.FromSeconds(10));
+		}
+
+		public void WaitUntilDecodeStarted() => Assert.True(_started.Wait(TimeSpan.FromSeconds(10)));
+
+		/// <summary>The next decode is not held — used for the request that supersedes.</summary>
+		public void LetTheNextOneThrough() => Interlocked.Exchange(ref _passThrough, 1);
+
+		public void Release() => _released.Set();
+
+		public void Dispose()
+		{
+			_released.Set();
+			_started.Dispose();
+			_released.Dispose();
+		}
 	}
 
 	/// <summary>

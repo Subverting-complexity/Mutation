@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO;
 using CognitiveSupport;
@@ -42,13 +43,13 @@ public class AudioPlayerTeardownTests : IDisposable
 	}
 
 	[Fact]
-	public void Reaching_the_end_of_a_file_releases_the_device()
+	public async Task Reaching_the_end_of_a_file_releases_the_device()
 	{
 		using var player = NewPlayer();
 		bool ended = false;
 		player.PlaybackEnded += (_, _) => ended = true;
 
-		player.Play(WriteWav("ends.wav"));
+		await player.PlayAsync(WriteWav("ends.wav"));
 		FakeAudioOutputDevice device = Assert.Single(_devices);
 		Assert.True(device.IsPlaying);
 
@@ -60,13 +61,13 @@ public class AudioPlayerTeardownTests : IDisposable
 	}
 
 	[Fact]
-	public void A_failed_playback_reports_the_error_and_still_releases_the_device()
+	public async Task A_failed_playback_reports_the_error_and_still_releases_the_device()
 	{
 		using var player = NewPlayer();
 		string? failure = null;
 		player.PlaybackFailed += (_, message) => failure = message;
 
-		player.Play(WriteWav("fails.wav"));
+		await player.PlayAsync(WriteWav("fails.wav"));
 		FakeAudioOutputDevice device = Assert.Single(_devices);
 
 		device.RaisePlaybackStopped(new InvalidOperationException("device lost"));
@@ -79,21 +80,26 @@ public class AudioPlayerTeardownTests : IDisposable
 	// A PlaybackEnded listener that queues up the next file is the normal "play the whole
 	// list" pattern. The finishing device must not tear down the one that just started.
 	[Fact]
-	public void Starting_the_next_file_from_the_ended_handler_leaves_the_new_device_alone()
+	public async Task Starting_the_next_file_from_the_ended_handler_leaves_the_new_device_alone()
 	{
 		using var player = NewPlayer();
-		string next = WriteWav("next.wav");
+		string nextPath = WriteWav("next.wav");
 
+		// The listener cannot await, so it hands the task out to be awaited here. That is the
+		// shape a real handler has too: the next file starts decoding while the finishing
+		// device is still tidying itself up.
+		Task? next = null;
 		player.PlaybackEnded += (_, _) =>
 		{
 			if (_devices.Count == 1)
-				player.Play(next);
+				next = player.PlayAsync(nextPath);
 		};
 
-		player.Play(WriteWav("first.wav"));
+		await player.PlayAsync(WriteWav("first.wav"));
 		FakeAudioOutputDevice first = _devices[0];
 
 		first.RaisePlaybackStopped();
+		await next!;
 
 		Assert.Equal(2, _devices.Count);
 		Assert.Equal(1, first.DisposeCount);
@@ -104,16 +110,16 @@ public class AudioPlayerTeardownTests : IDisposable
 		Assert.True(player.IsPlaying);
 	}
 
-	// Two overlapping Play calls must not strand the loser's device: the file is decoded
-	// outside the playback lock now, so the second call can arrive while the first is
-	// still preparing.
+	// One file after another: the first file's device must be released rather than left
+	// attached with nothing to close it. Overlapping requests are covered separately, in
+	// AudioPlayerAsyncPlaybackTests.
 	[Fact]
-	public void Playing_a_second_file_releases_the_first_files_device()
+	public async Task Playing_a_second_file_releases_the_first_files_device()
 	{
 		using var player = NewPlayer();
 
-		player.Play(WriteWav("one.wav"));
-		player.Play(WriteWav("two.wav"));
+		await player.PlayAsync(WriteWav("one.wav"));
+		await player.PlayAsync(WriteWav("two.wav"));
 
 		Assert.Equal(2, _devices.Count);
 		Assert.Equal(1, _devices[0].DisposeCount);
@@ -121,15 +127,15 @@ public class AudioPlayerTeardownTests : IDisposable
 	}
 
 	[Fact]
-	public void A_stopped_notification_from_a_superseded_device_is_ignored()
+	public async Task A_stopped_notification_from_a_superseded_device_is_ignored()
 	{
 		using var player = NewPlayer();
 		int endedCount = 0;
 		player.PlaybackEnded += (_, _) => endedCount++;
 
-		player.Play(WriteWav("stale.wav"));
+		await player.PlayAsync(WriteWav("stale.wav"));
 		FakeAudioOutputDevice stale = _devices[0];
-		player.Play(WriteWav("current.wav"));
+		await player.PlayAsync(WriteWav("current.wav"));
 		FakeAudioOutputDevice current = _devices[1];
 
 		// The old device's PlaybackStopped, delivered late.
@@ -141,10 +147,10 @@ public class AudioPlayerTeardownTests : IDisposable
 	}
 
 	[Fact]
-	public void Dispose_releases_the_device()
+	public async Task Dispose_releases_the_device()
 	{
 		var player = NewPlayer();
-		player.Play(WriteWav("disposed.wav"));
+		await player.PlayAsync(WriteWav("disposed.wav"));
 
 		player.Dispose();
 
