@@ -66,6 +66,20 @@ This choice does not affect muting. Muting always covers every microphone,
 whichever one is selected. Your choice is remembered the next time you start
 Mutation.
 
+Some microphones take a moment to hand over — a USB mic that has just been plugged
+in, or a Bluetooth headset waking up. Mutation waits for it in the background, so
+the window stays usable and you keep your place in the dropdown while it works. If
+you change your mind and pick another microphone before the first one is ready, the
+last one you pick is the one you end up on.
+
+If the switch does not work, Mutation tells you rather than leave you with a
+microphone that quietly hears nothing:
+
+- "... is no longer available. Choose another microphone." means the mic was
+  unplugged between you picking it and Mutation getting to it. Pick another one.
+- "Could not switch to ...", followed by the reason, means the microphone was
+  there but would not start. Try it again, or pick another one.
+
 ## The live level display
 
 Underneath the dropdown is a live picture of what your microphone is hearing: a

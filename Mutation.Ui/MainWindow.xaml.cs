@@ -102,6 +102,13 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Set while the microphone combo is being rebuilt programmatically, so the
 	// selection handler does not treat the resulting event as a user choice.
 	private bool _suppressMicrophoneSelection;
+	// Runs microphone switches — resolving the device over winmm and restarting
+	// waveform capture — on a background worker, so a device that is slow to respond
+	// cannot freeze the window and the screen reader with it (issue #267). Also the
+	// ordering authority: the latest selection supersedes any older one, in flight or
+	// queued, so the level controls can never end up describing a different device
+	// than the one the user chose.
+	private readonly Mutation.Ui.Core.MicrophoneSwitchCoordinator _microphoneSwitch;
 	// Set as soon as the window starts closing, so async continuations that resume
 	// afterwards do not touch torn-down controls.
 	private bool _isClosing;
@@ -206,6 +213,14 @@ public sealed partial class MainWindow : Window, IDisposable
             ShowStatus);
         _microphoneVisualization.Initialize();
         SyncMicWaveToggleState();
+
+        // Built before anything can select a microphone — restoring the persisted
+        // choice below raises SelectionChanged, and that handler goes through here.
+        _microphoneSwitch = new Mutation.Ui.Core.MicrophoneSwitchCoordinator(
+            _audioDeviceManager.SelectMicrophoneById,
+            _microphoneVisualization.RestartCapture,
+            _microphoneVisualization.StopCapture,
+            ex => ErrorLogger.LogError("Selecting the microphone failed", ex));
 
         _audioSessionManager.RefreshSessions();
                 UpdatePlaybackButtonVisuals("Play selected session", PlayGlyph);
@@ -663,7 +678,10 @@ public sealed partial class MainWindow : Window, IDisposable
 				break;
 
 			default:
-				_microphoneVisualization?.StopCapture();
+				// Queued on the switch worker rather than closed here: it is the same
+				// winmm teardown, and going through the worker also orders it against a
+				// switch that may still be in flight.
+				_ = _microphoneSwitch.ReleaseAsync();
 				ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
 				break;
 		}
@@ -2620,7 +2638,17 @@ public sealed partial class MainWindow : Window, IDisposable
             StatusAnnouncement.ActivityId);
     }
 
-	private void CmbMicrophone_SelectionChanged(object sender, SelectionChangedEventArgs e)
+	// The user picked a different microphone. Everything on this path that can block
+	// on the device — resolving it over winmm, and closing and reopening the capture
+	// handle — runs on the switch coordinator's background worker, so a USB device
+	// mid-reconnect, a Bluetooth headset, or a wedged driver can no longer freeze the
+	// window and the screen reader with it (issue #267).
+	//
+	// Nothing here disables or reassigns the combo, so a screen-reader user keeps
+	// their focus and their selection for the whole switch, however long it takes;
+	// what they get is the outcome, announced through the status bar, rather than a
+	// dead window and then silently dead capture.
+	private async void CmbMicrophone_SelectionChanged(object sender, SelectionChangedEventArgs e)
 	{
 		// A programmatic rebuild of the list re-raises this; it is not a user choice.
 		if (_suppressMicrophoneSelection)
@@ -2628,7 +2656,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		if (CmbMicrophone.SelectedItem is not Mutation.Ui.Core.CaptureDeviceInfo device)
 		{
-			_microphoneVisualization?.StopCapture();
+			// Releasing the handle is a winmm call like any other, so it goes through
+			// the same worker — and queueing it there is also what keeps it ordered
+			// against a switch that may still be in flight.
+			_ = _microphoneSwitch.ReleaseAsync();
 			return;
 		}
 
@@ -2640,39 +2671,55 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (string.Equals(device.Id, _audioDeviceManager.SelectedMicrophone?.Id, StringComparison.OrdinalIgnoreCase))
 			return;
 
-		try
+		// Selected by ID: the manager re-resolves the live device out of its current
+		// enumeration, so a list entry that predates a hot-plug cannot become the
+		// selection (issue #264).
+		//
+		// A null result means a newer selection superseded this one. That switch owns
+		// the settings, the capture, and the level controls now, so this one reports
+		// nothing — otherwise the controls would end up describing a device the user
+		// has already moved on from.
+		if (await _microphoneSwitch.SwitchAsync(device.Id) is not Mutation.Ui.Core.MicrophoneSwitchResult result)
+			return;
+
+		// The window closed while the device was being opened; its controls are torn
+		// down and there is nobody left to tell.
+		if (_isClosing)
+			return;
+
+		switch (result.Outcome)
 		{
-			// Selected by ID: the manager re-resolves the live device out of its current
-			// enumeration, so a list entry that predates a hot-plug cannot become the
-			// selection (issue #264).
-			if (!_audioDeviceManager.SelectMicrophoneById(device.Id))
-			{
+			case Mutation.Ui.Core.MicrophoneSwitchOutcome.Switched:
+				if (_settings.AudioSettings != null)
+				{
+					_settings.AudioSettings.ActiveCaptureDeviceFullName = device.FriendlyName;
+					// Debounced rather than written inline: the save serializes the whole
+					// settings object and atomically replaces the file plus its .bak, and
+					// that disk I/O has no business on the UI thread. Nothing is at risk
+					// of being lost — the close handler saves _settings unconditionally.
+					_settingsSaveDebouncer.Trigger();
+				}
+
+				// Re-sync the level controls to the newly-selected device (support and
+				// current level may differ) and re-assert the pinned level on it.
+				if (_micLevelInitialized)
+					InitializeMicrophoneLevelControls();
+				break;
+
+			case Mutation.Ui.Core.MicrophoneSwitchOutcome.Unavailable:
 				ShowStatus("Microphone",
 					$"{device.FriendlyName} is no longer available. Choose another microphone.",
 					InfoBarSeverity.Warning);
-				return;
-			}
+				break;
 
-			if (_settings.AudioSettings != null)
-			{
-				_settings.AudioSettings.ActiveCaptureDeviceFullName = device.FriendlyName;
-				_settingsManager.SaveSettingsToFile(_settings);
-			}
-			_microphoneVisualization?.RestartCapture();
-
-			// Re-sync the level controls to the newly-selected device (support and
-			// current level may differ) and re-assert the pinned level on it.
-			if (_micLevelInitialized)
-				InitializeMicrophoneLevelControls();
-		}
-		catch (Exception ex)
-		{
-			// A device fault must reach the user as a status message; escaping here
-			// would take down an unguarded UI event handler.
-			ErrorLogger.LogError("Selecting the microphone failed", ex);
-			ShowStatus("Microphone",
-				$"Could not switch to {device.FriendlyName}: {ex.Message}",
-				InfoBarSeverity.Error);
+			default:
+				// A device fault must reach the user as a status message: capture is
+				// dead, and without this they would be left dictating into nothing. The
+				// coordinator has already logged the exception behind the message.
+				ShowStatus("Microphone",
+					$"Could not switch to {device.FriendlyName}: {result.FailureMessage}",
+					InfoBarSeverity.Error);
+				break;
 		}
 	}
 

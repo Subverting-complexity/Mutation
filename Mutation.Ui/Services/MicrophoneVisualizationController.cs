@@ -32,7 +32,27 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	private readonly WaveformRenderGate _waveformRenderGate = new();
 	private readonly SingleTimerSlot<DispatcherQueueTimer> _waveformTimer;
+
+	// Guards the capture handle and the epoch that decides which start owns it.
+	// Capture transitions now arrive from two directions — the UI thread (startup,
+	// the visualization toggle, window close) and the background switch worker
+	// (issue #267) — so the handle can no longer be a plain field. Held for field
+	// access only, never across a device call: a background start blocked on a
+	// wedged waveInOpen must not be able to stall a UI-thread caller that takes it.
+	private readonly object _captureSync = new();
 	private WaveInEvent? _waveformCapture;
+	// Bumped by every start and stop. A start that finds its epoch superseded while
+	// it was opening the device closes the handle it just opened rather than
+	// publishing it — otherwise a switch that lands after a stop leaves a capture
+	// running that nothing owns, and the microphone stays live with no way to
+	// release it.
+	private int _captureEpoch;
+	// Set by Dispose, cleared by Initialize. Separate from the epoch because Dispose
+	// also tears down _samples: a start that read _samples just before Dispose ran
+	// would otherwise claim a *newer* epoch and publish a handle into a controller
+	// that has already been shut down.
+	private bool _captureDisposed;
+
 	private Signal? _waveformSignal;
 
 	// Null until Initialize() runs, and again after Dispose() — the capture callback and the
@@ -88,6 +108,11 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	public void Initialize()
 	{
+		// Re-opens the controller after a Dispose that was really an "off" switch
+		// (ApplyEnabledStateFromSettings), so capture can be published again.
+		lock (_captureSync)
+			_captureDisposed = false;
+
 		_samples = new WaveformSampleBuffer(WaveformWindowSampleCount);
 
 		var plot = _waveformPlot.Plot;
@@ -106,12 +131,34 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		_waveformTimer.Restart();
 	}
 
+	/// <summary>
+	/// Opens capture on the currently-selected device. Safe to call from the
+	/// background switch worker as well as the UI thread: everything it touches is
+	/// either thread-safe on its own (the sample ring, the render gate) or published
+	/// under <c>_captureSync</c>, and the status messages it raises are marshalled
+	/// back to the UI thread.
+	/// </summary>
 	public void StartCapture()
 	{
 		if (_samples is null)
 			return;
 
-		StopCapture();
+		int epoch;
+		WaveInEvent? superseded;
+		lock (_captureSync)
+		{
+			if (_captureDisposed)
+				return;
+
+			epoch = ++_captureEpoch;
+			superseded = _waveformCapture;
+			_waveformCapture = null;
+		}
+
+		// Outside the lock: closing a handle is a winmm call into the driver and is
+		// exactly the kind of work that must never be held over a lock the UI thread
+		// can take.
+		CloseCapture(superseded);
 
 		_samples.Reset();
 
@@ -126,24 +173,39 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 			return;
 		}
 
+		WaveInEvent? capture = null;
 		try
 		{
-			_waveformCapture = new WaveInEvent
+			capture = new WaveInEvent
 			{
 				DeviceNumber = deviceIndex,
 				WaveFormat = new WaveFormat(WaveformSampleRate, 16, 1),
 				BufferMilliseconds = WaveformBufferMilliseconds
 			};
-			_waveformCapture.DataAvailable += OnWaveformDataAvailable;
-			_waveformCapture.StartRecording();
+			capture.DataAvailable += OnWaveformDataAvailable;
+			capture.StartRecording();
 		}
 		catch (Exception ex)
 		{
-			_waveformCapture?.Dispose();
-			_waveformCapture = null;
+			CloseCapture(capture);
 			_dispatcherQueue.TryEnqueue(() =>
 				_showStatus("Microphone", $"Unable to monitor audio: {ex.Message}", InfoBarSeverity.Error));
+			return;
 		}
+
+		bool stillCurrent;
+		lock (_captureSync)
+		{
+			stillCurrent = !_captureDisposed && _captureEpoch == epoch;
+			if (stillCurrent)
+				_waveformCapture = capture;
+		}
+
+		// Someone stopped, disposed, or started a newer capture while this one was
+		// opening. Release the handle here rather than leave the microphone live with
+		// nothing holding a reference to close it.
+		if (!stillCurrent)
+			CloseCapture(capture);
 	}
 
 	public void RestartCapture()
@@ -152,23 +214,53 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		StartCapture();
 	}
 
+	/// <summary>
+	/// Releases capture. Callable from either thread; see <see cref="StartCapture"/>.
+	/// </summary>
 	public void StopCapture()
 	{
-		if (_waveformCapture is null)
+		WaveInEvent? capture;
+		lock (_captureSync)
+		{
+			// Bumped even when there is no handle to close: a start that is mid-
+			// waveInOpen right now has to learn that its result is no longer wanted.
+			_captureEpoch++;
+			capture = _waveformCapture;
+			_waveformCapture = null;
+		}
+
+		CloseCapture(capture);
+	}
+
+	// Shuts a capture handle down and releases it, treating any failure as nothing to
+	// act on — the handle is being abandoned either way, and a throw from the teardown
+	// of the device being replaced must not be reported as a failure to switch to the
+	// new one.
+	private void CloseCapture(WaveInEvent? capture)
+	{
+		if (capture is null)
 			return;
 
 		try
 		{
-			_waveformCapture.DataAvailable -= OnWaveformDataAvailable;
-			_waveformCapture.StopRecording();
+			capture.DataAvailable -= OnWaveformDataAvailable;
+			capture.StopRecording();
 		}
 		catch
 		{
 			// Ignore failures that occur while shutting down capture.
 		}
 
-		_waveformCapture.Dispose();
-		_waveformCapture = null;
+		// Disposed even when stopping threw, so a device that faults on the way down
+		// does not leak its handle.
+		try
+		{
+			capture.Dispose();
+		}
+		catch
+		{
+			// Ignore failures that occur while shutting down capture.
+		}
 	}
 
 	// Sets the visualization to a specific on/off state, persists it, and applies it.
@@ -209,6 +301,12 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	public void Dispose()
 	{
+		// Set before the stop, so a start already running on the switch worker cannot
+		// slip a freshly-opened handle past the epoch check and leave the microphone
+		// live after the window has closed.
+		lock (_captureSync)
+			_captureDisposed = true;
+
 		StopCapture();
 
 		_waveformTimer.Stop();
