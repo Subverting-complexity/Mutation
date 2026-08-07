@@ -6,6 +6,7 @@ using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Windowing;
 using WinRT.Interop;
@@ -19,10 +20,19 @@ public sealed partial class PromptEditorWindow : Window
     public bool IsSaved { get; private set; }
     private readonly TranscriptFormatter _formatter;
 
+    // Closing this editor is the user's way out of a test run they no longer want. A model
+    // call climbs an escalating retry ladder and can take minutes, so without this the
+    // window would go and the request would carry on with nobody left to read it
+    // (issue #256). The state object owns the source's lifetime — cancelling never
+    // disposes it, and the run's own finally does — so a close landing mid-retry cannot
+    // turn into an ObjectDisposedException.
+    private readonly LlmOperationState _testRun = new();
+
     public PromptEditorWindow(LlmSettings.LlmPrompt? prompt, TranscriptFormatter formatter, IReadOnlyList<string> availableModels)
     {
         this.InitializeComponent();
         _formatter = formatter;
+        this.Closed += PromptEditorWindow_Closed;
 
         // Set window size
         IntPtr hWnd = WindowNative.GetWindowHandle(this);
@@ -155,7 +165,16 @@ public sealed partial class PromptEditorWindow : Window
                         FastMode = ChkFastMode.IsChecked ?? false,
                         OnFastModeFallback = f => fallback = f,
                     };
-                    string result = await _formatter.ProcessWithLlmAsync(text, currentContent, testModel, requestOptions);
+                    string result;
+                    CancellationToken testToken = _testRun.Begin();
+                    try
+                    {
+                        result = await _formatter.ProcessWithLlmAsync(text, currentContent, testModel, requestOptions, testToken);
+                    }
+                    finally
+                    {
+                        _testRun.End();
+                    }
 
                     // Show result in a dialog or just a message box?
                     // WinUI 3 MessageDialog or ContentDialog requires XamlRoot.
@@ -184,6 +203,11 @@ public sealed partial class PromptEditorWindow : Window
                 ShowError("Clipboard does not contain text.");
             }
         }
+        catch (OperationCanceledException)
+        {
+            // The window has gone, so there is nothing left to show the result in and
+            // nobody to show an error to. Closing it was the answer.
+        }
         catch (Exception ex)
         {
             // Keep the full chain in the log and show the reader the short form,
@@ -191,6 +215,14 @@ public sealed partial class PromptEditorWindow : Window
             ErrorLogger.LogError("Prompt test", ex);
             ShowError(ErrorDialogMessage.ForException(ex, ErrorLogger.PrimaryLogPath));
         }
+    }
+
+    private void PromptEditorWindow_Closed(object sender, WindowEventArgs args)
+    {
+        this.Closed -= PromptEditorWindow_Closed;
+        // Signal only. Disposal belongs to the run's finally, which is the one place that
+        // knows every retry has finished. A no-op when nothing is running.
+        _testRun.Cancel();
     }
 
     private async void ShowError(string message)

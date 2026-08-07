@@ -25,8 +25,12 @@ If you prefer clicking, the **Speech to Text** card on the main window has a
 
 While Mutation is turning your recording into text, the **Raw Transcript** box
 reads "Transcribing..." and the buttons are greyed out. Press **Shift+Alt+U** once
-more and it gives up on that recording. You hear the failure beep and "Transcription
-cancelled.", the box empties itself, and everything is yours to use again.
+more and it gives up on that recording.
+
+You hear two things, a second or so apart. First the failure beep and "Cancelling
+transcription..." — that is Mutation telling you your keypress arrived. Then, once the
+transcription has actually let go, "Transcription cancelled." The box empties itself
+and everything is yours to use again.
 
 Your recording is not lost. It is still the session Mutation has selected, so you
 can press **Retry transcription** to send it off again — or step back to it later
@@ -42,6 +46,21 @@ On the main window this is the **Record and Format** button, next to **Record**.
 
 Which prompt runs is up to you: it's the one you have marked as **Auto-Run**. See
 [Using AI prompts on your text](ai-prompts.md) for how to set that up.
+
+## Changed your mind while the AI is tidying up
+
+The AI step happens after the transcription, and it can take longer — occasionally
+much longer, if the service is busy and Mutation is quietly trying again in the
+background. The status line reads "Processing with LLM..." while that is going on.
+
+Press **Shift+Alt+I** once more and it gives up on the AI step. (**Shift+Alt+U** does
+the same thing here — either shortcut will stop it.) You hear the failure beep and
+"Cancelling language model processing...", then "Language model processing cancelled.
+Transcript ready and copied."
+
+Your dictation is not thrown away with it. Everything you said is still transcribed,
+still in both boxes, and still on your clipboard — just without the AI's tidying up.
+Cancelling costs you the polish, never the words.
 
 ## Where the text ends up
 

@@ -201,6 +201,7 @@ footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); colo
 <li>Say what must not change. &quot;Keep my wording and tone&quot; is worth adding to any tidy-up prompt.</li>
 </ul>
 <p>There is a <strong>Test Run</strong> button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.</p>
+<p>If a test run is taking longer than you want to wait, closing the <strong>Edit Prompt</strong> window stops it. Save your work first if you want to keep it — closing the window closes the editor too.</p>
 <p>Then press <strong>Save</strong>, or <strong>Cancel</strong> to throw it away.</p>
 <hr />
 <h2 id="giving-a-prompt-its-own-shortcut">Giving a prompt its own shortcut</h2>
@@ -228,6 +229,12 @@ footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); colo
 <p>Under <strong>AI assistance</strong> in <strong>Settings</strong> there are two knobs worth knowing about.</p>
 <p><strong>Request timeout</strong> is how long Mutation waits for the model to respond before giving up. If you regularly send long documents and see things time out, raise it.</p>
 <p><strong>Retries</strong> is how many times Mutation quietly tries again after a failed request, before telling you it did not work. The default of three is there for a good reason: it helps the very first request after you reboot succeed while your network is still warming up.</p>
+<p>Those two multiply. With the default timeout and three retries, a service that has gone down keeps Mutation waiting for several minutes before it gives up — so it is worth knowing how to stop it.</p>
+<h3 id="stopping-a-prompt-that-is-taking-too-long">Stopping a prompt that is taking too long</h3>
+<p>Run the same prompt again and Mutation gives up on the request instead of starting a second one. Press its shortcut a second time, or press <strong>Run</strong> on the same row again, or press <strong>Process with LLM</strong> again — whichever way you started it.</p>
+<p>You hear the failure beep and &quot;Cancelling language model processing...&quot;, then &quot;Language model processing cancelled.&quot; once the request has let go. The <strong>Formatted Transcript</strong> box empties itself.</p>
+<p>Nothing is lost. Your original text is still on the clipboard where you copied it from, so you can try again whenever you like — or pick a different prompt.</p>
+<p>Closing the Mutation window stops an AI request too, so you never have to wait for one before you can quit.</p>
 <hr />
 <h2 id="where-to-next">Where to next</h2>
 <ul>

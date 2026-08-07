@@ -82,6 +82,11 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Cancellation lifetime of the batch OCR run, linked to shutdown so closing the window
 	// stops it, and cancellable on its own from the Cancel button (issue #227).
 	private readonly OcrDocumentsRunController _ocrDocumentsRun;
+	// Cancellation lifetime of a prompt run started from the prompt library — its button
+	// or its hotkey. Separate from the one AudioSessionManager owns for the dictation
+	// flow, because the two are started by different keys and each cancels its own
+	// (issue #256).
+	private readonly Mutation.Ui.Core.LlmOperationState _promptLlmOperation = new();
 	private DictationInsertOption _insertOption = DictationInsertOption.Paste;
 	private readonly DispatcherTimer _statusDismissTimer;
 	// Shows modal dialogs one at a time; a dialog requested while another
@@ -2064,7 +2069,19 @@ public sealed partial class MainWindow : Window, IDisposable
                  DispatcherQueue.TryEnqueue(() => ExecutePrompt(prompt));
                  return;
              }
-        
+
+			// A second press while a request is in flight means "stop", not "run another".
+			// A model call can take minutes — the retry ladder escalates its timeout on
+			// every attempt — so without this the user had no way out of it (issue #256).
+			// Checked before the start beep so a cancel never sounds like a fresh start.
+			if (_promptLlmOperation.Running)
+			{
+				_promptLlmOperation.Cancel();
+				BeepPlayer.Play(BeepType.Failure);
+				ShowStatus("Processing", CancellationMessages.LlmRequested, InfoBarSeverity.Informational);
+				return;
+			}
+
 			BeepPlayer.Play(BeepType.Start);
 			TxtFormatTranscript.Text = "Processing...";
 			string raw = await _clipboard.GetTextAsync();
@@ -2082,7 +2099,18 @@ public sealed partial class MainWindow : Window, IDisposable
 				FastMode = prompt.FastMode,
 				OnFastModeFallback = f => fastModeFallback = f,
 			};
-			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions);
+			// Linked to the shutdown token so closing the window abandons the request
+			// instead of leaving it climbing the retry ladder with nobody to read it.
+			CancellationToken llmToken = _promptLlmOperation.Begin(_shutdownCts.Token);
+			string processed;
+			try
+			{
+				processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions, llmToken);
+			}
+			finally
+			{
+				_promptLlmOperation.End();
+			}
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
@@ -2110,6 +2138,14 @@ public sealed partial class MainWindow : Window, IDisposable
 					FastModeMessages.AppendTo(failure, fastModeNotice),
 					InfoBarSeverity.Error);
 			}
+        }
+        catch (OperationCanceledException)
+        {
+             // Asked for, not a failure: no error dialog, and the "Processing..."
+             // placeholder is taken back out of the box rather than left standing there
+             // telling a screen-reader user work is still running (issue #295).
+             TxtFormatTranscript.Text = string.Empty;
+             ShowStatus("Processing", CancellationMessages.LlmCompleted, InfoBarSeverity.Informational);
         }
         catch (Exception ex)
         {
@@ -3191,6 +3227,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		_promptDebounceCts?.Dispose();
 		_settingsSaveDebouncer?.Dispose();
 		_ocrDocumentsRun.Dispose();
+		// Before _shutdownCts: this source is linked to it, and cancelling as it disposes
+		// is what lets an in-flight prompt run unwind rather than be abandoned.
+		_promptLlmOperation.Dispose();
 		_shutdownCts.Dispose();
 		_statusDismissTimer?.Stop();
 	}

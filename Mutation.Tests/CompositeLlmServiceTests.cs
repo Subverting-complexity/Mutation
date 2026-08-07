@@ -46,6 +46,28 @@ public class CompositeLlmServiceTests
 		Assert.True(routed.LastOptions!.FastMode);
 	}
 
+	[Theory]
+	[InlineData("claude-sonnet-4-6", LlmProvider.Anthropic)]
+	[InlineData("gpt-4.1", LlmProvider.OpenAI)]
+	public async Task CreateChatCompletion_ForwardsTheCancellationTokenToTheChosenProvider(string model, LlmProvider provider)
+	{
+		// Issue #256: the routing layer is the one place a dropped token would go
+		// unnoticed — the call still works, it just cannot be cancelled any more.
+		var anthropic = new StubLlmService("a");
+		var openAi = new StubLlmService("o");
+		var composite = new CompositeLlmService(openAi, anthropic, Providers((model, provider)));
+		using var cts = new CancellationTokenSource();
+
+		await composite.CreateChatCompletion(
+			new List<LlmChatMessage> { new(LlmChatRole.User, "hi") },
+			model,
+			options: null,
+			cts.Token);
+
+		var used = provider == LlmProvider.Anthropic ? anthropic : openAi;
+		Assert.Equal(cts.Token, used.LastCancellationToken);
+	}
+
 	[Fact]
 	public async Task CreateChatCompletion_WithoutOptions_PassesNullThrough()
 	{
@@ -163,16 +185,19 @@ public class CompositeLlmServiceTests
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
 		public LlmRequestOptions? LastOptions { get; private set; }
+		public CancellationToken LastCancellationToken { get; private set; }
 
 		public Task<string> CreateChatCompletion(
 			IList<LlmChatMessage> messages,
 			string llmModelName,
-			LlmRequestOptions? options = null)
+			LlmRequestOptions? options = null,
+			CancellationToken cancellationToken = default)
 		{
 			CallCount++;
 			LastMessages = messages;
 			LastModel = llmModelName;
 			LastOptions = options;
+			LastCancellationToken = cancellationToken;
 			return Task.FromResult(_response);
 		}
 	}

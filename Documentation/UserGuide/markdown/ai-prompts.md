@@ -53,6 +53,8 @@ Three pointers for writing a good one:
 
 There is a **Test Run** button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.
 
+If a test run is taking longer than you want to wait, closing the **Edit Prompt** window stops it. Save your work first if you want to keep it — closing the window closes the editor too.
+
 Then press **Save**, or **Cancel** to throw it away.
 
 ---
@@ -106,6 +108,18 @@ Under **AI assistance** in **Settings** there are two knobs worth knowing about.
 **Request timeout** is how long Mutation waits for the model to respond before giving up. If you regularly send long documents and see things time out, raise it.
 
 **Retries** is how many times Mutation quietly tries again after a failed request, before telling you it did not work. The default of three is there for a good reason: it helps the very first request after you reboot succeed while your network is still warming up.
+
+Those two multiply. With the default timeout and three retries, a service that has gone down keeps Mutation waiting for several minutes before it gives up — so it is worth knowing how to stop it.
+
+### Stopping a prompt that is taking too long
+
+Run the same prompt again and Mutation gives up on the request instead of starting a second one. Press its shortcut a second time, or press **Run** on the same row again, or press **Process with LLM** again — whichever way you started it.
+
+You hear the failure beep and "Cancelling language model processing...", then "Language model processing cancelled." once the request has let go. The **Formatted Transcript** box empties itself.
+
+Nothing is lost. Your original text is still on the clipboard where you copied it from, so you can try again whenever you like — or pick a different prompt.
+
+Closing the Mutation window stops an AI request too, so you never have to wait for one before you can quit.
 
 ---
 

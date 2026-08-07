@@ -90,6 +90,27 @@ and the pieces are joined back in the order you recorded them.
 4. If your service accepts larger uploads than OpenAI does, raise the number, or set
    it to 0 to never split.
 
+### An AI prompt seems stuck on "Processing with LLM..."
+
+**What's happening.** The AI runs over the internet too, and Mutation retries a failed
+request the same way it retries a transcription — each attempt given a longer window
+than the last. With the standard settings, an AI service that has gone down can keep
+Mutation waiting several minutes before it admits defeat. Nothing is broken; it is
+still trying.
+
+**What to do.**
+
+1. Stop it. Whatever started the request will stop it if you do it again — press the
+   prompt's shortcut a second time, press **Run** on the same row again, or press
+   **Record and Format** again if the AI step followed a dictation. You hear the
+   failure beep and "Cancelling language model processing...", then "Language model
+   processing cancelled." Cancelling a dictation's AI step keeps the dictation — you
+   lose the tidying up, never your words.
+2. Closing the Mutation window also stops an AI request, so you never have to wait for
+   one to finish before you can quit.
+3. If it happens often, lower **Request timeout** or **Retries** under **AI
+   assistance** in **Settings** so Mutation gives up sooner and tells you.
+
 ### OCR returns nothing useful, or the wrong reading order
 
 **What's happening.** OCR reads text out of a picture. If the picture is small,

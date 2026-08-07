@@ -37,6 +37,7 @@ public class AudioSessionManager : IDisposable
     private readonly MicrophoneLevelWriteCoordinator _levelWriteCoordinator;
     private readonly FastModeNoticeTracker _fastModeNotices;
     private readonly AudioPlayer _playbackPlayer;
+    private readonly LlmOperationState _llmOperation = new();
     private SpeechSession? _playingSession;
     private SpeechSession? _selectedSession;
     private bool _currentRecordingUsesLlmProcessing;
@@ -67,6 +68,16 @@ public class AudioSessionManager : IDisposable
     public bool IsPlaybackActive => _playingSession != null;
     public bool IsRecording => _speechManager.Recording;
     public bool IsTranscribing => _speechManager.Transcribing;
+
+    /// <summary>
+    /// Whether the language model is still working on a delivered transcript. Its own
+    /// flag because the recorder's is already false by then — the transcription ends and
+    /// disposes its cancellation source before the prompt is sent — so without this the
+    /// dictation hotkey read the LLM step as "nothing in flight" and opened a fresh
+    /// recording on top of it, which then had its state clobbered when the model replied
+    /// (issue #256).
+    /// </summary>
+    public bool IsProcessingWithLlm => _llmOperation.Running;
 
     // The recorder's own view of what it is doing. Used only where a failure has left
     // the session in a state this class cannot name from where it stands — everywhere
@@ -194,7 +205,26 @@ public class AudioSessionManager : IDisposable
                 // stale Transcribing with nothing left to correct it, leaving the buttons
                 // disabled and the transcript box read-only for the rest of the session.
                 // The beep and the status message are this branch's whole signal.
-                StatusMessage?.Invoke(this, "Transcription cancelled.");
+                //
+                // Progress, not completion. Nothing has finished yet, and the
+                // transcription announces "Transcription cancelled." for itself when it
+                // unwinds a moment later; saying that here too gave a screen-reader user
+                // the same sentence twice (issue #299).
+                StatusMessage?.Invoke(this, CancellationMessages.TranscriptionRequested);
+                return;
+            }
+
+            // Same shape as the transcription cancel above, and for the same reasons: the
+            // operation that owns the state raises its own state change when it unwinds,
+            // so this branch signals with a beep and a status line and changes nothing.
+            // It has to come before the IsRecording test — the recorder is idle during the
+            // model call, so without this the press would start a new recording underneath
+            // a request that then finished and clobbered its state (issue #256).
+            if (IsProcessingWithLlm)
+            {
+                _llmOperation.Cancel();
+                BeepPlayer.Play(BeepType.Failure);
+                StatusMessage?.Invoke(this, CancellationMessages.LlmRequested);
                 return;
             }
 
@@ -251,12 +281,12 @@ public class AudioSessionManager : IDisposable
                         prompt,
                         cancellationToken,
                         onRecordingStopped: () => BeepPlayer.Play(BeepType.End));
-                    await ProcessTranscriptAsync(text, llmPrompt);
+                    await ProcessTranscriptAsync(text, llmPrompt, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
                     cancelled = true;
-                    StatusMessage?.Invoke(this, "Transcription cancelled.");
+                    StatusMessage?.Invoke(this, CancellationMessages.TranscriptionCompleted);
                 }
                 catch (NoSpeechDetectedException)
                 {
@@ -337,7 +367,7 @@ public class AudioSessionManager : IDisposable
         catch (OperationCanceledException)
         {
             cancelled = true;
-            StatusMessage?.Invoke(this, "Transcription cancelled.");
+            StatusMessage?.Invoke(this, CancellationMessages.TranscriptionCompleted);
         }
         catch (Exception ex)
         {
@@ -374,7 +404,7 @@ public class AudioSessionManager : IDisposable
         catch (OperationCanceledException)
         {
             cancelled = true;
-            StatusMessage?.Invoke(this, "Transcription cancelled.");
+            StatusMessage?.Invoke(this, CancellationMessages.TranscriptionCompleted);
         }
         catch (Exception ex)
         {
@@ -386,12 +416,15 @@ public class AudioSessionManager : IDisposable
         }
     }
 
-    private async Task ProcessTranscriptAsync(string text, LlmSettings.LlmPrompt? llmPrompt)
+    private const string TranscriptDeliveredMessage = "Transcript ready and copied.";
+
+    private async Task ProcessTranscriptAsync(string text, LlmSettings.LlmPrompt? llmPrompt, CancellationToken cancellationToken)
     {
         // Always run rules-based formatting first
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
         string? llmProcessedText = null;
         FastModeFallback? fastModeFallback = null;
+        bool llmCancelled = false;
 
         if (_currentRecordingUsesLlmProcessing && llmPrompt != null)
         {
@@ -405,8 +438,28 @@ public class AudioSessionManager : IDisposable
                     FastMode = llmPrompt.FastMode,
                     OnFastModeFallback = f => fastModeFallback = f,
                 };
-                // Pass the rules-formatted text to the LLM
-                llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName, requestOptions);
+                // Claimed for the length of the call so a second press of the dictation
+                // hotkey can cut it short, and released in the finally so the next
+                // dictation is not met with a stale "already running".
+                CancellationToken llmToken = _llmOperation.Begin(cancellationToken);
+                try
+                {
+                    // Pass the rules-formatted text to the LLM
+                    llmProcessedText = await _transcriptFormatter.ProcessWithLlmAsync(rulesFormattedText, llmPrompt.Content, modelName, requestOptions, llmToken);
+                }
+                finally
+                {
+                    _llmOperation.End();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Not a failure — the user asked for this, or the window is closing. The
+                // dictation is not thrown away with the model call: the rules-formatted
+                // transcript is delivered exactly as it is when the model call fails,
+                // because losing a long dictation is far worse than an untidied one.
+                llmCancelled = true;
+                ErrorLogger.LogInfo("LLM", "LLM processing cancelled; delivering the rules-formatted transcript.");
             }
             catch (Exception ex)
             {
@@ -428,7 +481,9 @@ public class AudioSessionManager : IDisposable
         // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output.
         TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText, fastModeNotice));
-        StatusMessage?.Invoke(this, "Transcript ready and copied.");
+        StatusMessage?.Invoke(this, llmCancelled
+            ? CancellationMessages.LlmCancelledThen(TranscriptDeliveredMessage)
+            : TranscriptDeliveredMessage);
     }
 
     /// <summary>
@@ -538,6 +593,9 @@ public class AudioSessionManager : IDisposable
         _playbackPlayer.PlaybackEnded -= PlaybackPlayer_PlaybackEnded;
         _playbackPlayer.PlaybackFailed -= PlaybackPlayer_PlaybackFailed;
         _playbackPlayer.Dispose();
+        // Cancels as it disposes, so a model call still in flight unwinds instead of
+        // being abandoned mid-request.
+        _llmOperation.Dispose();
     }
 
     public Task CleanupSessionsAsync()
@@ -563,6 +621,10 @@ public class AudioSessionManager : IDisposable
         {
             _speechManager.CancelTranscription();
         }
+        // A model call can outlive the transcription that started it by minutes, so the
+        // close path has to name it separately or the window waits on a request nobody is
+        // left to read.
+        _llmOperation.Cancel();
     }
 
     private static bool PathsEqual(string? p1, string? p2)

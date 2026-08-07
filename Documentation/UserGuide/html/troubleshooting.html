@@ -220,6 +220,25 @@ size (MB)</strong> and try again.</li>
 <li>If your service accepts larger uploads than OpenAI does, raise the number, or set
 it to 0 to never split.</li>
 </ol>
+<h3 id="an-ai-prompt-seems-stuck-on-processing-with-llm">An AI prompt seems stuck on &quot;Processing with LLM...&quot;</h3>
+<p><strong>What's happening.</strong> The AI runs over the internet too, and Mutation retries a failed
+request the same way it retries a transcription — each attempt given a longer window
+than the last. With the standard settings, an AI service that has gone down can keep
+Mutation waiting several minutes before it admits defeat. Nothing is broken; it is
+still trying.</p>
+<p><strong>What to do.</strong></p>
+<ol>
+<li>Stop it. Whatever started the request will stop it if you do it again — press the
+prompt's shortcut a second time, press <strong>Run</strong> on the same row again, or press
+<strong>Record and Format</strong> again if the AI step followed a dictation. You hear the
+failure beep and &quot;Cancelling language model processing...&quot;, then &quot;Language model
+processing cancelled.&quot; Cancelling a dictation's AI step keeps the dictation — you
+lose the tidying up, never your words.</li>
+<li>Closing the Mutation window also stops an AI request, so you never have to wait for
+one to finish before you can quit.</li>
+<li>If it happens often, lower <strong>Request timeout</strong> or <strong>Retries</strong> under <strong>AI
+assistance</strong> in <strong>Settings</strong> so Mutation gives up sooner and tells you.</li>
+</ol>
 <h3 id="ocr-returns-nothing-useful-or-the-wrong-reading-order">OCR returns nothing useful, or the wrong reading order</h3>
 <p><strong>What's happening.</strong> OCR reads text out of a picture. If the picture is small,
 blurry, or is light text on a dark background, there may be nothing recognisable in

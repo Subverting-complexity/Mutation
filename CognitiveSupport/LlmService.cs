@@ -48,7 +48,8 @@ public class LlmService : ILlmService
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
 		string llmModelName,
-		LlmRequestOptions? requestOptions = null)
+		LlmRequestOptions? requestOptions = null,
+		CancellationToken cancellationToken = default)
 	{
 		if (!_chatClients.ContainsKey(llmModelName))
 			throw new ArgumentException($"{llmModelName} is not one of the configured models. The following are the available, configured models: {string.Join(",", _chatClients.Keys)}", nameof(llmModelName));
@@ -73,7 +74,11 @@ public class LlmService : ILlmService
 		var retryPolicy = Policy
 			.Handle<HttpRequestException>()
 			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
+			// A per-attempt timeout and an outside cancellation both arrive here as
+			// TaskCanceledException, and only the first of them is worth another try.
+			// Without the guard the caller's cancel is read as a transient blip and the
+			// escalation the cancel exists to escape carries on regardless (issue #256).
+			.Or<TaskCanceledException>(_ => !cancellationToken.IsCancellationRequested)
 			.Or<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status))
 				.WaitAndRetryAsync(
 					delay,
@@ -88,13 +93,17 @@ public class LlmService : ILlmService
 		{
 			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
 			var context = new Context { [AttemptKey] = 1 };
-			return await retryPolicy.ExecuteAsync(async (ctx) =>
+			// The token goes to ExecuteAsync as well as into the attempt, so a cancel that
+			// lands during the wait between two attempts is acted on then rather than
+			// sitting out the sleep.
+			return await retryPolicy.ExecuteAsync(async (ctx, overallToken) =>
 			{
 				int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;
 				int timeout = _timeoutSeconds * attempt;
-				using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
-				return await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token).ConfigureAwait(false);
-			}, context).ConfigureAwait(false);
+				using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+				using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
+				return await client.CompleteChatAsync(openAiMessages, options, linkedCts.Token).ConfigureAwait(false);
+			}, context, cancellationToken).ConfigureAwait(false);
 		}
 
 		ClientResult<ChatCompletion> result = fastMode
