@@ -98,12 +98,11 @@ logs/
 # github-workflow plugin scratch files
 .claude/plan.md
 
-# graphify — generated artifacts (rebuild via `graphify update .`, ~10s, 0 tokens)
-graphify-out/graph.json
-graphify-out/graph.html
-graphify-out/cost.json
-graphify-out/.graphify_python
-graphify-out/.graphify_root
+# graphify — every artifact is generated (rebuild via `graphify update .`, ~10s,
+# 0 tokens). The AST cache under cache/ast/<tool-version>/ regenerates wholesale
+# and is keyed by the tool version, so tracking it buried real changes in review
+# under thousands of lines of churn.
+graphify-out/
 
 # The user guide is built by Documentation/UserGuideBuilder, so pandoc is no
 # longer used. Kept ignored so a stray ~220MB copy can never be committed:
