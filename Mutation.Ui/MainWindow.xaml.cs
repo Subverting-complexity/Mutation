@@ -2005,8 +2005,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		string formatted = _transcriptFormatter.ApplyRules(raw, false);
 		TxtFormatTranscript.Text = formatted;
 		bool copied = await _clipboard.TrySetTextAsync(formatted);
-		bool inserted = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
-		if (copied && inserted)
+		var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
+		string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "formatted transcript");
+		if (failure is null)
 		{
 			BeepPlayer.Play(BeepType.Success);
 			ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
@@ -2014,9 +2015,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		else
 		{
 			BeepPlayer.Play(BeepType.Failure);
-			ShowStatus("Formatting",
-				"The clipboard is in use by another application; the formatted transcript could not be copied. It is available in the Mutation window.",
-				InfoBarSeverity.Error);
+			ShowStatus("Formatting", failure, InfoBarSeverity.Error);
 		}
 	}
 
@@ -2078,7 +2077,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
-			bool inserted = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
+			var outcome = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
+			string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "processed text");
 
 			// Claimed after everything that can throw and just before the announcement,
 			// so a failure on the delivery path cannot burn the one notice the user gets
@@ -2086,7 +2086,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
 
-			if (copied && inserted)
+			if (failure is null)
 			{
 				BeepPlayer.Play(BeepType.Success);
 				ShowStatus("Processing",
@@ -2098,9 +2098,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			{
 				BeepPlayer.Play(BeepType.Failure);
 				ShowStatus("Processing",
-					FastModeMessages.AppendTo(
-						"The clipboard is in use by another application; the processed text could not be delivered. It is available in the Mutation window.",
-						fastModeNotice),
+					FastModeMessages.AppendTo(failure, fastModeNotice),
 					InfoBarSeverity.Error);
 			}
         }
@@ -2258,61 +2256,81 @@ public sealed partial class MainWindow : Window, IDisposable
 		string? formattedText = null,
 		FastModeFallbackReason? fastModeNotice = null)
 	{
-		string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
+		// The restoration below is what gives the user their transcript box back. It ran
+		// last, unguarded, so any throw on the delivery path — a beep, an automation peer
+		// inside ShowStatus — left the box read-only and auto-formatting suppressed for
+		// the rest of the session, with nothing said about why (#234). It now runs in a
+		// finally, and the failure is announced rather than left to the global handler.
+		await GuardedUiOperation.RunAsync(
+			work: async () =>
+			{
+				string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
-		TxtRawTranscript.Text = rawText;
-		TxtFormatTranscript.Text = formatted;
+				TxtRawTranscript.Text = rawText;
+				TxtFormatTranscript.Text = formatted;
 
-		bool copied = await _clipboard.TrySetTextAsync(formatted);
-		bool inserted = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
+				bool copied = await _clipboard.TrySetTextAsync(formatted);
+				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
+				string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "transcript");
 
-		if (copied && inserted)
-		{
-			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Speech to Text", FastModeMessages.AppendTo(successMessage, fastModeNotice), InfoBarSeverity.Success);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
-		}
-		else
-		{
-			BeepPlayer.Play(BeepType.Failure);
-			ShowStatus("Speech to Text",
-				FastModeMessages.AppendTo(
-					"The clipboard is in use by another application; the transcript could not be delivered. It is available in the Mutation window.",
-					fastModeNotice),
-				InfoBarSeverity.Error);
-		}
-
-		TxtRawTranscript.IsReadOnly = false;
-		_suppressAutoActions = false;
-		UpdateRecordingActionAvailability();
-		ScheduleSessionCleanup();
+				if (failure is null)
+				{
+					BeepPlayer.Play(BeepType.Success);
+					ShowStatus("Speech to Text", FastModeMessages.AppendTo(successMessage, fastModeNotice), InfoBarSeverity.Success);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
+				}
+				else
+				{
+					BeepPlayer.Play(BeepType.Failure);
+					ShowStatus("Speech to Text",
+						FastModeMessages.AppendTo(failure, fastModeNotice),
+						InfoBarSeverity.Error);
+				}
+			},
+			onFailure: ex =>
+			{
+				ErrorLogger.LogError("FinalizeTranscript", ex);
+				BeepPlayer.Play(BeepType.Failure);
+				ShowStatus("Speech to Text",
+					"Something went wrong while delivering the transcript. It is available in the Mutation window.",
+					InfoBarSeverity.Error);
+			},
+			restore: () =>
+			{
+				TxtRawTranscript.IsReadOnly = false;
+				_suppressAutoActions = false;
+				UpdateRecordingActionAvailability();
+				ScheduleSessionCleanup();
+			},
+			onReportFailed: ex => ErrorLogger.LogError("FinalizeTranscript failure report", ex));
 	}
 
-    private void AudioSessionManager_StateChanged(object? sender, EventArgs e)
+    // Driven by the activity the session says it is entering, never by re-reading the
+    // recorder's flags. This handler is dispatched, so it runs after the raising code
+    // has moved on: reading IsRecording here once let a stop be greeted with the start
+    // beep and "Recording..." — the opposite of what the user had just done (#271).
+    private void AudioSessionManager_StateChanged(object? sender, RecordingActivity activity)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
             UpdateRecordingActionAvailability();
-            if (_audioSessionManager.IsRecording)
-            {
-                UpdateSpeechButtonVisuals("Stop", StopGlyph);
-                TxtRawTranscript.IsReadOnly = true;
-                TxtRawTranscript.Text = "Recording...";
+
+            var plan = RecordingUiPlanner.For(activity);
+            UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled);
+            TxtRawTranscript.IsReadOnly = plan.TranscriptReadOnly;
+            if (plan.TranscriptText is string placeholder)
+                TxtRawTranscript.Text = placeholder;
+            if (plan.PlayStartBeep)
                 BeepPlayer.Play(BeepType.Start);
-            }
-            else if (_audioSessionManager.IsTranscribing)
-            {
-                UpdateSpeechButtonVisuals("Transcribing...", ProcessingGlyph, false);
-                TxtRawTranscript.IsReadOnly = true;
-                TxtRawTranscript.Text = "Transcribing...";
-            }
-            else
-            {
-                UpdateSpeechButtonVisuals("Record", RecordGlyph);
-                TxtRawTranscript.IsReadOnly = false;
-            }
         });
     }
+
+    private static string GlyphFor(RecordingActivity activity) => activity switch
+    {
+        RecordingActivity.Recording => StopGlyph,
+        RecordingActivity.Transcribing => ProcessingGlyph,
+        _ => RecordGlyph,
+    };
 
     private void AudioSessionManager_TranscriptReady(object? sender, TranscriptResult result)
     {
@@ -2739,41 +2757,49 @@ public sealed partial class MainWindow : Window, IDisposable
 		ThirdPartyExplanationText.Text = explanation;
 	}
 
-	// Returns false only when a paste-mode insert could not proceed because the
-	// clipboard stayed unavailable; every path that needs no insert returns true.
-	private async Task<bool> TryInsertIntoActiveApplicationAsync(string text, bool clipboardAvailable = true)
+	// Reports how far the text actually got. Every path that needs no insert — an empty
+	// transcript, Mutation itself in front, the "do not insert" option — is Delivered.
+	//
+	// The injection is awaited rather than fired and forgotten (#232). Windows drops
+	// injected input silently when the foreground application runs with higher
+	// privileges, so the only moment the failure can be seen is when SendInput returns
+	// a short count; a caller that had already announced success by then would have
+	// told a blind user their dictation landed in a window that never received it. The
+	// await keeps the work off the UI thread — it runs on the thread pool and the UI
+	// thread returns to its message pump — and it is bounded: SendInput is synchronous,
+	// and the hotkey path waits at most ModifierReleaseTimeoutMs for the user to let go
+	// of the chord they triggered this with.
+	private async Task<TranscriptDeliveryOutcome> TryInsertIntoActiveApplicationAsync(string text, bool clipboardAvailable = true)
 	{
 		if (string.IsNullOrWhiteSpace(text))
-			return true;
+			return TranscriptDeliveryOutcome.Delivered;
 
 		var windowHandle = WindowNative.GetWindowHandle(this);
 		if (windowHandle != IntPtr.Zero)
 		{
 			var foregroundWindow = GetForegroundWindow();
 			if (foregroundWindow == windowHandle)
-				return true;
+				return TranscriptDeliveryOutcome.Delivered;
 		}
 
 		switch (_insertOption)
 		{
 			case DictationInsertOption.SendKeys:
 				BeepPlayer.Play(BeepType.Start);
-				// Off the UI thread: SendInput can stall on the foreground app
-				// and must never block or pump messages mid-finalization.
-				_ = Task.Run(() => HotkeyManager.SendText(text));
-				return true;
+				bool typed = await Task.Run(() => HotkeyManager.SendText(text));
+				return typed ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
 			case DictationInsertOption.Paste:
 				// Pasting sends Ctrl+V, so the text must actually be on the
 				// clipboard; retry the write here if the earlier copy failed.
 				if (!clipboardAvailable && !await _clipboard.TrySetTextAsync(text))
-					return false;
+					return TranscriptDeliveryOutcome.ClipboardBlocked;
 				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
 				// literal would throw and drop to the SendKeys.SendWait fallback.
-				_ = Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
-				return true;
+				bool pasted = await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
+				return pasted ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
 		}
 
-		return true;
+		return TranscriptDeliveryOutcome.Delivered;
 	}
 
 	private async void TxtSpeechToText_TextChanged(object sender, TextChangedEventArgs e)

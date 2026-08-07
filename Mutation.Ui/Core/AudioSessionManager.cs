@@ -60,6 +60,15 @@ public class AudioSessionManager : IDisposable
     public bool IsRecording => _speechManager.Recording;
     public bool IsTranscribing => _speechManager.Transcribing;
 
+    // The recorder's own view of what it is doing. Used only where a failure has left
+    // the session in a state this class cannot name from where it stands — everywhere
+    // else the raising code states the activity it is entering, so a change that is
+    // still in flight cannot be announced as its opposite.
+    private RecordingActivity CurrentActivity =>
+        IsRecording ? RecordingActivity.Recording
+        : IsTranscribing ? RecordingActivity.Transcribing
+        : RecordingActivity.Idle;
+
     /// <summary>
     /// Playback speed for the recorded-audio player (1.0 = normal). Setting it
     /// retunes audio that is already playing, without restarting. The value is
@@ -74,8 +83,14 @@ public class AudioSessionManager : IDisposable
     public event EventHandler? SelectedSessionChanged;
     public event EventHandler? PlaybackStarted;
     public event EventHandler? PlaybackStopped;
-    public event EventHandler? StateChanged;
-    
+    /// <summary>
+    /// Raised with the activity the session is entering. The activity is carried on the
+    /// event rather than read back off <see cref="IsRecording"/> by the handler: the
+    /// handler runs on the UI thread via the dispatcher, so by then the recorder's flags
+    /// may not have caught up, and a stop could be announced as a start (issue #271).
+    /// </summary>
+    public event EventHandler<RecordingActivity>? StateChanged;
+
     public event EventHandler<TranscriptResult>? TranscriptReady;
     public event EventHandler<string>? ErrorOccurred;
     public event EventHandler<string>? StatusMessage;
@@ -163,7 +178,9 @@ public class AudioSessionManager : IDisposable
             {
                 _speechManager.CancelTranscription();
                 BeepPlayer.Play(BeepType.Failure);
-                StateChanged?.Invoke(this, EventArgs.Empty);
+                // Cancellation has only been requested; the in-flight transcription is
+                // still unwinding and raises its own Idle from its finally.
+                StateChanged?.Invoke(this, RecordingActivity.Transcribing);
                 StatusMessage?.Invoke(this, "Transcription cancelled.");
                 return;
             }
@@ -197,14 +214,17 @@ public class AudioSessionManager : IDisposable
                     ? "Listening — but the pinned microphone level could not be applied; recording at the current level."
                     : "Listening for audio...");
                 RefreshSessions(session);
-                StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Stop)
+                StateChanged?.Invoke(this, RecordingActivity.Recording);
             }
             else
             {
                 _currentRecordingUsesLlmProcessing = useLlmProcessing;
                 StopPlayback();
                 StatusMessage?.Invoke(this, "Transcribing your recording...");
-                StateChanged?.Invoke(this, EventArgs.Empty); // Notify UI to update buttons (Transcribing...)
+                // Transcribing, stated outright. The recorder has not been asked to stop
+                // yet, so a handler reading IsRecording here would see a live recording
+                // and greet a stop with the start beep and "Recording..." (issue #271).
+                StateChanged?.Invoke(this, RecordingActivity.Transcribing);
 
                 try
                 {
@@ -230,7 +250,7 @@ public class AudioSessionManager : IDisposable
                 }
                 finally
                 {
-                    StateChanged?.Invoke(this, EventArgs.Empty);
+                    StateChanged?.Invoke(this, RecordingActivity.Idle);
                 }
             }
         }
@@ -238,12 +258,12 @@ public class AudioSessionManager : IDisposable
         {
             BeepPlayer.Play(BeepType.Failure);
             StatusMessage?.Invoke(this, "Still finishing the previous operation — try again shortly.");
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, CurrentActivity);
         }
         catch (Exception ex)
         {
             ErrorOccurred?.Invoke(this, ex.Message);
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, CurrentActivity);
         }
     }
 
@@ -280,7 +300,7 @@ public class AudioSessionManager : IDisposable
         {
             StopPlayback();
             StatusMessage?.Invoke(this, "Transcribing your recording...");
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, RecordingActivity.Transcribing);
 
             string text = await _speechManager.TranscribeExistingRecordingAsync(activeService, SelectedSession, prompt, cancellationToken);
             // Retry doesn't apply LLM processing — pass raw text only so
@@ -298,7 +318,7 @@ public class AudioSessionManager : IDisposable
         }
         finally
         {
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, RecordingActivity.Idle);
         }
     }
 
@@ -314,7 +334,7 @@ public class AudioSessionManager : IDisposable
         {
             StopPlayback();
             StatusMessage?.Invoke(this, $"Transcribing {file.Name}...");
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, RecordingActivity.Transcribing);
 
             var session = await _speechManager.ImportUploadedAudioAsync(file.Path, cancellationToken);
             RefreshSessions(session);
@@ -333,7 +353,7 @@ public class AudioSessionManager : IDisposable
         }
         finally
         {
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, RecordingActivity.Idle);
         }
     }
 

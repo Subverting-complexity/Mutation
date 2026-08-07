@@ -17,6 +17,11 @@ Settings, and that one only works when Mutation's own window is in front.
 
 Every default shortcut listed here can be changed. Nothing is fixed.
 
+A shortcut fires once per press. Holding the keys down a little too long does
+nothing extra — you will not start a second recording, or flip the mute back and
+forth, just because your fingers lingered. Let go and press again when you want it
+to happen a second time.
+
 ## The full list
 
 ### Microphone

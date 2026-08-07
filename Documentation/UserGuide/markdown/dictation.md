@@ -82,6 +82,12 @@ landing in another window.
 One thing worth knowing: if the Mutation window itself is the one in front, nothing
 is inserted anywhere. Mutation won't paste into itself.
 
+Whichever choice you make, Mutation waits to see whether the text actually arrived
+before it tells you it worked. If Windows refused the keystrokes — which it does
+when the app in front is running as an administrator — you get the failure beep and
+a message saying so, instead of a success beep for text that never landed. The
+transcript stays in the Mutation window either way, so nothing is lost.
+
 ### Sending a shortcut afterwards
 
 In **Settings**, on the **Speech to Text** page, there is an optional box called

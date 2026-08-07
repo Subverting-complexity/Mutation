@@ -176,6 +176,39 @@ window."
 3. If you rely on the text landing in another app automatically, set the "send keys
    after" option to **Ctrl+V** so Mutation pastes for you once the copy succeeds.
 
+### Mutation says it could not send the text to the other app
+
+**What's happening.** This is a different problem from the clipboard one above, and it
+has its own message: "The transcript could not be sent to the other application; it may
+be running with higher privileges than Mutation. It is available in the Mutation
+window." You get a failure beep with it, not the success beep.
+
+Windows will not let an ordinary program type into a window that is running with
+administrator privileges. It does not warn anybody — it simply throws the keystrokes
+away. Mutation now checks whether Windows accepted them and tells you when it did not,
+rather than announcing success for text that never arrived.
+
+**What to do.**
+
+1. Your text is not lost. It is in the main window and, unless the clipboard also
+   failed, on your clipboard — so you can paste it yourself with **Ctrl+V**.
+2. The usual cause is an app started with "Run as administrator", or a system dialog
+   that has taken the foreground. Close it, or click into an ordinary window, and
+   dictate again.
+3. Task Manager, the Windows security prompt, and some installer windows behave this
+   way too. Nothing is wrong with Mutation or your microphone.
+
+### Something went wrong while delivering the transcript
+
+**What's happening.** Very occasionally the delivery itself fails in a way Mutation did
+not expect — a beep that cannot play, for instance. You hear the failure beep and read
+"Something went wrong while delivering the transcript. It is available in the Mutation
+window."
+
+**What to do.** Copy the text from the main window. The transcript box goes back to
+being editable straight away, so you can carry on dictating. If it keeps happening,
+the log file has the details — see **Finding the log file** below.
+
 ### Fast mode didn't actually run fast
 
 **What's happening.** Fast mode is a faster setting for AI prompts. If it is not

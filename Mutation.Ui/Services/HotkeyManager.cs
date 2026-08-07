@@ -110,11 +110,8 @@ public class HotkeyManager : IDisposable
 	private const int WM_HOTKEY = 0x0312;
 	private const int GWLP_WNDPROC = -4;
 
-	private const uint MOD_ALT = 0x1;
-	private const uint MOD_CONTROL = 0x2;
-	private const uint MOD_SHIFT = 0x4;
-	private const uint MOD_WIN = 0x8;
-	private const uint MOD_NOREPEAT = 0x4000;
+	// Modifier flags live in HotkeyModifiers so their composition — including
+	// MOD_NOREPEAT — can be tested without a window handle.
 
         [DllImport("user32.dll", SetLastError = true)] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 	[DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hWnd, int id);
@@ -205,10 +202,7 @@ public class HotkeyManager : IDisposable
                 }
 
                 int id = Interlocked.Increment(ref _id);
-                uint mods = (hotkey.Alt ? MOD_ALT : 0) |
-                                                                                          (hotkey.Control ? MOD_CONTROL : 0) |
-                                                                                          (hotkey.Shift ? MOD_SHIFT : 0) |
-                                                                                          (hotkey.Win ? MOD_WIN : 0);
+                uint mods = HotkeyModifiers.Compose(hotkey);
 				bool success = RegisterHotKey(_hwnd, id, mods, (uint)hotkey.Key);
                 if (success)
                 {
@@ -428,10 +422,22 @@ public class HotkeyManager : IDisposable
 		});
 	}
 
-	public static void SendHotkey(string hotkey)
+	/// <summary>
+	/// Sends <paramref name="hotkey"/> — one chord, or a comma-separated sequence — to
+	/// whatever window has the keyboard focus.
+	/// </summary>
+	/// <returns>
+	/// True only when every chord was confirmed delivered through SendInput. The
+	/// WinForms SendKeys fallback still runs as a best effort, but it cannot report
+	/// whether the target window took the keystrokes, so a run that needed it returns
+	/// false. Callers that announce the result must treat that as "could not confirm
+	/// delivery": for a blind user a false success is worse than a false alarm, because
+	/// nothing else in the session will ever contradict it (issue #232).
+	/// </returns>
+	public static bool SendHotkey(string hotkey)
 	{
 		if (string.IsNullOrWhiteSpace(hotkey))
-			return;
+			return true;
 
 		// Quick override for diagnostics: set MUTATION_FORCE_SENDKEYS=1 to bypass SendInput
 		if (Environment.GetEnvironmentVariable("MUTATION_FORCE_SENDKEYS") == "1")
@@ -441,7 +447,7 @@ public class HotkeyManager : IDisposable
 				string mappedHotkey = SendKeysMapper.Map(hotkey);
 				Log($"ENV override: Fallback SendKeys: '{mappedHotkey}' (from '{hotkey}')");
 				SendKeysOnUiThread(mappedHotkey);
-				return;
+				return false;
 			}
 			catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"SendKeys env override failed: {ex.Message}"); }
 		}
@@ -449,7 +455,7 @@ public class HotkeyManager : IDisposable
 		// Support sequences like "Ctrl+C, Ctrl+V"
 		var parts = hotkey.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 		if (parts.Length == 0)
-			return;
+			return true;
 
 		bool allSentViaInput = true;
 		foreach (var part in parts)
@@ -490,6 +496,8 @@ public class HotkeyManager : IDisposable
 			}
 			catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"SendKeys fallback failed: {ex.Message}"); }
 		}
+
+		return allSentViaInput;
 	}
 
 	private static void SendKeysOnUiThread(string mapped)
@@ -536,10 +544,20 @@ public class HotkeyManager : IDisposable
 		return tcs.Task;
 	}
 
-	public static void SendText(string text)
+	/// <summary>
+	/// Types <paramref name="text"/> into whatever window has the keyboard focus.
+	/// </summary>
+	/// <returns>
+	/// True when Windows accepted every keystroke. False when it accepted fewer than
+	/// were submitted — which is what happens when the foreground application runs with
+	/// higher privileges than Mutation and Windows drops the input silently. The caller
+	/// has to tell the user, or they are left believing their dictation landed in an
+	/// application that never received a character (issue #232).
+	/// </returns>
+	public static bool SendText(string text)
 	{
 		if (string.IsNullOrEmpty(text))
-			return;
+			return true;
 
 		List<INPUT> inputs = new();
 		foreach (char c in text)
@@ -555,7 +573,13 @@ public class HotkeyManager : IDisposable
 				U = new INPUTUNION { ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP } }
 			});
 		}
-		SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+		uint submitted = (uint)inputs.Count;
+		uint sent = SendInput(submitted, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+		if (sent == submitted)
+			return true;
+
+		Log($"SendText delivered {sent}/{submitted} keystrokes, GetLastError={Marshal.GetLastWin32Error()}");
+		return false;
 	}
 
 	private static bool SendHotkeyViaSendInput(Hotkey hotkey)
