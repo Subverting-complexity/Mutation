@@ -138,6 +138,42 @@ public class RecordingUiPlannerTests
 		Assert.Contains("Stop", plan.ButtonLabel);
 	}
 
+	// ----- Button descriptions, added for issue #309.
+
+	[Fact]
+	public void EveryBusyActivityDescribesItsButton_SoTheTooltipCannotGoStale()
+	{
+		// A busy state used to change only the accessible name. The tooltip went on saying
+		// "Start or stop speech capture" while the button was renamed to something else, so
+		// a screen-reader user and a sighted user hovering the same control were told
+		// different things.
+		Assert.False(string.IsNullOrWhiteSpace(
+			RecordingUiPlanner.For(RecordingActivity.Transcribing).ButtonDescription));
+		Assert.False(string.IsNullOrWhiteSpace(
+			RecordingUiPlanner.For(RecordingActivity.ProcessingWithLlm).ButtonDescription));
+	}
+
+	[Fact]
+	public void TheRestingActivitiesLeaveTheirDescriptionToTheHotkeyAffordances()
+	{
+		// Record and Stop get their tooltip from ConfigureButtonHotkey, which composes the
+		// shortcut into it. A description here would fight that.
+		Assert.Null(RecordingUiPlanner.For(RecordingActivity.Idle).ButtonDescription);
+		Assert.Null(RecordingUiPlanner.For(RecordingActivity.Cancelled).ButtonDescription);
+		Assert.Null(RecordingUiPlanner.For(RecordingActivity.Recording).ButtonDescription);
+	}
+
+	[Fact]
+	public void ADescribedButtonSaysTheSameThingAsItsLabel()
+	{
+		// The stop and its description have to agree about what pressing it does, or the
+		// tooltip becomes a second, quieter source of truth.
+		var plan = RecordingUiPlanner.For(RecordingActivity.ProcessingWithLlm);
+
+		Assert.Contains("Stop", plan.ButtonLabel);
+		Assert.Contains("Stop", plan.ButtonDescription!);
+	}
+
 	[Fact]
 	public void EveryActivityHasItsOwnButtonLabel()
 	{

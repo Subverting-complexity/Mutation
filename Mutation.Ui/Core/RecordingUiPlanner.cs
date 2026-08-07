@@ -15,6 +15,7 @@ public static class RecordingUiPlanner
 	{
 		RecordingActivity.Recording => new RecordingUiPlan(
 			ButtonLabel: "Stop",
+			ButtonDescription: null,
 			ButtonEnabled: true,
 			TranscriptReadOnly: true,
 			TranscriptText: RecordingPlaceholder,
@@ -22,6 +23,7 @@ public static class RecordingUiPlanner
 
 		RecordingActivity.Transcribing => new RecordingUiPlan(
 			ButtonLabel: TranscribingPlaceholder,
+			ButtonDescription: "Turning your recording into text. Wait for it to finish.",
 			ButtonEnabled: false,
 			TranscriptReadOnly: true,
 			TranscriptText: TranscribingPlaceholder,
@@ -34,6 +36,7 @@ public static class RecordingUiPlanner
 		// really running rather than leaving "Transcribing..." standing over it.
 		RecordingActivity.ProcessingWithLlm => new RecordingUiPlan(
 			ButtonLabel: "Stop LLM processing",
+			ButtonDescription: "Stop the language model and keep the transcript as it is",
 			ButtonEnabled: true,
 			TranscriptReadOnly: true,
 			TranscriptText: ProcessingWithLlmPlaceholder,
@@ -44,6 +47,7 @@ public static class RecordingUiPlanner
 		// put there — and a screen reader would read that back as work still running.
 		RecordingActivity.Cancelled => new RecordingUiPlan(
 			ButtonLabel: "Record",
+			ButtonDescription: null,
 			ButtonEnabled: true,
 			TranscriptReadOnly: false,
 			TranscriptText: string.Empty,
@@ -51,6 +55,7 @@ public static class RecordingUiPlanner
 
 		_ => new RecordingUiPlan(
 			ButtonLabel: "Record",
+			ButtonDescription: null,
 			ButtonEnabled: true,
 			TranscriptReadOnly: false,
 			TranscriptText: null,

@@ -1,5 +1,7 @@
 using CognitiveSupport;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
@@ -169,13 +171,22 @@ public sealed partial class PromptEditorWindow : Window
             // first, and the button silently ate both.
             if (_testRun.Running)
             {
-                if (!_testRun.CancelRequested)
+                if (_testRun.CancelRequested)
                 {
-                    _testRun.Cancel();
-                    // The beep is the immediate acknowledgement; the run announces its own
-                    // outcome in a dialog when it lets go, so nothing is said twice.
-                    BeepPlayer.Play(BeepType.Failure);
+                    // A repeat press on a stop already asked for. Answered rather than
+                    // ignored: an enabled button that produces silence reads as one that
+                    // did not register (#309). No second beep — the first press already
+                    // acknowledged audibly, and the stop it refers to has not changed.
+                    ShowStatus("Test Run", CancellationMessages.AlreadyStopping, InfoBarSeverity.Informational);
+                    return;
                 }
+
+                _testRun.Cancel();
+                // Progress, then completion — the same split the rest of the app makes.
+                // The beep lands immediately; the run says it has actually let go when it
+                // unwinds, which can be seconds later.
+                BeepPlayer.Play(BeepType.Failure);
+                ShowStatus("Test Run", "Cancelling the test run...", InfoBarSeverity.Informational);
                 return;
             }
 
@@ -240,10 +251,10 @@ public sealed partial class PromptEditorWindow : Window
         }
         catch (OperationCanceledException) when (testToken.IsCancellationRequested)
         {
-            // Stopped from the Test Run button while the editor is still open. Said out
-            // loud: this window has no status line, so the dialog is the only channel it
-            // has, and a button that produces silence reads as one that did not register.
-            ShowInfo("Test Run", "Test run cancelled.");
+            // Stopped from the Test Run button while the editor is still open. On the
+            // status line rather than in a dialog: the user asked for this, so there is no
+            // reason to take their focus away from the prompt they were editing.
+            ShowStatus("Test Run", "Test run cancelled.", InfoBarSeverity.Informational);
         }
         catch (Exception ex)
         {
@@ -263,18 +274,34 @@ public sealed partial class PromptEditorWindow : Window
         _testRun.Cancel();
     }
 
-    // The plain-titled sibling of ShowError, for outcomes that are not failures. Same
-    // channel because it is the only one this window has.
-    private async void ShowInfo(string title, string message)
+    /// <summary>
+    /// This window's status line, for outcomes that are not failures. Mirrors
+    /// MainWindow.ShowStatus, including the explicit UIA notification: WinUI announces an
+    /// InfoBar only on its closed-to-open transition, so a second message while the bar is
+    /// already open would never be spoken (issue #164).
+    /// </summary>
+    private void ShowStatus(string title, string message, InfoBarSeverity severity)
     {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = message,
-            CloseButtonText = "OK",
-            XamlRoot = this.Content.XamlRoot
-        };
-        await dialog.ShowAsync();
+        message = ErrorLogger.RedactSecrets(message ?? string.Empty);
+
+        StatusInfoBar.Title = title;
+        StatusInfoBar.Message = message;
+        StatusInfoBar.Severity = severity;
+        StatusInfoBar.IsOpen = true;
+        AutomationProperties.SetName(StatusInfoBar, $"{title} status");
+        AutomationProperties.SetHelpText(StatusInfoBar, message);
+
+        string announcement = StatusAnnouncement.ComposeText(title, message);
+        if (announcement.Length == 0)
+            return;
+
+        // CreatePeerForElement, not FromElement, so the very first status announces too.
+        var peer = FrameworkElementAutomationPeer.CreatePeerForElement(StatusInfoBar);
+        peer?.RaiseNotificationEvent(
+            StatusAnnouncement.GetKind(severity),
+            StatusAnnouncement.GetProcessing(severity),
+            announcement,
+            StatusAnnouncement.ActivityId);
     }
 
     private async void ShowError(string message)

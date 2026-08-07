@@ -2270,7 +2270,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			?? new SolidColorBrush(Microsoft.UI.Colors.Gray);
 	}
 
-	private void UpdateSpeechButtonVisuals(string label, string glyph, bool isEnabled = true)
+	private void UpdateSpeechButtonVisuals(string label, string glyph, bool isEnabled = true, string? description = null)
 	{
 		// isEnabled is honoured in every branch. It used to be read only by the last
 		// one, which made the caller's choice silently inert for the Record and Stop
@@ -2302,12 +2302,42 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Transcribing / Processing
 			BtnSpeechToTextIcon.Glyph = glyph;
 			BtnSpeechToText.IsEnabled = isEnabled;
-			SetButtonAccessibleLabel(BtnSpeechToText, label);
+			SetBusyButtonState(
+				BtnSpeechToText,
+				label,
+				description,
+				isEnabled ? _settings.SpeechToTextSettings?.SpeechToTextHotKey : null);
 
 			BtnSpeechToTextWithFormatIcon.Glyph = glyph;
 			BtnSpeechToTextWithFormat.IsEnabled = isEnabled;
-			SetButtonAccessibleLabel(BtnSpeechToTextWithFormat, label);
+			SetBusyButtonState(
+				BtnSpeechToTextWithFormat,
+				label,
+				description,
+				isEnabled ? _settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey : null);
 		}
+	}
+
+	/// <summary>
+	/// Names a button for the state it is in, and says the same thing in its tooltip.
+	/// </summary>
+	/// <param name="hotkey">
+	/// Null while the button is disabled. Mentioning a shortcut for a control that cannot
+	/// be pressed offers the user an action that does nothing; mentioning it while the
+	/// button *is* live — the model-call stop — is the fastest way to reach it.
+	/// </param>
+	private void SetBusyButtonState(Button button, string label, string? description, string? hotkey)
+	{
+		SetButtonAccessibleLabel(button, HotkeyAccessibleText.ComposeName(label, hotkey));
+
+		// Left alone when the plan states no description, so a caller that only means to
+		// change the name cannot silently blank a tooltip it knows nothing about.
+		if (string.IsNullOrWhiteSpace(description))
+			return;
+
+		string tooltip = HotkeyAccessibleText.ComposeTooltip(description, hotkey);
+		ToolTipService.SetToolTip(button, tooltip);
+		AutomationProperties.SetHelpText(button, tooltip);
 	}
 
         private void UpdatePlaybackButtonVisuals(string automationName, string glyph)
@@ -2454,7 +2484,7 @@ public sealed partial class MainWindow : Window, IDisposable
             UpdateRecordingActionAvailability();
 
             var plan = RecordingUiPlanner.For(activity);
-            UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled);
+            UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled, plan.ButtonDescription);
             TxtRawTranscript.IsReadOnly = plan.TranscriptReadOnly;
             // Null means "leave whatever is in the box"; empty means "clear it", which is
             // how a cancelled run takes its own "Transcribing..." back out (#295).
