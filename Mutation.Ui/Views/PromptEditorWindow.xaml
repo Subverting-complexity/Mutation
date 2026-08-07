@@ -104,18 +104,19 @@
                 Title="Status"
                 IsOpen="False"
                 IsClosable="True"
+                CloseButtonClick="StatusInfoBar_CloseButtonClick"
                 VerticalAlignment="Center"
                 AutomationProperties.Name="Prompt editor status"
                 AutomationProperties.LiveSetting="Polite"
                 AutomationProperties.HelpText="Latest status message for this prompt" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
-            <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click"
-                    AutomationProperties.Name="Test run"
-                    AutomationProperties.HelpText="Runs this prompt against the current clipboard content, using the settings above, without saving."
-                    ToolTipService.ToolTip="Run the prompt against current clipboard content" />
-            <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="BtnSave_Click" />
-            <Button x:Name="BtnCancel" Content="Cancel" Click="BtnCancel_Click" />
+                <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click"
+                        AutomationProperties.Name="Test run"
+                        AutomationProperties.HelpText="Runs this prompt against the current clipboard content, using the settings above, without saving. Press it again while a run is going to stop it."
+                        ToolTipService.ToolTip="Run the prompt against current clipboard content" />
+                <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="BtnSave_Click" />
+                <Button x:Name="BtnCancel" Content="Cancel" Click="BtnCancel_Click" />
             </StackPanel>
         </Grid>
     </Grid>

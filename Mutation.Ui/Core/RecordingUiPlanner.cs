@@ -23,7 +23,10 @@ public static class RecordingUiPlanner
 
 		RecordingActivity.Transcribing => new RecordingUiPlan(
 			ButtonLabel: TranscribingPlaceholder,
-			ButtonDescription: "Turning your recording into text. Wait for it to finish.",
+			// Not "wait for it to finish": pressing the shortcut again cancels, which is
+			// what the guide tells the user and what DictationPressPlanner does. The button
+			// is disabled here, so this text is the only place that says so.
+			ButtonDescription: "Turning your recording into text. Press the shortcut again to give up on this recording.",
 			ButtonEnabled: false,
 			TranscriptReadOnly: true,
 			TranscriptText: TranscribingPlaceholder,
