@@ -19,6 +19,15 @@ internal class SpeechToTextState : IDisposable
 		get { lock (_ctsLock) return _cts is not null; }
 	}
 
+	// Whether a cancel has already been asked for and the transcription is winding down.
+	// CancelTranscription deliberately leaves the source in place, so this stays true
+	// until EndTranscription runs. A repeat press is then answered with "already
+	// stopping" instead of the request line a second time (issue #299).
+	internal bool CancellationRequested
+	{
+		get { lock (_ctsLock) return _cts is not null && _cts.IsCancellationRequested; }
+	}
+
 	public SpeechToTextState(
 		Func<IAudioRecorder?> getAudioRecorder)
 	{

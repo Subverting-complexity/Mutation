@@ -185,6 +185,31 @@ public class TranscriptFormatterTests
 	}
 
 	[Fact]
+	public async Task ProcessWithLlmAsync_ForwardsTheCancellationTokenUnchanged()
+	{
+		// The caller that offered the user a cancel owns what it means, so the token is
+		// handed straight down rather than merged with anything here (issue #256).
+		var stub = new StubLlmService("out");
+		var formatter = new TranscriptFormatter(BuildSettings(), stub);
+		using var cts = new CancellationTokenSource();
+
+		await formatter.ProcessWithLlmAsync("hello", "system", "gpt-4", options: null, cts.Token);
+
+		Assert.Equal(cts.Token, stub.LastCancellationToken);
+	}
+
+	[Fact]
+	public async Task ProcessWithLlmAsync_WithoutAToken_PassesNoneSoExistingCallSitesAreUnchanged()
+	{
+		var stub = new StubLlmService("out");
+		var formatter = new TranscriptFormatter(BuildSettings(), stub);
+
+		await formatter.ProcessWithLlmAsync("hello", "system", "gpt-4");
+
+		Assert.Equal(CancellationToken.None, stub.LastCancellationToken);
+	}
+
+	[Fact]
 	public async Task ProcessWithLlmAsync_RunsFixNewLinesOnResult()
 	{
 		var stub = new StubLlmService("line1\r\nline2\rline3\nline4");
@@ -209,16 +234,19 @@ public class TranscriptFormatterTests
 		public IList<LlmChatMessage>? LastMessages { get; private set; }
 		public string? LastModel { get; private set; }
 		public LlmRequestOptions? LastOptions { get; private set; }
+		public CancellationToken LastCancellationToken { get; private set; }
 
 		public Task<string> CreateChatCompletion(
 			IList<LlmChatMessage> messages,
 			string llmModelName,
-			LlmRequestOptions? options = null)
+			LlmRequestOptions? options = null,
+			CancellationToken cancellationToken = default)
 		{
 			CallCount++;
 			LastMessages = messages;
 			LastModel = llmModelName;
 			LastOptions = options;
+			LastCancellationToken = cancellationToken;
 			return Task.FromResult(_response);
 		}
 	}

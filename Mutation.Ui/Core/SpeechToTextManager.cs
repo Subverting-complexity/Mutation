@@ -53,6 +53,8 @@ public class SpeechToTextManager : IDisposable
 
 	public bool Recording => _state.RecordingAudio;
 	public bool Transcribing => _state.TranscribingAudio;
+	/// <summary>Whether a cancel has been asked for and the transcription is winding down.</summary>
+	public bool TranscriptionCancelRequested => _state.CancellationRequested;
 
 	public SpeechSession? CurrentRecordingSession
 	{

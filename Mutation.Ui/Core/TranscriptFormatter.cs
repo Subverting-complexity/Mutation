@@ -2,6 +2,7 @@ using CognitiveSupport;
 using CognitiveSupport.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Mutation.Ui;
@@ -39,11 +40,16 @@ public class TranscriptFormatter
 	/// Per-request knobs (Fast mode, and the callback that reports a fall back to
 	/// standard speed) forwarded to the language-model service unchanged.
 	/// </param>
+	/// <param name="cancellationToken">
+	/// Abandons the call, retries included. Forwarded rather than merged with anything
+	/// here so the caller that offered the user a cancel owns what it means.
+	/// </param>
 	public async Task<string> ProcessWithLlmAsync(
 		string transcript,
 		string systemPrompt,
 		string modelName,
-		LlmRequestOptions? options = null)
+		LlmRequestOptions? options = null,
+		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(transcript))
 			return transcript;
@@ -54,7 +60,7 @@ public class TranscriptFormatter
 				new LlmChatMessage(LlmChatRole.User, transcript)
 		  };
 
-		string formattedText = await _llmService.CreateChatCompletion(messages, modelName, options);
+		string formattedText = await _llmService.CreateChatCompletion(messages, modelName, options, cancellationToken);
 		return formattedText.FixNewLines();
 	}
 }
