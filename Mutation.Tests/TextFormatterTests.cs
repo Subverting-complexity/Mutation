@@ -110,15 +110,79 @@ public class TextFormatterTests
 		Assert.Equal("first" + Environment.NewLine + "second", result);
 	}
 
-	// Deleting a word should close the gap to a single space, not to none.
+	// A symbol replacement is spacing-neutral: it wants to weld its neighbours, which is the
+	// one case where swallowing the gap was right all along.
+	[Theory]
+	[InlineData("state dash of dash the dash art", "dash", "-", "state-of-the-art")]
+	[InlineData("and slash or", "slash", "/", "and/or")]
+	[InlineData("jacques at sign example", "at sign", "@", "jacques@example")]
+	[InlineData("my underscore var here", "underscore", "_", "my_var here")]
+	public void FormatWithRule_Smart_SymbolReplacement_ClosesTheGap(
+		string input, string find, string replaceWith, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, replaceWith, MatchTypeEnum.Smart)));
+	}
+
+	// A replacement that opens with punctuation but carries text is a word, not punctuation,
+	// and still needs the gap in front of it.
 	[Fact]
-	public void FormatWithRule_Smart_EmptyReplacement_LeavesOneSpace()
+	public void FormatWithRule_Smart_WordOpeningWithPunctuation_KeepsTheGap()
 	{
 		string result = TextFormatter.FormatWithRule(
-			"so um yeah",
+			"built on dotnet today",
+			Rule("dotnet", ".NET", MatchTypeEnum.Smart));
+
+		Assert.Equal("built on .NET today", result);
+	}
+
+	// Deleting a word should close the gap to a single space, not to none — and not to one
+	// space per copy when the word was said twice in a row.
+	[Theory]
+	[InlineData("so um yeah", "so yeah")]
+	[InlineData("so um um yeah", "so yeah")]
+	[InlineData("so um um um yeah", "so yeah")]
+	[InlineData("so um  yeah", "so yeah")]
+	[InlineData("um yeah", "yeah")]
+	public void FormatWithRule_Smart_EmptyReplacement_ClosesToOneSpace(string input, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule("um", string.Empty, MatchTypeEnum.Smart)));
+	}
+
+	// The deleted word may be carrying the sentence's full stop. Dropping it as well loses the
+	// sentence break; leaving it after the gap strands it before the next word.
+	[Fact]
+	public void FormatWithRule_Smart_EmptyReplacement_KeepsPunctuationTheDeletedWordCarried()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I think um. Next one",
 			Rule("um", string.Empty, MatchTypeEnum.Smart));
 
-		Assert.Equal("so yeah", result);
+		Assert.Equal("I think. Next one", result);
+	}
+
+	// ...but with no word in front of it, that punctuation has nothing to attach to. A line
+	// that opens with a run of punctuated fillers must not open with their leftover commas.
+	[Theory]
+	[InlineData("um, um, I think", "um", "I think")]
+	[InlineData("um, um, um, I think", "um", "I think")]
+	[InlineData("um. um. I think", "um", "I think")]
+	[InlineData("you know, you know, I think", "you know", "I think")]
+	[InlineData("so um, um, I think", "um", "so, I think")]
+	public void FormatWithRule_Smart_EmptyReplacement_LeadingFillerRun_LeavesNoStrayPunctuation(
+		string input, string find, string expected)
+	{
+		Assert.Equal(expected, TextFormatter.FormatWithRule(input, Rule(find, string.Empty, MatchTypeEnum.Smart)));
+	}
+
+	// The text after the deleted word may already start with a space of its own.
+	[Fact]
+	public void FormatWithRule_Smart_EmptyReplacement_DoesNotDoubleAnExistingSpace()
+	{
+		string result = TextFormatter.FormatWithRule(
+			"I think um , next",
+			Rule("um", string.Empty, MatchTypeEnum.Smart));
+
+		Assert.Equal("I think , next", result);
 	}
 
 	// Smart is the literal match type. Regex metacharacters in Find used to reach the engine
