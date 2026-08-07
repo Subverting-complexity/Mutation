@@ -140,10 +140,36 @@ public sealed class MicrophoneSwitchCoordinator
 		return mine.Task;
 	}
 
+	// Nothing should escape DrainLoop — Apply catches every device fault. This is the
+	// backstop for the one failure mode that would be permanent: a worker that dies
+	// with _workerRunning still set is a coordinator that never starts another one, so
+	// every microphone switch for the rest of the session would hang unreported.
+	private void Drain()
+	{
+		try
+		{
+			DrainLoop();
+		}
+		catch (Exception ex)
+		{
+			TaskCompletionSource<MicrophoneSwitchResult?>? orphan;
+			lock (_gate)
+			{
+				_workerRunning = false;
+				orphan = _pendingCompletion;
+				_pendingDeviceId = null;
+				_pendingCompletion = null;
+			}
+
+			orphan?.TrySetResult(null);
+			ReportError(ex);
+		}
+	}
+
 	// Applies queued requests one at a time until none remain. Only the request
 	// currently held in _pendingCompletion is applied each pass, so a burst collapses
 	// to its most recent entry.
-	private void Drain()
+	private void DrainLoop()
 	{
 		while (true)
 		{

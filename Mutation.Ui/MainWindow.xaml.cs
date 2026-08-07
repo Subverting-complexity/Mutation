@@ -109,6 +109,18 @@ public sealed partial class MainWindow : Window, IDisposable
 	// queued, so the level controls can never end up describing a different device
 	// than the one the user chose.
 	private readonly Mutation.Ui.Core.MicrophoneSwitchCoordinator _microphoneSwitch;
+	// The microphone the user has most recently asked for, which is not the same as
+	// the one the device manager has settled on: the switch is applied on a background
+	// worker and lags. Comparing a new selection against the manager's would let the
+	// user pick B, change their mind back to the still-current-looking A, and be
+	// silently skipped — leaving the combo and the live device permanently disagreeing.
+	// UI thread only.
+	private string? _requestedMicrophoneId;
+	// The most recent switch request, or a completed task when none has been made.
+	// Awaited before a recording starts so the recorder is handed the device the user
+	// chose rather than the one they moved away from — a hotkey press no longer waits
+	// behind a frozen UI thread, so it can now arrive mid-switch. UI thread only.
+	private Task _microphoneSwitchSettled = Task.CompletedTask;
 	// Set as soon as the window starts closing, so async continuations that resume
 	// afterwards do not touch torn-down controls.
 	private bool _isClosing;
@@ -249,7 +261,15 @@ public sealed partial class MainWindow : Window, IDisposable
 
 		RestorePersistedMicrophoneSelection(micList);
 		_audioDeviceManager.CaptureDeviceListChanged += AudioDeviceManager_CaptureDeviceListChanged;
-		_microphoneVisualization.StartCapture();
+
+		// Skipped when restoring the persisted choice queued a switch: that switch
+		// starts capture on the device the user actually chose, and opening one here
+		// first would briefly run the OS default instead — an activity light on a
+		// microphone they are not using, and an error message naming it if it will not
+		// open. When the persisted choice is already the default there is no switch to
+		// wait for, and this is what gets the waveform going.
+		if (_requestedMicrophoneId is null)
+			_microphoneVisualization.StartCapture();
 
 		CmbSpeechService.ItemsSource = _speechServices;
 		CmbSpeechService.DisplayMemberPath = nameof(ISpeechToTextService.ServiceName);
@@ -681,7 +701,8 @@ public sealed partial class MainWindow : Window, IDisposable
 				// Queued on the switch worker rather than closed here: it is the same
 				// winmm teardown, and going through the worker also orders it against a
 				// switch that may still be in flight.
-				_ = _microphoneSwitch.ReleaseAsync();
+				_requestedMicrophoneId = null;
+				_microphoneSwitchSettled = _microphoneSwitch.ReleaseAsync();
 				ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
 				break;
 		}
@@ -1276,6 +1297,17 @@ public sealed partial class MainWindow : Window, IDisposable
 				return;
             }
             
+            // A microphone switch may still be opening the device the user just picked;
+            // the recorder is about to be handed the device index, and that index does
+            // not move until the switch lands. Before this ran off the UI thread a
+            // hotkey press could not arrive mid-switch at all — the frozen message pump
+            // held it back — so waiting here restores what the freeze used to
+            // guarantee: you record from the microphone you chose, not the one you
+            // moved away from. Only on the way in; a stop must never be held up by a
+            // device that is slow to open.
+            if (!_audioSessionManager.IsRecording)
+                await _microphoneSwitchSettled;
+
             LlmSettings.LlmPrompt? autoRunPrompt = _promptLibrary?.GetAutoRunPrompt();
             await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmProcessing, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
 		}
@@ -2659,7 +2691,8 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Releasing the handle is a winmm call like any other, so it goes through
 			// the same worker — and queueing it there is also what keeps it ordered
 			// against a switch that may still be in flight.
-			_ = _microphoneSwitch.ReleaseAsync();
+			_requestedMicrophoneId = null;
+			_microphoneSwitchSettled = _microphoneSwitch.ReleaseAsync();
 			return;
 		}
 
@@ -2668,8 +2701,32 @@ public sealed partial class MainWindow : Window, IDisposable
 		// the pipeline for the device already selected would save settings, drop and
 		// reopen capture, and re-probe the level controls — an audible glitch and a
 		// screen-reader interruption for a selection that did not change.
-		if (string.Equals(device.Id, _audioDeviceManager.SelectedMicrophone?.Id, StringComparison.OrdinalIgnoreCase))
+		//
+		// Compared against what was last *asked for*, not what the device manager has
+		// settled on: the switch runs on a worker and the manager lags behind it, so
+		// asking the manager would skip a genuine change of mind — pick B, go back to
+		// A while B is still opening, and A looks like the current device — and leave
+		// the combo naming one microphone while another is live.
+		if (string.Equals(device.Id, RequestedOrSelectedMicrophoneId(), StringComparison.OrdinalIgnoreCase))
 			return;
+
+		_requestedMicrophoneId = device.Id;
+
+		if (_settings.AudioSettings != null)
+		{
+			// Written into the settings object before the switch is attempted, not
+			// after it succeeds: closing the window mid-switch runs PersistClosingState
+			// first, and an assignment left to the continuation would never make it
+			// into that save. A name that turns out to belong to an unavailable device
+			// costs nothing — the next startup does not find it in the list and falls
+			// back to whatever the device manager settled on.
+			//
+			// The file write itself is debounced. The save serializes the whole
+			// settings object and atomically replaces the file plus its .bak, and that
+			// disk I/O has no business on the UI thread.
+			_settings.AudioSettings.ActiveCaptureDeviceFullName = device.FriendlyName;
+			_settingsSaveDebouncer.Trigger();
+		}
 
 		// Selected by ID: the manager re-resolves the live device out of its current
 		// enumeration, so a list entry that predates a hot-plug cannot become the
@@ -2679,7 +2736,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		// the settings, the capture, and the level controls now, so this one reports
 		// nothing — otherwise the controls would end up describing a device the user
 		// has already moved on from.
-		if (await _microphoneSwitch.SwitchAsync(device.Id) is not Mutation.Ui.Core.MicrophoneSwitchResult result)
+		var pending = _microphoneSwitch.SwitchAsync(device.Id);
+		_microphoneSwitchSettled = pending;
+		if (await pending is not Mutation.Ui.Core.MicrophoneSwitchResult result)
 			return;
 
 		// The window closed while the device was being opened; its controls are torn
@@ -2687,19 +2746,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (_isClosing)
 			return;
 
+		// A switch that did not take leaves the manager on the previous device, so the
+		// request that failed must not go on standing in for the live selection — the
+		// next pick has to be compared against what is actually being recorded from.
+		// Skipped if the user has already asked for something else in the meantime.
+		if (!result.Switched && string.Equals(_requestedMicrophoneId, device.Id, StringComparison.OrdinalIgnoreCase))
+			_requestedMicrophoneId = _audioDeviceManager.SelectedMicrophone?.Id;
+
 		switch (result.Outcome)
 		{
 			case Mutation.Ui.Core.MicrophoneSwitchOutcome.Switched:
-				if (_settings.AudioSettings != null)
-				{
-					_settings.AudioSettings.ActiveCaptureDeviceFullName = device.FriendlyName;
-					// Debounced rather than written inline: the save serializes the whole
-					// settings object and atomically replaces the file plus its .bak, and
-					// that disk I/O has no business on the UI thread. Nothing is at risk
-					// of being lost — the close handler saves _settings unconditionally.
-					_settingsSaveDebouncer.Trigger();
-				}
-
 				// Re-sync the level controls to the newly-selected device (support and
 				// current level may differ) and re-assert the pinned level on it.
 				if (_micLevelInitialized)
@@ -2722,6 +2778,12 @@ public sealed partial class MainWindow : Window, IDisposable
 				break;
 		}
 	}
+
+	// The microphone the selection path is currently working towards. Falls back to
+	// the device manager's own selection when nothing has been asked for yet — at
+	// startup, before the persisted choice is restored.
+	private string? RequestedOrSelectedMicrophoneId() =>
+		_requestedMicrophoneId ?? _audioDeviceManager.SelectedMicrophone?.Id;
 
 	private void MicWaveToggle_Click(object sender, RoutedEventArgs e)
 	{

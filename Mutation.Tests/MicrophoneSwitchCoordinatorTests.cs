@@ -54,7 +54,9 @@ public class MicrophoneSwitchCoordinatorTests
 		Assert.True(result.Value.Switched);
 		Assert.Null(result.Value.FailureMessage);
 		Assert.Equal(new[] { "select:mic-a", "restart" }, steps);
-		Assert.False(coordinator.IsSwitching);
+		// The awaiter is completed just before the worker records that it has gone
+		// idle, so this settles a moment later rather than in lockstep.
+		AssertEventually(() => !coordinator.IsSwitching, "the worker did not settle");
 	}
 
 	[Fact]
@@ -174,7 +176,7 @@ public class MicrophoneSwitchCoordinatorTests
 		Assert.Null(await first);
 		Assert.Equal(MicrophoneSwitchOutcome.Switched, (await third)!.Value.Outcome);
 		Assert.Equal(new[] { "mic-a", "mic-c" }, selected);
-		Assert.False(coordinator.IsSwitching);
+		AssertEventually(() => !coordinator.IsSwitching, "the worker did not settle");
 	}
 
 	[Fact]
@@ -268,5 +270,21 @@ public class MicrophoneSwitchCoordinatorTests
 		Assert.Equal(MicrophoneSwitchOutcome.Switched, first!.Value.Outcome);
 		Assert.Equal(MicrophoneSwitchOutcome.Switched, second!.Value.Outcome);
 		Assert.Equal(new[] { "mic-a", "mic-b" }, selected);
+	}
+
+	// The worker completes an awaiter before it records that it has gone idle, so a
+	// resumed test can observe IsSwitching either way for an instant. Polled rather
+	// than asserted outright, so a loaded machine cannot turn that into a failure.
+	private static void AssertEventually(Func<bool> condition, string message)
+	{
+		var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+		while (DateTime.UtcNow < deadline)
+		{
+			if (condition())
+				return;
+			Thread.Sleep(10);
+		}
+
+		Assert.True(condition(), message);
 	}
 }

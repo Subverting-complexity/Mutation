@@ -140,7 +140,14 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	/// </summary>
 	public void StartCapture()
 	{
-		if (_samples is null)
+		// Taken once into a local rather than re-read further down: this method blocks
+		// on the device in between, and a Dispose on the UI thread nulls the field
+		// while it does. Re-reading it would throw, and the switch coordinator would
+		// dress that up as "could not switch to this microphone" — a failure message
+		// about a device that was fine, for a visualization the user had just switched
+		// off.
+		var samples = _samples;
+		if (samples is null)
 			return;
 
 		int epoch;
@@ -160,7 +167,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 		// can take.
 		CloseCapture(superseded);
 
-		_samples.Reset();
+		samples.Reset();
 
 		// Render the reset-to-flat state once even before the first samples arrive.
 		_waveformRenderGate.MarkDataArrived();
@@ -382,7 +389,11 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 
 	private void OnWaveformDataAvailable(object? sender, WaveInEventArgs e)
 	{
-		if (_samples is null || _samples.Write(e.Buffer, e.BytesRecorded) == 0)
+		// One read into a local, for the same reason as StartCapture: this runs on the
+		// capture device's own thread, and Dispose can null the field between a
+		// null-check and a use of it.
+		var samples = _samples;
+		if (samples is null || samples.Write(e.Buffer, e.BytesRecorded) == 0)
 			return;
 
 		// New samples are in the ring buffer — let the next render tick draw them.
