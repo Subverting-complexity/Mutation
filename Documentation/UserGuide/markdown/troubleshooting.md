@@ -69,6 +69,11 @@ If the service is busy and asks Mutation to wait a moment before asking again, M
 waits as long as it was asked to, up to a minute. So a gap between beeps that is longer
 than usual is the service setting the pace, not something going wrong.
 
+Not everything is worth another go. If the service turns the request down for a reason
+that will not change — your key was rejected, or the recording is bigger than it
+accepts — Mutation tells you straight away instead of working through the retries
+first. You hear one set of beeps, not four.
+
 **What to do.**
 
 1. Give it a moment — the retries are automatic and you will hear the result.

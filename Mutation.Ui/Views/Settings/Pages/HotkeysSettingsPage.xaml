@@ -5,6 +5,7 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
 	xmlns:local="using:Mutation.Ui"
+	xmlns:views="using:Mutation.Ui.Views"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
@@ -47,54 +48,74 @@
 						IsTabStop="False">
 						<ListView.ItemTemplate>
 							<DataTemplate x:DataType="local:HotkeyRouterEntry">
-								<Grid ColumnSpacing="12" Padding="0,4">
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="2*" />
-										<ColumnDefinition Width="2*" />
-										<ColumnDefinition Width="Auto" />
-									</Grid.ColumnDefinitions>
+								<StackPanel Spacing="2" Padding="0,4">
+									<Grid ColumnSpacing="12">
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="2*" />
+											<ColumnDefinition Width="2*" />
+											<ColumnDefinition Width="Auto" />
+										</Grid.ColumnDefinitions>
 
-									<Grid Grid.Column="0">
-										<Border Background="{x:Bind FromBackgroundBrush, Mode=OneWay}" CornerRadius="4">
+										<Grid Grid.Column="0">
+											<Border Background="{x:Bind FromBackgroundBrush, Mode=OneWay}" CornerRadius="4">
+												<TextBox
+													Text="{x:Bind FromHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+													PlaceholderText="CTRL+ALT+H"
+													Background="Transparent"
+													HorizontalAlignment="Stretch"
+													AutomationProperties.Name="Shortcut to listen for"
+													ToolTipService.ToolTip="Shortcut to listen for"
+													GotFocus="HotkeyRouterBox_GotFocus"
+													LostFocus="HotkeyRouterFrom_LostFocus" />
+											</Border>
+											<FontIcon
+												Glyph="&#xE783;"
+												Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+												HorizontalAlignment="Right"
+												VerticalAlignment="Center"
+												Margin="0,0,8,0"
+												Visibility="{x:Bind BindingErrorVisibility, Mode=OneWay}"
+												AutomationProperties.Name="{x:Bind BindingErrorMessage, Mode=OneWay}"
+												ToolTipService.ToolTip="{x:Bind BindingErrorMessage, Mode=OneWay}" />
+										</Grid>
+
+										<Border Grid.Column="1" Background="{x:Bind ToBackgroundBrush, Mode=OneWay}" CornerRadius="4">
 											<TextBox
-												Text="{x:Bind FromHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-												PlaceholderText="CTRL+ALT+H"
+												Text="{x:Bind ToHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+												PlaceholderText="CTRL+SHIFT+H"
 												Background="Transparent"
 												HorizontalAlignment="Stretch"
-												AutomationProperties.Name="Shortcut to listen for"
-												ToolTipService.ToolTip="Shortcut to listen for"
-												LostFocus="HotkeyRouterFrom_LostFocus" />
+												AutomationProperties.Name="Shortcut to send when triggered"
+												ToolTipService.ToolTip="Shortcut to send when triggered"
+												GotFocus="HotkeyRouterBox_GotFocus"
+												LostFocus="HotkeyRouterTo_LostFocus" />
 										</Border>
-										<FontIcon
-											Glyph="&#xE783;"
-											Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-											HorizontalAlignment="Right"
-											VerticalAlignment="Center"
-											Margin="0,0,8,0"
-											Visibility="{x:Bind BindingErrorVisibility, Mode=OneWay}"
-											AutomationProperties.Name="{x:Bind BindingErrorMessage, Mode=OneWay}"
-											ToolTipService.ToolTip="{x:Bind BindingErrorMessage, Mode=OneWay}" />
+
+										<Button
+											Grid.Column="2"
+											Style="{StaticResource SubtleButtonStyle}"
+											Content="Delete"
+											AutomationProperties.Name="Delete mapping"
+											Click="HotkeyRouterDelete_Click"
+											Tag="{x:Bind}" />
 									</Grid>
 
-									<Border Grid.Column="1" Background="{x:Bind ToBackgroundBrush, Mode=OneWay}" CornerRadius="4">
-										<TextBox
-											Text="{x:Bind ToHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-											PlaceholderText="CTRL+SHIFT+H"
-											Background="Transparent"
-											HorizontalAlignment="Stretch"
-											AutomationProperties.Name="Shortcut to send when triggered"
-											ToolTipService.ToolTip="Shortcut to send when triggered"
-											LostFocus="HotkeyRouterTo_LostFocus" />
-									</Border>
-
-									<Button
-										Grid.Column="2"
-										Style="{StaticResource SubtleButtonStyle}"
-										Content="Delete"
-										AutomationProperties.Name="Delete mapping"
-										Click="HotkeyRouterDelete_Click"
-										Tag="{x:Bind}" />
-								</Grid>
+									<!-- Says what a box rewrote itself to when the user left it. A polite
+									     region of its own, so it waits its turn rather than cutting across
+									     the next field, and so it cannot overwrite the row's error. Bound
+									     through LiveText because a row in a list has no code-behind to call
+									     LiveMessage.Show from (issue #332). Full-contrast text rather than
+									     the secondary brush a caption would normally take: this app's
+									     reader is low-vision, and a message worth showing at all is worth
+									     being able to read. -->
+									<TextBlock
+										views:LiveText.Message="{x:Bind CommitAnnouncement, Mode=OneWay}"
+										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+										Visibility="Collapsed"
+										AutomationProperties.LiveSetting="Polite"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										TextWrapping="Wrap" />
+								</StackPanel>
 							</DataTemplate>
 						</ListView.ItemTemplate>
 					</ListView>

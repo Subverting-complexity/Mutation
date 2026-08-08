@@ -385,7 +385,8 @@ reader reads it out: &quot;Speak clipboard now reads CTRL+SHIFT+A.&quot; You get
 when something actually changed, so tabbing down a page of shortcuts that are
 already written Mutation's way stays quiet. The note goes away when you come back
 to that box. The <strong>From</strong> and <strong>To</strong> boxes in the shortcut router further down the
-page still tidy up in silence.</p>
+page do the same, and name themselves when they do: &quot;Shortcut to listen for now
+reads CTRL+SHIFT+A.&quot;</p>
 <p>Short names for keys are fine. Write <strong>Alt+PgDn</strong> or <strong>Alt+PageDown</strong>, <strong>Ctrl+Esc</strong>
 or <strong>Ctrl+Escape</strong>, <strong>Bksp</strong> or <strong>Backspace</strong>, <strong>ArrowUp</strong> or <strong>Up</strong> — Mutation
 takes either, in any box on the page, and saves the full name. The one word to
@@ -412,7 +413,13 @@ hotkey</strong> note appears under both rows, and is read out the moment it turn
 you are editing. Give one of them a different combination, otherwise only one of the
 two will ever fire.
 Mutation compares the keys, not the spelling, so writing one as
-<strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught.</li>
+<strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught. The check covers
+the whole page at once, so a shortcut at the top and a router mapping's &quot;From&quot; box at
+the bottom claiming the same keys are both flagged.</li>
+<li><strong>The same combination as one of your prompt shortcuts</strong> — a note reading <strong>Also
+used by an LLM prompt</strong> appears under the row. Prompt shortcuts are set in the prompt
+window rather than on this page, so there is no second row here to flag. Open
+<strong>AI prompts</strong> to see which one it is.</li>
 <li><strong>The same combination in a &quot;send key after&quot; box and a real shortcut</strong> —
 also flagged, and worth fixing. Windows hands that key straight back to Mutation,
 so the action would set itself off again and again. Putting the same key in <em>both</em>
@@ -476,9 +483,10 @@ are in, and the call mutes.</p>
 down to the <strong>Hotkey Router</strong> section. Press <strong>Add mapping</strong>, fill in the &quot;From&quot;
 and &quot;To&quot; boxes, and press <strong>Save</strong>. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
-Two mappings listening for the same &quot;From&quot; combination get a &quot;Duplicate 'From'
-hotkey&quot; message — again comparing the keys rather than the spelling. <strong>Delete</strong>
-removes a mapping.</p>
+A mapping whose &quot;From&quot; combination is already taken gets a &quot;Duplicate 'From'
+hotkey&quot; message — again comparing the keys rather than the spelling. That covers
+another mapping, any shortcut higher up the Hotkeys page, and any of your prompt
+shortcuts. <strong>Delete</strong> removes a mapping.</p>
 <blockquote>
 <p>As the in-app help puts it: map one shortcut to another so a single key press can
 trigger a more complex shortcut. Changes apply when you save settings.</p>

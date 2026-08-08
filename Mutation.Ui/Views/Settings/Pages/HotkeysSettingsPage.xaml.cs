@@ -18,6 +18,14 @@ public sealed partial class HotkeysSettingsPage : UserControl
 {
 	private const string DuplicateBadgeText = "Duplicate hotkey";
 
+	/// <summary>
+	/// For a row whose only clash is with a prompt's own shortcut. The prompt is edited in its
+	/// own window rather than in a list on this page, so there is no second row here to look
+	/// at — saying "Duplicate hotkey" and leaving every visible row unflagged would send the
+	/// user hunting down the page for a partner that is not on it.
+	/// </summary>
+	private const string PromptClashBadgeText = "Also used by an LLM prompt";
+
 	private readonly Settings _settings;
 	private readonly List<HotkeyRow> _rows = new();
 	private readonly HotkeyRouterController _routerController;
@@ -29,7 +37,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_settings = settings;
 		InitializeComponent();
 		BuildRows();
-		RecomputeDuplicates();
 
 		_routerController = new HotkeyRouterController(
 			HotkeyRouterEntries,
@@ -37,7 +44,12 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			settingsManager: null,
 			DispatcherQueue.GetForCurrentThread(),
 			HotkeyRouterList,
-			autoPersist: false);
+			autoPersist: false,
+			// This page holds both lists, so it is the only place that can see a core hotkey
+			// and a route claiming the same chord (issue #321).
+			crossListDuplicateCheck: RecomputeDuplicates);
+
+		// Also runs the first duplicate check, once the router rows exist to take part in it.
 		_routerController.Initialize();
 	}
 
@@ -229,26 +241,69 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		}
 	}
 
+	/// <summary>
+	/// One duplicate check for every shortcut this settings session can reach, not one per
+	/// list. <see cref="HotkeyRegistrationTable"/> is a single table for the whole app, so a
+	/// chord any list holds is a chord no other list can also have; checking each list only
+	/// against itself let a core hotkey and a route both claim <c>CTRL+ALT+G</c> with no badge
+	/// on either row, and the user found out from the failure dialog after saving (issue #321).
+	/// </summary>
 	private void RecomputeDuplicates()
 	{
-		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
+		var coreRows = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
 		foreach (var row in _rows)
-			configured.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
+			coreRows.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
 
-		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+		var routerRows = _routerController.ConfiguredFromHotkeys();
+
+		// Two passes rather than one, so a row can say which kind of clash it has. The prompt
+		// shortcuts take part in the check but have no rows on this page to flag, and a badge
+		// reading "Duplicate hotkey" beside seventeen unflagged rows would be a hunt with no
+		// quarry.
+		var onThisPage = HotkeyConflictFinder.DuplicateIndexesAcross([coreRows, routerRows]);
+		var everywhere = HotkeyConflictFinder.DuplicateIndexesAcross(
+			[coreRows, routerRows, ConfiguredPromptHotkeys()]);
 
 		for (int i = 0; i < _rows.Count; i++)
-			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates.Contains(i));
+		{
+			LiveMessage.Show(
+				_rows[i].DuplicateBadge,
+				onThisPage[0].Contains(i) ? DuplicateBadgeText
+					: everywhere[0].Contains(i) ? PromptClashBadgeText
+					: null);
+		}
+
+		// A route says "Duplicate 'From' hotkey." either way. The wording is true of a prompt
+		// clash too, and the row has one message to spend.
+		_routerController.ApplyDuplicates(everywhere[1]);
 	}
 
-	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate) =>
-		LiveMessage.Show(badge, isDuplicate ? DuplicateBadgeText : null);
+	/// <summary>
+	/// The shortcut on each LLM prompt. They are registered from the same table as everything
+	/// on this page, so they clash with it, but they are edited in the prompt window rather
+	/// than here — they take part in the check without being flagged by it.
+	/// </summary>
+	private IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey> ConfiguredPromptHotkeys()
+	{
+		var prompts = _settings.LlmSettings?.Prompts;
+		if (prompts is null)
+			return Array.Empty<HotkeyConflictFinder.ConfiguredHotkey>();
+
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(prompts.Count);
+		foreach (var prompt in prompts)
+			configured.Add(new(prompt.Hotkey, ClaimsTheChord: true));
+
+		return configured;
+	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
 		_routerController.AddNewMapping();
 
 	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
 		_routerController.DeleteMapping(sender);
+
+	private void HotkeyRouterBox_GotFocus(object sender, RoutedEventArgs e) =>
+		_routerController.ClearCommitAnnouncement(sender);
 
 	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
 		_routerController.CommitFromLostFocus(sender);

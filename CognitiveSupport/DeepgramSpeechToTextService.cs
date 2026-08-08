@@ -44,7 +44,11 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 10;
 		_timeProvider = timeProvider ?? TimeProvider.System;
 		_announceAttempt = announceAttempt ?? (attempt => this.Beep(attempt));
-		_retryPipeline = TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient(), timeProvider);
+		_retryPipeline = TransientRetry.Pipeline(
+			retryCount: 3,
+			TransientRetry.Transient()
+				.Handle<Deepgram.Models.Exceptions.v1.DeepgramException>(DeepgramFailure.IsWorthAnotherAttempt),
+			timeProvider);
 	}
 
 	public async Task<string> ConvertAudioToText(

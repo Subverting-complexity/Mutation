@@ -97,21 +97,58 @@ public class DeepgramSpeechToTextServiceRetryTests
 	}
 
 	[Fact]
-	public async Task AFailureDeepgramItselfReportsIsNotRetried()
+	public async Task ARateLimitIsRetriedUntilItSucceeds()
+	{
+		// The failure this ladder is most obviously for, and the one it used to miss: a 429
+		// is Deepgram asking to be asked again, and the recording is already made (issue
+		// #316).
+		var (service, client, _, _) = CreateService(
+			_ => throw AnsweredWith(DeepgramErrorBodies.TooManyRequests),
+			_ => throw AnsweredWith(DeepgramErrorBodies.TooManyRequests),
+			_ => Transcript("the recovered transcript"));
+
+		string path = WriteAudioFile();
+		try
+		{
+			string text = await service.ConvertAudioToText("", path, CancellationToken.None);
+
+			Assert.Equal("the recovered transcript", text);
+			Assert.Equal(3, client.Calls);
+		}
+		finally
+		{
+			File.Delete(path);
+		}
+	}
+
+	[Fact]
+	public async Task AnUnavailableServiceIsRetried()
+	{
+		var (service, client, _, _) = CreateService(
+			_ => throw AnsweredWith(DeepgramErrorBodies.ServiceUnavailable),
+			_ => Transcript("the recovered transcript"));
+
+		string path = WriteAudioFile();
+		try
+		{
+			string text = await service.ConvertAudioToText("", path, CancellationToken.None);
+
+			Assert.Equal("the recovered transcript", text);
+			Assert.Equal(2, client.Calls);
+		}
+		finally
+		{
+			File.Delete(path);
+		}
+	}
+
+	[Fact]
+	public async Task ARejectedApiKeyIsNotRetried()
 	{
 		// A rejected API key does not become valid on the second ask, so reporting it at
-		// once beats making the user wait out the whole ladder first.
-		//
-		// What actually decides it, though, is not the status — it is whether the error
-		// carried a body. Deepgram's client deserializes a JSON error into this exception,
-		// which nothing here handles; an error with an empty body falls through to
-		// EnsureSuccessStatusCode instead and arrives as the HttpRequestException the test
-		// above retries. So the real rule today is "an error with a body is final, one
-		// without gets four attempts", regardless of whether it was a 429 or a 401. That is
-		// stranger than any rule anyone chose, and DeepgramRESTException carries no status
-		// to fix it with. Recorded rather than papered over — see issue #316.
+		// once beats making the user wait out the whole ladder on a lengthening timeout.
 		var (service, client, _, _) = CreateService(
-			_ => throw new Deepgram.Models.Exceptions.v1.DeepgramRESTException("401 Unauthorized"));
+			_ => throw AnsweredWith(DeepgramErrorBodies.InvalidAuth));
 
 		string path = WriteAudioFile();
 		try
@@ -126,6 +163,35 @@ public class DeepgramSpeechToTextServiceRetryTests
 			File.Delete(path);
 		}
 	}
+
+	[Fact]
+	public async Task ARequestDeepgramCannotReadIsNotRetried()
+	{
+		var (service, client, _, _) = CreateService(
+			_ => throw AnsweredWith(DeepgramErrorBodies.BadRequest));
+
+		string path = WriteAudioFile();
+		try
+		{
+			await Assert.ThrowsAsync<Deepgram.Models.Exceptions.v1.DeepgramRESTException>(() =>
+				service.ConvertAudioToText("", path, CancellationToken.None));
+
+			Assert.Equal(1, client.Calls);
+		}
+		finally
+		{
+			File.Delete(path);
+		}
+	}
+
+	/// <summary>
+	/// The exception Deepgram's own client raises for <paramref name="errorBody"/>, built the
+	/// way the client builds it — by deserializing the answer into the exception. Constructing
+	/// one by hand would leave the error code unset and prove nothing about the real path.
+	/// </summary>
+	private static Exception AnsweredWith(string errorBody) =>
+		System.Text.Json.JsonSerializer
+			.Deserialize<Deepgram.Models.Exceptions.v1.DeepgramRESTException>(errorBody)!;
 
 	[Fact]
 	public async Task EachAttemptGivesItselfLongerThanTheLast()

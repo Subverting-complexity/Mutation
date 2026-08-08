@@ -120,7 +120,8 @@ reader reads it out: "Speak clipboard now reads CTRL+SHIFT+A." You get that only
 when something actually changed, so tabbing down a page of shortcuts that are
 already written Mutation's way stays quiet. The note goes away when you come back
 to that box. The **From** and **To** boxes in the shortcut router further down the
-page still tidy up in silence.
+page do the same, and name themselves when they do: "Shortcut to listen for now
+reads CTRL+SHIFT+A."
 
 Short names for keys are fine. Write **Alt+PgDn** or **Alt+PageDown**, **Ctrl+Esc**
 or **Ctrl+Escape**, **Bksp** or **Backspace**, **ArrowUp** or **Up** — Mutation
@@ -152,7 +153,13 @@ readers announce it straight away.
   you are editing. Give one of them a different combination, otherwise only one of the
   two will ever fire.
   Mutation compares the keys, not the spelling, so writing one as
-  **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught.
+  **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught. The check covers
+  the whole page at once, so a shortcut at the top and a router mapping's "From" box at
+  the bottom claiming the same keys are both flagged.
+- **The same combination as one of your prompt shortcuts** — a note reading **Also
+  used by an LLM prompt** appears under the row. Prompt shortcuts are set in the prompt
+  window rather than on this page, so there is no second row here to flag. Open
+  **AI prompts** to see which one it is.
 - **The same combination in a "send key after" box and a real shortcut** —
   also flagged, and worth fixing. Windows hands that key straight back to Mutation,
   so the action would set itself off again and again. Putting the same key in *both*
@@ -221,9 +228,10 @@ To set one up, go to **Settings** (**Ctrl+Comma**), pick **Hotkeys**, and scroll
 down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
-Two mappings listening for the same "From" combination get a "Duplicate 'From'
-hotkey" message — again comparing the keys rather than the spelling. **Delete**
-removes a mapping.
+A mapping whose "From" combination is already taken gets a "Duplicate 'From'
+hotkey" message — again comparing the keys rather than the spelling. That covers
+another mapping, any shortcut higher up the Hotkeys page, and any of your prompt
+shortcuts. **Delete** removes a mapping.
 
 > As the in-app help puts it: map one shortcut to another so a single key press can
 > trigger a more complex shortcut. Changes apply when you save settings.
