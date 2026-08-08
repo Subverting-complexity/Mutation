@@ -2384,6 +2384,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		// Before the beep and the status, either of which can throw — a status builds an
 		// automation peer and starts a timer (issue #234). The text has already landed by
 		// this point, so the shortcut that acts on it should not be the thing that is lost.
+		//
+		// This button is the one delivery site with no hotkey of its own, so Mutation is
+		// always the foreground window when it runs — which is why the insert above
+		// deliberately typed nothing. The shortcut is still sent, on purpose: it is normally
+		// a screen-reader command, which is global and wants running wherever the user is.
+		// A shortcut that only means something in another application will land here instead,
+		// and that is the same bargain the eight OCR buttons already make (PR #339).
 		if (plan.SendConfiguredHotkey)
 			HotkeyManager.SendHotkeyAfterDelay(
 				_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
