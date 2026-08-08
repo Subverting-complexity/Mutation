@@ -125,15 +125,32 @@ internal sealed class HotkeyRouterController
 		}
 	}
 
+	/// <summary>
+	/// Takes down the notice left by the last time this box tidied itself up, on the way back
+	/// into it (issue #332).
+	/// </summary>
+	public void ClearFromAnnouncement(object sender)
+	{
+		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
+			entry.ClearFromCommitAnnouncement();
+	}
+
+	/// <summary>The same, for the "To" box.</summary>
+	public void ClearToAnnouncement(object sender)
+	{
+		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
+			entry.ClearToCommitAnnouncement();
+	}
+
 	public List<(string From, string To)> SyncSettings()
 	{
 		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
 
+		// Silently: this runs on every commit and on save, over every row. The row the user
+		// just left has already said what it rewrote, and re-committing it here would only
+		// wipe that notice; the rows they never touched have nothing to report at all.
 		foreach (var entry in _entries)
-		{
-			entry.CommitFromHotkey();
-			entry.CommitToHotkey();
-		}
+			entry.CommitSilently();
 
 		var validEntries = _entries
 			.Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)
@@ -256,21 +273,52 @@ internal sealed class HotkeyRouterController
 	}
 
 	/// <summary>
-	/// Flags the routes whose "from" shortcut is already taken by another route. Compared as
-	/// chords rather than as text, so the answer is the one registration will give — the
-	/// screen used to compare the typed strings and could wave through a pair the hotkey
-	/// table then refused (issue #306).
+	/// The router's "From" chords as the conflict finder wants them. Handed out so a host that
+	/// shows more than one hotkey list can check them all against each other in one go — the
+	/// registration table is shared, so a route and a core hotkey do compete (issue #321).
 	/// </summary>
-	private void RecalculateDuplicates()
+	internal IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey> ConfiguredFromChords()
 	{
 		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_entries.Count);
 		foreach (var entry in _entries)
 			configured.Add(new(entry.IsFromValid ? entry.NormalizedFromHotkey : null, ClaimsTheChord: true));
+		return configured;
+	}
 
-		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
-
+	/// <summary>Flags the routes at <paramref name="duplicates"/> and clears the rest.</summary>
+	internal void ApplyDuplicates(IReadOnlySet<int> duplicates)
+	{
 		for (int i = 0; i < _entries.Count; i++)
 			_entries[i].SetDuplicate(duplicates.Contains(i));
+	}
+
+	/// <summary>
+	/// Set by a host that owns other hotkey lists on the same screen, to check every list at
+	/// once instead of this one alone (issue #321). It is expected to call back into
+	/// <see cref="ConfiguredFromChords"/> and <see cref="ApplyDuplicates"/>.
+	/// </summary>
+	internal Action? CheckDuplicatesAcrossLists { get; set; }
+
+	/// <summary>
+	/// Flags the routes whose "from" shortcut is already taken by another route. Compared as
+	/// chords rather than as text, so the answer is the one registration will give — the
+	/// screen used to compare the typed strings and could wave through a pair the hotkey
+	/// table then refused (issue #306).
+	/// <para>
+	/// This is the narrow answer, over the router list alone. A host that has set
+	/// <see cref="CheckDuplicatesAcrossLists"/> gets the wide one instead, because a route can
+	/// just as easily collide with a hotkey on another list.
+	/// </para>
+	/// </summary>
+	private void RecalculateDuplicates()
+	{
+		if (CheckDuplicatesAcrossLists is { } acrossLists)
+		{
+			acrossLists();
+			return;
+		}
+
+		ApplyDuplicates(HotkeyConflictFinder.DuplicateIndexes(ConfiguredFromChords()));
 	}
 
 	private void AttachEntry(HotkeyRouterEntry entry) =>

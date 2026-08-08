@@ -29,7 +29,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_settings = settings;
 		InitializeComponent();
 		BuildRows();
-		RecomputeDuplicates();
 
 		_routerController = new HotkeyRouterController(
 			HotkeyRouterEntries,
@@ -38,6 +37,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			DispatcherQueue.GetForCurrentThread(),
 			HotkeyRouterList,
 			autoPersist: false);
+		// Both lists claim their chords from the same registration table, so they are checked
+		// against each other rather than each against itself (issue #321). Set before
+		// Initialize, which recomputes on its way out.
+		_routerController.CheckDuplicatesAcrossLists = RecomputeDuplicates;
 		_routerController.Initialize();
 	}
 
@@ -229,16 +232,31 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		}
 	}
 
+	/// <summary>
+	/// Flags every row on the page that shares a chord with another one — the rows above and
+	/// the router mappings below, checked as one set rather than two.
+	/// <para>
+	/// They compete for real: <see cref="HotkeyRegistrationTable"/> is one table for the whole
+	/// app, so setting "Speak clipboard" and a route's "From" to the same chord used to pass
+	/// both lists and then fail at registration, reported in a dialog after saving with
+	/// nothing to say which two rows to compare (issue #321).
+	/// </para>
+	/// </summary>
 	private void RecomputeDuplicates()
 	{
-		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
+		var core = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
 		foreach (var row in _rows)
-			configured.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
+			core.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
 
-		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+		var router = _routerController.ConfiguredFromChords();
+
+		var duplicates = HotkeyConflictFinder.DuplicateIndexesAcross(
+			new IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey>[] { core, router });
 
 		for (int i = 0; i < _rows.Count; i++)
-			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates.Contains(i));
+			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates[0].Contains(i));
+
+		_routerController.ApplyDuplicates(duplicates[1]);
 	}
 
 	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate) =>
@@ -255,4 +273,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	private void HotkeyRouterTo_LostFocus(object sender, RoutedEventArgs e) =>
 		_routerController.CommitToLostFocus(sender);
+
+	private void HotkeyRouterFrom_GotFocus(object sender, RoutedEventArgs e) =>
+		_routerController.ClearFromAnnouncement(sender);
+
+	private void HotkeyRouterTo_GotFocus(object sender, RoutedEventArgs e) =>
+		_routerController.ClearToAnnouncement(sender);
 }

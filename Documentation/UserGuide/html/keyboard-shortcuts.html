@@ -385,7 +385,9 @@ reader reads it out: &quot;Speak clipboard now reads CTRL+SHIFT+A.&quot; You get
 when something actually changed, so tabbing down a page of shortcuts that are
 already written Mutation's way stays quiet. The note goes away when you come back
 to that box. The <strong>From</strong> and <strong>To</strong> boxes in the shortcut router further down the
-page still tidy up in silence.</p>
+page do the same thing, and name the box they are talking about: &quot;Shortcut to
+listen for now reads CTRL+SHIFT+A.&quot; If the row has something wrong with it, you
+hear that instead — the problem matters more than the spelling.</p>
 <p>Short names for keys are fine. Write <strong>Alt+PgDn</strong> or <strong>Alt+PageDown</strong>, <strong>Ctrl+Esc</strong>
 or <strong>Ctrl+Escape</strong>, <strong>Bksp</strong> or <strong>Backspace</strong>, <strong>ArrowUp</strong> or <strong>Up</strong> — Mutation
 takes either, in any box on the page, and saves the full name. The one word to
@@ -412,7 +414,11 @@ hotkey</strong> note appears under both rows, and is read out the moment it turn
 you are editing. Give one of them a different combination, otherwise only one of the
 two will ever fire.
 Mutation compares the keys, not the spelling, so writing one as
-<strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught.</li>
+<strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught.
+The shortcuts at the top of the page and the router mappings at the bottom are
+checked against each other, not just each list against itself. Give <strong>Speak
+clipboard</strong> and a router mapping's &quot;From&quot; box the same combination and both rows
+are flagged, so you can see the two ends of the clash while you are still editing.</li>
 <li><strong>The same combination in a &quot;send key after&quot; box and a real shortcut</strong> —
 also flagged, and worth fixing. Windows hands that key straight back to Mutation,
 so the action would set itself off again and again. Putting the same key in <em>both</em>
@@ -477,8 +483,10 @@ down to the <strong>Hotkey Router</strong> section. Press <strong>Add mapping</s
 and &quot;To&quot; boxes, and press <strong>Save</strong>. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
 Two mappings listening for the same &quot;From&quot; combination get a &quot;Duplicate 'From'
-hotkey&quot; message — again comparing the keys rather than the spelling. <strong>Delete</strong>
-removes a mapping.</p>
+hotkey&quot; message — again comparing the keys rather than the spelling. So does a
+mapping whose &quot;From&quot; combination is already used by one of the shortcuts higher up
+the page: the two lists are checked together, because Mutation can only claim a
+combination once. <strong>Delete</strong> removes a mapping.</p>
 <blockquote>
 <p>As the in-app help puts it: map one shortcut to another so a single key press can
 trigger a more complex shortcut. Changes apply when you save settings.</p>

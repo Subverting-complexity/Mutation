@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using CognitiveSupport;
 using Mutation.Ui;
 
@@ -194,5 +196,146 @@ public class HotkeyRouterEntryTests
 
 		Assert.False(entry.IsFromValid);
 		Assert.Equal("CTRL+SHIFT", entry.FromHotkey);
+	}
+
+	// ----- Announcing a rewrite (issue #332) -----
+	//
+	// These two boxes tidied up in silence, exactly as the hotkey editors did before #327:
+	// type "shift+ctrl+a", press Tab, and a sighted user watches it become "CTRL+SHIFT+A"
+	// while a screen-reader user hears nothing and reads back something they did not type.
+
+	[Fact]
+	public void Commit_ThatRewritesTheFromBox_SaysWhatItNowReads()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
+		Assert.Null(entry.ToCommitAnnouncement);
+	}
+
+	[Fact]
+	public void Commit_ThatRewritesTheToBox_SaysWhatItNowReads()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.ToHotkey = "alt+ctrl+y";
+		entry.CommitToHotkey();
+
+		Assert.Equal("Shortcut to send when triggered now reads CTRL+ALT+Y.", entry.ToCommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void Commit_OfTextAlreadyWrittenCanonically_StaysSilent()
+	{
+		// The common case by far. Tabbing across a row that is already tidy has to say
+		// nothing, or the list talks over the user on every mapping they pass.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "CTRL+SHIFT+A";
+		entry.CommitFromHotkey();
+
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void Commit_OfHalfTypedText_LeavesTheRowErrorToSpeak()
+	{
+		// "CTRL+SHIFT" is a rewrite of what was typed, but the row already has something more
+		// important to say about it. Being told the shortcut is unusable outranks being told
+		// how it is now spelled, and the two would otherwise arrive in the same breath.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "ctrl+shift+";
+		entry.CommitFromHotkey();
+
+		Assert.NotNull(entry.BindingErrorMessage);
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void ADuplicateFoundAfterTheCommit_TakesDownTheRewriteNotice()
+	{
+		// Duplicates are recomputed after the commit that caused them, so the notice can
+		// already be standing by the time the clash is known. The clash is the more urgent
+		// news and must not have a tidy-up notice talking over it.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		Assert.NotNull(entry.FromCommitAnnouncement);
+
+		entry.SetDuplicate(true);
+
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void BuildingARowFromSettings_SaysNothing()
+	{
+		// A settings file written before the app canonicalised these values would otherwise
+		// read every tidied row aloud at startup, about an edit nobody made.
+		var entry = new HotkeyRouterEntry(Map("shift+ctrl+a", "alt+ctrl+y"));
+
+		Assert.Equal("CTRL+SHIFT+A", entry.FromHotkey);
+		Assert.Null(entry.FromCommitAnnouncement);
+		Assert.Null(entry.ToCommitAnnouncement);
+	}
+
+	[Fact]
+	public void CommittingSilently_LeavesAStandingNoticeAlone()
+	{
+		// Saving the page re-commits every row. The row the user just left has already said
+		// what it rewrote, and a second commit of the same text must not wipe that.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.CommitSilently();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void ReturningToTheBox_TakesTheNoticeDown()
+	{
+		// Left standing it becomes an ordinary line of text under the row, read out as current
+		// content by anyone going down the page afterwards.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.ClearFromCommitAnnouncement();
+
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void TheSameRewriteTwiceIsAnnouncedTwice()
+	{
+		// Clearing on the way back in is what makes this work: an unchanged message would
+		// otherwise be swallowed as "nothing new to say".
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		var announcements = new List<string?>();
+		entry.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(HotkeyRouterEntry.FromCommitAnnouncement))
+				announcements.Add(entry.FromCommitAnnouncement);
+		};
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		entry.ClearFromCommitAnnouncement();
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.Equal(
+			new[] { "Shortcut to listen for now reads CTRL+SHIFT+A.", null, "Shortcut to listen for now reads CTRL+SHIFT+A." },
+			announcements);
 	}
 }

@@ -88,6 +88,58 @@ internal static class HotkeyConflictFinder
 	}
 
 	/// <summary>
+	/// The same answer for several lists at once: for each list in <paramref name="lists"/>,
+	/// the positions in it holding a shortcut that clashes with another one <em>anywhere</em>
+	/// in the set.
+	/// <para>
+	/// <see cref="HotkeyRegistrationTable"/> is one table for the whole app — the Core, Router
+	/// and Prompt groups exist only to decide what a refresh releases, and share one set of
+	/// live chords. So a core hotkey and a router mapping compete for the same chord, and
+	/// whichever registers second comes back as "The shortcut is already registered." after
+	/// the user saves. Each Settings list used to check only itself, which is how a clash
+	/// across two lists reached that dialog with no badge on either row (issue #321).
+	/// </para>
+	/// <para>
+	/// Every rule <see cref="DuplicateIndexes(IReadOnlyList{ConfiguredHotkey})"/> follows holds
+	/// here unchanged, because this is that same call over one concatenated list, with the
+	/// positions mapped back to the list each came from.
+	/// </para>
+	/// </summary>
+	public static IReadOnlyList<IReadOnlySet<int>> DuplicateIndexesAcross(
+		IReadOnlyList<IReadOnlyList<ConfiguredHotkey>> lists)
+	{
+		if (lists is null) throw new ArgumentNullException(nameof(lists));
+
+		var combined = new List<ConfiguredHotkey>();
+		var offsets = new int[lists.Count];
+		for (int list = 0; list < lists.Count; list++)
+		{
+			if (lists[list] is null)
+				throw new ArgumentNullException(nameof(lists), $"List {list} is null.");
+
+			offsets[list] = combined.Count;
+			combined.AddRange(lists[list]);
+		}
+
+		var duplicates = DuplicateIndexes(combined);
+
+		var perList = new IReadOnlySet<int>[lists.Count];
+		for (int list = 0; list < lists.Count; list++)
+		{
+			var mine = new HashSet<int>();
+			for (int i = 0; i < lists[list].Count; i++)
+			{
+				if (duplicates.Contains(offsets[list] + i))
+					mine.Add(i);
+			}
+
+			perList[list] = mine;
+		}
+
+		return perList;
+	}
+
+	/// <summary>
 	/// Every chord one entry puts on the keyboard: one for a registered shortcut, and one per
 	/// step for a sent sequence. Half-typed text yields nothing, because there is no chord to
 	/// compare.

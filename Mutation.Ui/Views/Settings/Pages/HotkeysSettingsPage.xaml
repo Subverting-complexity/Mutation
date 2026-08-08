@@ -5,6 +5,7 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="using:Mutation.Ui.Views.SettingsUi.Controls"
 	xmlns:local="using:Mutation.Ui"
+	xmlns:views="using:Mutation.Ui.Views"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
@@ -53,6 +54,10 @@
 										<ColumnDefinition Width="2*" />
 										<ColumnDefinition Width="Auto" />
 									</Grid.ColumnDefinitions>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
+									</Grid.RowDefinitions>
 
 									<Grid Grid.Column="0">
 										<Border Background="{x:Bind FromBackgroundBrush, Mode=OneWay}" CornerRadius="4">
@@ -63,6 +68,7 @@
 												HorizontalAlignment="Stretch"
 												AutomationProperties.Name="Shortcut to listen for"
 												ToolTipService.ToolTip="Shortcut to listen for"
+												GotFocus="HotkeyRouterFrom_GotFocus"
 												LostFocus="HotkeyRouterFrom_LostFocus" />
 										</Border>
 										<FontIcon
@@ -84,6 +90,7 @@
 											HorizontalAlignment="Stretch"
 											AutomationProperties.Name="Shortcut to send when triggered"
 											ToolTipService.ToolTip="Shortcut to send when triggered"
+											GotFocus="HotkeyRouterTo_GotFocus"
 											LostFocus="HotkeyRouterTo_LostFocus" />
 									</Border>
 
@@ -94,6 +101,31 @@
 										AutomationProperties.Name="Delete mapping"
 										Click="HotkeyRouterDelete_Click"
 										Tag="{x:Bind}" />
+
+									<!--
+										Says what the box rewrote itself to when leaving it tidied the
+										text up. Collapsed and silent until there is something to say;
+										LiveRegion sets the text and raises the event, the live setting
+										is what marks it worth announcing (issue #332).
+									-->
+									<TextBlock
+										Grid.Row="1"
+										Grid.Column="0"
+										TextWrapping="Wrap"
+										Visibility="Collapsed"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+										AutomationProperties.LiveSetting="Polite"
+										views:LiveRegion.Text="{x:Bind FromCommitAnnouncement, Mode=OneWay}" />
+									<TextBlock
+										Grid.Row="1"
+										Grid.Column="1"
+										TextWrapping="Wrap"
+										Visibility="Collapsed"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+										AutomationProperties.LiveSetting="Polite"
+										views:LiveRegion.Text="{x:Bind ToCommitAnnouncement, Mode=OneWay}" />
 								</Grid>
 							</DataTemplate>
 						</ListView.ItemTemplate>

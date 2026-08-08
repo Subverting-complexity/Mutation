@@ -74,7 +74,8 @@ messages.
 The Settings window follows the same rule. A shortcut box that tidies up what you
 typed says so as you leave it — "Speak clipboard now reads CTRL+SHIFT+A." — and waits
 its turn, so it never talks over a warning about the same box. A box that was already
-written Mutation's way stays quiet. See
+written Mutation's way stays quiet. The "From" and "To" boxes in the shortcut router
+do the same, naming which of the two they mean. See
 [Keyboard shortcuts](keyboard-shortcuts.md) for what the tidying up does.
 
 ## The screenshot overlay talks you through it

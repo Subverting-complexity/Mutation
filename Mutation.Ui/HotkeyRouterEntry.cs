@@ -1,4 +1,5 @@
 ﻿using CognitiveSupport;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
@@ -25,8 +26,20 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         private static readonly Brush SuccessStatusBrush = ResolveThemeBrush("SystemFillColorSuccessBrush") ?? new SolidColorBrush(Color.FromArgb(0xFF, 0x0B, 0x8A, 0x00));
         private static readonly Brush FailureStatusBrush = ResolveThemeBrush("SystemFillColorCriticalBrush") ?? new SolidColorBrush(Color.FromArgb(0xFF, 0xD1, 0x42, 0x42));
 
+        /// <summary>
+        /// What each box is called when a rewrite is read out. These are the names the
+        /// screen reader already gives the two text boxes (<c>AutomationProperties.Name</c>
+        /// in the row template), so the notice names the field the same way the reader just
+        /// did. The visible column headers, "From" and "To", read as the start of a sentence
+        /// instead — "From now reads CTRL+SHIFT+A" is heard as "from now on".
+        /// </summary>
+        private const string FromBoxName = "Shortcut to listen for";
+        private const string ToBoxName = "Shortcut to send when triggered";
+
         private string _fromHotkeyText = string.Empty;
         private string _toHotkeyText = string.Empty;
+        private string? _fromCommitAnnouncement;
+        private string? _toCommitAnnouncement;
         private string? _formattedFrom;
         private string? _formattedTo;
         private bool _isFromValid;
@@ -49,8 +62,11 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 _fromHotkeyText = map.FromHotKey ?? string.Empty;
                 _toHotkeyText = map.ToHotKey ?? string.Empty;
 
-                EvaluateFrom(commit: true);
-                EvaluateTo(commit: true);
+                // Silent: a row being built from what is already on disk has not been edited
+                // by anyone, and a settings file written before the app canonicalised these
+                // values would otherwise read every tidied row aloud at startup.
+                EvaluateFrom(commit: true, announce: false);
+                EvaluateTo(commit: true, announce: false);
         }
 
         internal void ReplaceBackingMap(HotKeyRouterSettings.HotKeyRouterMap map)
@@ -60,8 +76,8 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 _fromHotkeyText = map.FromHotKey ?? string.Empty;
                 _toHotkeyText = map.ToHotKey ?? string.Empty;
 
-                EvaluateFrom(commit: true);
-                EvaluateTo(commit: true);
+                EvaluateFrom(commit: true, announce: false);
+                EvaluateTo(commit: true, announce: false);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -73,7 +89,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 {
                         if (SetField(ref _fromHotkeyText, value ?? string.Empty, nameof(FromHotkey)))
                         {
-                                EvaluateFrom(commit: false);
+                                EvaluateFrom(commit: false, announce: false);
                                 SetBindingResult(HotkeyBindingState.Inactive, null);
                         }
                 }
@@ -86,7 +102,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 {
                         if (SetField(ref _toHotkeyText, value ?? string.Empty, nameof(ToHotkey)))
                         {
-                                EvaluateTo(commit: false);
+                                EvaluateTo(commit: false, announce: false);
                                 SetBindingResult(HotkeyBindingState.Inactive, null);
                         }
                 }
@@ -146,15 +162,49 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
 
         public string? BindingErrorMessage => _combinedError;
 
+        /// <summary>
+        /// What to read out after the "From" box tidied up what was typed into it, or null
+        /// when there is nothing worth interrupting for. Bound to a live region in the row
+        /// template, which is what turns it into something a screen reader says (issue #332).
+        /// </summary>
+        public string? FromCommitAnnouncement => _fromCommitAnnouncement;
+
+        /// <summary>The same, for the "To" box.</summary>
+        public string? ToCommitAnnouncement => _toCommitAnnouncement;
+
         public void CommitFromHotkey()
         {
-                EvaluateFrom(commit: true);
+                EvaluateFrom(commit: true, announce: true);
         }
 
         public void CommitToHotkey()
         {
-                EvaluateTo(commit: true);
+                EvaluateTo(commit: true, announce: true);
         }
+
+        /// <summary>
+        /// Commits without saying anything. Saving the page commits every row on the way out,
+        /// and the rows the user never touched have nothing to report — while the one they
+        /// were still in has already reported it on the way past.
+        /// </summary>
+        internal void CommitSilently()
+        {
+                EvaluateFrom(commit: true, announce: false);
+                EvaluateTo(commit: true, announce: false);
+        }
+
+        /// <summary>
+        /// Takes down the last commit's notice on the way back into a box. It described
+        /// something that happened when the user left, and left standing it becomes a line of
+        /// ordinary-looking text under the row — read out as current content by anyone going
+        /// down the page afterwards. Clearing it also means the same rewrite happening twice
+        /// is announced twice, rather than the second one being swallowed as an unchanged
+        /// message.
+        /// </summary>
+        public void ClearFromCommitAnnouncement() => SetFromCommitAnnouncement(null);
+
+        /// <summary>The same, for the "To" box.</summary>
+        public void ClearToCommitAnnouncement() => SetToCommitAnnouncement(null);
 
         public void SetDuplicate(bool isDuplicate)
         {
@@ -162,6 +212,12 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                         return;
 
                 _isDuplicate = isDuplicate;
+                // The row error outranks a tidy-up notice. Duplicates are recomputed after the
+                // commit that caused them, so the notice can already be standing by the time
+                // the clash is known — take it down rather than let the two talk over each
+                // other about the same box.
+                if (isDuplicate)
+                        SetFromCommitAnnouncement(null);
                 OnPropertyChanged(nameof(IsDuplicate));
                 OnPropertyChanged(nameof(IsFromInputValid));
                 OnPropertyChanged(nameof(IsValid));
@@ -189,8 +245,9 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 UpdateCombinedError();
         }
 
-        private void EvaluateFrom(bool commit)
+        private void EvaluateFrom(bool commit, bool announce)
         {
+                string typed = _fromHotkeyText;
                 _formattedFrom = FormatHotkey(_fromHotkeyText);
                 (_isFromValid, _fromValidationMessage) = ValidateFormattedHotkey(_formattedFrom, true);
 
@@ -216,10 +273,15 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(FromBackgroundBrush));
                 UpdateCombinedError();
+
+                if (announce)
+                        SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                FromBoxName, typed, _fromHotkeyText, FromRowMessage));
         }
 
-        private void EvaluateTo(bool commit)
+        private void EvaluateTo(bool commit, bool announce)
         {
+                string typed = _toHotkeyText;
                 _formattedTo = FormatHotkey(_toHotkeyText);
                 (_isToValid, _toValidationMessage) = ValidateFormattedHotkey(_formattedTo, false);
 
@@ -240,6 +302,39 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(ToBackgroundBrush));
                 UpdateCombinedError();
+
+                if (announce)
+                        SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                ToBoxName, typed, _toHotkeyText, _toValidationMessage));
+        }
+
+        /// <summary>
+        /// What the row has to say about its "From" box, in the order
+        /// <see cref="UpdateCombinedError"/> already arbitrates them. Passed to
+        /// <see cref="HotkeyCommitAnnouncement"/> as the thing a tidy-up notice must lose to:
+        /// being told the shortcut is unusable, or is already taken, matters more than being
+        /// told how it is now spelled.
+        /// </summary>
+        private string? FromRowMessage => IsFromInputValid
+                ? null
+                : _isDuplicate ? DuplicateFromMessage : _fromValidationMessage;
+
+        private void SetFromCommitAnnouncement(string? message)
+        {
+                if (string.Equals(_fromCommitAnnouncement, message, StringComparison.Ordinal))
+                        return;
+
+                _fromCommitAnnouncement = message;
+                OnPropertyChanged(nameof(FromCommitAnnouncement));
+        }
+
+        private void SetToCommitAnnouncement(string? message)
+        {
+                if (string.Equals(_toCommitAnnouncement, message, StringComparison.Ordinal))
+                        return;
+
+                _toCommitAnnouncement = message;
+                OnPropertyChanged(nameof(ToCommitAnnouncement));
         }
 
         private void ApplyFormattedValue(ref string storage, string? formatted, string propertyName)
@@ -277,15 +372,19 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         /// </summary>
         private string? FormatHotkey(string? value) => Hotkey.Canonicalize(value);
 
+        private const string DuplicateFromMessage = "Duplicate 'From' hotkey.";
+
         private void UpdateCombinedError()
         {
-                string? message = null;
+                string? message;
                 if (!IsFromInputValid)
-                        message = _isDuplicate ? "Duplicate 'From' hotkey." : _fromValidationMessage;
+                        message = FromRowMessage;
                 else if (!_isToValid)
                         message = _toValidationMessage;
                 else if (_bindingState == HotkeyBindingState.Failed)
                         message = _bindingError;
+                else
+                        message = null;
 
                 if (!string.Equals(_combinedError, message, StringComparison.Ordinal))
                 {

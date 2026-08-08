@@ -236,6 +236,119 @@ public class HotkeyConflictFinderTests
 		Assert.Throws<ArgumentNullException>(() => DuplicateIndexes(null!));
 	}
 
+	// ----- Across every list on the page (issue #321) -----
+	//
+	// HotkeyRegistrationTable is one table for the whole app: the Core, Router and Prompt
+	// groups exist only to decide what a refresh releases, and share one set of live chords.
+	// Each Settings list used to check only itself, so a core hotkey and a router mapping
+	// could claim the same chord with no badge on either row — and the user found out from
+	// "The shortcut is already registered." after saving.
+
+	[Fact]
+	public void A_shortcut_on_one_list_conflicts_with_the_same_one_on_another()
+	{
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Claimed("CTRL+ALT+G"), Claimed("CTRL+ALT+H")),
+			Configured(Claimed("CTRL+ALT+G"))));
+
+		// Both ends flagged, on whichever list they sit, so the user can find the pair.
+		Assert.Equal(new[] { 0 }, Sorted(across[0]));
+		Assert.Equal(new[] { 0 }, Sorted(across[1]));
+	}
+
+	[Fact]
+	public void Distinct_shortcuts_across_lists_do_not_conflict()
+	{
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Claimed("CTRL+ALT+G")),
+			Configured(Claimed("CTRL+ALT+H"), Claimed("SHIFT+F1"))));
+
+		Assert.Empty(across[0]);
+		Assert.Empty(across[1]);
+	}
+
+	[Fact]
+	public void Modifier_order_does_not_hide_a_clash_across_lists()
+	{
+		// The spellings differ and the chord does not, which is the whole reason this
+		// compares parsed chords rather than text (issue #306).
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Claimed("SHIFT+CTRL+A")),
+			Configured(Claimed("CTRL+SHIFT+A"))));
+
+		Assert.Equal(new[] { 0 }, Sorted(across[0]));
+		Assert.Equal(new[] { 0 }, Sorted(across[1]));
+	}
+
+	[Fact]
+	public void A_sent_key_still_clashes_with_a_registered_one_on_another_list()
+	{
+		// Windows routes the synthesized keystroke back to whoever registered the chord, so
+		// the action fires itself again — the exclusion #320 established survives the widening.
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Sent("CTRL+ALT+G")),
+			Configured(Claimed("CTRL+ALT+G"))));
+
+		Assert.Equal(new[] { 0 }, Sorted(across[0]));
+		Assert.Equal(new[] { 0 }, Sorted(across[1]));
+	}
+
+	[Fact]
+	public void Two_sent_keys_on_different_lists_are_still_not_a_conflict()
+	{
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Sent("^{F5}")),
+			Configured(Sent("^{F5}"))));
+
+		Assert.Empty(across[0]);
+		Assert.Empty(across[1]);
+	}
+
+	[Fact]
+	public void Half_typed_text_never_conflicts_across_lists_either()
+	{
+		// It cannot be registered at all, so it cannot collide — and the row already carries a
+		// validation message without a wrong duplicate badge on top of it.
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Claimed("CTRL+")),
+			Configured(Claimed("CTRL+"), Claimed(null))));
+
+		Assert.Empty(across[0]);
+		Assert.Empty(across[1]);
+	}
+
+	[Fact]
+	public void A_clash_inside_one_list_is_still_found_when_checked_alongside_others()
+	{
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(Claimed("CTRL+ALT+G"), Claimed("CTRL+ALT+H"), Claimed("ctrl+alt+g")),
+			Configured(Claimed("SHIFT+F1"))));
+
+		Assert.Equal(new[] { 0, 2 }, Sorted(across[0]));
+		Assert.Empty(across[1]);
+	}
+
+	[Fact]
+	public void An_empty_list_alongside_a_populated_one_answers_for_both()
+	{
+		var across = DuplicateIndexesAcross(Lists(
+			Configured(),
+			Configured(Claimed("CTRL+ALT+G"), Claimed("CTRL+ALT+G"))));
+
+		Assert.Empty(across[0]);
+		Assert.Equal(new[] { 0, 1 }, Sorted(across[1]));
+	}
+
+	[Fact]
+	public void A_missing_set_of_lists_is_refused_rather_than_treated_as_empty()
+	{
+		Assert.Throws<ArgumentNullException>(() => DuplicateIndexesAcross(null!));
+		Assert.Throws<ArgumentNullException>(() => DuplicateIndexesAcross(Lists(Configured(), null!)));
+	}
+
+	private static IReadOnlyList<IReadOnlyList<ConfiguredHotkey>> Lists(
+		params IReadOnlyList<ConfiguredHotkey>[] lists) => lists;
+
 	private static int[] Sorted(IReadOnlySet<int> indexes)
 	{
 		var sorted = new List<int>(indexes);

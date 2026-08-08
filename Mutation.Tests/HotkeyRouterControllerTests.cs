@@ -240,6 +240,69 @@ public class HotkeyRouterControllerTests
 		Assert.False(first.IsDuplicate);
 	}
 
+	// ----- One check across every list on the page (issue #321) -----
+
+	[Fact]
+	public void RecalculateDuplicates_HandsTheDecisionToTheHostWhenOneIsListening()
+	{
+		// The router shares one registration table with the core hotkeys and the per-prompt
+		// ones, so a route can collide with a row it cannot see. A host that shows both lists
+		// answers for both, and the router's own narrower check stands down.
+		var (controller, _, _, entries, _) = BuildController();
+		var first = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V"));
+		var second = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+B"));
+		entries.Add(first);
+		entries.Add(second);
+
+		int calls = 0;
+		controller.CheckDuplicatesAcrossLists = () => calls++;
+
+		CallRecalculateDuplicates(controller);
+
+		Assert.Equal(1, calls);
+		// Left to the host, which in this test flagged nothing — the point being that the
+		// narrow check did not quietly run as well and flag them itself.
+		Assert.False(first.IsDuplicate);
+		Assert.False(second.IsDuplicate);
+	}
+
+	[Fact]
+	public void ConfiguredFromChords_ReportsEachRowsFromChordAsClaimed()
+	{
+		var (controller, _, _, entries, _) = BuildController();
+		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("shift+ctrl+a", "Ctrl+V")));
+		// Half-typed: nothing to compare, so it is offered as no chord at all rather than as
+		// text that might accidentally match.
+		entries.Add(new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+", "Ctrl+B")));
+
+		var configured = controller.ConfiguredFromChords();
+
+		Assert.Equal(2, configured.Count);
+		Assert.Equal("CTRL+SHIFT+A", configured[0].Text);
+		Assert.True(configured[0].ClaimsTheChord);
+		Assert.Null(configured[1].Text);
+		Assert.True(configured[1].ClaimsTheChord);
+	}
+
+	[Fact]
+	public void ApplyDuplicates_FlagsExactlyTheRowsItIsGiven()
+	{
+		var (controller, _, _, entries, _) = BuildController();
+		var first = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V"));
+		var second = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+X", "Ctrl+B"));
+		entries.Add(first);
+		entries.Add(second);
+
+		controller.ApplyDuplicates(new HashSet<int> { 1 });
+
+		Assert.False(first.IsDuplicate);
+		Assert.True(second.IsDuplicate);
+
+		controller.ApplyDuplicates(new HashSet<int>());
+
+		Assert.False(second.IsDuplicate);
+	}
+
 	// ----- autoPersist=false (settings page editor mode) -----
 
 	[Fact]

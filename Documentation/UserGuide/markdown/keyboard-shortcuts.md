@@ -120,7 +120,9 @@ reader reads it out: "Speak clipboard now reads CTRL+SHIFT+A." You get that only
 when something actually changed, so tabbing down a page of shortcuts that are
 already written Mutation's way stays quiet. The note goes away when you come back
 to that box. The **From** and **To** boxes in the shortcut router further down the
-page still tidy up in silence.
+page do the same thing, and name the box they are talking about: "Shortcut to
+listen for now reads CTRL+SHIFT+A." If the row has something wrong with it, you
+hear that instead — the problem matters more than the spelling.
 
 Short names for keys are fine. Write **Alt+PgDn** or **Alt+PageDown**, **Ctrl+Esc**
 or **Ctrl+Escape**, **Bksp** or **Backspace**, **ArrowUp** or **Up** — Mutation
@@ -153,6 +155,10 @@ readers announce it straight away.
   two will ever fire.
   Mutation compares the keys, not the spelling, so writing one as
   **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught.
+  The shortcuts at the top of the page and the router mappings at the bottom are
+  checked against each other, not just each list against itself. Give **Speak
+  clipboard** and a router mapping's "From" box the same combination and both rows
+  are flagged, so you can see the two ends of the clash while you are still editing.
 - **The same combination in a "send key after" box and a real shortcut** —
   also flagged, and worth fixing. Windows hands that key straight back to Mutation,
   so the action would set itself off again and again. Putting the same key in *both*
@@ -222,8 +228,10 @@ down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
 Two mappings listening for the same "From" combination get a "Duplicate 'From'
-hotkey" message — again comparing the keys rather than the spelling. **Delete**
-removes a mapping.
+hotkey" message — again comparing the keys rather than the spelling. So does a
+mapping whose "From" combination is already used by one of the shortcuts higher up
+the page: the two lists are checked together, because Mutation can only claim a
+combination once. **Delete** removes a mapping.
 
 > As the in-app help puts it: map one shortcut to another so a single key press can
 > trigger a more complex shortcut. Changes apply when you save settings.
