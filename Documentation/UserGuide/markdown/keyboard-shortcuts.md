@@ -106,9 +106,15 @@ To record a new combination:
 Changed your mind mid-recording? Press **Escape** and nothing is captured.
 
 You can also just type into the box if you prefer. Write the keys separated by
-plus signs. Mutation tidies up the capitals for you when you move away from the
-box. The **Clear** button empties a box, which is what you want for the two
-optional "send a key afterwards" fields.
+plus signs. When you move away from the box, Mutation tidies up what you typed: it
+puts the capitals right, and it puts the keys in its own order, always Ctrl, then
+Shift, then Alt, then the Windows key, then the key itself. So if you type
+**Shift+Ctrl+A**, the box shows `CTRL+SHIFT+A` afterwards. It is the same shortcut
+either way — Mutation just writes it one way everywhere, so two boxes holding the
+same combination look the same. That tidied version is what gets saved, so a
+shortcut you once typed into the settings file by hand is rewritten this way the
+next time you edit it on this page. The **Clear** button empties a box, which is
+what you want for the two optional "send a key afterwards" fields.
 
 Your changes are held until you press **Save** at the bottom of Settings. Press
 **Cancel** and nothing you changed is kept.
@@ -139,6 +145,14 @@ readers announce it straight away.
   hotkeys could not be registered", listing each action, its combination, and the
   reason, usually "The shortcut is already registered by another application."
   Go back to the Hotkeys page and pick something else.
+
+The two "send a key afterwards" boxes are a little more relaxed than the rest. As
+well as ordinary combinations like **Ctrl+V**, they accept Windows' own shorthand
+for typing keys — the style that writes Ctrl as `^` and puts named keys in curly
+brackets, so Ctrl+F5 becomes `^{F5}`. You never need it: **Ctrl+F5** does the same
+job and reads better. If you do use it, Mutation keeps exactly what you typed, and
+it is the one thing on this page not checked against your other shortcuts. So if
+you write a key that way, check yourself that no Mutation shortcut already uses it.
 
 ## Choosing combinations that won't clash
 

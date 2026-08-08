@@ -160,4 +160,39 @@ public class HotkeyRouterEntryTests
 
 		Assert.Equal("CTRL+B", map.ToHotKey);
 	}
+
+	// A row used to keep the modifier order the user typed, so "Shift+Ctrl+X" went to the
+	// settings file spelled that way while the rest of the app spelled the same chord
+	// "CTRL+SHIFT+X" (issue #323).
+	[Fact]
+	public void Commit_WritesTheChordInTheAppsOwnModifierOrder()
+	{
+		var map = Map("Ctrl+C", "Ctrl+V");
+		var entry = new HotkeyRouterEntry(map);
+
+		entry.FromHotkey = "Shift+Ctrl+X";
+		entry.CommitFromHotkey();
+		entry.ToHotkey = "alt+ctrl+y";
+		entry.CommitToHotkey();
+
+		Assert.Equal("CTRL+SHIFT+X", map.FromHotKey);
+		Assert.Equal("CTRL+SHIFT+X", entry.FromHotkey);
+		Assert.Equal("CTRL+ALT+Y", map.ToHotKey);
+		Assert.Equal("CTRL+ALT+Y", entry.ToHotkey);
+	}
+
+	[Fact]
+	public void Commit_LeavesHalfTypedTextOnScreenRatherThanErasingIt()
+	{
+		// It does not parse, so there is no canonical spelling to write. The row still has to
+		// show what the user typed — the validation message beside it is what tells them it is
+		// not finished.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "ctrl+shift+";
+		entry.CommitFromHotkey();
+
+		Assert.False(entry.IsFromValid);
+		Assert.Equal("CTRL+SHIFT", entry.FromHotkey);
+	}
 }

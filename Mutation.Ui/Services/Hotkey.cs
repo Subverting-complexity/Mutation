@@ -91,6 +91,38 @@ public class Hotkey : IEquatable<Hotkey>
 	}
 
 	/// <summary>
+	/// The canonical spelling of whatever <paramref name="text"/> says, for the two places that
+	/// write a chord back to settings — the hotkey editor and the hotkey router row.
+	/// <para>
+	/// Both used to split, upper-case and rejoin, which keeps the order the user typed. So
+	/// someone who typed <c>SHIFT+CTRL+A</c> by hand had <c>SHIFT+CTRL+A</c> on disk while the
+	/// rest of the app spelled that chord <c>CTRL+SHIFT+A</c> (issue #323). Text that parses now
+	/// comes back as <see cref="ToString"/> writes it.
+	/// </para>
+	/// <para>
+	/// Half-typed text — <c>CTRL+</c> on the way to something, a key name with a typo — does not
+	/// parse, and falls back to the upper-cased join those two produced before. That keeps what
+	/// the user is still typing on screen instead of erasing it, and leaves the validation
+	/// message to say what is wrong with it.
+	/// </para>
+	/// </summary>
+	public static string Canonicalize(string? text)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+			return string.Empty;
+
+		if (TryParse(text, out Hotkey? parsed))
+			return parsed.ToString();
+
+		var parts = text.Split(TokenSeparators,
+			StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		var upperCased = new string[parts.Length];
+		for (int i = 0; i < parts.Length; i++)
+			upperCased[i] = parts[i].ToUpperInvariant();
+		return string.Join('+', upperCased);
+	}
+
+	/// <summary>
 	/// Parses <paramref name="text"/> as a chord, answering false rather than throwing when
 	/// it is blank or not a chord at all. Callers that check for duplicates run over whatever
 	/// the user has typed so far, where half-finished text is routine and not an error.

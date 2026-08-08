@@ -150,6 +150,11 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			{
 				Header = spec.Label,
 				AllowEmpty = spec.AllowEmpty,
+				// The "Send key after…" rows are typed out rather than registered, so they
+				// accept SendKeys syntax — as they already do on the OCR and Speech pages. This
+				// page used to leave the flag off, so a working `^{F5}` was read out here as an
+				// error on the very page whose job is saying which shortcuts are wrong (#322).
+				AllowSendKeysSyntax = !spec.Registers,
 				Hotkey = spec.Getter(_settings) ?? string.Empty,
 			};
 			var dupBadge = new TextBlock

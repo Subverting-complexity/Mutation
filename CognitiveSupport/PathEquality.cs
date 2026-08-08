@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Security;
 
-namespace Mutation.Ui.Core;
+namespace CognitiveSupport;
 
 /// <summary>
 /// The one answer to "do these two strings name the same file or folder?".
@@ -13,8 +13,14 @@ namespace Mutation.Ui.Core;
 /// normalization. Two spellings of one recording therefore compared equal in one place and
 /// unequal in the other, and nothing in either signature said so (issue #306).
 /// </para>
+/// <para>
+/// It lives here rather than in <c>Mutation.Ui</c> because <see cref="SilenceRemovalLog"/>
+/// needs the same rule and cannot reach up into the UI project. It depends on nothing but
+/// <see cref="System.IO"/>, so the lower project is where a rule both layers follow belongs
+/// (issue #324).
+/// </para>
 /// </summary>
-internal static class PathEquality
+public static class PathEquality
 {
 	/// <summary>
 	/// Whether <paramref name="first"/> and <paramref name="second"/> name the same file or

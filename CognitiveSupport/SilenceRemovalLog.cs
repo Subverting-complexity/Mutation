@@ -37,6 +37,11 @@ public sealed class SilenceRemovalLog
 	/// <summary>
 	/// The points recorded for this file, or an empty list if the file is not the one
 	/// most recently preprocessed.
+	/// <para>
+	/// Matched with <see cref="PathEquality.SamePath"/> rather than a raw string compare, so
+	/// the answer here agrees with the rest of the app when the caller spells the recording
+	/// differently from the way preprocessing recorded it (issue #324).
+	/// </para>
 	/// </summary>
 	public IReadOnlyList<SilenceRemovalPoint> PointsFor(string audioFilePath)
 	{
@@ -45,7 +50,7 @@ public sealed class SilenceRemovalLog
 
 		lock (_gate)
 		{
-			return string.Equals(_path, audioFilePath, StringComparison.OrdinalIgnoreCase)
+			return PathEquality.SamePath(_path, audioFilePath)
 				? _points
 				: Array.Empty<SilenceRemovalPoint>();
 		}

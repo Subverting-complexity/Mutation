@@ -3,7 +3,6 @@ using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
@@ -269,20 +268,14 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 }
         }
 
-        private string? FormatHotkey(string? value)
-        {
-                if (string.IsNullOrWhiteSpace(value))
-                        return string.Empty;
-
-                IEnumerable<string> parts = value
-                        .Split(Hotkey.TokenSeparators, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(part => part.Trim())
-                        .Where(part => !string.IsNullOrWhiteSpace(part))
-                        .Select(part => part.ToUpperInvariant());
-
-                string formatted = string.Join('+', parts);
-                return formatted;
-        }
+        /// <summary>
+        /// The text this row shows and persists. Routed through
+        /// <see cref="Hotkey.Canonicalize"/> so a chord typed as <c>SHIFT+CTRL+A</c> is written
+        /// the way the rest of the app spells it, rather than in the order it was typed
+        /// (issue #323). Text that is still half-typed comes back upper-cased and otherwise
+        /// untouched, which is what <see cref="ValidateFormattedHotkey"/> then complains about.
+        /// </summary>
+        private string? FormatHotkey(string? value) => Hotkey.Canonicalize(value);
 
         private void UpdateCombinedError()
         {

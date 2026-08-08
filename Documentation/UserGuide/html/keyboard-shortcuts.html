@@ -372,9 +372,15 @@ key before it decides you are finished.</li>
 </ol>
 <p>Changed your mind mid-recording? Press <strong>Escape</strong> and nothing is captured.</p>
 <p>You can also just type into the box if you prefer. Write the keys separated by
-plus signs. Mutation tidies up the capitals for you when you move away from the
-box. The <strong>Clear</strong> button empties a box, which is what you want for the two
-optional &quot;send a key afterwards&quot; fields.</p>
+plus signs. When you move away from the box, Mutation tidies up what you typed: it
+puts the capitals right, and it puts the keys in its own order, always Ctrl, then
+Shift, then Alt, then the Windows key, then the key itself. So if you type
+<strong>Shift+Ctrl+A</strong>, the box shows <code>CTRL+SHIFT+A</code> afterwards. It is the same shortcut
+either way — Mutation just writes it one way everywhere, so two boxes holding the
+same combination look the same. That tidied version is what gets saved, so a
+shortcut you once typed into the settings file by hand is rewritten this way the
+next time you edit it on this page. The <strong>Clear</strong> button empties a box, which is
+what you want for the two optional &quot;send a key afterwards&quot; fields.</p>
 <p>Your changes are held until you press <strong>Save</strong> at the bottom of Settings. Press
 <strong>Cancel</strong> and nothing you changed is kept.</p>
 <h2 id="when-a-combination-is-taken-or-not-allowed">When a combination is taken or not allowed</h2>
@@ -403,6 +409,13 @@ hotkeys could not be registered&quot;, listing each action, its combination, and
 reason, usually &quot;The shortcut is already registered by another application.&quot;
 Go back to the Hotkeys page and pick something else.</li>
 </ul>
+<p>The two &quot;send a key afterwards&quot; boxes are a little more relaxed than the rest. As
+well as ordinary combinations like <strong>Ctrl+V</strong>, they accept Windows' own shorthand
+for typing keys — the style that writes Ctrl as <code>^</code> and puts named keys in curly
+brackets, so Ctrl+F5 becomes <code>^{F5}</code>. You never need it: <strong>Ctrl+F5</strong> does the same
+job and reads better. If you do use it, Mutation keeps exactly what you typed, and
+it is the one thing on this page not checked against your other shortcuts. So if
+you write a key that way, check yourself that no Mutation shortcut already uses it.</p>
 <h2 id="choosing-combinations-that-wont-clash">Choosing combinations that won't clash</h2>
 <ol>
 <li><strong>Use three modifiers.</strong> Combinations like <strong>Ctrl+Shift+Alt+Q</strong> are almost never
