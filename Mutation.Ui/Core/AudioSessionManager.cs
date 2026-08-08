@@ -86,6 +86,26 @@ public class AudioSessionManager : IDisposable
     /// </summary>
     public bool IsProcessingWithLlm => _llmOperation.Running;
 
+    /// <summary>
+    /// Whether the next dictation press would open the microphone, rather than stop or
+    /// cancel something already in flight.
+    ///
+    /// <para>
+    /// Answered by <see cref="DictationPressPlanner"/> — the same decision
+    /// <see cref="StartStopRecordingAsync"/> makes from the same five facts — so the
+    /// caller that has to hold a *start* until the microphone is ready cannot drift out
+    /// of step with what the press actually does (issue #312). Getting that wrong the
+    /// other way would be worse than the bug: a stop delayed behind a device that will
+    /// not open is a recording the user cannot end.
+    /// </para>
+    /// </summary>
+    public bool NextPressStartsRecording => DictationPressPlanner.For(
+        isTranscribing: IsTranscribing,
+        transcriptionCancelRequested: _speechManager.TranscriptionCancelRequested,
+        isProcessingWithLlm: IsProcessingWithLlm,
+        llmCancelRequested: _llmOperation.CancelRequested,
+        isRecording: IsRecording) == DictationPressAction.StartRecording;
+
     // The recorder's own view of what it is doing. Used only where a failure has left
     // the session in a state this class cannot name from where it stands — everywhere
     // else the raising code states the activity it is entering, so a change that is

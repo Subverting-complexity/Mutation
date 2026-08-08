@@ -344,6 +344,144 @@ public class MicrophoneSwitchCoordinatorTests
 		Assert.Equal(new[] { "mic-a", "mic-b" }, selected);
 	}
 
+	// The wait a dictation start parks on (issue #312). Nothing is running, so there is
+	// nothing to wait for and the recorder must not be held up for even one dispatch.
+	[Fact]
+	public void WaitForIdleAsync_WhenNothingIsRunning_IsAlreadyComplete()
+	{
+		var coordinator = Create();
+
+		Assert.True(coordinator.WaitForIdleAsync().IsCompleted);
+	}
+
+	// The point of the whole thing: the wait must not release until the device work has
+	// actually finished, because that is when MicrophoneDeviceIndex finally moves.
+	[Fact]
+	public async Task WaitForIdleAsync_DoesNotCompleteUntilTheSwitchHasLanded()
+	{
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var restarted = false;
+		var coordinator = Create(
+			selectDevice: _ => { started.Set(); release.Wait(); return true; },
+			restartCapture: () => restarted = true);
+
+		var switching = coordinator.SwitchAsync("mic-a");
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the switch did not start");
+
+		var idle = coordinator.WaitForIdleAsync();
+		Assert.False(idle.IsCompleted);
+
+		release.Set();
+		await switching;
+		await idle.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.True(restarted);
+		Assert.False(coordinator.IsSwitching);
+	}
+
+	// A request superseded mid-flight completes with null the moment the newer one
+	// arrives, long before any device is open. Waiting on that task would let a recording
+	// start into a switch that is still running — hence a separate idle signal, which
+	// must cover the newest request and not the one that was dropped.
+	[Fact]
+	public async Task WaitForIdleAsync_CoversARequestQueuedBehindTheRunningOne()
+	{
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var selected = new ConcurrentQueue<string>();
+		var coordinator = Create(
+			selectDevice: id =>
+			{
+				selected.Enqueue(id);
+				if (id == "mic-a")
+				{
+					started.Set();
+					release.Wait();
+				}
+				return true;
+			});
+
+		var first = coordinator.SwitchAsync("mic-a");
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the first switch did not start");
+
+		var second = coordinator.SwitchAsync("mic-b");
+		var idle = coordinator.WaitForIdleAsync();
+
+		release.Set();
+		Assert.Null(await first);
+		await second;
+		await idle.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.Equal(new[] { "mic-a", "mic-b" }, selected);
+	}
+
+	// Every waiter is waiting for the same thing, and a second one must not be handed a
+	// source nothing will ever complete.
+	[Fact]
+	public async Task WaitForIdleAsync_ReleasesEveryWaiter()
+	{
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var coordinator = Create(selectDevice: _ => { started.Set(); release.Wait(); return true; });
+
+		var switching = coordinator.SwitchAsync("mic-a");
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the switch did not start");
+
+		var first = coordinator.WaitForIdleAsync();
+		var second = coordinator.WaitForIdleAsync();
+
+		release.Set();
+		await switching;
+		await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+	}
+
+	// A wait that survived a failed switch would be a dictation hotkey parked forever on
+	// a device that already gave up.
+	[Fact]
+	public async Task WaitForIdleAsync_CompletesWhenTheSwitchFails()
+	{
+		var coordinator = Create(restartCapture: () => throw new InvalidOperationException("wedged"));
+
+		var result = await coordinator.SwitchAsync("mic-a");
+
+		Assert.Equal(MicrophoneSwitchOutcome.Failed, result!.Value.Outcome);
+		await coordinator.WaitForIdleAsync().WaitAsync(TimeSpan.FromSeconds(5));
+	}
+
+	// A second switch after the first has settled has to re-arm the signal: the source is
+	// consumed when the worker goes idle, and a stale completed one would let a start
+	// straight through the middle of the new switch.
+	[Fact]
+	public async Task WaitForIdleAsync_ReArmsForTheNextSwitch()
+	{
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var coordinator = Create(
+			selectDevice: id =>
+			{
+				if (id == "mic-b")
+				{
+					started.Set();
+					release.Wait();
+				}
+				return true;
+			});
+
+		await coordinator.SwitchAsync("mic-a");
+		AssertEventually(() => coordinator.WaitForIdleAsync().IsCompleted, "the first switch did not settle");
+
+		var second = coordinator.SwitchAsync("mic-b");
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the second switch did not start");
+
+		var idle = coordinator.WaitForIdleAsync();
+		Assert.False(idle.IsCompleted);
+
+		release.Set();
+		await second;
+		await idle.WaitAsync(TimeSpan.FromSeconds(5));
+	}
+
 	// The worker completes an awaiter before it records that it has gone idle, so a
 	// resumed test can observe IsSwitching either way for an instant. Polled rather
 	// than asserted outright, so a loaded machine cannot turn that into a failure.

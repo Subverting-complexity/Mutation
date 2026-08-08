@@ -133,6 +133,24 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Set as soon as the window starts closing, so async continuations that resume
 	// afterwards do not touch torn-down controls.
 	private bool _isClosing;
+	// Completes when the audio stack has been enumerated and the microphone combo has
+	// been filled in from it — or when that failed and the user has been told. Never
+	// faults: AdoptMicrophonesWhenReadyAsync reports its own trouble, and a waiter on the
+	// dictation path must not be handed an exception instead of an answer.
+	private readonly Task _audioDevicesReady;
+	// True while a dictation start is parked waiting for the microphone to settle.
+	// Nothing else disables the shortcut for that stretch — the session is neither
+	// recording nor transcribing yet — so without this a second press would queue a
+	// second start and the two would resume together (issue #312). UI thread only.
+	private bool _dictationStartWaiting;
+	// How long a dictation start waits for the microphone before giving up. A winmm call
+	// already inside a wedged driver cannot be cancelled, so an unbounded wait would
+	// leave every later press queued behind one that never completes — a hotkey that is
+	// silently dead for the rest of the session.
+	private static readonly TimeSpan MicrophoneReadyTimeout = TimeSpan.FromSeconds(8);
+	private const string DetectingMicrophonesPlaceholder = "Finding microphones...";
+	private const string SelectMicrophonePlaceholder = "Select a microphone";
+	private const string NoMicrophonesPlaceholder = "No microphones available";
 	private const string DefaultVoiceLabel = "(System default)";
 
 	private static readonly IReadOnlyDictionary<string, string> AudioMimeTypeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -256,31 +274,24 @@ public sealed partial class MainWindow : Window, IDisposable
 		_statusDismissTimer.Tick += StatusDismissTimer_Tick;
 		StatusInfoBar.CloseButtonClick += StatusInfoBar_CloseButtonClick;
 
-		_audioDeviceManager.EnsureDefaultMicrophoneSelected();
-
 		UpdateMicrophoneToggleVisuals();
 		UpdateSpeechButtonVisuals("Record", RecordGlyph);
 		// The combo binds immutable descriptions, not live MMDevice wrappers: the device
 		// list is re-enumerated on every hot-plug and on the mute and level retry paths,
 		// and the superseded wrappers are disposed — so live devices held here go stale
 		// and even the display binding ends up reading a dead COM proxy (issue #264).
-		var micList = _audioDeviceManager.CaptureDeviceInfos;
-		CmbMicrophone.ItemsSource = micList;
+		//
+		// Bound empty here and filled in when the audio stack answers. The control itself
+		// is in the tree, enabled and focusable, from the moment the window opens — what
+		// used to hold the window back was the enumeration behind it, not the combo
+		// (issue #308). Its placeholder says so, so a screen reader landing on it before
+		// the devices arrive gets an explanation rather than an empty list.
+		CmbMicrophone.ItemsSource = Array.Empty<Mutation.Ui.Core.CaptureDeviceInfo>();
 		CmbMicrophone.DisplayMemberPath = nameof(Mutation.Ui.Core.CaptureDeviceInfo.FriendlyName);
+		CmbMicrophone.PlaceholderText = DetectingMicrophonesPlaceholder;
+		AutomationProperties.SetHelpText(CmbMicrophone, DetectingMicrophonesPlaceholder);
 
-		RestorePersistedMicrophoneSelection(micList);
 		_audioDeviceManager.CaptureDeviceListChanged += AudioDeviceManager_CaptureDeviceListChanged;
-
-		// Skipped when restoring the persisted choice queued a switch: that switch
-		// starts capture on the device the user actually chose, and opening one here
-		// first would briefly run the OS default instead — an activity light on a
-		// microphone they are not using, and an error message naming it if it will not
-		// open. When the persisted choice is already the default there is no switch to
-		// wait for, and this is what gets the waveform going.
-		if (_requestedMicrophoneId is null)
-			_microphoneVisualization.StartCapture();
-		else
-			_startupCapturePending = true;
 
 		CmbSpeechService.ItemsSource = _speechServices;
 		CmbSpeechService.DisplayMemberPath = nameof(ISpeechToTextService.ServiceName);
@@ -325,19 +336,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		// screen reader says as the window opens.
 		_announceThirdPartyExplanation = true;
 
-		// After initializing and restoring the active microphone, play a sound
-		// representing the current state (mute/unmute) to reflect actual status.
-		if (_audioDeviceManager.SelectedMicrophone is not null)
-			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
-
 		InitializeTextToSpeechControls();
 		InitializePlaybackSpeedControl();
-		// Fire and forget: the probe it performs is a COM read of a device that may be
-		// slow, so it runs off the UI thread and the controls settle a moment later.
-		// The synchronous part — disabling the controls and claiming the initialization
-		// generation — has already run by the time this returns.
-		InitializeMicrophoneLevelControls();
 		InitializeHotkeyVisuals();
+
+		// Everything that has to ask the audio hardware a question — the enumeration, the
+		// OS default, the winmm index, the mute state, and the capture handle — happens
+		// from here, off the UI thread, and lands back on it when it answers (issue #308).
+		// Kept as a task rather than fired and forgotten: a dictation press that arrives
+		// while it is still running waits on it, so the recorder cannot open device
+		// index -1 (issue #312).
+		_audioDevicesReady = AdoptMicrophonesWhenReadyAsync();
 
 		_closeSequence = new Mutation.Ui.Core.ApplicationCloseSequence(
 			PersistClosingState,
@@ -619,6 +628,136 @@ public sealed partial class MainWindow : Window, IDisposable
 		}
 	}
 
+	/// <summary>
+	/// Waits for the audio stack to answer, then fills in the microphone combo, restores
+	/// the persisted choice, opens capture, and seeds the mute beep and the level
+	/// controls — everything the constructor used to do inline, on the UI thread, behind
+	/// COM and winmm calls that can take seconds on a machine with a microphone that is
+	/// slow to enumerate (issue #308).
+	/// </summary>
+	/// <remarks>
+	/// The order below is the constructor's old order, kept deliberately. The persisted
+	/// choice is restored before the beep so the beep describes the device the user is
+	/// actually on, and the level controls are probed last so their generation counter is
+	/// claimed after any switch the restore queued.
+	///
+	/// Never throws — not just around the await, but over the whole body. It is the task
+	/// the dictation path waits on, and that path only ever reads
+	/// <see cref="Task.IsCompleted"/>: a fault here would be observed by nobody, leaving
+	/// no log, no message, and a half-built microphone card.
+	/// </remarks>
+	private async Task AdoptMicrophonesWhenReadyAsync()
+	{
+		try
+		{
+			await _audioDeviceManager.InitializeAsync();
+
+			// The window closed while the audio stack was waking up.
+			if (_isClosing)
+				return;
+
+			AdoptMicrophones();
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError("Setting up the audio devices failed", ex);
+			if (_isClosing)
+				return;
+
+			SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
+			ShowStatus("Microphone",
+				"Could not read the microphones on this computer. Reconnect your microphone and restart Mutation.",
+				InfoBarSeverity.Error);
+		}
+		finally
+		{
+			// Run on every path, including the ones that found no device. It is the only
+			// thing that sets _micLevelInitialized, and the microphone-selection handler
+			// re-probes the level controls only when that flag is set — so skipping it
+			// here left the level slider and the pin switch enabled, announced, and
+			// permanently inert for a user who started Mutation with their microphone
+			// unplugged and then plugged it in.
+			if (!_isClosing)
+				InitializeMicrophoneLevelControls();
+		}
+	}
+
+	// The UI-thread half of startup, once the devices have answered. Split out so the
+	// method above is a plain try/catch/finally over it.
+	private void AdoptMicrophones()
+	{
+		var micList = _audioDeviceManager.CaptureDeviceInfos;
+
+		// Suppressed: filling an empty combo raises SelectionChanged, and the selection
+		// that matters is the one RestorePersistedMicrophoneSelection makes just below.
+		bool wasSuppressed = _suppressMicrophoneSelection;
+		_suppressMicrophoneSelection = true;
+		try
+		{
+			CmbMicrophone.ItemsSource = micList;
+		}
+		finally
+		{
+			_suppressMicrophoneSelection = wasSuppressed;
+		}
+
+		// The mute glyph and its label were built from an unread state while the devices
+		// were still being enumerated; now there is a real one behind them. Ahead of the
+		// empty-list return, because "no microphones" is a real state for them to show
+		// too.
+		UpdateMicrophoneToggleVisuals();
+
+		if (micList.Count == 0)
+		{
+			SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
+			ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
+			return;
+		}
+
+		SetMicrophonePlaceholder(SelectMicrophonePlaceholder);
+
+		// Assigned outside the suppression on purpose: the selection handler is what
+		// resolves the device over winmm, opens capture on it, and re-probes the level
+		// controls, all on the switch worker.
+		RestorePersistedMicrophoneSelection(micList);
+
+		// Skipped when restoring the persisted choice queued a switch: that switch starts
+		// capture on the device the user actually chose, and opening one here first would
+		// briefly run the OS default instead — an activity light on a microphone they are
+		// not using, and an error message naming it if it will not open. When the
+		// persisted choice is already the default there is no switch to wait for, and
+		// this is what gets the waveform going. Queued on the switch worker rather than
+		// called inline, because waveInOpen is the same kind of blocking call as the rest.
+		if (_requestedMicrophoneId is null)
+			_ = _microphoneSwitch.RestartCaptureAsync();
+		else
+			_startupCapturePending = true;
+
+		// Play a sound representing the current mute state, as the constructor used to
+		// once the active microphone had been restored. Mute is an aggregate across every
+		// capture device in this app, so this answers "are you live?" rather than naming
+		// one endpoint — and it is seeded from the adopted device, not from whichever
+		// endpoint happened to enumerate first.
+		if (_audioDeviceManager.SelectedMicrophone is not null)
+			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
+
+		// The combo changed under the user after the window was already up, so say what
+		// they ended up on rather than letting it happen in silence. The screen reader
+		// has read an empty combo by this point on a slow machine, and on a fast one this
+		// is simply the app naming the microphone it opened.
+		if (CmbMicrophone.SelectedItem is Mutation.Ui.Core.CaptureDeviceInfo adopted)
+			ShowStatus("Microphone", $"Using {adopted.FriendlyName}.", InfoBarSeverity.Informational);
+	}
+
+	// The placeholder is what a screen reader reads on a combo with nothing selected, and
+	// the help text is what it reads as the control's description. They are set together
+	// so a branch cannot leave one of them describing a state the app has left.
+	private void SetMicrophonePlaceholder(string placeholder)
+	{
+		CmbMicrophone.PlaceholderText = placeholder;
+		AutomationProperties.SetHelpText(CmbMicrophone, placeholder);
+	}
+
 	private void RestorePersistedMicrophoneSelection(IReadOnlyList<Mutation.Ui.Core.CaptureDeviceInfo> micList)
 	{
 		var match = FindPersistedMicrophone(micList);
@@ -695,6 +834,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionReplaced:
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionAdopted:
+				// A device is about to be selected again, so undo the empty-list wording.
+				SetMicrophonePlaceholder(SelectMicrophonePlaceholder);
+
 				// Announced before the assignment: selecting runs the handler, which
 				// reports its own failure if the device turns out to be unusable, and
 				// that more specific message should be the one left standing.
@@ -715,6 +857,10 @@ public sealed partial class MainWindow : Window, IDisposable
 				// switch that may still be in flight.
 				_requestedMicrophoneId = null;
 				_ = _microphoneSwitch.ReleaseAsync();
+				// The combo is empty, so its placeholder is what a screen reader landing
+				// on it will read. "Select a microphone" would be an instruction the user
+				// cannot follow.
+				SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
 				ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
 				break;
 		}
@@ -1309,6 +1455,13 @@ public sealed partial class MainWindow : Window, IDisposable
 				return;
             }
             
+			// Only a start waits. Asked of the session, through the same planner the
+			// recorder itself uses, because a stop must never be held up by a device that
+			// is slow to open: the recording is already running on a device that opened
+			// fine, and the user has finished speaking.
+			if (_audioSessionManager.NextPressStartsRecording && !await WaitForMicrophoneAsync())
+				return;
+
             LlmSettings.LlmPrompt? autoRunPrompt = _promptLibrary?.GetAutoRunPrompt();
             await _audioSessionManager.StartStopRecordingAsync(_activeSpeechService, useLlmProcessing, GetActivePrompt(), autoRunPrompt, _shutdownCts.Token);
 		}
@@ -1317,6 +1470,152 @@ public sealed partial class MainWindow : Window, IDisposable
 			ShowStatus("Speech to Text", ex.Message, InfoBarSeverity.Error);
 			await ShowErrorDialog("Speech to Text Error", ex);
 		}
+	}
+
+	/// <summary>
+	/// Holds a dictation start until the microphone the user last chose is the one the
+	/// recorder will open. Returns false when the caller must not go on to start.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Since #267 the microphone switch runs on a background worker, so
+	/// <c>MicrophoneDeviceIndex</c> does not move until the switch lands. Arrow onto a
+	/// Bluetooth headset, hear the combo announce it, press the dictation hotkey while it
+	/// is still opening, and the session recorded from the previous microphone — with
+	/// nothing in the UI to contradict what had just been announced (issue #312). Before
+	/// #267 the frozen message pump held the press back; the freeze was the bug, but it
+	/// was also what made this ordering safe.
+	/// </para>
+	/// <para>
+	/// Three things make the wait safe to have on the dictation path. It is re-entrant-
+	/// guarded, so a second press cannot queue a second start behind the first. It is
+	/// bounded, because a wedged device is a hang rather than an exception and would
+	/// otherwise leave the shortcut permanently dead and silent. And it is audible from
+	/// the first beat, so the press never reads as one that did not register.
+	/// </para>
+	/// </remarks>
+	private async Task<bool> WaitForMicrophoneAsync()
+	{
+		// Checked before the settle test, not after. Between the switch landing and the
+		// parked press's continuation being dispatched, the microphone reads as settled
+		// while a start is still pending — and a second press taken as a fresh start
+		// there is the double entry this guard exists to stop.
+		//
+		// A second press is answered rather than ignored, and never queued: two waits
+		// resume together and either start two recordings or instantly stop one that has
+		// barely begun. No second beep — the first press already gave the audible
+		// acknowledgement, and nothing has changed since.
+		if (_dictationStartWaiting)
+		{
+			ShowStatus("Speech to Text",
+				"Still waiting for the microphone. Recording will start as soon as it is ready.",
+				InfoBarSeverity.Informational);
+			return false;
+		}
+
+		if (!MicrophoneIsSettling())
+			return true;
+
+		_dictationStartWaiting = true;
+		UpdateRecordingActionAvailability();
+		try
+		{
+			// Within a beat of the press, whatever the device is doing. The beep is the
+			// half that carries when Mutation is in the background and the shortcut was
+			// pressed from another app, where a status message is never read out.
+			BeepPlayer.Play(BeepType.Waiting);
+			ShowStatus("Speech to Text",
+				"Waiting for the microphone to be ready — recording will start in a moment.",
+				InfoBarSeverity.Informational);
+
+			if (!await MicrophoneSettledAsync(MicrophoneReadyTimeout))
+			{
+				if (_isClosing)
+					return false;
+
+				return FallBackToTheLiveMicrophone();
+			}
+		}
+		finally
+		{
+			_dictationStartWaiting = false;
+			if (!_isClosing)
+				UpdateRecordingActionAvailability();
+		}
+
+		// The window closed while the device was opening; teardown would dispose the
+		// recording as fast as it started.
+		return !_isClosing;
+	}
+
+	/// <summary>
+	/// What a dictation start does once the wait has run out of budget. Returns whether
+	/// the caller should still go on to start.
+	/// </summary>
+	/// <remarks>
+	/// Refusing outright was the obvious answer and it is the wrong one. A winmm call
+	/// wedged inside a driver never returns, so the switch worker never goes idle and the
+	/// microphone never stops "settling" — every later press would then cost the full
+	/// budget and refuse, which is the permanently dead hotkey issue #312 set out to
+	/// prevent, reached the long way round. Worse, the obvious remedy would not work
+	/// either: choosing another microphone queues behind the same wedged worker.
+	///
+	/// So when there is a device that is actually open, the recording goes ahead on it and
+	/// the user is told which one, by name — a bounded wait and a plain sentence, rather
+	/// than the silent wrong-microphone recording that was the bug. Only when nothing is
+	/// live at all is there no recording to make.
+	/// </remarks>
+	private bool FallBackToTheLiveMicrophone()
+	{
+		BeepPlayer.Play(BeepType.Failure);
+
+		if (_audioDeviceManager.SelectedMicrophone is not { } live)
+		{
+			ShowStatus("Speech to Text",
+				"The microphone is still not ready, so nothing was recorded. Try again, or choose another microphone.",
+				InfoBarSeverity.Warning);
+			return false;
+		}
+
+		ShowStatus("Speech to Text",
+			$"The microphone you chose is still not ready. Recording from {live.FriendlyName} instead.",
+			InfoBarSeverity.Warning);
+		return true;
+	}
+
+	// Whether the microphone the recorder would open may still be about to change:
+	// startup has not finished adopting a device, or a switch is in flight or queued.
+	private bool MicrophoneIsSettling() =>
+		!_audioDevicesReady.IsCompleted || _microphoneSwitch.IsSwitching;
+
+	// Waits out the settling, giving up once the budget is spent. The loop is what covers
+	// a user who changes their mind mid-wait: a switch that lands only for a newer one to
+	// start means the recording still has to follow the last choice, not the first. The
+	// budget spans the whole loop, so re-arming cannot extend the wait indefinitely.
+	private async Task<bool> MicrophoneSettledAsync(TimeSpan budget)
+	{
+		var spent = System.Diagnostics.Stopwatch.StartNew();
+
+		while (!_isClosing && MicrophoneIsSettling())
+		{
+			TimeSpan remaining = budget - spent.Elapsed;
+			if (remaining <= TimeSpan.Zero)
+				return false;
+
+			var settled = Task.WhenAll(_audioDevicesReady, _microphoneSwitch.WaitForIdleAsync());
+
+			// Linked to the shutdown token so the timer does not outlive the window, and
+			// cancelled the moment the race is decided so a settled microphone does not
+			// leave a timer ticking for the rest of the budget.
+			using var expiry = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
+			var finished = await Task.WhenAny(settled, Task.Delay(remaining, expiry.Token));
+			expiry.Cancel();
+
+			if (finished != settled)
+				return false;
+		}
+
+		return !_isClosing;
 	}
 
 	/// <summary>
@@ -2428,7 +2727,13 @@ public sealed partial class MainWindow : Window, IDisposable
         // Same reason as UpdateSessionNavigationAvailability: Retry and Upload both refuse
         // during the model call, so leaving them enabled offered the user an action that
         // could only answer "finish the current operation first".
-        bool busy = _audioSessionManager.IsRecording
+        //
+        // A dictation start parked waiting for the microphone counts too (issue #312). It
+        // is neither recording nor transcribing yet, but it is committed to becoming a
+        // recording, and offering Retry or Upload in that window invites a second audio
+        // operation to start underneath the one that is already on its way.
+        bool busy = _dictationStartWaiting
+            || _audioSessionManager.IsRecording
             || _audioSessionManager.IsTranscribing
             || _audioSessionManager.IsProcessingWithLlm;
         // Asked of the session rather than the speakers: a long recording spends seconds

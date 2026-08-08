@@ -95,6 +95,30 @@ public class DictationPressPlannerTests
 			For(isTranscribing: true, transcriptionCancelRequested: true));
 	}
 
+	// ----- Which presses may be held for a microphone that is still opening (issue #312).
+
+	// AudioSessionManager.NextPressStartsRecording is this same call, and the dictation
+	// path waits only when it says StartRecording. The rule that matters is the negative
+	// one: a press that ends or cancels something must never be delayed by a device that
+	// is slow to open, or a user with a wedged microphone cannot stop the recording they
+	// are already making.
+	[Theory]
+	[InlineData(true, false, false)]
+	[InlineData(false, true, false)]
+	[InlineData(false, false, true)]
+	public void APressThatEndsSomething_IsNeverAStart_SoItIsNeverHeldForTheMicrophone(
+		bool isRecording,
+		bool isTranscribing,
+		bool isProcessingWithLlm)
+	{
+		Assert.NotEqual(
+			DictationPressAction.StartRecording,
+			For(
+				isTranscribing: isTranscribing,
+				isProcessingWithLlm: isProcessingWithLlm,
+				isRecording: isRecording));
+	}
+
 	[Fact]
 	public void ACancelRequestFlagWithNothingRunning_IsIgnored()
 	{

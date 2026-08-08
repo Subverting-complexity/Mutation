@@ -71,6 +71,11 @@ public sealed class MicrophoneSwitchCoordinator
 	// queued). Guarded by _gate.
 	private bool _workerRunning;
 
+	// Handed to callers of WaitForIdleAsync and completed when the worker goes idle.
+	// Created on demand, so a coordinator nobody waits on allocates nothing. Guarded by
+	// _gate.
+	private TaskCompletionSource<bool>? _idleCompletion;
+
 	/// <param name="selectDevice">Selects the device with the given endpoint ID,
 	/// returning false when no such device exists any more.</param>
 	/// <param name="restartCapture">Points waveform capture at the newly-selected
@@ -99,6 +104,45 @@ public sealed class MicrophoneSwitchCoordinator
 	public bool IsSwitching
 	{
 		get { lock (_gate) return _workerRunning; }
+	}
+
+	/// <summary>
+	/// Completes when no request is in flight or queued — i.e. when the selected device
+	/// and the capture handle have caught up with what the user last asked for.
+	///
+	/// <para>
+	/// This is what a dictation start waits on. <see cref="SwitchAsync"/>'s own task is
+	/// no use there: it belongs to whoever made the request, and a superseded one
+	/// completes with <c>null</c> the moment a newer request arrives rather than when
+	/// the device is actually open (issue #312).
+	/// </para>
+	///
+	/// <para>
+	/// It carries no deadline of its own. A wedged winmm call cannot be cancelled, so a
+	/// device that never answers never completes this — the caller must bound its own
+	/// wait.
+	/// </para>
+	/// </summary>
+	public Task WaitForIdleAsync()
+	{
+		lock (_gate)
+		{
+			if (!_workerRunning)
+				return Task.CompletedTask;
+
+			// One source shared by every waiter: they are all waiting for the same thing.
+			return (_idleCompletion ??= new TaskCompletionSource<bool>(
+				TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+		}
+	}
+
+	// Called wherever _workerRunning is cleared, always with _gate held, and its result
+	// completed outside the lock so no continuation runs under it.
+	private TaskCompletionSource<bool>? TakeIdleCompletion()
+	{
+		var idle = _idleCompletion;
+		_idleCompletion = null;
+		return idle;
 	}
 
 	/// <summary>
@@ -181,15 +225,21 @@ public sealed class MicrophoneSwitchCoordinator
 		catch (Exception ex)
 		{
 			TaskCompletionSource<MicrophoneSwitchResult?>? orphan;
+			TaskCompletionSource<bool>? idle;
 			lock (_gate)
 			{
 				_workerRunning = false;
 				orphan = _pendingCompletion;
 				_pendingDeviceId = null;
 				_pendingCompletion = null;
+				idle = TakeIdleCompletion();
 			}
 
 			orphan?.TrySetResult(null);
+			// Released here too, and not only on the clean exit below: a waiter parked on
+			// a worker that died would otherwise never be woken, which is the permanent
+			// dead hotkey this whole backstop exists to prevent.
+			idle?.TrySetResult(true);
 			ReportError(ex);
 		}
 	}
@@ -210,6 +260,10 @@ public sealed class MicrophoneSwitchCoordinator
 				if (_pendingCompletion is null)
 				{
 					_workerRunning = false;
+					var idle = TakeIdleCompletion();
+					// Completed asynchronously (the source is built that way), so this
+					// does not run a continuation under _gate.
+					idle?.TrySetResult(true);
 					return;
 				}
 

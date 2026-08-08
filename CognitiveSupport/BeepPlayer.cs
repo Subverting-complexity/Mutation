@@ -2,7 +2,7 @@
 
 namespace CognitiveSupport;
 
-public enum BeepType { Start, Success, Failure, End, Mute, Unmute }
+public enum BeepType { Start, Success, Failure, End, Mute, Unmute, Waiting }
 
 public static class BeepPlayer
 {
@@ -18,6 +18,12 @@ public static class BeepPlayer
 	public const int DefaultMuteDuration = 200;
 	public const int DefaultUnmuteFrequency = 1300;
 	public const int DefaultUnmuteDuration = 50;
+	// Two low, slow tones — deliberately nothing like the single bright Start beep, so a
+	// hotkey press that is waiting on the microphone cannot be mistaken for one that has
+	// opened it. Silence was the alternative, and to someone driving the app from another
+	// window by ear, silence reads as a shortcut that did not register (issue #312).
+	// Falling, where Success rises, so the two cannot be confused either.
+	public static readonly (int Frequency, int Duration)[] DefaultWaitingSequence = new[] { (440, 90), (350, 90) };
 
 	// Upper bound on how many times a beep is repeated in one PlayRepeated call. Keeps a
 	// runaway retry count from synthesizing a multi-second WAV the user has to sit through.
@@ -223,6 +229,9 @@ public static class BeepPlayer
 		BeepType.End => _playerEnd,
 		BeepType.Mute => _playerMute,
 		BeepType.Unmute => _playerUnmute,
+		// Waiting has no custom-file slot: the Settings dialog offers a file per beep the
+		// user already knew about, and a null here simply falls through to the synthesized
+		// default rather than going silent.
 		_ => null
 	};
 
@@ -258,6 +267,7 @@ public static class BeepPlayer
 		BeepType.End => new[] { (DefaultEndFrequency, DefaultEndDuration) },
 		BeepType.Mute => new[] { (DefaultMuteFrequency, DefaultMuteDuration) },
 		BeepType.Unmute => new[] { (DefaultUnmuteFrequency, DefaultUnmuteDuration) },
+		BeepType.Waiting => DefaultWaitingSequence,
 		_ => throw new ArgumentOutOfRangeException(nameof(type))
 	};
 
