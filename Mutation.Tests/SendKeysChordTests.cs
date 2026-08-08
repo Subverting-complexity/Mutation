@@ -79,6 +79,35 @@ public class SendKeysChordTests
 		Assert.Equal(expected, hotkey.Key);
 	}
 
+	[Fact]
+	public void EveryLetterAndDigitLandsOnItsOwnKey()
+	{
+		// The reading is arithmetic off VirtualKey.A and VirtualKey.Number0, which is only
+		// sound while those runs stay contiguous. Wrong here means a shortcut quietly sends
+		// a different key rather than failing.
+		for (char c = 'a'; c <= 'z'; c++)
+		{
+			Assert.True(SendKeysChord.TryParse("^" + c, out var hotkey));
+			Assert.Equal(char.ToUpperInvariant(c).ToString(), hotkey.Key.ToString());
+		}
+
+		for (char c = '0'; c <= '9'; c++)
+		{
+			Assert.True(SendKeysChord.TryParse("^" + c, out var hotkey));
+			Assert.Equal("Number" + c, hotkey.Key.ToString());
+		}
+	}
+
+	[Fact]
+	public void EveryFunctionKeyLandsOnItsOwnKey()
+	{
+		for (int n = 1; n <= 24; n++)
+		{
+			Assert.True(SendKeysChord.TryParse($"^{{F{n}}}", out var hotkey));
+			Assert.Equal($"F{n}", hotkey.Key.ToString());
+		}
+	}
+
 	[Theory]
 	[InlineData("")]
 	[InlineData("   ")]
