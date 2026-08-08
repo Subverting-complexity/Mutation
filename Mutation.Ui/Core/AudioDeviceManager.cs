@@ -53,11 +53,12 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// The describable subset of _captureDevices, cached so a UI read is a field read
 	// rather than a projection. Rebuilt with the list it is derived from.
 	private IReadOnlyList<CaptureDeviceInfo> _captureDeviceInfos = Array.Empty<CaptureDeviceInfo>();
-	// False until the first enumeration has published a list. Nothing "changed" when a
-	// device set appears where there was none, and the initial population is the caller's
-	// own job — since startup moved off the UI thread the UI is already subscribed by
-	// then, and raising here would have it adopt the first device out from under the
-	// persisted choice InitializeAsync is about to restore (issue #308).
+	// False until initialization has published its list. Nothing "changed" when a device
+	// set appears where there was none, and that initial population is the caller's own
+	// job — since startup moved off the UI thread the UI is already subscribed by then,
+	// and raising there would have it adopt the first device out from under the persisted
+	// choice startup is about to restore (issue #308). Set by Initialize, not by the
+	// enumeration itself, so a startup that threw still lets a later hot-plug through.
 	private bool _hasEnumerated;
 	private MMDevice? _microphone;
 	private CaptureDeviceInfo? _microphoneInfo;
@@ -116,32 +117,41 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			return _initialization ??= Task.Run(Initialize);
 	}
 
-	/// <summary>
-	/// True once <see cref="InitializeAsync"/> has finished, successfully or not. Until
-	/// then there is no device list, no selection, and no confirmed mute state.
-	/// </summary>
-	public bool IsInitialized => _initialization is { IsCompleted: true };
-
 	private void Initialize()
 	{
-		// Held across the whole run so a mute toggle — which takes this gate on its own
-		// background thread — cannot reach a half-built object, and so the toggle simply
-		// waits for startup instead of needing a "not ready yet" answer of its own.
-		lock (_comGate)
+		try
 		{
-			RefreshCaptureDevices();
+			// Held across the whole run so a mute toggle — which takes this gate on its
+			// own background thread — cannot reach a half-built object.
+			lock (_comGate)
+			{
+				RefreshCaptureDevices();
 
-			// Before the mute read, so the read can prefer the device the user will
-			// actually be on: the startup beep is meant to tell them whether *their*
-			// microphone is live.
-			EnsureDefaultMicrophoneSelected();
+				// Before the mute read, so the read can prefer the device that was just
+				// adopted: the startup beep is meant to say whether the microphone the
+				// user is about to be on is live.
+				EnsureDefaultMicrophoneSelected();
 
-			_muteState = new MuteStateController(this, ReadInitialMuteState());
+				_muteState = new MuteStateController(this, ReadInitialMuteState());
+			}
 		}
+		finally
+		{
+			lock (_sync)
+			{
+				// From here on a re-enumeration that changes the device set is news the UI
+				// has to hear. Set even when the work above threw: a startup that failed
+				// to read the devices is exactly the case where a later hot-plug is the
+				// user's way back, and leaving this false would swallow it.
+				_hasEnumerated = true;
+			}
 
-		// Subscribed only after _muteState exists, so a hot-plug notification that
-		// arrives during startup cannot reach a half-built object.
-		_deviceChangeNotifier.CaptureDevicesChanged += OnCaptureDevicesChanged;
+			// Subscribed last, so a notification cannot reach a half-built object — and in
+			// the finally, so a startup that threw still leaves hot-plug recovery wired.
+			// A notification that arrives while the work above is still running blocks on
+			// _comGate until it finishes, which is the ordering we want anyway.
+			_deviceChangeNotifier.CaptureDevicesChanged += OnCaptureDevicesChanged;
+		}
 	}
 
 	// When a microphone is added or removed at the OS level, re-enumerate so
@@ -214,7 +224,6 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		{
 			superseded = _captureDevices;
 			listChanged = _hasEnumerated && !SameDeviceIds(_captureDeviceInfos, infos);
-			_hasEnumerated = true;
 
 			// The selected microphone is not in the new enumeration — unplugged, disabled,
 			// or otherwise gone. Let the selection go with it. Keeping the stale ID is what
@@ -501,10 +510,26 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	/// which is what makes it safe to hold _comGate across the COM writes here.
 	public MuteToggleResult ToggleMute()
 	{
+		// A toggle pressed while startup is still running waits for it rather than being
+		// turned away with a failure the user did not cause. Waiting on the task rather
+		// than on _comGate alone, because InitializeAsync only queues the work: between
+		// the queue and the worker taking the gate there is a window where the gate is
+		// free and the mute state does not exist yet.
+		//
+		// Blocking is safe and deliberate. This runs on MicrophoneMuteToggleCoordinator's
+		// thread-pool thread, never the UI thread.
+		try
+		{
+			InitializeAsync().GetAwaiter().GetResult();
+		}
+		catch
+		{
+			// Reported below as an unconfirmed toggle: startup already logged the fault,
+			// and what the user needs here is the honest "could not confirm" answer.
+		}
+
 		// Serialize with the device-change handler so a hot-plug refresh
-		// cannot swap the device list out from under an in-flight toggle. Initialize
-		// holds the same gate across building the mute state, so a toggle pressed during
-		// startup simply waits for the devices rather than being turned away.
+		// cannot swap the device list out from under an in-flight toggle.
 		lock (_comGate)
 		{
 			// Only reachable when startup itself threw, which leaves no device list to

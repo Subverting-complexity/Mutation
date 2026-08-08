@@ -66,16 +66,7 @@ This choice does not affect muting. Muting always covers every microphone,
 whichever one is selected. Your choice is remembered the next time you start
 Mutation.
 
-### When Mutation starts
-
-Finding out which microphones a PC has can take a moment — longer if one of them is
-a USB mic that is still waking up, or a Bluetooth headset that is still connecting.
-Mutation does not hold the window shut while it asks. The window opens straight
-away, and the dropdown says "Finding microphones..." until the answer comes back.
-
-When it does, the dropdown fills in, your saved microphone is selected, and a
-message tells you which one you are on: "Using ...". If the PC has no microphones
-at all, you get "No microphones are available." instead.
+### Switching while Mutation is running
 
 Some microphones take a moment to hand over — a USB mic that has just been plugged
 in, or a Bluetooth headset waking up. Mutation waits for it in the background, so
@@ -90,6 +81,22 @@ microphone that quietly hears nothing:
   unplugged between you picking it and Mutation getting to it. Pick another one.
 - "Could not switch to ...", followed by the reason, means the microphone was
   there but would not start. Try it again, or pick another one.
+
+### When Mutation starts
+
+Finding out which microphones a PC has can take a moment — longer if one of them is
+a USB mic that is still waking up, or a Bluetooth headset that is still connecting.
+Mutation does not hold the window shut while it asks. The window opens straight
+away, and the dropdown says "Finding microphones..." until the answer comes back.
+
+When it does, the dropdown fills in, your saved microphone is selected, and a
+message tells you which one you are on: "Using ...". If the PC has no microphones
+at all, you get "No microphones are available." instead.
+
+You can use the rest of the window in the meantime. If you press the dictation
+shortcut before the microphone is ready, Mutation holds your press rather than
+losing it — see
+[When the microphone is not ready yet](dictation.md).
 
 ## The live level display
 

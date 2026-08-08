@@ -641,32 +641,51 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// actually on, and the level controls are probed last so their generation counter is
 	/// claimed after any switch the restore queued.
 	///
-	/// Never throws: it is the task the dictation path waits on, and a waiter must get an
-	/// answer rather than an exception.
+	/// Never throws — not just around the await, but over the whole body. It is the task
+	/// the dictation path waits on, and that path only ever reads
+	/// <see cref="Task.IsCompleted"/>: a fault here would be observed by nobody, leaving
+	/// no log, no message, and a half-built microphone card.
 	/// </remarks>
 	private async Task AdoptMicrophonesWhenReadyAsync()
 	{
 		try
 		{
 			await _audioDeviceManager.InitializeAsync();
+
+			// The window closed while the audio stack was waking up.
+			if (_isClosing)
+				return;
+
+			AdoptMicrophones();
 		}
 		catch (Exception ex)
 		{
 			ErrorLogger.LogError("Setting up the audio devices failed", ex);
-			if (!_isClosing)
-			{
-				CmbMicrophone.PlaceholderText = NoMicrophonesPlaceholder;
-				ShowStatus("Microphone",
-					"Could not read the microphones on this computer. Reconnect your microphone and restart Mutation.",
-					InfoBarSeverity.Error);
-			}
-			return;
+			if (_isClosing)
+				return;
+
+			SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
+			ShowStatus("Microphone",
+				"Could not read the microphones on this computer. Reconnect your microphone and restart Mutation.",
+				InfoBarSeverity.Error);
 		}
+		finally
+		{
+			// Run on every path, including the ones that found no device. It is the only
+			// thing that sets _micLevelInitialized, and the microphone-selection handler
+			// re-probes the level controls only when that flag is set — so skipping it
+			// here left the level slider and the pin switch enabled, announced, and
+			// permanently inert for a user who started Mutation with their microphone
+			// unplugged and then plugged it in.
+			if (!_isClosing)
+				InitializeMicrophoneLevelControls();
+		}
+	}
 
-		// The window closed while the audio stack was waking up.
-		if (_isClosing)
-			return;
-
+	// The UI-thread half of startup, once the devices have answered. Split out so the
+	// method above is a plain try/catch/finally over it.
+	private void AdoptMicrophones()
+	{
 		var micList = _audioDeviceManager.CaptureDeviceInfos;
 
 		// Suppressed: filling an empty combo raises SelectionChanged, and the selection
@@ -682,16 +701,20 @@ public sealed partial class MainWindow : Window, IDisposable
 			_suppressMicrophoneSelection = wasSuppressed;
 		}
 
+		// The mute glyph and its label were built from an unread state while the devices
+		// were still being enumerated; now there is a real one behind them. Ahead of the
+		// empty-list return, because "no microphones" is a real state for them to show
+		// too.
+		UpdateMicrophoneToggleVisuals();
+
 		if (micList.Count == 0)
 		{
-			CmbMicrophone.PlaceholderText = NoMicrophonesPlaceholder;
-			AutomationProperties.SetHelpText(CmbMicrophone, NoMicrophonesPlaceholder);
+			SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
 			ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
 			return;
 		}
 
-		CmbMicrophone.PlaceholderText = SelectMicrophonePlaceholder;
-		AutomationProperties.SetHelpText(CmbMicrophone, SelectMicrophonePlaceholder);
+		SetMicrophonePlaceholder(SelectMicrophonePlaceholder);
 
 		// Assigned outside the suppression on purpose: the selection handler is what
 		// resolves the device over winmm, opens capture on it, and re-probes the level
@@ -710,12 +733,11 @@ public sealed partial class MainWindow : Window, IDisposable
 		else
 			_startupCapturePending = true;
 
-		// The mute glyph and its label were built from an unread state while the devices
-		// were still being enumerated; now there is a real one behind them.
-		UpdateMicrophoneToggleVisuals();
-
 		// Play a sound representing the current mute state, as the constructor used to
-		// once the active microphone had been restored.
+		// once the active microphone had been restored. Mute is an aggregate across every
+		// capture device in this app, so this answers "are you live?" rather than naming
+		// one endpoint — and it is seeded from the adopted device, not from whichever
+		// endpoint happened to enumerate first.
 		if (_audioDeviceManager.SelectedMicrophone is not null)
 			BeepPlayer.Play(_audioDeviceManager.IsMuted ? BeepType.Mute : BeepType.Unmute);
 
@@ -725,12 +747,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		// is simply the app naming the microphone it opened.
 		if (CmbMicrophone.SelectedItem is Mutation.Ui.Core.CaptureDeviceInfo adopted)
 			ShowStatus("Microphone", $"Using {adopted.FriendlyName}.", InfoBarSeverity.Informational);
+	}
 
-		// Fire and forget: the probe it performs is a COM read of a device that may be
-		// slow, so it runs off the UI thread and the controls settle a moment later.
-		// The synchronous part — disabling the controls and claiming the initialization
-		// generation — has already run by the time this returns.
-		InitializeMicrophoneLevelControls();
+	// The placeholder is what a screen reader reads on a combo with nothing selected, and
+	// the help text is what it reads as the control's description. They are set together
+	// so a branch cannot leave one of them describing a state the app has left.
+	private void SetMicrophonePlaceholder(string placeholder)
+	{
+		CmbMicrophone.PlaceholderText = placeholder;
+		AutomationProperties.SetHelpText(CmbMicrophone, placeholder);
 	}
 
 	private void RestorePersistedMicrophoneSelection(IReadOnlyList<Mutation.Ui.Core.CaptureDeviceInfo> micList)
@@ -810,8 +835,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionReplaced:
 			case Mutation.Ui.Core.CaptureDeviceListOutcome.SelectionAdopted:
 				// A device is about to be selected again, so undo the empty-list wording.
-				CmbMicrophone.PlaceholderText = SelectMicrophonePlaceholder;
-				AutomationProperties.SetHelpText(CmbMicrophone, SelectMicrophonePlaceholder);
+				SetMicrophonePlaceholder(SelectMicrophonePlaceholder);
 
 				// Announced before the assignment: selecting runs the handler, which
 				// reports its own failure if the device turns out to be unusable, and
@@ -836,8 +860,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				// The combo is empty, so its placeholder is what a screen reader landing
 				// on it will read. "Select a microphone" would be an instruction the user
 				// cannot follow.
-				CmbMicrophone.PlaceholderText = NoMicrophonesPlaceholder;
-				AutomationProperties.SetHelpText(CmbMicrophone, NoMicrophonesPlaceholder);
+				SetMicrophonePlaceholder(NoMicrophonesPlaceholder);
 				ShowStatus("Microphone", "No microphones are available.", InfoBarSeverity.Warning);
 				break;
 		}
@@ -1473,13 +1496,15 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// </remarks>
 	private async Task<bool> WaitForMicrophoneAsync()
 	{
-		if (!MicrophoneIsSettling())
-			return true;
-
-		// A second press while the first is still parked. Answered rather than ignored, and
-		// never queued: two waits resume together and either start two recordings or
-		// instantly stop one that has barely begun. No second beep — the first press
-		// already gave the audible acknowledgement, and nothing has changed since.
+		// Checked before the settle test, not after. Between the switch landing and the
+		// parked press's continuation being dispatched, the microphone reads as settled
+		// while a start is still pending — and a second press taken as a fresh start
+		// there is the double entry this guard exists to stop.
+		//
+		// A second press is answered rather than ignored, and never queued: two waits
+		// resume together and either start two recordings or instantly stop one that has
+		// barely begun. No second beep — the first press already gave the audible
+		// acknowledgement, and nothing has changed since.
 		if (_dictationStartWaiting)
 		{
 			ShowStatus("Speech to Text",
@@ -1487,6 +1512,9 @@ public sealed partial class MainWindow : Window, IDisposable
 				InfoBarSeverity.Informational);
 			return false;
 		}
+
+		if (!MicrophoneIsSettling())
+			return true;
 
 		_dictationStartWaiting = true;
 		UpdateRecordingActionAvailability();
@@ -1505,11 +1533,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				if (_isClosing)
 					return false;
 
-				BeepPlayer.Play(BeepType.Failure);
-				ShowStatus("Speech to Text",
-					"The microphone is still not ready, so nothing was recorded. Try again, or choose another microphone.",
-					InfoBarSeverity.Warning);
-				return false;
+				return FallBackToTheLiveMicrophone();
 			}
 		}
 		finally
@@ -1522,6 +1546,41 @@ public sealed partial class MainWindow : Window, IDisposable
 		// The window closed while the device was opening; teardown would dispose the
 		// recording as fast as it started.
 		return !_isClosing;
+	}
+
+	/// <summary>
+	/// What a dictation start does once the wait has run out of budget. Returns whether
+	/// the caller should still go on to start.
+	/// </summary>
+	/// <remarks>
+	/// Refusing outright was the obvious answer and it is the wrong one. A winmm call
+	/// wedged inside a driver never returns, so the switch worker never goes idle and the
+	/// microphone never stops "settling" — every later press would then cost the full
+	/// budget and refuse, which is the permanently dead hotkey issue #312 set out to
+	/// prevent, reached the long way round. Worse, the obvious remedy would not work
+	/// either: choosing another microphone queues behind the same wedged worker.
+	///
+	/// So when there is a device that is actually open, the recording goes ahead on it and
+	/// the user is told which one, by name — a bounded wait and a plain sentence, rather
+	/// than the silent wrong-microphone recording that was the bug. Only when nothing is
+	/// live at all is there no recording to make.
+	/// </remarks>
+	private bool FallBackToTheLiveMicrophone()
+	{
+		BeepPlayer.Play(BeepType.Failure);
+
+		if (_audioDeviceManager.SelectedMicrophone is not { } live)
+		{
+			ShowStatus("Speech to Text",
+				"The microphone is still not ready, so nothing was recorded. Try again, or choose another microphone.",
+				InfoBarSeverity.Warning);
+			return false;
+		}
+
+		ShowStatus("Speech to Text",
+			$"The microphone you chose is still not ready. Recording from {live.FriendlyName} instead.",
+			InfoBarSeverity.Warning);
+		return true;
 	}
 
 	// Whether the microphone the recorder would open may still be about to change:

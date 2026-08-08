@@ -384,12 +384,15 @@ headset that never finishes connecting, can leave the question unanswered.</p>
 <ol>
 <li>Give it a few seconds. A USB microphone that has just been plugged in, or a headset
 still pairing, is often simply slow.</li>
-<li>Unplug the microphone, wait a moment, and plug it back in. Mutation notices and says
-&quot;Microphone connected. Now using ...&quot; when it comes back.</li>
-<li>If Mutation says &quot;Could not read the microphones on this computer&quot;, close it,
-reconnect your microphone, and start it again.</li>
-<li>Check the microphone works elsewhere — Windows Settings has a sound page that shows
-a test bar moving when you speak.</li>
+<li>If it is still saying it after that, close Mutation and start it again. While the
+question is unanswered Mutation is not yet watching for microphones being plugged
+in or out, so unplugging and re-plugging will not shake it loose.</li>
+<li>Before restarting, check the microphone works elsewhere — Windows Settings has a
+sound page that shows a test bar moving when you speak. If it does not move there
+either, the problem is the microphone or its driver, not Mutation.</li>
+<li>&quot;Could not read the microphones on this computer&quot; means the question came back with
+an error rather than an answer. Close Mutation, reconnect your microphone, and start
+it again.</li>
 </ol>
 <h3 id="dictation-says-it-is-waiting-for-the-microphone">Dictation says it is waiting for the microphone</h3>
 <p><strong>What's happening.</strong> You pressed the dictation shortcut while Mutation was still
@@ -400,11 +403,17 @@ that falls, and see &quot;Waiting for the microphone to be ready&quot;.</p>
 <ol>
 <li>Wait a beat. Normally the start beep follows within a second or two and recording
 begins as usual.</li>
-<li>If you get the failure beep and &quot;The microphone is still not ready, so nothing was
-recorded&quot;, the device did not open in time. Press the shortcut again to try once
-more.</li>
-<li>If it keeps failing, pick a different microphone on the <strong>Microphone</strong> card. A
-Bluetooth headset that is half-connected is the usual culprit.</li>
+<li>After eight seconds Mutation stops waiting. If it has a working microphone to fall
+back on, it records from that one and tells you which: &quot;The microphone you chose is
+still not ready. Recording from ... instead.&quot; Your words are not lost — just check
+the recording came from a mic you are actually speaking into.</li>
+<li>If instead you get &quot;The microphone is still not ready, so nothing was recorded&quot;,
+there was nothing to fall back on. Press the shortcut again to try once more.</li>
+<li>If it keeps happening, restart Mutation. A microphone whose driver has stopped
+answering holds Mutation's microphone switching until the app is restarted, so
+picking a different one in the dropdown will not clear it. A Bluetooth headset that
+is half-connected is the usual culprit — turn it off, or unpair it, before you start
+Mutation again.</li>
 </ol>
 <h3 id="no-voices-in-the-voice-list-or-the-voice-sounds-wrong">No voices in the voice list, or the voice sounds wrong</h3>
 <p><strong>What's happening.</strong> The voices Mutation offers for reading aloud come from Windows
