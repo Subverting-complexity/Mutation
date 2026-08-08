@@ -160,11 +160,12 @@ internal sealed class HotkeyRouterController
 	{
 		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
 
+		// Silently. This runs after every commit, over every row: the rows the user never
+		// touched have nothing to report, and the one they just left has already reported it —
+		// re-committing that one finds the text canonical, concludes there is nothing to say,
+		// and takes the notice back down before it can be heard (issue #344).
 		foreach (var entry in _entries)
-		{
-			entry.CommitFromHotkey();
-			entry.CommitToHotkey();
-		}
+			entry.CommitSilently();
 
 		var validEntries = _entries
 			.Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)

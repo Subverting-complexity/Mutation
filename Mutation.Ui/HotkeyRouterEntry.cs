@@ -197,6 +197,23 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         }
 
         /// <summary>
+        /// Commits both boxes without saying anything, and without taking down what the last
+        /// commit said.
+        /// <para>
+        /// Every commit is followed by a refresh, and the refresh re-commits every row on the
+        /// page. For the row the user just left, that second commit finds the text already
+        /// canonical, decides it has nothing to report, and clears the notice the first one had
+        /// raised — before the deferred announcement it queued could run. So the notice was
+        /// cancelled on every real path, by the very refresh the commit triggered (issue #344).
+        /// </para>
+        /// </summary>
+        internal void CommitSilently()
+        {
+                EvaluateFrom(commit: true, announce: false);
+                EvaluateTo(commit: true, announce: false);
+        }
+
+        /// <summary>
         /// Takes down the "From" box's last notice on the way back into it. It described
         /// something that happened when the user left, and left standing it becomes a line of
         /// ordinary-looking text under the row — read out as current content by anyone going
@@ -263,12 +280,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 {
                         ApplyFormattedValue(ref _fromHotkeyText, _formattedFrom, nameof(FromHotkey));
 
-                        if (announce)
-                        {
-                                SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
-                                        FromBoxLabel, typedBeforeCommit, _fromHotkeyText, FromErrorMessage));
-                        }
-
                         // Only update underlying map if valid; do NOT clear an existing persisted value here
                         // to avoid wiping settings when a parse hiccup occurs (e.g., at startup before full init).
                         if (_isFromValid)
@@ -288,6 +299,18 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(FromBackgroundBrush));
                 UpdateCombinedError();
+
+                // Last, and after UpdateCombinedError deliberately. The row's error is an
+                // assertive region and this is a polite one; both are raised on the same
+                // dispatcher pass, in the order they were set. Announced first, the polite
+                // notice is cut off mid-sentence by the assertive one behind it — and a clash
+                // is exactly the case where both have something to say. Announced after, the
+                // urgent news goes first and this waits its turn (issue #346).
+                if (commit && announce)
+                {
+                        SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                FromBoxLabel, typedBeforeCommit, _fromHotkeyText, FromErrorMessage));
+                }
         }
 
         /// <param name="announce">See <see cref="EvaluateFrom"/>.</param>
@@ -301,12 +324,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 if (commit)
                 {
                         ApplyFormattedValue(ref _toHotkeyText, _formattedTo, nameof(ToHotkey));
-
-                        if (announce)
-                        {
-                                SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
-                                        ToBoxLabel, typedBeforeCommit, _toHotkeyText, _toValidationMessage));
-                        }
 
                         // Only update underlying map if valid; avoid clearing persisted value on transient invalid state.
                         if (_isToValid)
@@ -322,6 +339,13 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(ToBackgroundBrush));
                 UpdateCombinedError();
+
+                // Last, after UpdateCombinedError — see EvaluateFrom.
+                if (commit && announce)
+                {
+                        SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                ToBoxLabel, typedBeforeCommit, _toHotkeyText, _toValidationMessage));
+                }
         }
 
         /// <summary>

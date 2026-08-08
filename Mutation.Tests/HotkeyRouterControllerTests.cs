@@ -67,6 +67,25 @@ public class HotkeyRouterControllerTests
 			.GetMethod("RecalculateDuplicates", BindingFlags.NonPublic | BindingFlags.Instance)!
 			.Invoke(controller, null);
 
+	[Fact]
+	public void CommittingABoxLeavesItsNoticeStandingThroughTheRefreshThatFollows()
+	{
+		// Every commit is followed by RefreshRegistrations, which calls SyncSettings, which
+		// re-commits every row. The row that just committed is now canonical, so the second
+		// commit finds nothing changed and clears the notice it had already raised — before
+		// the deferred announcement it queued ever runs. That cancels the notice on every
+		// real path, so the boxes announce nothing at all.
+		var (controller, _, _, entries, _) = BuildController();
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V"));
+		entries.Add(entry);
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
+	}
+
 	// ----- SyncSettings -----
 
 	[Fact]
