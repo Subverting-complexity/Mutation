@@ -118,6 +118,11 @@ Stories signal eligibility for pickup via the **Ready** column on the
 project board. (A board with a "Ready" option is required and configured
 below.)
 
+**Ready means available, not unclaimed.** Sessions run concurrently here, so
+picking a story means assigning it to yourself and moving its card to **In
+Progress** before reading any code, and skipping any issue that already has
+an assignee. See "Claim the story first" in `CLAUDE.md`.
+
 ## Agent Gating
 
 | Setting       | Value      |
