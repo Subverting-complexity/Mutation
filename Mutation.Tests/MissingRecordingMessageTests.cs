@@ -6,13 +6,16 @@ using Mutation.Ui.Core;
 namespace Mutation.Tests;
 
 /// <summary>
-/// Covers <see cref="AudioSessionManager.DescribeMissingRecording"/> — what Play says when the
-/// selected recording is no longer on disk.
+/// Covers <see cref="AudioSessionManager.DescribeMissingRecording"/> — the wording Play uses
+/// when the selected recording is no longer on disk. The refresh that follows lands the
+/// selection on a different recording, and Retry transcription would then act on one the user
+/// never chose, so the message has to name it (issue #303).
 /// <para>
-/// The refresh that follows lands the selection on a different recording, and Retry
-/// transcription would then act on one the user never chose. Both halves have to arrive in a
-/// single message: status announcements supersede rather than queue, so saying it in two calls
-/// means the second talks over the first and only one is heard (issue #303).
+/// What these do not cover: that Play makes exactly one announcement. Status announcements
+/// supersede rather than queue, so a second call would talk over the first — but that is a
+/// property of the call site, and <see cref="AudioSessionManager"/> cannot be constructed in a
+/// test without a recorder, a device enumerator and a transcription service (issue #255).
+/// Splitting this message back into two calls would leave every test here green.
 /// </para>
 /// </summary>
 public class MissingRecordingMessageTests

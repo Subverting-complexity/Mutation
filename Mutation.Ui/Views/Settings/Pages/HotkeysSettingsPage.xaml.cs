@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
+using Mutation.Ui.Views;
 using Mutation.Ui.Views.SettingsUi.Controls;
 
 namespace Mutation.Ui.Views.SettingsUi.Pages;
@@ -159,8 +160,9 @@ public sealed partial class HotkeysSettingsPage : UserControl
 				Visibility = Visibility.Collapsed,
 				Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
 			};
-			// Announced the moment it appears, the way the validation message under each box
-			// already is. A warning only a sighted user notices is no warning here.
+			// Announced the moment it appears — LiveMessage does the raising, this only marks
+			// the text as worth announcing. A warning only a sighted user notices is no
+			// warning here.
 			AutomationProperties.SetLiveSetting(dupBadge, AutomationLiveSetting.Assertive);
 
 			Grid editorRow = new() { ColumnSpacing = 8 };
@@ -218,32 +220,8 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates.Contains(i));
 	}
 
-	/// <summary>
-	/// Shows or hides one row's duplicate warning, and says it out loud when it appears.
-	/// <para>
-	/// Three things are needed, and the warning is silent without any one of them: the badge
-	/// carries the live setting, its <c>Text</c> changes rather than only its visibility, and
-	/// the event is raised by hand. WinUI raises nothing of its own when a TextBlock's text
-	/// changes — the live setting says the text is worth announcing, it does not announce it
-	/// (issue #243).
-	/// </para>
-	/// </summary>
-	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate)
-	{
-		string text = isDuplicate ? DuplicateBadgeText : string.Empty;
-		if (badge.Text == text)
-			return;
-
-		badge.Visibility = isDuplicate ? Visibility.Visible : Visibility.Collapsed;
-		badge.Text = text;
-
-		if (!isDuplicate)
-			return;
-
-		AutomationPeer? peer = FrameworkElementAutomationPeer.FromElement(badge)
-			?? FrameworkElementAutomationPeer.CreatePeerForElement(badge);
-		peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
-	}
+	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate) =>
+		LiveMessage.Show(badge, isDuplicate ? DuplicateBadgeText : null);
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
 		_routerController.AddNewMapping();

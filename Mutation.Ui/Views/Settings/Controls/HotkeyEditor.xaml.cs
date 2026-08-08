@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Mutation.Ui.Services;
+using Mutation.Ui.Views;
 using Windows.System;
 
 namespace Mutation.Ui.Views.SettingsUi.Controls;
@@ -194,35 +195,25 @@ public sealed partial class HotkeyEditor : UserControl
 		RecordLabel.Text = "Record";
 	}
 
+	/// <summary>
+	/// Shows what is wrong with the text in the box, or clears the message when it is fine.
+	/// <para>
+	/// Routed through <see cref="LiveMessage"/> so the message is actually announced. It
+	/// carried the live setting and nothing else, which the user guide has been describing as
+	/// "screen readers announce it straight away" — true only with the event raised (issue
+	/// #243).
+	/// </para>
+	/// </summary>
 	private void Validate(string text)
 	{
 		string trimmed = text?.Trim() ?? string.Empty;
 		if (string.IsNullOrEmpty(trimmed))
 		{
-			if (AllowEmpty)
-			{
-				ValidationText.Visibility = Visibility.Collapsed;
-				ValidationText.Text = string.Empty;
-			}
-			else
-			{
-				ValidationText.Visibility = Visibility.Visible;
-				ValidationText.Text = "Enter a hotkey.";
-			}
+			LiveMessage.Show(ValidationText, AllowEmpty ? null : "Enter a hotkey.");
 			return;
 		}
 
-		string? error = HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax);
-		if (error is null)
-		{
-			ValidationText.Visibility = Visibility.Collapsed;
-			ValidationText.Text = string.Empty;
-		}
-		else
-		{
-			ValidationText.Visibility = Visibility.Visible;
-			ValidationText.Text = error;
-		}
+		LiveMessage.Show(ValidationText, HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax));
 	}
 
 	private void Commit()
