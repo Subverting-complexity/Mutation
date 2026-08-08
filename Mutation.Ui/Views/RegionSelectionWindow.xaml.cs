@@ -883,9 +883,12 @@ public sealed partial class RegionSelectionWindow : Window
 				if (_dispatcherQueue is null || !_dispatcherQueue.TryEnqueue(
 					() => CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted)))
 				{
-					// Nothing will run the cancel, so the caller has to be released here or
-					// it waits for a region that is never coming.
-					_tcs?.TrySetResult(null);
+					// Nothing will run the cancel on the queue, so it runs here — a
+					// low-level hook is delivered on the thread that installed it, which is
+					// this window's own. Merely releasing the caller instead would leave a
+					// full-screen topmost overlay on screen and a global keyboard hook
+					// installed, with the capture looking finished to everyone above.
+					CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted);
 				}
 				return (IntPtr)1; // Suppress the key
 			}
