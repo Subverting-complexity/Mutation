@@ -94,6 +94,24 @@ public class KeyNameAliasesTests
 	}
 
 	[Fact]
+	public void ReadingASendKeysBraceNameBackAgreesWithTheAliasTable()
+	{
+		// SendKeysReader (issue #326) keeps its own closed list of the brace names Windows'
+		// shorthand uses, and deliberately so — reading {SHIFT} back as a key is how an
+		// innocent row gets a duplicate badge. But the half of that list which is short
+		// spellings is this table again, so the two can drift. Where both know a name, they
+		// have to mean the same key.
+		foreach (var (alias, canonical) in KeyNameAliases.All)
+		{
+			var read = SendKeysReader.ChordsIn("^{" + alias + "}");
+			if (read.Count == 0)
+				continue; // Not one of SendKeys' brace names; nothing to agree about.
+
+			Assert.Equal(Hotkey.Parse("Ctrl+" + canonical), Assert.Single(read));
+		}
+	}
+
+	[Fact]
 	public void MenuIsTheOneNameLeftMeaningTwoThings()
 	{
 		// Recorded rather than fixed: VirtualKey.Menu is Alt, and the send-key boxes have
