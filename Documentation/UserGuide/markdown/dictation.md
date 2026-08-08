@@ -215,10 +215,10 @@ The recording you have selected is never one of the ones cleared away, nor is on
 that is playing.
 
 If the selected recording goes missing some other way — you deleted the file
-yourself, say, or something else tidied the folder — **Play selected session** tells
-you "Audio file not found." Mutation then moves your selection to the newest
-recording and says which one it picked, so the next thing you press acts on a
-recording that is really there.
+yourself, say, or something else tidied the folder — **Play selected session** says
+"Audio file not found", and names the recording it has selected for you instead. It
+picks the newest one. That way the next button you press acts on a recording that is
+really there, and you know which one it is.
 
 ## Transcribing a file you already have
 

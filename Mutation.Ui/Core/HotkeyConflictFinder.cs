@@ -27,6 +27,12 @@ internal static class HotkeyConflictFinder
 	/// whichever app is in front — the "Send key after…" entries. Two sent keys cannot clash
 	/// with each other, but a sent key that matches a registered one does: Windows routes the
 	/// synthesized keystroke back to Mutation, so the action fires itself again.
+	/// <para>
+	/// It also decides how the text is read. A registered shortcut is one chord, and a comma
+	/// inside it is just another separator — <c>CTRL,A</c> registers as Ctrl+A. A sent value
+	/// may be a comma-separated <em>sequence</em> of chords, so it is split first and every
+	/// chord in it counts.
+	/// </para>
 	/// </param>
 	public readonly record struct ConfiguredHotkey(string? Text, bool ClaimsTheChord);
 
@@ -52,21 +58,23 @@ internal static class HotkeyConflictFinder
 	{
 		if (configured is null) throw new ArgumentNullException(nameof(configured));
 
-		var groups = new Dictionary<Hotkey, List<int>>();
+		var groups = new Dictionary<Hotkey, HashSet<int>>();
 		var claimed = new HashSet<Hotkey>();
 
 		for (int i = 0; i < configured.Count; i++)
 		{
 			var entry = configured[i];
-			if (!Hotkey.TryParse(entry.Text, out var chord))
-				continue;
+			foreach (var chord in ChordsIn(entry))
+			{
+				if (!groups.TryGetValue(chord, out var members))
+					groups[chord] = members = new HashSet<int>();
 
-			if (!groups.TryGetValue(chord, out var members))
-				groups[chord] = members = new List<int>();
-			members.Add(i);
+				// A set, so a sequence naming one chord twice does not look like two rows.
+				members.Add(i);
 
-			if (entry.ClaimsTheChord)
-				claimed.Add(chord);
+				if (entry.ClaimsTheChord)
+					claimed.Add(chord);
+			}
 		}
 
 		var duplicates = new HashSet<int>();
@@ -77,5 +85,30 @@ internal static class HotkeyConflictFinder
 		}
 
 		return duplicates;
+	}
+
+	/// <summary>
+	/// Every chord one entry puts on the keyboard: one for a registered shortcut, and one per
+	/// step for a sent sequence. Anything that does not parse — half-typed text, or the
+	/// SendKeys syntax the "send key after" boxes also accept — yields nothing, because there
+	/// is no chord to compare.
+	/// </summary>
+	private static IEnumerable<Hotkey> ChordsIn(ConfiguredHotkey entry)
+	{
+		if (entry.ClaimsTheChord)
+		{
+			if (Hotkey.TryParse(entry.Text, out var chord))
+				yield return chord;
+			yield break;
+		}
+
+		if (string.IsNullOrWhiteSpace(entry.Text))
+			yield break;
+
+		foreach (string step in entry.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+		{
+			if (Hotkey.TryParse(step, out var chord))
+				yield return chord;
+		}
 	}
 }

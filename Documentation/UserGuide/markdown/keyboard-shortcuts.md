@@ -124,8 +124,9 @@ readers announce it straight away.
 - **A key Mutation does not recognise** — "Unsupported key", followed by the key
   you typed.
 - **The same combination used twice inside Mutation** — an orange **Duplicate
-  hotkey** note appears under both rows, and is read out as soon as it appears. Give
-  one of them a different combination, otherwise only one of the two will ever fire.
+  hotkey** note appears under both rows, and is read out the moment it turns up while
+  you are editing. Give one of them a different combination, otherwise only one of the
+  two will ever fire.
   Mutation compares the keys, not the spelling, so writing one as
   **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught.
 - **The same combination in a "send a key afterwards" box and a real shortcut** —

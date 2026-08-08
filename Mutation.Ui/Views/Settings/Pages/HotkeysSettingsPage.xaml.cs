@@ -219,14 +219,30 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	}
 
 	/// <summary>
-	/// Shows or hides one row's duplicate warning. The text is set, not just the visibility,
-	/// because a live region announces a change of content — flipping visibility alone raises
-	/// no event, so the warning would only ever be found by navigating onto the row.
+	/// Shows or hides one row's duplicate warning, and says it out loud when it appears.
+	/// <para>
+	/// Three things are needed, and the warning is silent without any one of them: the badge
+	/// carries the live setting, its <c>Text</c> changes rather than only its visibility, and
+	/// the event is raised by hand. WinUI raises nothing of its own when a TextBlock's text
+	/// changes — the live setting says the text is worth announcing, it does not announce it
+	/// (issue #243).
+	/// </para>
 	/// </summary>
 	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate)
 	{
+		string text = isDuplicate ? DuplicateBadgeText : string.Empty;
+		if (badge.Text == text)
+			return;
+
 		badge.Visibility = isDuplicate ? Visibility.Visible : Visibility.Collapsed;
-		badge.Text = isDuplicate ? DuplicateBadgeText : string.Empty;
+		badge.Text = text;
+
+		if (!isDuplicate)
+			return;
+
+		AutomationPeer? peer = FrameworkElementAutomationPeer.FromElement(badge)
+			?? FrameworkElementAutomationPeer.CreatePeerForElement(badge);
+		peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
 	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>

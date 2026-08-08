@@ -106,6 +106,53 @@ public class HotkeyConflictFinderTests
 			Sent("ALT+J"), Claimed("ALT+J"), Sent("alt+j")))));
 	}
 
+	[Fact]
+	public void Any_step_of_a_sent_sequence_that_matches_a_claimed_shortcut_flags_both()
+	{
+		// A "send key after" value may be a comma-separated sequence. Reading it as one chord
+		// misses the collision and invents a chord nobody configured: "ALT+J, CTRL+ENTER" read
+		// whole comes out as CTRL+ALT+ENTER, so the ALT+J that actually loops goes unreported.
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("ALT+J"), Sent("ALT+J, CTRL+ENTER")))));
+	}
+
+	[Fact]
+	public void A_later_step_of_a_sent_sequence_counts_too()
+	{
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL+ENTER"), Sent("ALT+J, CTRL+ENTER")))));
+	}
+
+	[Fact]
+	public void A_sent_sequence_that_clashes_with_nothing_is_left_alone()
+	{
+		Assert.Empty(DuplicateIndexes(Configured(
+			Claimed("CTRL+ALT+G"), Sent("ALT+J, CTRL+ENTER"))));
+	}
+
+	[Fact]
+	public void A_sent_sequence_naming_one_chord_twice_is_not_a_duplicate_of_itself()
+	{
+		// One row cannot clash with itself, however many times it names the chord.
+		Assert.Empty(DuplicateIndexes(Configured(Sent("CTRL+V, CTRL+V"))));
+	}
+
+	[Fact]
+	public void A_comma_inside_a_claimed_shortcut_is_a_separator_not_a_sequence()
+	{
+		// Registration parses the whole string, where a comma is just another separator —
+		// "CTRL,A" binds Ctrl+A. Splitting it would compare two things that are not chords.
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL,A"), Claimed("CTRL+A")))));
+	}
+
+	[Fact]
+	public void SendKeys_syntax_in_a_sent_value_is_skipped_rather_than_misread()
+	{
+		// The send-key boxes also accept SendKeys syntax, which is not a chord at all.
+		Assert.Empty(DuplicateIndexes(Configured(Claimed("CTRL+V"), Sent("^v"))));
+	}
+
 	// ----- Nothing to compare -----
 
 	[Theory]
