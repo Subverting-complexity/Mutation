@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Mutation.Ui.Services;
 
@@ -18,10 +19,17 @@ namespace Mutation.Ui.Services;
 /// <para>
 /// Everything here errs towards reading nothing. A missed clash leaves the user where they
 /// already were; a wrong one puts a "Duplicate hotkey" badge on a shortcut that is perfectly
-/// fine, which is a worse place to be. So a run of ordinary characters — text being typed,
-/// not a shortcut — yields nothing, an unrecognised key name yields nothing, and a string
-/// that does not hold together at all yields nothing whatsoever rather than a partial
-/// reading of a value nobody can be sure of.
+/// fine, which is a worse place to be.
+/// </para>
+/// <para>
+/// It gives up at two different sizes, on purpose. A piece it cannot place — an unrecognised
+/// key name, a key the chord parser has no spelling for, a run of ordinary characters that is
+/// text being typed rather than a shortcut — drops out on its own and the rest of the value
+/// still reads. A value that does not hold together <em>structurally</em> — a modifier with
+/// no key after it, an unclosed brace or group, a nested group — yields nothing whatsoever,
+/// including whatever had already been read from earlier in it. Past a break like that the
+/// tokenizer no longer knows what it is looking at, and a partial reading of a value nobody
+/// can be sure of is how an innocent row gets flagged.
 /// </para>
 /// </summary>
 public static class SendKeysReader
@@ -278,7 +286,14 @@ public static class SendKeysReader
 	{
 		if (body.Length is < 2 or > 3) return false;
 		if (body[0] is not ('F' or 'f')) return false;
-		if (!int.TryParse(body.AsSpan(1), out int n)) return false;
+
+		// NumberStyles.None, matching SendKeysMapper. The default allows a leading sign, so
+		// "{F+5}" would pass as F5 and then be handed to Hotkey.Parse, which splits it on the
+		// '+' and comes back with the digit key 5 — a chord nobody wrote, on a row that would
+		// then be flagged against anything registered as plain 5.
+		if (!int.TryParse(body.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int n))
+			return false;
+
 		return n is >= 1 and <= 24;
 	}
 

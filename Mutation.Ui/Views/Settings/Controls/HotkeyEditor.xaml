@@ -35,6 +35,7 @@
 					 PlaceholderText="e.g. CTRL+ALT+J"
 					 KeyDown="HotkeyTextBox_KeyDown"
 					 TextChanged="HotkeyTextBox_TextChanged"
+					 GotFocus="HotkeyTextBox_GotFocus"
 					 LostFocus="HotkeyTextBox_LostFocus"
 					 IsSpellCheckEnabled="False"
 					 IsTextPredictionEnabled="False" />
@@ -72,9 +73,12 @@
 		<!-- Its own region, and a polite one. Sharing the validation block would put a
 		     rewrite notice in critical red and let it overwrite an error the user still
 		     needs; polite means it waits its turn rather than cutting across the next
-		     field the user has already tabbed into (issue #327). -->
+		     field the user has already tabbed into (issue #327). Full-contrast text
+		     rather than the secondary brush a caption would normally take: this app's
+		     reader is low-vision, and a message worth showing at all is worth being able
+		     to read. -->
 		<TextBlock x:Name="CommitAnnouncement"
-				   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+				   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
 				   Visibility="Collapsed"
 				   AutomationProperties.LiveSetting="Polite"
 				   Style="{StaticResource CaptionTextBlockStyle}"

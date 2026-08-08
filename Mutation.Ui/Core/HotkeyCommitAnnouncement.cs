@@ -43,7 +43,15 @@ internal static class HotkeyCommitAnnouncement
 		// Nothing changed, so there is nothing to report. This is the common case by far —
 		// tabbing through rows that are already canonical has to stay silent, or the page
 		// talks over the user on every single row.
-		if (string.Equals(typed ?? string.Empty, committed ?? string.Empty, StringComparison.Ordinal))
+		//
+		// Space either side of the text does not count as a change. It is invisible to a
+		// screen reader, so the field does not disagree with what the user typed, and there
+		// is no shortcut in it either way. It matters most for the two "send key after"
+		// boxes, whose contents are kept exactly as typed: trimming is the only rewrite they
+		// ever get, and announcing it would read SendKeys punctuation aloud — "^{F5}" is
+		// spoken as bare "F5" at most screen readers' default punctuation level, naming a
+		// different shortcut from the one in the box.
+		if (string.Equals((typed ?? string.Empty).Trim(), committed ?? string.Empty, StringComparison.Ordinal))
 			return null;
 
 		// An emptied box is the Clear button doing exactly what it was asked to, and it
@@ -51,8 +59,27 @@ internal static class HotkeyCommitAnnouncement
 		if (string.IsNullOrEmpty(committed))
 			return null;
 
-		return string.IsNullOrWhiteSpace(header)
+		string name = SpokenName(header);
+		return name.Length == 0
 			? $"Now reads {committed}."
-			: $"{header.Trim()} now reads {committed}.";
+			: $"{name} now reads {committed}.";
+	}
+
+	/// <summary>
+	/// The row's label with any trailing aside dropped. Several rows are labelled
+	/// "Send key after OCR (optional)", and "Send key after OCR (optional) now reads ^{F5}"
+	/// is a mouthful to listen to for a word that says nothing about what changed.
+	/// </summary>
+	private static string SpokenName(string? header)
+	{
+		string name = header?.Trim() ?? string.Empty;
+		if (name.EndsWith(')'))
+		{
+			int open = name.LastIndexOf('(');
+			if (open > 0)
+				name = name[..open].TrimEnd();
+		}
+
+		return name;
 	}
 }

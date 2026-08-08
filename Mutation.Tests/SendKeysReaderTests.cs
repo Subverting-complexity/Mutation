@@ -215,6 +215,18 @@ public class SendKeysReaderTests
 		Assert.Equal(["CTRL+F5"], Read("{NOTAKEY}^{F5}"));
 	}
 
+	[Theory]
+	[InlineData("{F+5}")]
+	[InlineData("^{F+5}")]
+	[InlineData("{F-5}")]
+	public void ASignedFunctionKeyNumberIsNotAFunctionKey(string sendKeys)
+	{
+		// "F+5" is not F5. Read as one, it goes on to the chord parser, which splits it on
+		// the '+' and hands back the digit key 5 — a shortcut nobody wrote, ready to be
+		// flagged against any row registered as plain 5.
+		Assert.Empty(Read(sendKeys));
+	}
+
 	[Fact]
 	public void AKeyWeCannotSpellAsAChordSimplyDropsOut()
 	{

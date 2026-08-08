@@ -380,14 +380,17 @@ either way — Mutation just writes it one way everywhere, so two boxes holding 
 same combination look the same. That tidied version is what gets saved, so a
 shortcut you typed into the settings file by hand comes back tidied once Mutation
 has opened that page.</p>
-<p>When the box does change what you typed, Mutation says so, and a screen reader
-reads it out: &quot;Speak clipboard now reads CTRL+SHIFT+A&quot;. You get that only when
-something actually changed, so tabbing down a page of shortcuts that are already
-written Mutation's way stays quiet.</p>
-<p>The two optional &quot;send a key afterwards&quot; boxes are the exception: they keep
-whatever you type, exactly as you typed it, because what goes in them is not
-always a plain combination. There is more on them below. The <strong>Clear</strong> button
-empties a box, which is what you want for those two.</p>
+<p>When a box does change what you typed, a short note appears under it and a screen
+reader reads it out: &quot;Speak clipboard now reads CTRL+SHIFT+A.&quot; You get that only
+when something actually changed, so tabbing down a page of shortcuts that are
+already written Mutation's way stays quiet. The note goes away when you come back
+to that box. The <strong>From</strong> and <strong>To</strong> boxes in the shortcut router further down the
+page still tidy up in silence.</p>
+<p>Two boxes are the exception: <strong>Send key after OCR (optional)</strong> and <strong>Send key
+after transcription (optional)</strong>. They keep whatever you type, exactly as you
+typed it, because what goes in them is not always a plain combination. There is
+more on them below. The <strong>Clear</strong> button empties a box, which is what you want for
+those two.</p>
 <p>Your changes are held until you press <strong>Save</strong> at the bottom of Settings. Press
 <strong>Cancel</strong> and nothing you changed is kept.</p>
 <h2 id="when-a-combination-is-taken-or-not-allowed">When a combination is taken or not allowed</h2>
@@ -405,10 +408,10 @@ you are editing. Give one of them a different combination, otherwise only one of
 two will ever fire.
 Mutation compares the keys, not the spelling, so writing one as
 <strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught.</li>
-<li><strong>The same combination in a &quot;send a key afterwards&quot; box and a real shortcut</strong> —
+<li><strong>The same combination in a &quot;send key after&quot; box and a real shortcut</strong> —
 also flagged, and worth fixing. Windows hands that key straight back to Mutation,
 so the action would set itself off again and again. Putting the same key in <em>both</em>
-&quot;send a key afterwards&quot; boxes is fine, though, and is not flagged: those keys go to
+&quot;send key after&quot; boxes is fine, though, and is not flagged: those keys go to
 whatever app you are in, so there is nothing for them to clash over.</li>
 <li><strong>Another app already owns it</strong> — Mutation cannot tell until it actually tries to
 claim the combination. When it fails, you get a beep and a message titled &quot;Some
@@ -416,8 +419,8 @@ hotkeys could not be registered&quot;, listing each action, its combination, and
 reason, usually &quot;The shortcut is already registered by another application.&quot;
 Go back to the Hotkeys page and pick something else.</li>
 </ul>
-<p>The two &quot;send a key afterwards&quot; boxes are a little more relaxed than the rest.
-They hold more than one plain combination can say:</p>
+<p>Those two &quot;send key after&quot; boxes are a little more relaxed than the rest. They
+hold more than one plain combination can say:</p>
 <ul>
 <li><strong>A run of keys, one after the other.</strong> Separate them with commas, like
 <code>Ctrl+V, Enter</code> to paste and then press Enter.</li>
@@ -427,11 +430,15 @@ never need it — <strong>Ctrl+F5</strong> does the same job and reads better �
 you already know it.</li>
 </ul>
 <p>Because of those two, Mutation leaves these boxes exactly as you type them rather
-than tidying them up. Both spellings are still checked against your other
-shortcuts, so writing <code>^{F5}</code> while some Mutation shortcut is <strong>Ctrl+F5</strong> is
-flagged exactly as writing <strong>Ctrl+F5</strong> would be. Plain words are the exception:
-type <code>hello</code> into one of these boxes and Mutation types the word for you, so there
-is no shortcut there to clash with anything.</p>
+than tidying them up.</p>
+<p>Both spellings are checked against your other shortcuts, so writing <code>^{F5}</code> while
+some Mutation shortcut is <strong>Ctrl+F5</strong> is flagged just as writing <strong>Ctrl+F5</strong> would
+be. Two things are not checked, and neither is a mistake. Plain words are not a
+shortcut at all — type <code>hello</code> and Mutation types the word for you. And anything
+in the shorthand that Mutation cannot read with certainty is passed over in
+silence rather than guessed at, because a wrong warning is worse than none. So no
+warning is good news, not a guarantee. If you want to be sure, write the key the
+plain way — <strong>Ctrl+F5</strong> rather than <code>^{F5}</code> — and it is always checked.</p>
 <h2 id="choosing-combinations-that-wont-clash">Choosing combinations that won't clash</h2>
 <ol>
 <li><strong>Use three modifiers.</strong> Combinations like <strong>Ctrl+Shift+Alt+Q</strong> are almost never

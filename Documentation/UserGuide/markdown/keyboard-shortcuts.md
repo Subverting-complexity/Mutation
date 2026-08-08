@@ -115,15 +115,18 @@ same combination look the same. That tidied version is what gets saved, so a
 shortcut you typed into the settings file by hand comes back tidied once Mutation
 has opened that page.
 
-When the box does change what you typed, Mutation says so, and a screen reader
-reads it out: "Speak clipboard now reads CTRL+SHIFT+A". You get that only when
-something actually changed, so tabbing down a page of shortcuts that are already
-written Mutation's way stays quiet.
+When a box does change what you typed, a short note appears under it and a screen
+reader reads it out: "Speak clipboard now reads CTRL+SHIFT+A." You get that only
+when something actually changed, so tabbing down a page of shortcuts that are
+already written Mutation's way stays quiet. The note goes away when you come back
+to that box. The **From** and **To** boxes in the shortcut router further down the
+page still tidy up in silence.
 
-The two optional "send a key afterwards" boxes are the exception: they keep
-whatever you type, exactly as you typed it, because what goes in them is not
-always a plain combination. There is more on them below. The **Clear** button
-empties a box, which is what you want for those two.
+Two boxes are the exception: **Send key after OCR (optional)** and **Send key
+after transcription (optional)**. They keep whatever you type, exactly as you
+typed it, because what goes in them is not always a plain combination. There is
+more on them below. The **Clear** button empties a box, which is what you want for
+those two.
 
 Your changes are held until you press **Save** at the bottom of Settings. Press
 **Cancel** and nothing you changed is kept.
@@ -144,10 +147,10 @@ readers announce it straight away.
   two will ever fire.
   Mutation compares the keys, not the spelling, so writing one as
   **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught.
-- **The same combination in a "send a key afterwards" box and a real shortcut** —
+- **The same combination in a "send key after" box and a real shortcut** —
   also flagged, and worth fixing. Windows hands that key straight back to Mutation,
   so the action would set itself off again and again. Putting the same key in *both*
-  "send a key afterwards" boxes is fine, though, and is not flagged: those keys go to
+  "send key after" boxes is fine, though, and is not flagged: those keys go to
   whatever app you are in, so there is nothing for them to clash over.
 - **Another app already owns it** — Mutation cannot tell until it actually tries to
   claim the combination. When it fails, you get a beep and a message titled "Some
@@ -155,8 +158,8 @@ readers announce it straight away.
   reason, usually "The shortcut is already registered by another application."
   Go back to the Hotkeys page and pick something else.
 
-The two "send a key afterwards" boxes are a little more relaxed than the rest.
-They hold more than one plain combination can say:
+Those two "send key after" boxes are a little more relaxed than the rest. They
+hold more than one plain combination can say:
 
 - **A run of keys, one after the other.** Separate them with commas, like
   `Ctrl+V, Enter` to paste and then press Enter.
@@ -166,11 +169,16 @@ They hold more than one plain combination can say:
   you already know it.
 
 Because of those two, Mutation leaves these boxes exactly as you type them rather
-than tidying them up. Both spellings are still checked against your other
-shortcuts, so writing `^{F5}` while some Mutation shortcut is **Ctrl+F5** is
-flagged exactly as writing **Ctrl+F5** would be. Plain words are the exception:
-type `hello` into one of these boxes and Mutation types the word for you, so there
-is no shortcut there to clash with anything.
+than tidying them up.
+
+Both spellings are checked against your other shortcuts, so writing `^{F5}` while
+some Mutation shortcut is **Ctrl+F5** is flagged just as writing **Ctrl+F5** would
+be. Two things are not checked, and neither is a mistake. Plain words are not a
+shortcut at all — type `hello` and Mutation types the word for you. And anything
+in the shorthand that Mutation cannot read with certainty is passed over in
+silence rather than guessed at, because a wrong warning is worse than none. So no
+warning is good news, not a guarantee. If you want to be sure, write the key the
+plain way — **Ctrl+F5** rather than `^{F5}` — and it is always checked.
 
 ## Choosing combinations that won't clash
 

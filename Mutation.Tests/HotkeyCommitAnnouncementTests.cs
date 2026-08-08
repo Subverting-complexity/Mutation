@@ -86,13 +86,53 @@ public class HotkeyCommitAnnouncementTests
 	}
 
 	[Fact]
-	public void TrimmingAloneCountsAsAChangeWorthReporting()
+	public void TrimmingAloneIsNotWorthReporting()
 	{
-		// The box really does hold something different afterwards, and a screen-reader user
-		// re-reading the field would otherwise find it disagreeing with what they typed.
-		string? message = HotkeyCommitAnnouncement.For(
-			"Send hotkey after OCR", "  ^{F5}  ", "^{F5}", validationMessage: null);
+		// Space either side is invisible to a screen reader, so the field does not disagree
+		// with what was typed. It also keeps SendKeys punctuation out of the announcement:
+		// "^{F5}" is spoken as bare "F5" at most default punctuation levels, which names a
+		// different shortcut from the one actually in the box.
+		Assert.Null(HotkeyCommitAnnouncement.For(
+			"Send key after OCR (optional)", "  ^{F5}  ", "^{F5}", validationMessage: null));
+	}
 
-		Assert.Equal("Send hotkey after OCR now reads ^{F5}.", message);
+	[Fact]
+	public void ARealRewriteIsStillReportedWhateverSpaceSurroundedIt()
+	{
+		string? message = HotkeyCommitAnnouncement.For(
+			"Speak clipboard", "  shift+ctrl+a  ", "CTRL+SHIFT+A", validationMessage: null);
+
+		Assert.Equal("Speak clipboard now reads CTRL+SHIFT+A.", message);
+	}
+
+	[Theory]
+	[InlineData("Send key after OCR (optional)", "Send key after OCR")]
+	[InlineData("Send key after transcription (optional)", "Send key after transcription")]
+	[InlineData("Send hotkey after OCR (optional)", "Send hotkey after OCR")]
+	public void ATrailingAsideInTheLabelIsNotReadOut(string header, string spoken)
+	{
+		// Four of the real labels end in "(optional)". It says nothing about what changed,
+		// and it is a mouthful in the middle of a spoken sentence.
+		Assert.Equal($"{spoken} now reads ALT+M.", HotkeyCommitAnnouncement.For(
+			header, "alt+m", "ALT+M", validationMessage: null));
+	}
+
+	[Theory]
+	[InlineData("Speak clipboard")]
+	[InlineData("Toggle microphone mute")]
+	[InlineData("Speech to text + process with LLM")]
+	public void AnOrdinaryLabelIsReadOutWhole(string header)
+	{
+		Assert.Equal($"{header} now reads ALT+M.", HotkeyCommitAnnouncement.For(
+			header, "alt+m", "ALT+M", validationMessage: null));
+	}
+
+	[Fact]
+	public void ALabelThatIsNothingButAnAsideIsNotStrippedToNothing()
+	{
+		// Dropping the whole label would leave a sentence with no subject; keeping it beats
+		// that, however odd a label it is.
+		Assert.Equal("(optional) now reads ALT+M.", HotkeyCommitAnnouncement.For(
+			"(optional)", "alt+m", "ALT+M", validationMessage: null));
 	}
 }

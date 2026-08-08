@@ -130,6 +130,17 @@ public sealed partial class HotkeyEditor : UserControl
 		Commit();
 	}
 
+	/// <summary>
+	/// Takes down the last commit's notice on the way back in. It described something that
+	/// happened when the user left, and left standing it becomes a line of ordinary-looking
+	/// text under the row — read out as current content by anyone going down the page
+	/// afterwards, and one more thing between them and the next control. Clearing it also
+	/// means the same rewrite happening twice is announced twice, rather than the second one
+	/// being swallowed as an unchanged message.
+	/// </summary>
+	private void HotkeyTextBox_GotFocus(object sender, RoutedEventArgs e) =>
+		LiveMessage.Show(CommitAnnouncement, null);
+
 	private void HotkeyTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
 	{
 		if (!_isRecording)
@@ -225,7 +236,8 @@ public sealed partial class HotkeyEditor : UserControl
 			? typed.Trim()
 			: Mutation.Ui.Services.Hotkey.Canonicalize(typed);
 
-		if (!string.Equals(committed, typed, StringComparison.Ordinal))
+		bool rewritten = !string.Equals(committed, typed, StringComparison.Ordinal);
+		if (rewritten)
 		{
 			_suppressTextChanged = true;
 			try { HotkeyTextBox.Text = committed; }
@@ -234,19 +246,29 @@ public sealed partial class HotkeyEditor : UserControl
 
 		// Suppressing TextChanged also suppressed everything downstream of it, so the box
 		// could rewrite its own contents in complete silence and leave the validation message
-		// describing text that is no longer there (issue #327). Both live regions are brought
-		// up to date against what the box now holds; each one stays quiet when its message has
-		// not changed, so a row that was already canonical says nothing.
+		// describing text that is no longer there (issue #327).
 		string? validation = ValidationMessageFor(committed);
-		LiveMessage.Show(ValidationText, validation);
-		LiveMessage.Show(
-			CommitAnnouncement,
-			HotkeyCommitAnnouncement.For(Header, typed, committed, validation));
+
+		// Only a rewrite can have left that message stale, and only a rewrite refreshes it.
+		// Doing it on every commit would newly complain at a required row that is empty and
+		// untouched — of which there are plenty — every single time the user tabbed past it.
+		if (rewritten)
+			LiveMessage.Show(ValidationText, validation);
 
 		if (!string.Equals(Hotkey, committed, StringComparison.Ordinal))
 			Hotkey = committed;
 
 		HotkeyCommitted?.Invoke(this, committed);
+
+		// Last, and deliberately so. The Hotkeys page recomputes duplicates off this event
+		// and puts "Duplicate hotkey" into an assertive live region of its own. Announced
+		// before that, a polite notice is cut off mid-sentence by the assertive one that
+		// follows it onto the same dispatcher pass — and the clash is precisely the case
+		// where both have something to say. Announced after, the urgent news goes first and
+		// this waits its turn.
+		LiveMessage.Show(
+			CommitAnnouncement,
+			HotkeyCommitAnnouncement.For(Header, typed, committed, validation));
 	}
 
 	private static VirtualKeyModifiers GetCurrentModifiers()
