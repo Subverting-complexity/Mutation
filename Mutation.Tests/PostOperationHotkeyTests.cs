@@ -49,6 +49,34 @@ public class PostOperationHotkeyTests
 	}
 
 	[Fact]
+	public void ThereIsSomethingToPasteWhenTheTextReachedTheClipboard()
+	{
+		Assert.True(PostOperationHotkey.ClipboardHoldsOcrText(true, false, "Invoice 4021"));
+	}
+
+	[Fact]
+	public void AReadThatFoundNoTextLeavesThePictureOnTheClipboard()
+	{
+		// The trap this exists for. An empty read still comes back a success, and the copy is
+		// skipped rather than failed, because there was nothing to copy — so ClipboardCopyFailed
+		// is false and every other signal says go. What is actually on the clipboard is the
+		// screenshot the run put there a moment earlier, and pasting it drops a picture into
+		// whatever the user was writing.
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, ""));
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, "   \r\n"));
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, null));
+	}
+
+	[Fact]
+	public void AFailedReadAndAFailedCopyBothLeaveNothingToPaste()
+	{
+		// A failure puts its message in Message, so the text check alone would wave it through.
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(false, false, "No image on clipboard."));
+		// And a copy that never landed leaves the clipboard holding whatever preceded it (#341).
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, true, "Invoice 4021"));
+	}
+
+	[Fact]
 	public void ThePasteComesBeforeTheConfiguredShortcut()
 	{
 		// The whole reason the two travel as one sequence. The shortcut people put in "Send

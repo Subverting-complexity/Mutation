@@ -329,7 +329,9 @@ whatever you were working in when the reading finishes. Switch it off and the te
 still goes to your clipboard and the <strong>OCR result</strong> box; you just paste it yourself.</li>
 </ul>
 <p>Mutation holds the paste back when there is nothing worth pasting: a reading that found
-no text, and a reading whose text could not reach the clipboard. It also holds back when
+no text, and a reading whose text could not reach the clipboard. In both of those the
+clipboard still holds the picture, and pasting would put that picture in your document
+instead. It also holds back when
 you started the job from a button in the Mutation window rather than by shortcut, since
 &quot;the app you were working in&quot; is Mutation itself. That is why a batch of documents is
 copied but not pasted.</p>

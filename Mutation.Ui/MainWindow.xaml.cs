@@ -1140,7 +1140,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			// this window still has the keyboard when it ends. That is the answer worth
 			// having: forty pages arriving in whatever control happens to be focused is not
 			// what the setting is for.
-			bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed);
+			bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed, result.Text);
 			HotkeyManager.SendHotkeyAfterDelay(
 				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
 				PostOperationHotkey.OcrDelay(result.Success));
@@ -3558,7 +3558,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		SetOcrText(result.Message);
 
-		bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed);
+		bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed, result.Message);
 		if (PostOperationHotkey.ShouldSendAfterOcr(result.Outcome))
 			HotkeyManager.SendHotkeyAfterDelay(
 				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
@@ -3586,18 +3586,16 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// Whether an OCR run should paste its text into the application the user was working in
 	/// before the shortcut configured to run afterwards.
 	/// <para>
-	/// Three ways the answer is no even when the setting is on, and all three are about there
-	/// being nothing worth pasting. A run that recognised nothing has no text; a run whose copy
-	/// failed left the clipboard holding whatever was there before — on the screenshot paths,
-	/// the screenshot itself (issue #341); and a run finished while this window still has the
-	/// keyboard was started from a button here, so the paste would land in Mutation rather than
-	/// anywhere the user meant.
+	/// Two ways the answer is no even when the setting is on. Either the clipboard does not
+	/// hold this run's text — see <see cref="PostOperationHotkey.ClipboardHoldsOcrText"/>, which
+	/// is where that gets decided — or this window still has the keyboard, which means the run
+	/// was started from a button here and the paste would land in Mutation rather than anywhere
+	/// the user meant.
 	/// </para>
 	/// </summary>
-	private bool ShouldPasteOcrText(bool success, bool clipboardCopyFailed) =>
+	private bool ShouldPasteOcrText(bool success, bool clipboardCopyFailed, string? text) =>
 		_settings.AzureComputerVisionSettings?.PasteOcrTextIntoActiveApplication == true
-		&& success
-		&& !clipboardCopyFailed
+		&& PostOperationHotkey.ClipboardHoldsOcrText(success, clipboardCopyFailed, text)
 		&& !IsThisWindowInForeground();
 
 	/// <summary>

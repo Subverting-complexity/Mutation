@@ -162,7 +162,9 @@ These live under **Screen capture & OCR** in **Settings** (**Ctrl+Comma**).
   still goes to your clipboard and the **OCR result** box; you just paste it yourself.
 
 Mutation holds the paste back when there is nothing worth pasting: a reading that found
-no text, and a reading whose text could not reach the clipboard. It also holds back when
+no text, and a reading whose text could not reach the clipboard. In both of those the
+clipboard still holds the picture, and pasting would put that picture in your document
+instead. It also holds back when
 you started the job from a button in the Mutation window rather than by shortcut, since
 "the app you were working in" is Mutation itself. That is why a batch of documents is
 copied but not pasted.

@@ -190,8 +190,9 @@ was. There are four reasons it would not.
 - You started the reading with a button in the Mutation window instead of a shortcut.
   The app you were working in is then Mutation, so there is nowhere else to paste. Use
   the shortcut — **Shift+Alt+J** and friends — from the app you want the text in.
-- The reading found no text, or its text never reached the clipboard. Both are covered
-  by their own entries above.
+- The reading found no text, or its text never reached the clipboard. Either way the
+  clipboard still holds the picture, and pasting would drop that picture into your
+  document. See the two entries just above this one.
 - It was a batch of documents. Those are always started from the Mutation window, so
   the point above applies.
 

@@ -40,6 +40,20 @@ internal static class PostOperationHotkey
 	/// </summary>
 	public static bool ShouldSendAfterOcr(OcrRunOutcome outcome) => outcome != OcrRunOutcome.Refused;
 
+	/// <summary>
+	/// Whether an OCR run left its text on the clipboard, where a paste would find it.
+	/// <para>
+	/// The whitespace check is not tidiness. A read that recognised nothing still comes back
+	/// as a success with an empty message, and the copy is skipped rather than failed —
+	/// there was nothing to copy. What the clipboard still holds at that point is whatever
+	/// the run put there a moment earlier, which on the screenshot paths is the screenshot
+	/// itself and on the clipboard-image path is the source image. Pasting then puts a
+	/// picture into the user's document.
+	/// </para>
+	/// </summary>
+	public static bool ClipboardHoldsOcrText(bool success, bool clipboardCopyFailed, string? text) =>
+		success && !clipboardCopyFailed && !string.IsNullOrWhiteSpace(text);
+
 	/// <summary>The chord that pastes, spelled the way <c>Hotkey.Parse</c> reads it.</summary>
 	/// <remarks>
 	/// "Ctrl+V", not "^v": the parser has no caret syntax, so the shorthand would throw and drop
