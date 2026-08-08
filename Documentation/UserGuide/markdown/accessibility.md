@@ -47,6 +47,13 @@ screen. There are distinct sounds for:
 - **Mute** — a low tone when microphones are muted.
 - **Unmute** — a short high tone when they are live.
 
+The end beep does one more job. When transcribing a recording, or reading text from
+the screen, has to be tried again, Mutation plays it once for each try — two beeps on
+the first retry, three on the second, four on the third. Nothing is wrong when you hear
+that. It means the request did not get through and Mutation is having another go, and
+the number of beeps tells you how far in it is. AI prompts do not beep this way; they
+retry silently.
+
 You can replace all of them with your own sound files. Open **Settings** with
 **Ctrl+Comma**, go to the audio settings, turn on the option to play your own sound
 files instead of the built-in beeps, and pick a `.wav` file for each of the six cues.

@@ -1,3 +1,4 @@
+using System.ClientModel.Primitives;
 using CognitiveSupport;
 
 namespace Mutation.Tests;
@@ -22,5 +23,21 @@ public class OpenAiClientOptionsFactoryTests
 
 		Assert.Equal(Timeout.InfiniteTimeSpan, options.NetworkTimeout);
 		Assert.Equal(endpoint, options.Endpoint);
+	}
+
+	[Fact]
+	public void Create_LeavesTheSdkSOwnRetryPolicyAlone_ByDefault()
+	{
+		// Production wants the SDK's default retries. Only a test that counts requests
+		// turns them off, and it has to ask (issue #311).
+		Assert.Null(OpenAiClientOptionsFactory.Create().RetryPolicy);
+	}
+
+	[Fact]
+	public void Create_CapsTheSdkSOwnRetries_WhenAsked()
+	{
+		var options = OpenAiClientOptionsFactory.Create(maxRetries: 0);
+
+		Assert.IsType<ClientRetryPolicy>(options.RetryPolicy);
 	}
 }

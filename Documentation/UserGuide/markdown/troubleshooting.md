@@ -60,6 +60,11 @@ a busy service makes it slow. Mutation retries a failed attempt, giving each ret
 longer window than the last, before it gives up. Long recordings naturally take longer
 than short ones.
 
+You can hear this happening. Each retry plays the end beep once more than the one
+before — two beeps, then three, then four. A burst of end beeps part way through a
+dictation means Mutation is still working, and how many you hear tells you how far into
+its retries it has got.
+
 **What to do.**
 
 1. Give it a moment — the retries are automatic and you will hear the result.
@@ -163,6 +168,10 @@ page limit only as far as your tier allows.
 **What's happening.** Every page of every file you picked is sent off to be read.
 Mutation works on two documents at a time by default, with up to four pages in the air
 at once, so forty PDFs still adds up to a lot of waiting.
+
+A page that does not get through first time is sent again, and each retry plays the end
+beep once more than the one before. Extra beeps during a batch are normal on a busy
+connection; they mean a page is being retried, not that anything has failed.
 
 **What to do.** Listen for the announcements — Mutation names each file as it finishes,
 and calls out the page count every ten pages inside a long PDF, so you can tell it is
