@@ -1,6 +1,4 @@
 using Polly;
-using Polly.Contrib.WaitAndRetry;
-using Polly.Timeout;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -24,7 +22,7 @@ public class AnthropicLlmService : ILlmService
 	private readonly HttpClient _httpClient;
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
-	private readonly int _retryCount;
+	private readonly ResiliencePipeline _retryPipeline;
 
 	public AnthropicLlmService(
 		string apiKey,
@@ -44,7 +42,7 @@ public class AnthropicLlmService : ILlmService
 		// CreateChatCompletion is the sole timeout authority.
 		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
-		_retryCount = retryCount < 0 ? 0 : retryCount;
+		_retryPipeline = TransientRetry.Pipeline(retryCount, TransientRetry.Transient());
 		_modelConfigs = modelList.ToDictionary(m => m.Name, m => m, LlmModelIndex.NameComparer);
 	}
 
@@ -139,44 +137,25 @@ public class AnthropicLlmService : ILlmService
 	{
 		string jsonBody = Serialize(request, fastMode);
 
-		// Retry policy mirrors OpenAiSpeechToTextService.cs so the cold-start path (slow
-		// DNS/TLS/JIT warmup on the first call after a reboot) gets a few escalating-timeout
-		// attempts instead of an unhandled failure.
-		// Only transient failures (network/timeout, 429, 5xx) are surfaced as the
+		// The retry shape lives in TransientRetry.cs, shared with the other four remote
+		// services, so the cold-start path (slow DNS/TLS/JIT warmup on the first call
+		// after a reboot) gets a few escalating-timeout attempts instead of an unhandled
+		// failure. Only transient failures (network/timeout, 429, 5xx) are surfaced as the
 		// retryable HttpRequestException; permanent 4xx errors such as 401 Unauthorized
-		// throw NonTransientLlmException, which the policy does not handle, so a bad API
+		// throw NonTransientLlmException, which the pipeline does not handle, so a bad API
 		// key fails fast instead of after every retry.
-		const string AttemptKey = "Attempt";
-
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: _retryCount, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			// Still unconditional: a per-attempt timeout arrives as TaskCanceledException
-			// too, and that one is exactly what the escalating ladder exists to retry. An
-			// outside cancellation is not filtered out here because it never reaches the
-			// predicate — see the ExecuteAsync call below.
-			.Or<TaskCanceledException>()
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
-
-		var pollyContext = new Context();
-		pollyContext[AttemptKey] = 1;
-
-		// Handing the token to ExecuteAsync is what makes the ladder escapable, and it is
+		//
+		// Each send counts its own attempts, so the standard-speed retry after a Fast mode
+		// fallback starts from 1 rather than inheriting the abandoned send's stretched
+		// timeout — the attempt lives in Polly's per-execution context, not in the shared
+		// pipeline.
+		//
+		// Handing the token to the pipeline is what makes the ladder escapable, and it is
 		// the whole mechanism: Polly checks it at the head of every attempt and waits on it
 		// during the backoff, so an outside cancel ends the retry loop there rather than
-		// being re-read as one more transient blip (issue #256). Mirrors
-		// OpenAiSpeechToTextService, which has always been shaped this way.
-		string responseBody = await retryPolicy.ExecuteAsync(async (ctx, overallToken) =>
+		// being re-read as one more transient blip (issue #256).
+		string responseBody = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
-			int attempt = ctx.ContainsKey(AttemptKey) ? (int)ctx[AttemptKey] : 1;
 			int timeout = _timeoutSeconds * attempt;
 			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
@@ -221,7 +200,7 @@ public class AnthropicLlmService : ILlmService
 			}
 
 			return body;
-		}, pollyContext, cancellationToken).ConfigureAwait(false);
+		}, cancellationToken).ConfigureAwait(false);
 
 		return responseBody;
 	}

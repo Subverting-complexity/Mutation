@@ -57,6 +57,13 @@
 
 ## Deliverable 2 — Cold-start LLM hardening + configurable retry knob
 
+> This section records the code as it was written. Issue #259 has since moved
+> the retry code off out-of-support Polly 7 onto Polly 8's resilience
+> pipelines, and package versions now live in `Directory.Packages.props`
+> rather than on the `<PackageReference>` lines below. The retry counts and
+> delays described here are unchanged; the API around them is not. See
+> `CognitiveSupport/TransientRetry.cs`.
+
 - **`CognitiveSupport/CognitiveSupport.csproj`**: added explicit
   `<PackageReference Include="Polly" Version="7.2.4" />` and
   `<PackageReference Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />` (previously only

@@ -1,8 +1,6 @@
 ﻿using CognitiveSupport.Extensions;
 using Deepgram.Models.Listen.v1.REST;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
-using Polly.Timeout;
 using System.Text.RegularExpressions;
 
 namespace CognitiveSupport;
@@ -10,6 +8,10 @@ namespace CognitiveSupport;
 public class DeepgramSpeechToTextService : ISpeechToTextService
 {
 	public string ServiceName { get; init; }
+
+	// Holds no call state, so one pipeline serves every transcription, concurrent or not.
+	private static readonly ResiliencePipeline RetryPipeline =
+		TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient());
 
 	private readonly string _modelId;
 	private readonly Deepgram.Clients.Interfaces.v1.IListenRESTClient _deepgramClient;
@@ -39,27 +41,9 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 		List<string> keyterms = ParseKeyterms(speechToTextPrompt);
 
 		var audioBytes = await File.ReadAllBytesAsync(audioffilePath, overallCancellationToken).ConfigureAwait(false);
-		const string AttemptKey = "Attempt";
 
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: 3, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
-
-		var context = new Context();
-		context[AttemptKey] = 1;
-		var response = await retryPolicy.ExecuteAsync(async (context, overallToken) =>
+		var response = await RetryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
-			int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
 			int baseTimeout = timeoutSeconds ?? _timeoutSeconds;
 			// Linear backoff for timeout duration, but respect the requested timeout as a minimum for the first attempt.
 			// Removing the 60s cap to allow for longer file transcriptions.
@@ -71,8 +55,8 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 			this.Beep(attempt);
 
 			return await TranscribeViaDeepgram(keyterms, audioBytes, linkedCts).ConfigureAwait(false);
-		}, context, overallCancellationToken).ConfigureAwait(false);
-	
+		}, overallCancellationToken).ConfigureAwait(false);
+
 		return response?.Results?.Channels?.FirstOrDefault()?.Alternatives?.FirstOrDefault()?.Transcript
 			?? "(no transcript available)";
 

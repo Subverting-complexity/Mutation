@@ -1,14 +1,16 @@
 ﻿using CognitiveSupport.Extensions;
 using OpenAI.Audio;
 using Polly;
-using Polly.Contrib.WaitAndRetry;
-using Polly.Timeout;
 
 namespace CognitiveSupport;
 
 public class OpenAiSpeechToTextService : ISpeechToTextService
 {
 	public string ServiceName { get; init; }
+
+	// Holds no call state, so one pipeline serves every transcription, concurrent or not.
+	private static readonly ResiliencePipeline RetryPipeline =
+		TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient());
 
 	private readonly AudioClient _audioClient;
 	private readonly int _timeoutSeconds;
@@ -32,28 +34,8 @@ public class OpenAiSpeechToTextService : ISpeechToTextService
 		if (string.IsNullOrEmpty(audioffilePath))
 			throw new ArgumentException($"'{nameof(audioffilePath)}' cannot be null or empty.", nameof(audioffilePath));
 
-		const string AttemptKey = "Attempt";
-
-		var delay = Backoff.LinearBackoff(TimeSpan.FromMilliseconds(500), retryCount: 3, factor: 1);
-		var retryPolicy = Policy
-			.Handle<HttpRequestException>()
-			.Or<TimeoutRejectedException>()
-			.Or<TaskCanceledException>()
-				.WaitAndRetryAsync(
-					delay,
-					onRetry: (exception, timeSpan, attemptNumber, context) =>
-					{
-						int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
-						context[AttemptKey] = ++attempt;
-					}
-				);
-
-		var context = new Context();
-		context[AttemptKey] = 1;
-
-		var response = await retryPolicy.ExecuteAsync(async (context, overallToken) =>
+		var response = await RetryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
-			int attempt = context.ContainsKey(AttemptKey) ? (int)context[AttemptKey] : 1;
 			int baseTimeout = timeoutSeconds ?? _timeoutSeconds;
 			int timeout = baseTimeout * attempt;
 			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
@@ -63,7 +45,7 @@ public class OpenAiSpeechToTextService : ISpeechToTextService
 			this.Beep(attempt);
 
 			return await TranscribeViaWhisper(speechToTextPrompt, audioffilePath, linkedCts.Token).ConfigureAwait(false);
-		}, context, overallCancellationToken).ConfigureAwait(false);
+		}, overallCancellationToken).ConfigureAwait(false);
 
 		return response;
 
