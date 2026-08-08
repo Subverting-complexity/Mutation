@@ -279,6 +279,20 @@ page, which is better for columns and tables. <strong>Basic</strong> layout read
 to right, top to bottom, which is better for a plain block of text that Natural has
 scrambled. Each has its own shortcut, so you can just try the other one.</li>
 </ol>
+<h3 id="ocr-read-the-text-but-could-not-copy-it-to-the-clipboard">OCR read the text but could not copy it to the clipboard</h3>
+<p><strong>What's happening.</strong> Only one program can have the clipboard open at a time. Just
+after a screenshot, a clipboard manager or your screen reader often opens it to look at
+the picture that arrived — and for that moment nothing else can write to it. Mutation
+waits and tries again a few times, which is usually enough. When it is not, you hear
+the message &quot;The text was recognised, but it could not be copied to the clipboard. It
+is in the OCR results box.&quot;</p>
+<p>This is not a failed reading. The text is there, in the <strong>OCR result</strong> box on the
+<strong>Visual Capture</strong> card, and any shortcut you set to run afterwards still fires, so a
+screen reader can read it out of the box as usual.</p>
+<p><strong>What to do.</strong> Copy the text out of the <strong>OCR result</strong> box, or press the OCR shortcut
+again — the second attempt almost always gets in. If it happens every time, a clipboard
+manager or clipboard-history tool is the usual culprit; closing it or turning off its
+monitoring settles it.</p>
 <h3 id="ocr-skipped-a-file-for-being-too-large">OCR skipped a file for being too large</h3>
 <p><strong>What's happening.</strong> There is a maximum size for a file or page sent for OCR, so a
 huge file cannot be uploaded by accident. Anything over it is skipped before upload,
@@ -366,8 +380,14 @@ after OCR</strong> boxes in <strong>Settings</strong>. There are two reasons one
 failure beep, the shortcut is deliberately skipped — it is usually something that acts
 on the text, and running it when the text never landed would aim it at the wrong thing.
 OCR is different: it sends the shortcut either way, so a screen-reader command in that
-box reads out the error as readily as the result. The one exception is a batch of
-documents you cancelled — nothing is copied then, so nothing is sent.</p>
+box reads out the error as readily as the result. There are two exceptions. A batch of
+documents you cancelled sends nothing, because nothing is copied then. And an OCR
+shortcut pressed while a capture is already on screen sends nothing either — nothing
+happened, so there is nothing new to read, and the keystroke would land in the capture
+overlay rather than where you aimed it.</p>
+<p>Cancelling a capture does still send it, so a screen-reader shortcut reads out the
+&quot;cancelled&quot; message. It waits a moment first, until the window you were in has the
+keyboard back.</p>
 <p>The second is how the shortcut is written. Write it the ordinary way — modifier names
 joined with plus signs, like <strong>Ctrl+V</strong>, <strong>Alt+F4</strong> or <strong>Ctrl+Shift+Delete</strong>. Mutation
 still understands the older shorthand some settings files hold, such as <code>^{DEL}</code> for

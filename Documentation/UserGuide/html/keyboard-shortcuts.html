@@ -330,6 +330,10 @@ it can only be added by editing the settings file by hand — see
 </div>
 <p>Each prompt you create can have its own shortcut. You set it in the prompt editor
 on the main window, not on the Hotkeys page. None are filled in for you.</p>
+<p>If the combination you type is already taken, the prompt editor tells you straight
+away, under the <strong>Hotkey</strong> box, and says what has it — another prompt by name, one of
+Mutation's own shortcuts, or a hotkey route. You can still save it, but only one of
+the two will ever fire, so it is worth picking something else while you are there.</p>
 <h3 id="app">App</h3>
 <div class="table-wrap"><table>
 <thead>
@@ -416,10 +420,11 @@ Mutation compares the keys, not the spelling, so writing one as
 <strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught. The check covers
 the whole page at once, so a shortcut at the top and a router mapping's &quot;From&quot; box at
 the bottom claiming the same keys are both flagged.</li>
-<li><strong>The same combination as one of your prompt shortcuts</strong> — a note reading <strong>Also
-used by an LLM prompt</strong> appears under the row. Prompt shortcuts are set in the prompt
-window rather than on this page, so there is no second row here to flag. Open
-<strong>AI prompts</strong> to see which one it is.</li>
+<li><strong>The same combination as one of your prompt shortcuts</strong> — a note appears under
+the row naming the prompt, for example <strong>Also used by the LLM prompt &quot;Summarize&quot;</strong>.
+Prompt shortcuts are set in the prompt window rather than on this page, so there is
+no second row here to flag — the note names it instead, so you know which prompt to
+open.</li>
 <li><strong>The same combination in a &quot;send key after&quot; box and a real shortcut</strong> —
 also flagged, and worth fixing. Windows hands that key straight back to Mutation,
 so the action would set itself off again and again. Putting the same key in <em>both</em>

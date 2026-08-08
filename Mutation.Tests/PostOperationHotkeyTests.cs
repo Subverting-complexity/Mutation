@@ -30,4 +30,21 @@ public class PostOperationHotkeyTests
 		// one with text settling in it — has to be the longer of the two.
 		Assert.True(PostOperationHotkey.SuccessDelayMs > PostOperationHotkey.FailureDelayMs);
 	}
+
+	[Fact]
+	public void ARunThatWasRefusedSendsNothing()
+	{
+		// Pressing an OCR shortcut while a capture is already on screen changes nothing: the
+		// OCR box still holds the last run's answer, and what is in front of the user is a
+		// full-screen capture overlay. The shortcut would be typed into it (issue #342).
+		Assert.False(PostOperationHotkey.ShouldSendAfterOcr(OcrRunOutcome.Refused));
+	}
+
+	[Fact]
+	public void ARunThatReachedAnAnswerStillSendsIt()
+	{
+		// Including a failed one. Narrowing the send to successes would be a worse bug than
+		// the one being fixed — see the test above on the failure delay.
+		Assert.True(PostOperationHotkey.ShouldSendAfterOcr(OcrRunOutcome.Answered));
+	}
 }

@@ -76,6 +76,11 @@ to happen a second time.
 Each prompt you create can have its own shortcut. You set it in the prompt editor
 on the main window, not on the Hotkeys page. None are filled in for you.
 
+If the combination you type is already taken, the prompt editor tells you straight
+away, under the **Hotkey** box, and says what has it — another prompt by name, one of
+Mutation's own shortcuts, or a hotkey route. You can still save it, but only one of
+the two will ever fire, so it is worth picking something else while you are there.
+
 ### App
 
 | What it does | Default shortcut | More about it |
@@ -156,10 +161,11 @@ readers announce it straight away.
   **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught. The check covers
   the whole page at once, so a shortcut at the top and a router mapping's "From" box at
   the bottom claiming the same keys are both flagged.
-- **The same combination as one of your prompt shortcuts** — a note reading **Also
-  used by an LLM prompt** appears under the row. Prompt shortcuts are set in the prompt
-  window rather than on this page, so there is no second row here to flag. Open
-  **AI prompts** to see which one it is.
+- **The same combination as one of your prompt shortcuts** — a note appears under
+  the row naming the prompt, for example **Also used by the LLM prompt "Summarize"**.
+  Prompt shortcuts are set in the prompt window rather than on this page, so there is
+  no second row here to flag — the note names it instead, so you know which prompt to
+  open.
 - **The same combination in a "send key after" box and a real shortcut** —
   also flagged, and worth fixing. Windows hands that key straight back to Mutation,
   so the action would set itself off again and again. Putting the same key in *both*

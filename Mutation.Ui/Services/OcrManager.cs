@@ -1,5 +1,6 @@
 ﻿using CognitiveSupport;
 using Microsoft.UI.Xaml;
+using Mutation.Ui.Core;
 using Mutation.Ui.Views;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -25,8 +26,34 @@ using System.Runtime.CompilerServices;
 
 namespace Mutation.Ui.Services;
 
-public record OcrResult(bool Success, string Message);
-public record OcrBatchResult(bool Success, string Text, int TotalCount, int SuccessCount, IReadOnlyList<string> Failures);
+/// <param name="Message">The recognised text when <paramref name="Success"/>, otherwise why not.</param>
+/// <param name="Outcome">
+/// Whether this run produced an answer at all. Read instead of comparing
+/// <paramref name="Message"/> against a known string, which is how a refused run used to be
+/// told apart from a failed one — a decision that broke the moment anybody reworded a message.
+/// </param>
+/// <param name="ClipboardCopyFailed">
+/// True when there is recognised text here that did not reach the clipboard. It says something
+/// only alongside <c>Success</c>: a run that recognised nothing had nothing to copy, and does
+/// not report a copy that never happened as having failed (issue #341).
+/// </param>
+public record OcrResult(
+	bool Success,
+	string Message,
+	OcrRunOutcome Outcome = OcrRunOutcome.Answered,
+	bool ClipboardCopyFailed = false);
+
+/// <param name="ClipboardCopyFailed">
+/// As on <see cref="OcrResult"/>: the combined text was recognised but could not be put on the
+/// clipboard, so the run must not announce that the results were copied.
+/// </param>
+public record OcrBatchResult(
+	bool Success,
+	string Text,
+	int TotalCount,
+	int SuccessCount,
+	IReadOnlyList<string> Failures,
+	bool ClipboardCopyFailed = false);
 public record OcrProcessingProgress(int ProcessedSegments, int TotalSegments, string FileName, int PageNumber, int TotalPagesForFile);
 
 public class OcrManager
@@ -95,12 +122,30 @@ public class OcrManager
         }
     }
 
+    /// <summary>
+    /// The answer to a capture press that arrives while one is already on screen.
+    /// <para>
+    /// Refused, not failed. Nothing happened, the OCR box still holds the last run's answer,
+    /// and the thing in front of the user is the capture overlay — so the shortcut configured
+    /// to run after an OCR must not be sent, or it is typed into that overlay (issue #342).
+    /// The outcome carries that; the message used to be the only way to tell, which meant
+    /// rewording it would have quietly broken the decision.
+    /// </para>
+    /// <para>
+    /// Its own method so the outcome can be pinned by a test. Reaching this branch through
+    /// <see cref="TakeScreenshotAndExtractTextAsync"/> would need a real capture already on a
+    /// real screen (issue #304 is the same missing seam).
+    /// </para>
+    /// </summary>
+    internal static OcrResult CaptureAlreadyInProgress() =>
+        new(false, "Screenshot already in progress", OcrRunOutcome.Refused);
+
     public async Task<OcrResult> TakeScreenshotAndExtractTextAsync(OcrReadingOrder order)
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
             try { _activeOverlay?.BringToFront(); } catch { }
-            return new(false, "Screenshot already in progress");
+            return CaptureAlreadyInProgress();
         }
         try
         {
@@ -230,13 +275,14 @@ public class OcrManager
         }
 
         string resultText = combinedText.ToString();
+        bool copied = true;
         if (successCount > 0 && !string.IsNullOrWhiteSpace(resultText))
-            await SetClipboardTextAsync(resultText);
+            copied = await TrySetClipboardTextAsync(resultText);
 
         bool success = successCount > 0 && failures.Count == 0;
         await PlayBeepSafeAsync(success ? BeepType.Success : BeepType.Failure);
 
-        return new(success, resultText, paths.Count, successCount, failures.AsReadOnly());
+        return new(success, resultText, paths.Count, successCount, failures.AsReadOnly(), ClipboardCopyFailed: !copied);
     }
 
     // Self-contained processing for a single file. Returns a FileOcrOutcome and never mutates
@@ -425,8 +471,12 @@ public class OcrManager
         try
         {
             var text = await _ocrService.ExtractText(order, netStream, default);
-            await SetClipboardTextAsync(text);
-            return new(true, text);
+
+            // Outside the catch on purpose. The read has already succeeded by this point, and a
+            // clipboard that will not open is not a reason to call the read a failure and put a
+            // COM error where the recognised text belongs (issue #341).
+            bool copied = await TrySetClipboardTextAsync(text);
+            return new(true, text, ClipboardCopyFailed: !copied);
         }
         catch (Exception ex)
         {
@@ -516,18 +566,39 @@ public class OcrManager
         return string.Equals(uri.Host, "placeholder.com", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task SetClipboardTextAsync(string text)
+    /// <summary>
+    /// Puts <paramref name="text"/> on the clipboard, retrying while something else has it
+    /// open. True when it landed, or when there was nothing worth copying.
+    /// <para>
+    /// It used to be a bare <c>SetContent</c> with no retry, which the speech-to-text path had
+    /// already stopped doing. The window for losing the race is at its widest on the screenshot
+    /// path, which puts the <em>image</em> on the clipboard a moment earlier — exactly when a
+    /// clipboard manager or a screen reader opens the clipboard to look at what arrived. The
+    /// <c>CLIPBRD_E_CANT_OPEN</c> that came back was caught as an OCR failure, so a perfectly
+    /// good read was reported as a failed one and the shortcut that ran afterwards acted on the
+    /// screenshot still sitting there (issue #341).
+    /// </para>
+    /// </summary>
+    private Task<bool> TrySetClipboardTextAsync(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return;
+            return Task.FromResult(true);
 
-        if (HasDispatcherThreadAccess())
+        // The retry wraps the dispatcher hop rather than the other way round, so every attempt
+        // is made from the UI thread. ClipboardRetry waits with ConfigureAwait(false), so a
+        // ladder started on the UI thread resumes its second attempt on the thread pool — where
+        // the clipboard refuses the call for a second reason that no number of further attempts
+        // ever gets past.
+        return ClipboardRetry.TryAsync(() =>
         {
-            _clipboard.SetText(text);
-            return;
-        }
+            if (HasDispatcherThreadAccess())
+            {
+                _clipboard.SetText(text);
+                return Task.CompletedTask;
+            }
 
-        await RunOnDispatcherAsync(() => _clipboard.SetText(text));
+            return RunOnDispatcherAsync(() => _clipboard.SetText(text));
+        });
     }
 
     private static IReadOnlyList<FileOcrBatch> ExpandFileBatches(IReadOnlyList<string> paths)
@@ -803,7 +874,22 @@ public class OcrManager
                 Rect? selectionRect = await selectTask;
                 await beepTask;
                 if (selectionRect == null || selectionRect.Value.Width < 1 || selectionRect.Value.Height < 1)
+                {
+                    // Nothing was captured, so what follows is an error message and the shortcut
+                    // the user configured to read it — both aimed at the window the overlay took
+                    // the keyboard from. Waiting for the overlay to hand it back keeps that
+                    // shortcut out of the overlay, which the 50 ms failure delay could otherwise
+                    // beat (issue #342). Only on this branch: a capture that produced an image
+                    // goes on to spend hundreds of milliseconds reading it.
+                    //
+                    // Released before the wait rather than in the finally below. The overlay is
+                    // already hidden by now, and a hotkey press arriving during the wait is
+                    // answered by bringing the active overlay to the front — which would put
+                    // this one back on screen after it had finished standing down.
+                    _activeOverlay = null;
+                    await overlay.ForegroundHandedBack;
                     return null;
+                }
                 return await CropBitmapAsync(bmp, selectionRect.Value);
             }
             finally

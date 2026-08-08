@@ -65,6 +65,8 @@ The **Hotkey** box in the prompt editor is optional. Fill it in and that key com
 
 Pick combinations that nothing else is using. **Ctrl+Alt** plus a letter is usually safe. If a shortcut cannot be claimed because another program already has it, Mutation tells you.
 
+If something inside Mutation already has it, you find out sooner: a note appears under the **Hotkey** box as you type, saying what has it — another prompt by name, one of Mutation's own shortcuts, or a hotkey route. You can still save, but only one of the two will fire, so it is worth changing while you are here.
+
 ---
 
 ## The Auto-Run prompt

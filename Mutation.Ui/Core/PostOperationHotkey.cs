@@ -27,4 +27,16 @@ internal static class PostOperationHotkey
 	/// it is text.
 	/// </summary>
 	public static int OcrDelay(bool success) => success ? SuccessDelayMs : FailureDelayMs;
+
+	/// <summary>
+	/// Whether an OCR run left anything for the shortcut to act on.
+	/// <para>
+	/// Sending after a failure is deliberate, and stays: an error in the OCR box wants reading
+	/// as much as a result does. A refusal is not that kind of failure. Pressing an OCR
+	/// shortcut while a capture is already on screen changes nothing — the OCR box still holds
+	/// the last run's answer — and the thing in front of the user at that moment is the capture
+	/// overlay, so the keystroke would be typed into it (issue #342).
+	/// </para>
+	/// </summary>
+	public static bool ShouldSendAfterOcr(OcrRunOutcome outcome) => outcome != OcrRunOutcome.Refused;
 }

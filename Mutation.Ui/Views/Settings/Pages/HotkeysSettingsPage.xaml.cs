@@ -18,14 +18,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 {
 	private const string DuplicateBadgeText = "Duplicate hotkey";
 
-	/// <summary>
-	/// For a row whose only clash is with a prompt's own shortcut. The prompt is edited in its
-	/// own window rather than in a list on this page, so there is no second row here to look
-	/// at — saying "Duplicate hotkey" and leaving every visible row unflagged would send the
-	/// user hunting down the page for a partner that is not on it.
-	/// </summary>
-	private const string PromptClashBadgeText = "Also used by an LLM prompt";
-
 	private readonly Settings _settings;
 	private readonly List<HotkeyRow> _rows = new();
 	private readonly HotkeyRouterController _routerController;
@@ -53,37 +45,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_routerController.Initialize();
 	}
 
-	/// <param name="Registers">
-	/// Whether this shortcut is claimed from Windows. The "Send key after…" entries are typed
-	/// out to whichever app is in front rather than registered, so two of them holding the same
-	/// key is an ordinary way to set the app up and not a conflict — it used to be reported as
-	/// one (issue #306). They are still checked against the shortcuts Mutation does claim,
-	/// because Windows routes a synthesized keystroke back to whoever registered it.
-	/// </param>
-	internal sealed record HotkeySpec(
-		string Label,
-		Func<Settings, string?> Getter,
-		Action<Settings, string?> Setter,
-		bool AllowEmpty,
-		string? Default = null,
-		bool Registers = true)
-	{
-		/// <summary>
-		/// Whether this row's box also accepts SendKeys syntax, the way the same two values
-		/// already do on the OCR and Speech pages. This page used to leave the flag off, so a
-		/// working <c>^{F5}</c> was read out here as "Unsupported key" — on the page whose job
-		/// is telling the user which shortcuts are wrong (issue #322).
-		/// <para>
-		/// It follows from <see cref="Registers"/> because the reason is the same one: a value
-		/// that is typed out rather than claimed is a keystroke to send, and a keystroke to
-		/// send is what SendKeys syntax spells. Derived rather than a flag of its own so the
-		/// two cannot be set to disagree — a row that is not registered but must be a plain
-		/// chord would need its own flag, and there is no such row.
-		/// </para>
-		/// </summary>
-		public bool AllowsSendKeysSyntax => !Registers;
-	}
-
 	private sealed class HotkeyRow
 	{
 		public required HotkeySpec Spec { get; init; }
@@ -92,92 +53,13 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		public required TextBlock DuplicateBadge { get; init; }
 	}
 
-	/// <summary>
-	/// Every row on the page, in the order it appears. Reachable from tests because the flags
-	/// on it decide what each box accepts, and the page itself cannot be built without a WinUI
-	/// host (issue #304 tracks that seam).
-	/// </summary>
-	internal static readonly HotkeySpec[] Specs = new[]
-	{
-		new HotkeySpec("Toggle microphone mute",
-			s => s.AudioSettings?.MicrophoneToggleMuteHotKey,
-			(s, v) => (s.AudioSettings ??= new AudioSettings()).MicrophoneToggleMuteHotKey = v,
-			false, SettingsDefaults.Audio.MicrophoneToggleMuteHotKey),
-
-		new HotkeySpec("Take screenshot",
-			s => s.AzureComputerVisionSettings?.ScreenshotHotKey,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).ScreenshotHotKey = v,
-			false, SettingsDefaults.Ocr.ScreenshotHotKey),
-		new HotkeySpec("Screenshot + OCR",
-			s => s.AzureComputerVisionSettings?.ScreenshotOcrHotKey,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).ScreenshotOcrHotKey = v,
-			false, SettingsDefaults.Ocr.ScreenshotOcrHotKey),
-		new HotkeySpec("Screenshot + OCR (left-to-right)",
-			s => s.AzureComputerVisionSettings?.ScreenshotLeftToRightTopToBottomOcrHotKey,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).ScreenshotLeftToRightTopToBottomOcrHotKey = v,
-			false, SettingsDefaults.Ocr.ScreenshotLeftToRightTopToBottomOcrHotKey),
-		new HotkeySpec("OCR clipboard",
-			s => s.AzureComputerVisionSettings?.OcrHotKey,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).OcrHotKey = v,
-			false, SettingsDefaults.Ocr.OcrHotKey),
-		new HotkeySpec("OCR clipboard (left-to-right)",
-			s => s.AzureComputerVisionSettings?.OcrLeftToRightTopToBottomHotKey,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).OcrLeftToRightTopToBottomHotKey = v,
-			false, SettingsDefaults.Ocr.OcrLeftToRightTopToBottomHotKey),
-		new HotkeySpec("Send key after OCR (optional)",
-			s => s.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
-			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).SendHotkeyAfterOcrOperation = v,
-			true, null, Registers: false),
-
-		new HotkeySpec("Speech to text",
-			s => s.SpeechToTextSettings?.SpeechToTextHotKey,
-			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SpeechToTextHotKey = v,
-			false, SettingsDefaults.Speech.SpeechToTextHotKey),
-		new HotkeySpec("Speech to text + process with LLM",
-			s => s.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey,
-			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SpeechToTextWithLlmProcessingHotKey = v,
-			false, SettingsDefaults.Speech.SpeechToTextWithLlmProcessingHotKey),
-		new HotkeySpec("Send key after transcription (optional)",
-			s => s.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
-			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SendHotkeyAfterTranscriptionOperation = v,
-			true, null, Registers: false),
-
-		new HotkeySpec("Speak clipboard",
-			s => s.TextToSpeechSettings?.SpeakClipboard,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakClipboard = v,
-			false, SettingsDefaults.Tts.SpeakClipboard),
-		new HotkeySpec("Speak selection",
-			s => s.TextToSpeechSettings?.SpeakSelectionHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakSelectionHotKey = v,
-			false, SettingsDefaults.Tts.SpeakSelectionHotKey),
-		new HotkeySpec("Restart speech from beginning",
-			s => s.TextToSpeechSettings?.RestartFromBeginningHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).RestartFromBeginningHotKey = v,
-			false, SettingsDefaults.Tts.RestartFromBeginningHotKey),
-		new HotkeySpec("Skip sentence backward",
-			s => s.TextToSpeechSettings?.SkipSentenceBackwardHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SkipSentenceBackwardHotKey = v,
-			false, SettingsDefaults.Tts.SkipSentenceBackwardHotKey),
-		new HotkeySpec("Skip sentence forward",
-			s => s.TextToSpeechSettings?.SkipSentenceForwardHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SkipSentenceForwardHotKey = v,
-			false, SettingsDefaults.Tts.SkipSentenceForwardHotKey),
-		new HotkeySpec("Speak reading position",
-			s => s.TextToSpeechSettings?.SpeakPositionHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).SpeakPositionHotKey = v,
-			false, SettingsDefaults.Tts.SpeakPositionHotKey),
-		new HotkeySpec("Pause or resume reading",
-			s => s.TextToSpeechSettings?.PauseResumeHotKey,
-			(s, v) => (s.TextToSpeechSettings ??= new TextToSpeechSettings()).PauseResumeHotKey = v,
-			false, SettingsDefaults.Tts.PauseResumeHotKey),
-	};
 
 	private void BuildRows()
 	{
 		HotkeyList.Children.Clear();
 		_rows.Clear();
 
-		foreach (var spec in Specs)
+		foreach (var spec in CoreHotkeys.All)
 		{
 			var editor = new HotkeyEditor
 			{
@@ -256,20 +138,22 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 		var routerRows = _routerController.ConfiguredFromHotkeys();
 
+		var prompts = NamedPromptHotkeys();
+
 		// Two passes rather than one, so a row can say which kind of clash it has. The prompt
 		// shortcuts take part in the check but have no rows on this page to flag, and a badge
 		// reading "Duplicate hotkey" beside seventeen unflagged rows would be a hunt with no
 		// quarry.
 		var onThisPage = HotkeyConflictFinder.DuplicateIndexesAcross([coreRows, routerRows]);
 		var everywhere = HotkeyConflictFinder.DuplicateIndexesAcross(
-			[coreRows, routerRows, ConfiguredPromptHotkeys()]);
+			[coreRows, routerRows, ConfiguredHotkeysOf(prompts)]);
 
 		for (int i = 0; i < _rows.Count; i++)
 		{
 			LiveMessage.Show(
 				_rows[i].DuplicateBadge,
 				onThisPage[0].Contains(i) ? DuplicateBadgeText
-					: everywhere[0].Contains(i) ? PromptClashBadgeText
+					: everywhere[0].Contains(i) ? PromptClashBadge(_rows[i], prompts)
 					: null);
 		}
 
@@ -279,19 +163,56 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	}
 
 	/// <summary>
-	/// The shortcut on each LLM prompt. They are registered from the same table as everything
-	/// on this page, so they clash with it, but they are edited in the prompt window rather
-	/// than here — they take part in the check without being flagged by it.
+	/// For a row whose only clash is with a prompt's own shortcut. The prompt is edited in its
+	/// own window rather than in a list on this page, so there is no second row here to look at
+	/// — the badge names the prompt instead, which is the difference between a warning the user
+	/// can act on and one that only says something is wrong somewhere (issue #336).
 	/// </summary>
-	private IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey> ConfiguredPromptHotkeys()
+	/// <remarks>
+	/// Asked with the same two things the cross-list check was given — the saved value, not
+	/// what is in the box, and the row's own <see cref="HotkeySpec.Registers"/> flag — so the
+	/// two cannot disagree about what this row holds. The flag matters on the two "Send key
+	/// after…" rows: their value may be a comma-separated sequence or SendKeys shorthand, and
+	/// asking about it as though it were a single claimed chord parses <c>^{F5}</c> as nothing
+	/// and comes back with no name to show.
+	/// </remarks>
+	private string PromptClashBadge(HotkeyRow row, IReadOnlyList<NamedHotkey> prompts)
+	{
+		var names = HotkeyClashDescription.NamesHolding(
+			row.Spec.Getter(_settings), prompts, row.Spec.Registers);
+
+		// A guard rather than an expected branch: the caller only reaches here because the
+		// cross-list check found a prompt clash on this row, and this asks the same question of
+		// the same values. A badge that named nothing would still be better than a blank one.
+		return names.Count == 0
+			? "Also used by an LLM prompt"
+			: $"Also used by {string.Join(", ", names)}";
+	}
+
+	/// <summary>
+	/// The shortcut on each LLM prompt, with the prompt's name. They are registered from the
+	/// same table as everything on this page, so they clash with it, but they are edited in the
+	/// prompt window rather than here — they take part in the check without being flagged by it.
+	/// </summary>
+	private IReadOnlyList<NamedHotkey> NamedPromptHotkeys()
 	{
 		var prompts = _settings.LlmSettings?.Prompts;
 		if (prompts is null)
-			return Array.Empty<HotkeyConflictFinder.ConfiguredHotkey>();
+			return Array.Empty<NamedHotkey>();
 
-		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(prompts.Count);
+		var named = new List<NamedHotkey>(prompts.Count);
 		foreach (var prompt in prompts)
-			configured.Add(new(prompt.Hotkey, ClaimsTheChord: true));
+			named.Add(new(ClaimedHotkeys.NameOf(prompt), prompt.Hotkey, ClaimsTheChord: true));
+
+		return named;
+	}
+
+	private static IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey> ConfiguredHotkeysOf(
+		IReadOnlyList<NamedHotkey> named)
+	{
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(named.Count);
+		foreach (var entry in named)
+			configured.Add(entry.Configured);
 
 		return configured;
 	}

@@ -29,6 +29,13 @@ public sealed partial class RegionSelectionWindow : Window
 	private IntPtr _previousForeground;
 	private readonly DispatcherQueue? _dispatcherQueue;
 
+	/// <summary>
+	/// Completed when <see cref="HideAndRestore"/> has finished with the foreground — either the
+	/// window that was in front before the overlay opened has the keyboard back, or the retry
+	/// ladder has given up on it.
+	/// </summary>
+	private TaskCompletionSource? _foregroundHandback;
+
 	// Keyboard path for the overlay, so the four screenshot/OCR hotkeys are completable
 	// without sight of the crosshair (issue #215).
 	private readonly KeyboardRegionSelector _keyboard = new();
@@ -807,43 +814,84 @@ public sealed partial class RegionSelectionWindow : Window
 		return success;
 	}
 
+	/// <summary>
+	/// Waits for the window that was in front before this overlay opened to get the keyboard
+	/// back, or for the attempt to be given up on. Already complete when there is nothing to
+	/// wait for.
+	/// <para>
+	/// A cancelled capture is followed by an error message and, 50 ms later, by whatever
+	/// shortcut the user configured to read it — and that shortcut lands wherever the keyboard
+	/// is. The restore below runs a ladder of retries at that same 50 ms spacing, so the two
+	/// used to race, and the shortcut could be typed into a capture overlay that had not
+	/// finished standing down (issue #342). A successful OCR is never affected: it spends
+	/// hundreds of milliseconds on the network first.
+	/// </para>
+	/// </summary>
+	public Task ForegroundHandedBack => _foregroundHandback?.Task ?? Task.CompletedTask;
+
 	private void HideAndRestore()
 	{
 		UninstallKeyboardHook();
+		// Runs continuations asynchronously so a waiter cannot resume inline on this thread and
+		// carry on with the rest of the capture in the middle of the handback.
+		var handback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		_foregroundHandback = handback;
+
 		try { this.AppWindow?.Hide(); } catch { }
 		if (TryRestoreForegroundWindow() || _previousForeground == IntPtr.Zero)
 		{
+			handback.TrySetResult();
 			return;
 		}
 		if (_dispatcherQueue is null)
 		{
+			handback.TrySetResult();
 			return;
 		}
-		_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+		if (!_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
 		{
 			if (TryRestoreForegroundWindow() || _previousForeground == IntPtr.Zero)
 			{
+				handback.TrySetResult();
 				return;
 			}
 			_ = Task.Run(async () =>
 			{
-				await Task.Delay(FocusRetryDelayMilliseconds);
-				if (this._dispatcherQueue is DispatcherQueue queue)
+				// True once the last rung owns the completion. Until then this method does,
+				// because a waiter that is never released would hold up the message saying the
+				// capture was cancelled — worse than releasing it a moment early.
+				bool lastRungOwnsIt = false;
+				try
 				{
-					if (this._previousForeground == IntPtr.Zero)
+					await Task.Delay(FocusRetryDelayMilliseconds);
+					if (this._dispatcherQueue is DispatcherQueue queue && this._previousForeground != IntPtr.Zero)
 					{
-						return;
-					}
-					queue.TryEnqueue(DispatcherQueuePriority.Low, () =>
-					{
-						if (!this.TryRestoreForegroundWindow())
+						lastRungOwnsIt = queue.TryEnqueue(DispatcherQueuePriority.Low, () =>
 						{
-							this._previousForeground = IntPtr.Zero;
-						}
-					});
+							try
+							{
+								if (!this.TryRestoreForegroundWindow())
+								{
+									this._previousForeground = IntPtr.Zero;
+								}
+							}
+							finally
+							{
+								handback.TrySetResult();
+							}
+						});
+					}
+				}
+				finally
+				{
+					if (!lastRungOwnsIt)
+						handback.TrySetResult();
 				}
 			});
-		});
+		}))
+		{
+			handback.TrySetResult();
+		}
 	}
 
 	private void InstallKeyboardHook()
