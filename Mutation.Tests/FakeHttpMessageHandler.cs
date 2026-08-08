@@ -12,15 +12,19 @@ namespace Mutation.Tests;
 /// </summary>
 internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 {
-	private readonly Queue<(HttpStatusCode Status, string Body)> _replies = new();
-	private (HttpStatusCode Status, string Body) _lastReply = (HttpStatusCode.OK, "{}");
+	private readonly Queue<(HttpStatusCode Status, string Body, string? RetryAfter)> _replies = new();
+	private (HttpStatusCode Status, string Body, string? RetryAfter) _lastReply = (HttpStatusCode.OK, "{}", null);
 
 	/// <summary>Every request sent, in order, with its body already read.</summary>
 	internal List<CapturedRequest> Requests { get; } = new();
 
-	internal FakeHttpMessageHandler Respond(HttpStatusCode status, string body)
+	/// <param name="retryAfter">
+	/// The <c>Retry-After</c> header to answer with, when the reply is one that carries one.
+	/// Null sends no such header, which is the ordinary case.
+	/// </param>
+	internal FakeHttpMessageHandler Respond(HttpStatusCode status, string body, string? retryAfter = null)
 	{
-		_replies.Enqueue((status, body));
+		_replies.Enqueue((status, body, retryAfter));
 		return this;
 	}
 
@@ -42,10 +46,17 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
 		if (_replies.Count > 0)
 			_lastReply = _replies.Dequeue();
 
-		return new HttpResponseMessage(_lastReply.Status)
+		var response = new HttpResponseMessage(_lastReply.Status)
 		{
 			Content = new StringContent(_lastReply.Body, Encoding.UTF8, "application/json")
 		};
+		if (_lastReply.RetryAfter is not null)
+		{
+			// Without validation, so a deliberately malformed value can be sent to see what
+			// the reader makes of it.
+			response.Headers.TryAddWithoutValidation("Retry-After", _lastReply.RetryAfter);
+		}
+		return response;
 	}
 
 	internal sealed record CapturedRequest(string Body, IReadOnlyDictionary<string, string> Headers)

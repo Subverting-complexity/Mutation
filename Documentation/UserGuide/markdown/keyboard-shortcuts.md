@@ -122,6 +122,12 @@ already written Mutation's way stays quiet. The note goes away when you come bac
 to that box. The **From** and **To** boxes in the shortcut router further down the
 page still tidy up in silence.
 
+Short names for keys are fine. Write **Alt+PgDn** or **Alt+PageDown**, **Ctrl+Esc**
+or **Ctrl+Escape**, **Bksp** or **Backspace**, **ArrowUp** or **Up** — Mutation
+takes either, in any box on the page, and saves the full name. The one word to
+avoid is **Menu**, which means the Alt key in a shortcut but the context-menu key
+in a "send key after" box.
+
 Two boxes are the exception: **Send key after OCR (optional)** and **Send key
 after transcription (optional)**. They keep whatever you type, exactly as you
 typed it, because what goes in them is not always a plain combination. There is

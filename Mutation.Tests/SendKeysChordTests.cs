@@ -169,13 +169,15 @@ public class SendKeysChordTests
 	[InlineData("Ctrl+PgDn", VirtualKey.PageDown)]
 	[InlineData("Ctrl+Bksp", VirtualKey.Back)]
 	[InlineData("Ctrl+Esc", VirtualKey.Escape)]
-	public void TheMappersOwnKeyAliasesAlsoReadBack(string chord, VirtualKey expected)
+	public void TheShortKeyNamesAlsoReadBack(string chord, VirtualKey expected)
 	{
-		// SendKeysMapper accepts short names Hotkey.Parse does not, so these round-trip
-		// through the mapped form rather than through a second Hotkey.Parse.
+		// These used to be spellings only SendKeysMapper accepted, so the round trip had to
+		// avoid Hotkey.Parse. Both surfaces take them now (issue #329), so the two readings
+		// are checked against each other as well as against the key.
 		var mapped = SendKeysMapper.Map(chord);
 
 		Assert.True(SendKeysChord.TryParse(mapped, out var readBack));
 		Assert.Equal(expected, readBack.Key);
+		Assert.Equal(Hotkey.Parse(chord), readBack);
 	}
 }

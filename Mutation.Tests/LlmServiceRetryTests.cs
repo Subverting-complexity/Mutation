@@ -8,9 +8,12 @@ namespace Mutation.Tests;
 
 /// <summary>
 /// Issue #311: every fast-mode test builds this service with a retry count of zero, so the
-/// pipeline is empty and no retry has ever run. These use a real one — and turn the OpenAI
-/// SDK's own retry policy off, so a request count is the number of times <em>this</em>
-/// service tried rather than the product of two nested loops.
+/// pipeline is empty and no retry has ever run. These use a real one.
+/// <para>
+/// A request count here is the number of times <em>this</em> service tried, not the product
+/// of two nested loops — and since issue #318 that is true of production too, because the
+/// SDK's own retry policy is off by default rather than turned off for the tests.
+/// </para>
 /// </summary>
 public class LlmServiceRetryTests : IDisposable
 {
@@ -42,7 +45,6 @@ public class LlmServiceRetryTests : IDisposable
 			timeoutSeconds: TimeoutSeconds,
 			retryCount: retryCount,
 			transport: new HttpClientPipelineTransport(httpClient),
-			sdkRetryCount: 0,
 			timeProvider: clock);
 		return (service, clock);
 	}
@@ -121,6 +123,53 @@ public class LlmServiceRetryTests : IDisposable
 	}
 
 	[Fact]
+	public async Task APersistentRateLimitCostsFourRequestsAndNotSixteen()
+	{
+		// The number issue #318 is about. Our four attempts used to wrap the SDK's own three
+		// retries, so a rate-limited account was answered by asking sixteen more times. This
+		// service is built exactly as App.xaml.cs builds it — no test-only cap — so the count
+		// is production's count.
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.TooManyRequests, ErrorBody("slow down"));
+		var (service, _) = CreateService(handler);
+
+		await Assert.ThrowsAsync<ClientResultException>(() =>
+			service.CreateChatCompletion(Messages(), Model));
+
+		Assert.Equal(4, handler.Requests.Count);
+	}
+
+	[Fact]
+	public async Task ARateLimitThatAsksForAParticularWaitGetsIt()
+	{
+		// Honouring Retry-After was the one thing the SDK's retry loop did better than ours,
+		// and turning that loop off would have thrown it away. 2 s here, not the 500 ms the
+		// linear backoff would otherwise have picked.
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.TooManyRequests, ErrorBody("slow down"), retryAfter: "2")
+			.Respond(HttpStatusCode.OK, SuccessBody);
+		var (service, clock) = CreateService(handler);
+
+		string result = await service.CreateChatCompletion(Messages(), Model);
+
+		Assert.Equal("done", result);
+		Assert.Equal([2000d], clock.BackoffMilliseconds);
+	}
+
+	[Fact]
+	public async Task AFailureThatAsksForNothingKeepsTheLinearBackoff()
+	{
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.ServiceUnavailable, ErrorBody("still down"))
+			.Respond(HttpStatusCode.OK, SuccessBody);
+		var (service, clock) = CreateService(handler);
+
+		await service.CreateChatCompletion(Messages(), Model);
+
+		Assert.Equal([500d], clock.BackoffMilliseconds);
+	}
+
+	[Fact]
 	public async Task EachAttemptGivesItselfLongerThanTheLast()
 	{
 		var handler = new FakeHttpMessageHandler()
@@ -185,7 +234,6 @@ public class LlmServiceRetryTests : IDisposable
 			timeoutSeconds: TimeoutSeconds,
 			retryCount: 3,
 			transport: new HttpClientPipelineTransport(httpClient),
-			sdkRetryCount: 0,
 			timeProvider: new RecordingClock());
 
 		await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>

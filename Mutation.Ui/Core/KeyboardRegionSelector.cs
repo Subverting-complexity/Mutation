@@ -49,6 +49,11 @@ internal readonly record struct RegionKeyResult(RegionKeyOutcome Outcome, string
 ///
 /// Coordinates are overlay-space DIPs, matching the pointer path, and all state is
 /// plain numbers so the behaviour is testable without a window.
+///
+/// What is *said* is in bitmap pixels, because that is the unit the capture is announced
+/// in. The two used to disagree: moving read out DIPs and the capture read out pixels, so
+/// on a 150% display a user sizing a region by the spoken numbers was fed two readings
+/// that did not agree (issue #265). See <see cref="SetBitmapSize"/>.
 /// </summary>
 internal sealed class KeyboardRegionSelector
 {
@@ -61,6 +66,8 @@ internal sealed class KeyboardRegionSelector
 
 	private double _width;
 	private double _height;
+	private double _bitmapWidth;
+	private double _bitmapHeight;
 
 	public double CaretX { get; private set; }
 	public double CaretY { get; private set; }
@@ -99,6 +106,23 @@ internal sealed class KeyboardRegionSelector
 		CaretY = Clamp(CaretY, _height);
 		AnchorX = Clamp(AnchorX, _width);
 		AnchorY = Clamp(AnchorY, _height);
+	}
+
+	/// <summary>
+	/// The size of the captured bitmap, which is what everything spoken is scaled to. The
+	/// overlay is measured in DIPs and the capture in bitmap pixels, and on any display
+	/// above 100% those are different numbers for the same edge.
+	/// <para>
+	/// Told as a size rather than as a ratio so a later <see cref="Resize"/> — the overlay
+	/// re-laid out across a changed set of monitors — cannot leave a stale scale behind.
+	/// Zero, or never calling this, leaves everything spoken in DIPs, which is what a 100%
+	/// display gives anyway.
+	/// </para>
+	/// </summary>
+	public void SetBitmapSize(double width, double height)
+	{
+		_bitmapWidth = double.IsFinite(width) ? Math.Max(0, width) : 0;
+		_bitmapHeight = double.IsFinite(height) ? Math.Max(0, height) : 0;
 	}
 
 	/// <summary>Moves the caret to where the pointer left it, so the two paths agree.</summary>
@@ -166,7 +190,7 @@ internal sealed class KeyboardRegionSelector
 		CaretY = _height;
 		return new RegionKeyResult(
 			RegionKeyOutcome.SelectedWholeScreen,
-			$"Whole screen selected, {Describe(_width)} by {Describe(_height)}. Press Enter to capture.");
+			$"Whole screen selected, {DescribeX(_width)} by {DescribeY(_height)} pixels. Press Enter to capture.");
 	}
 
 	private RegionKeyResult Commit()
@@ -178,7 +202,7 @@ internal sealed class KeyboardRegionSelector
 			AnchorY = CaretY;
 			return new RegionKeyResult(
 				RegionKeyOutcome.AnchorSet,
-				$"Region corner set at {Describe(CaretX)}, {Describe(CaretY)}. Move with the arrow keys, then press Enter to capture.");
+				$"Region corner set at {DescribeX(CaretX)}, {DescribeY(CaretY)} pixels. Move with the arrow keys, then press Enter to capture.");
 		}
 
 		// A zero-width or zero-height region is discarded further down the capture
@@ -211,8 +235,19 @@ internal sealed class KeyboardRegionSelector
 	// way to tell where on the screen the rectangle sits, and no way to recover it short
 	// of clearing the corner and starting again.
 	private string DescribePosition() => HasAnchor
-		? $"{Describe(SelectionWidth)} by {Describe(SelectionHeight)}, from {Describe(SelectionLeft)}, {Describe(SelectionTop)}"
-		: $"{Describe(CaretX)}, {Describe(CaretY)}";
+		? $"{DescribeX(SelectionWidth)} by {DescribeY(SelectionHeight)}, from {DescribeX(SelectionLeft)}, {DescribeY(SelectionTop)}"
+		: $"{DescribeX(CaretX)}, {DescribeY(CaretY)}";
+
+	// Said on every arrow press, so the unit is left off here and stated on the two
+	// announcements that are not a running readout. A number per keystroke is what makes
+	// sizing by ear bearable; "410 pixels, 250 pixels" ten times a second is not.
+	private string DescribeX(double dips) => Describe(dips * ScaleX);
+
+	private string DescribeY(double dips) => Describe(dips * ScaleY);
+
+	private double ScaleX => _bitmapWidth > 0 && _width > 0 ? _bitmapWidth / _width : 1;
+
+	private double ScaleY => _bitmapHeight > 0 && _height > 0 ? _bitmapHeight / _height : 1;
 
 	private static string Describe(double value) =>
 		Math.Round(value).ToString(System.Globalization.CultureInfo.CurrentCulture);

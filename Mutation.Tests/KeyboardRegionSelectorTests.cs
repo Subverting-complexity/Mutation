@@ -247,4 +247,85 @@ public class KeyboardRegionSelectorTests
 		Assert.Equal(0, selector.SelectionWidth);
 		Assert.Equal(0, selector.SelectionHeight);
 	}
+
+	// Issue #265: what moving reads out and what the capture reads out were two different
+	// scales. On a 150% display a user sizing a region by the spoken numbers was told 400
+	// while moving and 600 on capture, for the same edge.
+	private static KeyboardRegionSelector ScaledSelector(double scale)
+	{
+		var selector = new KeyboardRegionSelector();
+		selector.SetBitmapSize(1000 * scale, 800 * scale);
+		selector.Reset(1000, 800, 0, 0);
+		return selector;
+	}
+
+	[Fact]
+	public void MovingReadsOutBitmapPixelsRatherThanOverlayUnits()
+	{
+		var selector = ScaledSelector(1.5);
+
+		var result = Press(selector, RegionSelectionKey.Right);
+
+		// One normal step is 10 overlay units, which is 15 pixels of the captured image.
+		Assert.Equal(KeyboardRegionSelector.NormalStep, selector.CaretX);
+		Assert.Equal("15, 0", result.Announcement);
+	}
+
+	[Fact]
+	public void TheSizeSaidWhileSizingIsTheSizeSaidOnCapture()
+	{
+		// The whole point: the running readout has to be the number the capture will
+		// confirm, or sizing by ear cannot work.
+		var selector = ScaledSelector(1.5);
+		Press(selector, RegionSelectionKey.Commit);
+		Press(selector, RegionSelectionKey.End);
+		var result = Press(selector, RegionSelectionKey.PageDown);
+
+		// The full 1000 x 800 overlay is a 1500 x 1200 capture.
+		Assert.StartsWith("1500 by 1200", result.Announcement);
+	}
+
+	[Fact]
+	public void TheWholeScreenIsReadOutInPixelsToo()
+	{
+		var selector = ScaledSelector(2);
+
+		var result = Press(selector, RegionSelectionKey.SelectAll, control: true);
+
+		Assert.Contains("2000 by 1600 pixels", result.Announcement);
+	}
+
+	[Fact]
+	public void ACornerIsReadOutInPixelsToo()
+	{
+		var selector = ScaledSelector(2);
+		Press(selector, RegionSelectionKey.Right);
+
+		var result = Press(selector, RegionSelectionKey.Commit);
+
+		Assert.Contains("20, 0 pixels", result.Announcement);
+	}
+
+	[Fact]
+	public void AnUnscaledDisplayReadsOutTheOverlayUnitsUnchanged()
+	{
+		// Nothing was told a bitmap size, and 100% is the common case anyway: the numbers
+		// are the ones this has always said.
+		var selector = NewSelector(width: 1000, height: 800);
+		selector.SyncCaret(0, 0);
+
+		Assert.Equal("10, 0", Press(selector, RegionSelectionKey.Right).Announcement);
+	}
+
+	[Fact]
+	public void ARidiculousBitmapSizeIsIgnoredRatherThanSpoken()
+	{
+		// Belt and braces: NaN divided into a coordinate would read out "NaN" to someone
+		// who cannot see that the number is nonsense.
+		var selector = new KeyboardRegionSelector();
+		selector.SetBitmapSize(double.NaN, double.PositiveInfinity);
+		selector.Reset(1000, 800, 0, 0);
+
+		Assert.Equal("10, 0", Press(selector, RegionSelectionKey.Right).Announcement);
+	}
 }

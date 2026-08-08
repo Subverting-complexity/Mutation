@@ -33,7 +33,8 @@ opposite corner, and let go. That is it. A right-click cancels instead.
 You never need to see the screen to do this. The overlay talks you through it. When it
 opens it says what it wants from you, then as you move it announces the position you
 are at, the size of the rectangle you have built so far, and finally the size of what
-was captured.
+was captured. Those numbers are all in pixels of the picture, so the size you hear
+while sizing the rectangle matches the size you hear when it is captured.
 
 Think of it as a moving pointer that you park at one corner, pin down, and then drag to
 the other corner.
