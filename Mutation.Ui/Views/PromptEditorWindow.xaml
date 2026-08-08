@@ -36,12 +36,23 @@
                      AutomationProperties.Name="Name"
                      AutomationProperties.HelpText="Name shown for this prompt in the prompt list."
                      Grid.Column="0" />
-            <controls:HotkeyEditor x:Name="HkPromptHotkey"
-                                   Header="Hotkey"
-                                   HelpText="Optional global shortcut that runs this prompt."
-                                   AllowEmpty="True"
-                                   Grid.Column="1"
-                                   VerticalAlignment="Bottom" />
+            <!-- The box and its clash warning move together, so the warning appearing
+                 cannot push the Model row about. The warning is its own assertive live
+                 region: it says the shortcut is already spoken for, and a user who cannot
+                 see the badge has to hear it as it appears rather than on the way past. -->
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
+                <controls:HotkeyEditor x:Name="HkPromptHotkey"
+                                       Header="Hotkey"
+                                       HelpText="Optional global shortcut that runs this prompt."
+                                       AllowEmpty="True" />
+                <TextBlock x:Name="TxtHotkeyClash"
+                           Text=""
+                           Visibility="Collapsed"
+                           TextWrapping="Wrap"
+                           Foreground="OrangeRed"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
 
             <ComboBox x:Name="CmbModel"
                       Header="Model"

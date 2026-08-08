@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -122,6 +122,20 @@ public class PostOperationHotkeyCoverageTests
 		Assert.True(unsent.Count == 0,
 			"An OCR result is shown to the user with no configured shortcut sent after it:\n" +
 			string.Join("\n", unsent));
+	}
+
+	[Fact]
+	public void Every_single_image_OCR_handler_publishes_through_the_one_method_that_sends()
+	{
+		var source = MainWindowSource();
+
+		// The four hotkey handlers and the four button handlers. Counted so that a ninth path
+		// added without going through PublishOcrResult is a failure here rather than a shortcut
+		// that silently never fires.
+		int publishes = LinesCalling(source,
+			line => line.Contains("PublishOcrResult(result", StringComparison.Ordinal)).Count;
+
+		Assert.Equal(8, publishes);
 	}
 
 	[Fact]

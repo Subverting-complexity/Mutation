@@ -1,5 +1,6 @@
 using CognitiveSupport;
 using Microsoft.UI.Xaml.Controls;
+using Mutation.Ui.Core;
 using Mutation.Ui.Views;
 using System;
 using System.Collections.Generic;
@@ -78,7 +79,9 @@ internal sealed class PromptLibraryController
 		if (_settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(null, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken);
+		var dialog = new PromptEditorWindow(
+			null, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken,
+			ClaimedHotkeys.Excluding(_settings, excludedPrompt: null));
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -104,7 +107,11 @@ internal sealed class PromptLibraryController
 		if (prompt == null || _settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(prompt, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken);
+		// This prompt is left out of its own check: its saved shortcut is the one in the box,
+		// and a prompt cannot be a duplicate of itself.
+		var dialog = new PromptEditorWindow(
+			prompt, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken,
+			ClaimedHotkeys.Excluding(_settings, prompt));
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{

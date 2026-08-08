@@ -46,16 +46,26 @@ public sealed partial class PromptEditorWindow : Window
     // this editor's Closed handler alone does not cover that.
     private readonly CancellationToken _shutdownToken;
 
-    public PromptEditorWindow(
+    // Every shortcut the rest of the app has already claimed, with the name each one goes by.
+    // Snapshotted when the editor opens, which is when it is true: this window is effectively
+    // modal, so nothing else can take a shortcut while it is up.
+    private readonly IReadOnlyList<NamedHotkey> _claimedElsewhere;
+
+    // Internal rather than public because of the last argument: the shortcuts already claimed
+    // are described with an internal type, and everything that opens this window is in here.
+    internal PromptEditorWindow(
         LlmSettings.LlmPrompt? prompt,
         TranscriptFormatter formatter,
         IReadOnlyList<string> availableModels,
-        CancellationToken shutdownToken = default)
+        CancellationToken shutdownToken = default,
+        IReadOnlyList<NamedHotkey>? claimedElsewhere = null)
     {
         this.InitializeComponent();
         _formatter = formatter;
         _shutdownToken = shutdownToken;
+        _claimedElsewhere = claimedElsewhere ?? Array.Empty<NamedHotkey>();
         this.Closed += PromptEditorWindow_Closed;
+        HkPromptHotkey.HotkeyCommitted += HkPromptHotkey_HotkeyCommitted;
 
         _statusDismissTimer = new DispatcherTimer { Interval = StatusDismissDelay };
         _statusDismissTimer.Tick += StatusDismissTimer_Tick;
@@ -115,7 +125,35 @@ public sealed partial class PromptEditorWindow : Window
             }
             CmbModel.SelectedItem = desiredModel;
         }
+
+        // Checked as the window opens, not only after an edit. A prompt saved before the other
+        // end existed is already clashing, and the user opening it is exactly who needs to know.
+        ShowHotkeyClash();
     }
+
+    private void HkPromptHotkey_HotkeyCommitted(object? sender, string value) => ShowHotkeyClash();
+
+    /// <summary>
+    /// Says whether this shortcut is already claimed — by another prompt, by one of the app's
+    /// own shortcuts, or by a hotkey route.
+    /// <para>
+    /// The Hotkeys page checks its own rows against each other and against the prompts, so a
+    /// prompt clashing with a core hotkey or a route is flagged there. Nothing checked a prompt
+    /// against another prompt: two of them on <c>CTRL+ALT+P</c> looked right in both editors,
+    /// and whichever registered second came back in the "Some hotkeys could not be registered"
+    /// dialog after saving — the wrong moment to find out, and the last list where finding out
+    /// late was still possible (issue #340).
+    /// </para>
+    /// <para>
+    /// A warning, not a refusal. Registration is what actually fails, one shortcut is still
+    /// perfectly usable while the other is not, and taking the Save button away from someone
+    /// mid-edit is a worse answer than telling them plainly.
+    /// </para>
+    /// </summary>
+    private void ShowHotkeyClash() =>
+        LiveMessage.Show(
+            TxtHotkeyClash,
+            HotkeyClashDescription.For(HkPromptHotkey.Hotkey, _claimedElsewhere));
 
     private void BtnSave_Click(object sender, RoutedEventArgs e)
     {
@@ -281,6 +319,7 @@ public sealed partial class PromptEditorWindow : Window
     private void PromptEditorWindow_Closed(object sender, WindowEventArgs args)
     {
         this.Closed -= PromptEditorWindow_Closed;
+        HkPromptHotkey.HotkeyCommitted -= HkPromptHotkey_HotkeyCommitted;
         _closed = true;
         _statusDismissTimer.Stop();
         _statusDismissTimer.Tick -= StatusDismissTimer_Tick;

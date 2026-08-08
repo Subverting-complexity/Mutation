@@ -1,6 +1,6 @@
-using System.Linq;
+﻿using System.Linq;
 using Mutation.Ui.Services;
-using Mutation.Ui.Views.SettingsUi.Pages;
+using Mutation.Ui.Core;
 
 namespace Mutation.Tests;
 
@@ -20,14 +20,14 @@ namespace Mutation.Tests;
 /// gap is one property assignment in <c>BuildRows</c>.
 /// </para>
 /// </summary>
-public class HotkeysSettingsPageSpecsTests
+public class CoreHotkeysTests
 {
 	private const string SendKeyAfterOcr = "Send key after OCR (optional)";
 	private const string SendKeyAfterTranscription = "Send key after transcription (optional)";
 	private const string SendKeysValue = "^{F5}";
 
-	private static HotkeysSettingsPage.HotkeySpec SpecFor(string label) =>
-		HotkeysSettingsPage.Specs.Single(s => s.Label == label);
+	private static HotkeySpec SpecFor(string label) =>
+		CoreHotkeys.All.Single(s => s.Label == label);
 
 	[Theory]
 	[InlineData(SendKeyAfterOcr)]
@@ -60,20 +60,20 @@ public class HotkeysSettingsPageSpecsTests
 	{
 		Assert.Equal(
 			new[] { SendKeyAfterOcr, SendKeyAfterTranscription },
-			HotkeysSettingsPage.Specs.Where(s => s.AllowsSendKeysSyntax).Select(s => s.Label).ToArray());
+			CoreHotkeys.All.Where(s => s.AllowsSendKeysSyntax).Select(s => s.Label).ToArray());
 	}
 
 	[Fact]
 	public void A_row_accepts_SendKeys_syntax_when_and_only_when_it_is_not_registered()
 	{
-		Assert.All(HotkeysSettingsPage.Specs,
+		Assert.All(CoreHotkeys.All,
 			spec => Assert.Equal(!spec.Registers, spec.AllowsSendKeysSyntax));
 	}
 
 	[Fact]
 	public void An_ordinary_chord_is_still_accepted_on_every_row()
 	{
-		Assert.All(HotkeysSettingsPage.Specs,
+		Assert.All(CoreHotkeys.All,
 			spec => Assert.Null(HotkeyValidator.Validate("Ctrl+V", spec.AllowsSendKeysSyntax)));
 	}
 
@@ -84,6 +84,6 @@ public class HotkeysSettingsPageSpecsTests
 		// are the only ones the Clear button is meant for.
 		Assert.Equal(
 			new[] { SendKeyAfterOcr, SendKeyAfterTranscription },
-			HotkeysSettingsPage.Specs.Where(s => s.AllowEmpty).Select(s => s.Label).ToArray());
+			CoreHotkeys.All.Where(s => s.AllowEmpty).Select(s => s.Label).ToArray());
 	}
 }

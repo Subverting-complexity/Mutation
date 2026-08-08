@@ -505,8 +505,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				{
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
-					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+					PublishOcrResult(result);
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR Error", ex); }
 			});
@@ -518,8 +517,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				{
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
-					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+					PublishOcrResult(result);
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR (LRTB) Error", ex); }
 			});
@@ -531,8 +529,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				{
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
-					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+					PublishOcrResult(result);
 				}
 				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard Error", ex); }
 			});
@@ -544,8 +541,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				{
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
-					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+					PublishOcrResult(result);
 				}
 				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard (LRTB) Error", ex); }
 			});
@@ -1020,8 +1016,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
-			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+			PublishOcrResult(result);
 			if (result.Success)
 				ShowStatus("Screenshot & OCR", "Text captured from screenshot.", InfoBarSeverity.Success);
 			else
@@ -1040,8 +1035,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
-			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+			PublishOcrResult(result);
 			if (result.Success)
 				ShowStatus("Screenshot & OCR (left-to-right)", "Text captured from screenshot using left-to-right reading order.", InfoBarSeverity.Success);
 			else
@@ -1060,8 +1054,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
-			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+			PublishOcrResult(result);
 			if (result.Success)
 				ShowStatus("OCR", "Clipboard image converted to text.", InfoBarSeverity.Success);
 			else
@@ -1164,7 +1157,15 @@ public sealed partial class MainWindow : Window, IDisposable
 			}
 			else if (result.Success)
 			{
-				ShowStatus("OCR documents", $"Processed {result.SuccessCount} document(s). Results copied to the clipboard.", InfoBarSeverity.Success);
+				// The clipboard half of this sentence is not a foregone conclusion: something
+				// else can hold the clipboard open through every retry, and telling the user
+				// their forty pages are on it when they are not is worse than saying nothing
+				// (issue #341). The text is in the OCR box either way.
+				(string clipboard, InfoBarSeverity severity) = result.ClipboardCopyFailed
+					? ("but they could not be copied to the clipboard. They are in the OCR results box.", InfoBarSeverity.Warning)
+					: ("Results copied to the clipboard.", InfoBarSeverity.Success);
+
+				ShowStatus("OCR documents", $"Processed {result.SuccessCount} document(s){(result.ClipboardCopyFailed ? ", " : ". ")}{clipboard}", severity);
 			}
 			else
 			{
@@ -1430,8 +1431,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
-			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
+			PublishOcrResult(result);
 			if (result.Success)
 				ShowStatus("OCR (left-to-right)", "Clipboard image converted using left-to-right reading order.", InfoBarSeverity.Success);
 			else
@@ -3531,6 +3531,44 @@ public sealed partial class MainWindow : Window, IDisposable
 			summary += "; ...";
 
 		return summary;
+	}
+
+	/// <summary>
+	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
+	/// user has to know the copy did not happen, and — because the shortcut that runs next is
+	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
+	/// </summary>
+	private const string OcrClipboardCopyFailedMessage =
+		"The text was recognised, but it could not be copied to the clipboard. It is in the OCR results box.";
+
+	/// <summary>
+	/// Puts an OCR run's answer in front of the user: the text, or the error, in the OCR box;
+	/// then the shortcut configured to run afterwards; then a word about the clipboard if it
+	/// would not take the text.
+	/// <para>
+	/// One method for all eight single-image paths rather than the same three lines eight times.
+	/// A ninth path added without the send is how batch OCR came to have none (issue #335), and
+	/// the two things this now decides — that a refused capture sends nothing (issue #342), and
+	/// that a failed copy is said out loud (issue #341) — are decided once instead of eight
+	/// times.
+	/// </para>
+	/// <para>
+	/// The send goes before the status, not after. A status builds an automation peer and starts
+	/// a timer, the operation issue #234 was filed about throwing, and a throw there used to take
+	/// the shortcut with it after the text had already landed.
+	/// </para>
+	/// </summary>
+	private void PublishOcrResult(OcrResult result)
+	{
+		SetOcrText(result.Message);
+
+		if (PostOperationHotkey.ShouldSendAfterOcr(result.Outcome))
+			HotkeyManager.SendHotkeyAfterDelay(
+				_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
+				PostOperationHotkey.OcrDelay(result.Success));
+
+		if (result.ClipboardCopyFailed)
+			ShowStatus("OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
 	}
 
 	internal void SetOcrText(string message)

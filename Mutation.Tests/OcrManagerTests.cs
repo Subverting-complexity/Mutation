@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CognitiveSupport;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -93,6 +94,121 @@ public class OcrManagerTests
 		Assert.Equal(0, manager.RunOnDispatcherCalls);
 		WaitForBeep(manager, 1);
 		Assert.Contains(BeepType.Success, manager.Beeps);
+	}
+
+	/// <summary>
+	/// A clipboard held open by something else is retried, not reported. The window for it is
+	/// widest right after a screenshot puts the image on the clipboard, which is exactly when a
+	/// clipboard manager or a screen reader opens it to see what arrived — and the copy that
+	/// followed had no retry at all, so a perfectly good read came back as a COM error where the
+	/// text should have been (issue #341).
+	/// </summary>
+	[Fact]
+	public async Task A_clipboard_that_is_briefly_busy_is_retried_and_the_text_still_lands()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image, FailWrites = 2 };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService("recognised text"), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.True(result.Success);
+		Assert.False(result.ClipboardCopyFailed);
+		Assert.Equal(3, clipboard.SetTextCalls);
+		Assert.Equal("recognised text", clipboard.LastText);
+	}
+
+	/// <summary>
+	/// And when it never lets go, the run says the copy failed rather than that the OCR did.
+	/// The recognised text is the thing the user waited for and it is returned either way — the
+	/// caller puts it in the OCR box, where the shortcut that runs next can read it.
+	/// </summary>
+	[Fact]
+	public async Task A_clipboard_that_never_opens_is_a_failed_copy_and_not_a_failed_read()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image, FailWrites = int.MaxValue };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService("recognised text"), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		// The read succeeded, so the run did. The recognised text is still what comes back, and
+		// the caller still puts it in the OCR box where the shortcut that runs next can read it
+		// — the copy failing is a separate thing to say, not a reason to throw the text away and
+		// show a COM error in its place.
+		Assert.True(result.Success);
+		Assert.True(result.ClipboardCopyFailed);
+		Assert.Equal("recognised text", result.Message);
+		Assert.Equal(ClipboardRetry.DefaultAttempts, clipboard.SetTextCalls);
+	}
+
+	/// <summary>
+	/// A run that recognised nothing had nothing to copy, and must not report the copy that
+	/// never happened as one that failed.
+	/// </summary>
+	[Fact]
+	public async Task A_run_with_no_text_does_not_claim_the_copy_failed()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { Image = image, FailWrites = int.MaxValue };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(string.Empty), clipboard);
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.ClipboardCopyFailed);
+		Assert.Equal(0, clipboard.SetTextCalls);
+	}
+
+	/// <summary>
+	/// A batch says so too. Forty pages announced as "Results copied to the clipboard" when
+	/// they are not is the same lie, told to the user who waited longest for them.
+	/// </summary>
+	[Fact]
+	public async Task A_batch_that_could_not_be_copied_says_so_as_well()
+	{
+		var clipboard = new TestClipboard { FailWrites = int.MaxValue };
+		using var file = new TempFile(".png");
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService("recognised text"), clipboard);
+
+		var result = await manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None);
+
+		Assert.True(result.Success);
+		Assert.True(result.ClipboardCopyFailed);
+		Assert.Contains("recognised text", result.Text, StringComparison.Ordinal);
+	}
+
+	/// <summary>
+	/// Pressing an OCR shortcut while a capture is already on screen is refused rather than
+	/// failed. The distinction is the whole fix: the caller reads it to decide whether to send
+	/// the configured shortcut, and used to have nothing to read but the message text
+	/// (issue #342).
+	/// </summary>
+	[Fact]
+	public void A_second_capture_while_one_is_open_is_refused_rather_than_failed()
+	{
+		var result = OcrManager.CaptureAlreadyInProgress();
+
+		Assert.False(result.Success);
+		Assert.Equal(OcrRunOutcome.Refused, result.Outcome);
+		Assert.False(PostOperationHotkey.ShouldSendAfterOcr(result.Outcome));
+	}
+
+	/// <summary>
+	/// Every other unsuccessful run still sends it. An error in the OCR box wants reading as
+	/// much as a result does, and narrowing that to "only successes" would be a worse bug than
+	/// the one being fixed.
+	/// </summary>
+	[Fact]
+	public async Task An_ordinary_OCR_failure_still_gets_the_shortcut()
+	{
+		var settings = CreateValidSettings();
+		var manager = new TestableOcrManager(settings, new StubOcrService(), new TestClipboard());
+
+		var result = await manager.ExtractTextFromClipboardImageAsync(DefaultOrder);
+
+		Assert.False(result.Success);
+		Assert.Equal(OcrRunOutcome.Answered, result.Outcome);
+		Assert.True(PostOperationHotkey.ShouldSendAfterOcr(result.Outcome));
 	}
 
 	[Fact]
@@ -989,6 +1105,12 @@ public class OcrManagerTests
 		public string? LastText { get; private set; }
 		public int SetTextCalls { get; private set; }
 
+		/// <summary>
+		/// How many of the next writes throw the way a clipboard held open by another process
+		/// does. <see cref="int.MaxValue"/> for one that never lets go.
+		/// </summary>
+		public int FailWrites { get; set; }
+
 		// The image ExtractTextFromClipboardImageAsync will find. Null means "no image
 		// on the clipboard", which is the path that beeps failure.
 		public SoftwareBitmap? Image { get; set; }
@@ -996,6 +1118,16 @@ public class OcrManagerTests
 		public override void SetText(string text)
 		{
 			SetTextCalls++;
+			if (FailWrites > 0)
+			{
+				if (FailWrites != int.MaxValue)
+					FailWrites--;
+
+				// The real one is a COMException carrying CLIPBRD_E_CANT_OPEN. What matters
+				// here is only that the write throws, which is all the retry looks at.
+				throw new InvalidOperationException("OpenClipboard Failed (0x800401D0)");
+			}
+
 			LastText = text;
 		}
 
