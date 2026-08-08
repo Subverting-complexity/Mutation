@@ -2820,7 +2820,17 @@ public sealed partial class MainWindow : Window, IDisposable
 		// is required too — without one the restart could only report "device not
 		// resolved", talking over the message that actually tells them what to do.
 		if (_startupCapturePending && live is not null)
+		{
+			// Cleared as the recovery is queued, not when it lands: the flag's job is
+			// to make this happen once, and a request that is queued to open capture
+			// has done that job. Leaving it set would re-arm the restart on the next
+			// failed switch, and that one would be cycling a handle this one opened —
+			// the healthy-capture teardown this guard exists to prevent, reached the
+			// long way round. A recovery that fails reports itself through
+			// StartCapture; it does not get retried by a later, unrelated failure.
+			_startupCapturePending = false;
 			_ = _microphoneSwitch.RestartCaptureAsync();
+		}
 	}
 
 	private void MicWaveToggle_Click(object sender, RoutedEventArgs e)
