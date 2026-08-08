@@ -8,9 +8,9 @@ namespace Mutation.Ui.Core;
 /// Which entries in a list of configured shortcuts clash with each other.
 /// <para>
 /// The Settings screen used to answer this by comparing the raw text case-insensitively,
-/// while registration compares chords. <c>CTRL+ALT+G</c> and <c>Ctrl-Alt-G</c> are the same
-/// shortcut and the same string to nobody, so Settings would accept a pair that registration
-/// then refused, and the user found out from a failure dialog after saving (issue #306).
+/// while registration compares chords. Two spellings of one shortcut are the same shortcut
+/// and different strings, so Settings would accept a pair that registration then refused,
+/// and the user found out from a failure dialog after saving (issue #306).
 /// </para>
 /// <para>
 /// Kept as a pure list-in, indexes-out unit so it can be exercised without a settings page:
@@ -20,38 +20,60 @@ namespace Mutation.Ui.Core;
 /// </summary>
 internal static class HotkeyConflictFinder
 {
+	/// <summary>One configured shortcut, and whether it is claimed from Windows.</summary>
+	/// <param name="Text">Whatever the user has typed, in any spelling.</param>
+	/// <param name="ClaimsTheChord">
+	/// True for a shortcut Mutation registers with Windows, false for one it types out to
+	/// whichever app is in front — the "Send key after…" entries. Two sent keys cannot clash
+	/// with each other, but a sent key that matches a registered one does: Windows routes the
+	/// synthesized keystroke back to Mutation, so the action fires itself again.
+	/// </param>
+	public readonly record struct ConfiguredHotkey(string? Text, bool ClaimsTheChord);
+
 	/// <summary>
-	/// The positions in <paramref name="hotkeyTexts"/> holding a chord that also appears
-	/// somewhere else in the list. Every member of a clashing group is reported, not just the
+	/// The positions in <paramref name="configured"/> holding a shortcut that clashes with
+	/// another one in the list. Every member of a clashing group is reported, not just the
 	/// later ones, because the user needs both rows flagged to know which two to compare.
 	/// <para>
+	/// A group clashes when it holds more than one entry and at least one of them is claimed
+	/// from Windows. That covers registered-against-registered and sent-against-registered,
+	/// and leaves out sent-against-sent — sending the same key after OCR and after
+	/// transcription is an ordinary way to set the app up, and used to be reported as a
+	/// conflict it never was.
+	/// </para>
+	/// <para>
 	/// Text that is blank or does not parse as a chord is skipped rather than matched on. It
-	/// cannot be registered at all, so it cannot collide with anything — reporting two
-	/// half-typed rows as duplicates of each other would be a second, wrong complaint on top
-	/// of the validation message they already carry.
+	/// cannot be registered or sent as a chord at all, so it cannot collide with anything —
+	/// reporting two half-typed rows as duplicates of each other would be a second, wrong
+	/// complaint on top of the validation message they already carry.
 	/// </para>
 	/// </summary>
-	public static IReadOnlySet<int> DuplicateIndexes(IReadOnlyList<string?> hotkeyTexts)
+	public static IReadOnlySet<int> DuplicateIndexes(IReadOnlyList<ConfiguredHotkey> configured)
 	{
-		if (hotkeyTexts is null) throw new ArgumentNullException(nameof(hotkeyTexts));
+		if (configured is null) throw new ArgumentNullException(nameof(configured));
 
-		var firstSeenAt = new Dictionary<Hotkey, int>();
-		var duplicates = new HashSet<int>();
+		var groups = new Dictionary<Hotkey, List<int>>();
+		var claimed = new HashSet<Hotkey>();
 
-		for (int i = 0; i < hotkeyTexts.Count; i++)
+		for (int i = 0; i < configured.Count; i++)
 		{
-			if (!Hotkey.TryParse(hotkeyTexts[i], out var chord))
+			var entry = configured[i];
+			if (!Hotkey.TryParse(entry.Text, out var chord))
 				continue;
 
-			if (firstSeenAt.TryGetValue(chord, out int first))
-			{
-				duplicates.Add(first);
-				duplicates.Add(i);
-			}
-			else
-			{
-				firstSeenAt[chord] = i;
-			}
+			if (!groups.TryGetValue(chord, out var members))
+				groups[chord] = members = new List<int>();
+			members.Add(i);
+
+			if (entry.ClaimsTheChord)
+				claimed.Add(chord);
+		}
+
+		var duplicates = new HashSet<int>();
+		foreach (var (chord, members) in groups)
+		{
+			if (members.Count > 1 && claimed.Contains(chord))
+				duplicates.UnionWith(members);
 		}
 
 		return duplicates;

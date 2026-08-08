@@ -30,8 +30,9 @@ internal static class SessionSelectionPlanner
 	/// </param>
 	/// <returns>
 	/// An entry of <paramref name="sessions"/>, never a stale instance from a previous
-	/// rebuild — callers look the result up by index, which only works for an item the list
-	/// actually holds.
+	/// rebuild. <see cref="SpeechSession"/> is a record, so a stale instance would still have
+	/// compared equal and been found by <c>IndexOf</c> — this is not load-bearing, it just
+	/// keeps the selection and the list pointing at one object.
 	/// </returns>
 	public static SpeechSession? ChooseSelection(
 		IReadOnlyList<SpeechSession> sessions,

@@ -108,8 +108,11 @@ internal sealed class HotkeyRegistrationTable
 			return new RegistrationOutcome(norm, id, false, message);
 		}
 
-		// A copy, because Hotkey is mutable and a caller that edits the instance it handed us
-		// would otherwise move it inside the set and leave the chord permanently unbindable.
+		// A copy, because Hotkey is mutable and this set hashes it. A caller that edited the
+		// instance it handed us would strand it in the wrong bucket, where a later resize could
+		// rehash it onto a chord nobody registered and make that one unbindable. No caller does
+		// that today — every one parses a fresh instance — so this is a guard, not a fix, and
+		// there is no way to observe it through the public surface. Hence no test.
 		Hotkey held = hotkey.Clone();
 		_entries[id] = new Entry(callback, held, group);
 		_registered.Add(held);

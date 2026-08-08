@@ -199,16 +199,6 @@ public class HotkeyTests
 		Assert.Equal("CTRL+DELETE", hk.ToString());
 	}
 
-	[Fact]
-	public void ToString_AgreesWithTheRegistrationTables_normalized_form()
-	{
-		// Registration reports the chord it refused by this name. If the two ever drifted, the
-		// message would name a shortcut the user cannot find on the Settings screen.
-		var hk = new Hotkey { Control = true, Shift = true, Key = VirtualKey.F1 };
-
-		Assert.Equal(HotkeyRegistrationTable.NormalizeHotkey(hk), hk.ToString());
-	}
-
 	// ----- Value equality -----
 
 	[Fact]

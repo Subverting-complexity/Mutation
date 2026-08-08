@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using CognitiveSupport;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
@@ -14,6 +16,8 @@ namespace Mutation.Ui.Views.SettingsUi.Pages;
 
 public sealed partial class HotkeysSettingsPage : UserControl
 {
+	private const string DuplicateBadgeText = "Duplicate hotkey";
+
 	private readonly Settings _settings;
 	private readonly List<HotkeyRow> _rows = new();
 	private readonly HotkeyRouterController _routerController;
@@ -39,9 +43,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	/// <param name="Registers">
 	/// Whether this shortcut is claimed from Windows. The "Send key after…" entries are typed
-	/// out to whichever app is in front rather than registered, so they cannot clash with
-	/// anything — sending the same key after OCR and after transcription is an ordinary way to
-	/// set the app up, and used to be reported as a duplicate (issue #306).
+	/// out to whichever app is in front rather than registered, so two of them holding the same
+	/// key is an ordinary way to set the app up and not a conflict — it used to be reported as
+	/// one (issue #306). They are still checked against the shortcuts Mutation does claim,
+	/// because Windows routes a synthesized keystroke back to whoever registered it.
 	/// </param>
 	private sealed record HotkeySpec(
 		string Label,
@@ -149,11 +154,14 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			};
 			var dupBadge = new TextBlock
 			{
-				Text = "Duplicate hotkey",
+				Text = string.Empty,
 				Foreground = new SolidColorBrush(Microsoft.UI.Colors.OrangeRed),
 				Visibility = Visibility.Collapsed,
 				Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
 			};
+			// Announced the moment it appears, the way the validation message under each box
+			// already is. A warning only a sighted user notices is no warning here.
+			AutomationProperties.SetLiveSetting(dupBadge, AutomationLiveSetting.Assertive);
 
 			Grid editorRow = new() { ColumnSpacing = 8 };
 			editorRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -200,14 +208,25 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	private void RecomputeDuplicates()
 	{
-		var configured = new List<string?>(_rows.Count);
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
 		foreach (var row in _rows)
-			configured.Add(row.Spec.Registers ? row.Spec.Getter(_settings) : null);
+			configured.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
 
 		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
 
 		for (int i = 0; i < _rows.Count; i++)
-			_rows[i].DuplicateBadge.Visibility = duplicates.Contains(i) ? Visibility.Visible : Visibility.Collapsed;
+			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates.Contains(i));
+	}
+
+	/// <summary>
+	/// Shows or hides one row's duplicate warning. The text is set, not just the visibility,
+	/// because a live region announces a change of content — flipping visibility alone raises
+	/// no event, so the warning would only ever be found by navigating onto the row.
+	/// </summary>
+	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate)
+	{
+		badge.Visibility = isDuplicate ? Visibility.Visible : Visibility.Collapsed;
+		badge.Text = isDuplicate ? DuplicateBadgeText : string.Empty;
 	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>

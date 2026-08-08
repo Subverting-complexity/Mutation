@@ -281,12 +281,18 @@ public sealed partial class HotkeyEditor : UserControl
 			or VirtualKey.LeftWindows or VirtualKey.RightWindows;
 
 	/// <summary>
-	/// The recorded chord as text. Built through <see cref="Mutation.Ui.Services.Hotkey"/> so
-	/// what the box shows is the same canonical spelling registration and duplicate detection
-	/// use, rather than a third copy of the same formatting rules (issue #306).
+	/// The recorded chord as text, or nothing when there is no key to record. Built through
+	/// <see cref="Mutation.Ui.Services.Hotkey"/> so what the box shows is the same canonical
+	/// spelling registration and duplicate detection use, rather than a third copy of the same
+	/// formatting rules (issue #306). The caller ignores an empty result, which leaves the box
+	/// as it was rather than committing a placeholder that is not a shortcut.
 	/// </summary>
-	private static string FormatHotkey(VirtualKeyModifiers mods, VirtualKey key) =>
-		new Mutation.Ui.Services.Hotkey
+	private static string FormatHotkey(VirtualKeyModifiers mods, VirtualKey key)
+	{
+		if (key == VirtualKey.None)
+			return string.Empty;
+
+		return new Mutation.Ui.Services.Hotkey
 		{
 			Control = (mods & VirtualKeyModifiers.Control) != 0,
 			Shift = (mods & VirtualKeyModifiers.Shift) != 0,
@@ -294,4 +300,5 @@ public sealed partial class HotkeyEditor : UserControl
 			Win = (mods & VirtualKeyModifiers.Windows) != 0,
 			Key = key,
 		}.ToString();
+	}
 }

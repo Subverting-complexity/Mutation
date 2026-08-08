@@ -19,9 +19,15 @@ internal static class SessionRetentionPlanner
 	/// recording) are never deleted and still count toward the retained total, so the
 	/// active recording is preserved without shrinking the kept window below the cap.
 	/// </summary>
+	/// <param name="exclusions">
+	/// Paths that must survive. Matched with <see cref="PathEquality.SamePath"/> rather than
+	/// as strings: an exclusion spelled differently from the path the session scan produced
+	/// would otherwise miss, and the recording the user has selected would be deleted
+	/// underneath them (issue #306).
+	/// </param>
 	public static IReadOnlyList<SpeechSession> SelectSessionsToDelete(
 		IReadOnlyCollection<SpeechSession> sessions,
-		ISet<string> exclusions,
+		IReadOnlyCollection<string> exclusions,
 		int maxRetained)
 	{
 		ArgumentNullException.ThrowIfNull(sessions);
@@ -37,7 +43,7 @@ internal static class SessionRetentionPlanner
 			if (currentCount <= maxRetained)
 				break;
 
-			if (exclusions.Contains(session.FilePath))
+			if (exclusions.Any(excluded => PathEquality.SamePath(excluded, session.FilePath)))
 				continue;
 
 			toDelete.Add(session);

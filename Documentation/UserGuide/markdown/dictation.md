@@ -211,9 +211,14 @@ oldest ones beyond that. You can set this anywhere from 1 to 500 in **Settings**
 under **Recording sessions to keep**. A recording that is still in progress is
 never deleted.
 
-If the recording you had selected is one of the ones cleared away, Mutation moves
-your selection to the newest recording instead. So **Play selected session** always
-plays something real, rather than reporting that the file cannot be found.
+The recording you have selected is never one of the ones cleared away, nor is one
+that is playing.
+
+If the selected recording goes missing some other way — you deleted the file
+yourself, say, or something else tidied the folder — **Play selected session** tells
+you "Audio file not found." Mutation then moves your selection to the newest
+recording and says which one it picked, so the next thing you press acts on a
+recording that is really there.
 
 ## Transcribing a file you already have
 

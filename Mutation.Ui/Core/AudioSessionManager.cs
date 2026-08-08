@@ -152,7 +152,20 @@ public class AudioSessionManager : IDisposable
 
         string? path = preferredSelection != null ? preferredSelection.FilePath : preferredPath;
 
-        SelectedSession = SessionSelectionPlanner.ChooseSelection(SessionHistory, SelectedSession, path);
+        var previous = SelectedSession;
+        SelectedSession = SessionSelectionPlanner.ChooseSelection(SessionHistory, previous, path);
+
+        // Said out loud when the selection moved on its own. A caller that asked for a
+        // particular recording already knows where it put the user; this is the other case —
+        // the selected recording is gone, so Play and Retry transcription now act on a
+        // different one, and a user working by ear has nothing else to tell them that.
+        if (string.IsNullOrWhiteSpace(path)
+            && previous is not null
+            && SelectedSession is not null
+            && !PathEquality.SamePath(previous.FilePath, SelectedSession.FilePath))
+        {
+            StatusMessage?.Invoke(this, $"Selected {SelectedSession.FileName} instead.");
+        }
     }
 
     public async Task NavigateSessionsAsync(int direction)

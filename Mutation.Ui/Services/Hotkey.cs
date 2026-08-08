@@ -61,7 +61,9 @@ public class Hotkey : IEquatable<Hotkey>
 	/// <summary>
 	/// The one canonical spelling of a chord: modifiers in a fixed order, upper-cased key,
 	/// and the <c>Number</c> prefix stripped off the digit keys so a chord reads the way the
-	/// user typed it. <see cref="Parse"/> accepts what this produces, so the form round-trips.
+	/// user typed it. <see cref="Parse"/> accepts what this produces for any real chord —
+	/// the <c>(none)</c> placeholder is the exception, and is a description rather than a
+	/// spelling, because there is no chord to spell.
 	/// <para>
 	/// This used to be a third spelling — <c>Shift+Control+Alt+Windows+A</c> against the
 	/// <c>CTRL+SHIFT+ALT+WIN+A</c> that both the registration table and the hotkey editor

@@ -306,26 +306,11 @@ public class HotkeyRegistrationTableTests
 	}
 
 	[Fact]
-	public void A_chord_edited_after_it_was_registered_can_still_be_released()
+	public void A_chord_held_by_one_group_is_refused_to_another()
 	{
-		// Hotkey is mutable and the table keeps it in a hash set. Holding the caller's instance
-		// would let an edit move it inside the set, so the release could not find it and the
-		// chord would be unbindable for the rest of the session.
-		var (table, _) = NewTable();
-		var chord = Chord(VirtualKey.M);
-
-		table.Register(chord, () => { }, HotkeyGroup.Core);
-		chord.Key = VirtualKey.N;
-
-		table.ClearGroup(HotkeyGroup.Core);
-
-		Assert.False(table.IsRegistered(Chord(VirtualKey.M)));
-		Assert.True(table.Register(Chord(VirtualKey.M), () => { }, HotkeyGroup.Core).Success);
-	}
-
-	[Fact]
-	public void Two_spellings_of_one_chord_count_as_one_registration()
-	{
+		// The groups decide what a refresh releases, not who may bind what — one set of live
+		// chords covers all three. This is why the Settings screen has to check a core shortcut
+		// against a router mapping, which it still does not (issue #321).
 		var (table, platform) = NewTable();
 
 		table.Register(Hotkey.Parse("Ctrl-Shift-A"), () => { }, HotkeyGroup.Core);

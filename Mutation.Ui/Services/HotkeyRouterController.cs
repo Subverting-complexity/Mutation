@@ -263,9 +263,9 @@ internal sealed class HotkeyRouterController
 	/// </summary>
 	private void RecalculateDuplicates()
 	{
-		var configured = new List<string?>(_entries.Count);
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_entries.Count);
 		foreach (var entry in _entries)
-			configured.Add(entry.IsFromValid ? entry.NormalizedFromHotkey : null);
+			configured.Add(new(entry.IsFromValid ? entry.NormalizedFromHotkey : null, ClaimsTheChord: true));
 
 		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
 

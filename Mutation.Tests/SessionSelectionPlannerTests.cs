@@ -176,8 +176,9 @@ public class SessionSelectionPlannerTests
 	public void A_kept_selection_is_the_instance_the_rebuilt_list_holds()
 	{
 		// The list is rebuilt from disk on every refresh, so the entry naming the selected
-		// recording is a new object each time. Returning the caller's stale instance instead
-		// would make IndexOf report -1, and Previous/Next would start from the top of the list.
+		// recording is a new object each time. SpeechSession is a record, so returning the
+		// caller's stale instance would still have compared equal — this pins the selection and
+		// the list on one object rather than two that merely agree.
 		var stale = Session("selected.ogg");
 		var rebuilt = Session("selected.ogg");
 
