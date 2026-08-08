@@ -144,7 +144,8 @@ These live under **Screen capture & OCR** in **Settings** (**Ctrl+Comma**).
 
 There is also an optional **Send hotkey after OCR** setting, which fires a keystroke of
 your choosing once the text is ready — handy for kicking off your screen reader
-automatically.
+automatically. It is sent whether the run found text or failed, so a screen-reader
+shortcut in that box reads out the error just as readily as the result.
 
 The rest of the options are covered in [The Settings window](settings.md).
 

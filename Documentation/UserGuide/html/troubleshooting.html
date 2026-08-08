@@ -334,16 +334,34 @@ whether Windows accepted them and tells you when it did not, rather than announc
 success for text that never arrived.</p>
 <p><strong>What to do.</strong></p>
 <ol>
-<li>Check the other app first. Once in a while Mutation gets the text through on a
-second route and the warning turns out to be a false alarm, so look before you
-paste again — otherwise you may end up with it twice.</li>
-<li>If it really is missing, your text is not lost. It is in the main window and,
-unless the clipboard also failed, on your clipboard — paste it with <strong>Ctrl+V</strong>.</li>
+<li>Your text is not lost. It is in the main window and, unless the clipboard also
+failed, on your clipboard — paste it with <strong>Ctrl+V</strong>.</li>
+<li>Check the other app before you paste, so you don't end up with the text twice.</li>
 <li>The usual cause is an app started with &quot;Run as administrator&quot;, or a system dialog
 that has taken the foreground. Close it, or click into an ordinary window, and
 dictate again.</li>
 <li>Task Manager, the Windows security prompt, and some installer windows behave this
 way too. Nothing is wrong with Mutation or your microphone.</li>
+</ol>
+<h3 id="the-shortcut-i-set-to-run-afterwards-doesnt-happen">The shortcut I set to run afterwards doesn't happen</h3>
+<p><strong>What's happening.</strong> This is the <strong>Send hotkey after transcription</strong> and <strong>Send hotkey
+after OCR</strong> boxes in <strong>Settings</strong>. There are two reasons one may not arrive.</p>
+<p>The first is that dictation only sends it when the text was delivered. If you heard the
+failure beep, the shortcut is deliberately skipped — it is usually something that acts
+on the text, and running it when the text never landed would aim it at the wrong thing.
+OCR is different: it sends the shortcut either way, so a screen-reader command in that
+box reads out the error as readily as the result.</p>
+<p>The second is how the shortcut is written. Write it the ordinary way — modifier names
+joined with plus signs, like <strong>Ctrl+V</strong>, <strong>Alt+F4</strong> or <strong>Ctrl+Shift+Delete</strong>. Mutation
+still understands the older shorthand some settings files hold, such as <code>^{DEL}</code> for
+<strong>Ctrl+Delete</strong>, but the ordinary spelling is the one to reach for.</p>
+<p><strong>What to do.</strong></p>
+<ol>
+<li>Deal with the failure beep first. Whatever stopped the text arriving is stopping
+the shortcut too, and the two entries above cover the usual causes.</li>
+<li>Retype the shortcut the plain way — <strong>Ctrl+Delete</strong> rather than a shorthand.</li>
+<li>You can put more than one in, separated by commas: <strong>Ctrl+A, Ctrl+C</strong> sends the two
+in turn.</li>
 </ol>
 <h3 id="something-went-wrong-while-delivering-the-transcript">Something went wrong while delivering the transcript</h3>
 <p><strong>What's happening.</strong> Very occasionally the delivery itself fails in a way Mutation did

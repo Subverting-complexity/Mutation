@@ -506,7 +506,7 @@ public sealed partial class MainWindow : Window, IDisposable
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
 					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR Error", ex); }
 			});
@@ -519,7 +519,7 @@ public sealed partial class MainWindow : Window, IDisposable
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
 					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot + OCR (LRTB) Error", ex); }
 			});
@@ -532,7 +532,7 @@ public sealed partial class MainWindow : Window, IDisposable
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
 					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 				}
 				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard Error", ex); }
 			});
@@ -545,7 +545,7 @@ public sealed partial class MainWindow : Window, IDisposable
 					if (!await EnsureOcrConfiguredAsync()) return;
 					var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
 					SetOcrText(result.Message);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+					HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 				}
 				catch (Exception ex) { await ShowErrorDialog("OCR Clipboard (LRTB) Error", ex); }
 			});
@@ -1021,7 +1021,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("Screenshot & OCR", "Text captured from screenshot.", InfoBarSeverity.Success);
 			else
@@ -1041,7 +1041,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("Screenshot & OCR (left-to-right)", "Text captured from screenshot using left-to-right reading order.", InfoBarSeverity.Success);
 			else
@@ -1061,7 +1061,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("OCR", "Clipboard image converted to text.", InfoBarSeverity.Success);
 			else
@@ -1422,7 +1422,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, result.Success ? Constants.SendHotkeyDelay : Constants.FailureSendHotkeyDelay);
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("OCR (left-to-right)", "Clipboard image converted using left-to-right reading order.", InfoBarSeverity.Success);
 			else
@@ -2493,7 +2493,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
 			var outcome = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
-			string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "processed text");
+			var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "processed text");
 
 			// Claimed after everything that can throw and just before the announcement,
 			// so a failure on the delivery path cannot burn the one notice the user gets
@@ -2501,21 +2501,17 @@ public sealed partial class MainWindow : Window, IDisposable
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
 
-			if (failure is null)
-			{
-				BeepPlayer.Play(BeepType.Success);
-				ShowStatus("Processing",
-					FastModeMessages.AppendTo($"Applied prompt '{prompt.Name}' with the language model.", fastModeNotice),
-					InfoBarSeverity.Success);
-				HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
-			}
-			else
-			{
-				BeepPlayer.Play(BeepType.Failure);
-				ShowStatus("Processing",
-					FastModeMessages.AppendTo(failure, fastModeNotice),
-					InfoBarSeverity.Error);
-			}
+			BeepPlayer.Play(plan.Beep);
+			ShowStatus("Processing",
+				FastModeMessages.AppendTo(
+					plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
+					fastModeNotice),
+				plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+
+			if (plan.SendConfiguredHotkey)
+				HotkeyManager.SendHotkeyAfterDelay(
+					_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
+					PostOperationHotkey.SuccessDelayMs);
         }
         catch (OperationCanceledException) when (_isClosing || _shutdownCts.IsCancellationRequested)
         {
@@ -2788,21 +2784,17 @@ public sealed partial class MainWindow : Window, IDisposable
 
 				bool copied = await _clipboard.TrySetTextAsync(formatted);
 				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
-				string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "transcript");
+				var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "transcript");
 
-				if (failure is null)
-				{
-					BeepPlayer.Play(BeepType.Success);
-					ShowStatus("Speech to Text", FastModeMessages.AppendTo(successMessage, fastModeNotice), InfoBarSeverity.Success);
-					HotkeyManager.SendHotkeyAfterDelay(_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation, Constants.SendHotkeyDelay);
-				}
-				else
-				{
-					BeepPlayer.Play(BeepType.Failure);
-					ShowStatus("Speech to Text",
-						FastModeMessages.AppendTo(failure, fastModeNotice),
-						InfoBarSeverity.Error);
-				}
+				BeepPlayer.Play(plan.Beep);
+				ShowStatus("Speech to Text",
+					FastModeMessages.AppendTo(plan.FailureMessage ?? successMessage, fastModeNotice),
+					plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+
+				if (plan.SendConfiguredHotkey)
+					HotkeyManager.SendHotkeyAfterDelay(
+						_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
+						PostOperationHotkey.SuccessDelayMs);
 			},
 			onFailure: ex =>
 			{

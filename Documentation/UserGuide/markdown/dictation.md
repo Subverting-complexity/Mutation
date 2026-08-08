@@ -176,6 +176,13 @@ It exists for apps that need one extra keypress to finish the job — for exampl
 sending **Ctrl+V** to paste, or a **Tab** or **Enter** to move on. Leave it blank
 if you don't need it.
 
+If the transcript could not be delivered — you hear the failure beep — the shortcut is
+not sent. It usually acts on the text, and sending it when nothing arrived would aim it
+at whatever was there before.
+
+Write the shortcut the ordinary way, like **Ctrl+V** or **Ctrl+Shift+Delete**. You can
+list more than one, separated by commas, and they are sent in turn.
+
 ## Choosing a transcription service
 
 At the top of the **Speech to Text** card is a dropdown listing your transcription

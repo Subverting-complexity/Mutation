@@ -91,38 +91,11 @@ public class HotkeyManager : IDisposable
 	// MOD_NOREPEAT — can be tested without a window handle.
 
 	// RegisterHotKey/UnregisterHotKey live in Win32HotkeyPlatform, behind IHotkeyPlatform.
+	// The SendInput structs live in KeyboardInput, where their size — which is what Windows
+	// validates — can be asserted in a test.
 	[DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr newProc);
 	[DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-	[DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 	[DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
-
-	private const int INPUT_KEYBOARD = 1;
-	private const uint KEYEVENTF_KEYUP = 0x0002;
-	private const uint KEYEVENTF_UNICODE = 0x0004;
-	private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
-
-	[StructLayout(LayoutKind.Sequential)]
-	private struct INPUT
-	{
-		public uint type;
-		public INPUTUNION U;
-	}
-
-	[StructLayout(LayoutKind.Explicit)]
-	private struct INPUTUNION
-	{
-		[FieldOffset(0)] public KEYBDINPUT ki;
-	}
-
-	[StructLayout(LayoutKind.Sequential)]
-	private struct KEYBDINPUT
-	{
-		public ushort wVk;
-		public ushort wScan;
-		public uint dwFlags;
-		public uint time;
-		public IntPtr dwExtraInfo;
-	}
 
 	private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -187,7 +160,7 @@ public class HotkeyManager : IDisposable
 			                        try
 			                        {
 			                                var hotkey = Hotkey.Parse(map.FromHotKey!);
-			                                var attempt = _registrations.Register(hotkey, () => SendHotkeyAfterDelay(map.ToHotKey!, Constants.FailureSendHotkeyDelay), HotkeyRegistrationTable.HotkeyGroup.Router);
+			                                var attempt = _registrations.Register(hotkey, () => SendHotkeyAfterDelay(map.ToHotKey!, PostOperationHotkey.FailureDelayMs), HotkeyRegistrationTable.HotkeyGroup.Router);
                                 if (attempt.Success)
                                 {
                                         Log($"Router registered: From='{map.FromHotKey}' -> To='{map.ToHotKey}', id={attempt.Id}");
@@ -348,7 +321,14 @@ public class HotkeyManager : IDisposable
 		{
 			try
 			{
-				var hk = Hotkey.Parse(part);
+				var hk = ResolveChord(part);
+				if (hk is null)
+				{
+					Log($"'{part}' is not a chord SendInput can express, falling back to SendKeys mapping.");
+					allSentViaInput = false;
+					break;
+				}
+
 				Log($"Sending via SendInput: '{part}'");
 				bool ok = SendHotkeyViaSendInput(hk);
 				if (!ok)
@@ -384,6 +364,25 @@ public class HotkeyManager : IDisposable
 		}
 
 		return allSentViaInput;
+	}
+
+	/// <summary>
+	/// The chord <paramref name="text"/> spells, however the user wrote it, or null when it
+	/// is something only the WinForms fallback can express.
+	/// </summary>
+	/// <remarks>
+	/// Both spellings are accepted because both are on screen: the hotkey editors take
+	/// "CTRL+DELETE", while the two "send this afterwards" boxes have always also accepted
+	/// SendKeys notation, and settings saved years ago still hold "^{DEL}". Reading the
+	/// second form here is what puts it on the SendInput path, where a failure to deliver
+	/// can be seen (issue #325).
+	/// </remarks>
+	internal static Hotkey? ResolveChord(string text)
+	{
+		if (Hotkey.TryParse(text, out var parsed))
+			return parsed;
+
+		return SendKeysChord.TryParse(text, out var fromSendKeys) ? fromSendKeys : null;
 	}
 
 	private static void SendKeysOnUiThread(string mapped)
@@ -445,22 +444,14 @@ public class HotkeyManager : IDisposable
 		if (string.IsNullOrEmpty(text))
 			return true;
 
-		List<INPUT> inputs = new();
+		List<KeyboardInput.INPUT> inputs = new();
 		foreach (char c in text)
 		{
-			inputs.Add(new INPUT
-			{
-				type = INPUT_KEYBOARD,
-				U = new INPUTUNION { ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE } }
-			});
-			inputs.Add(new INPUT
-			{
-				type = INPUT_KEYBOARD,
-				U = new INPUTUNION { ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP } }
-			});
+			inputs.Add(KeyboardInput.UnicodeDown(c));
+			inputs.Add(KeyboardInput.UnicodeUp(c));
 		}
 		uint submitted = (uint)inputs.Count;
-		uint sent = SendInput(submitted, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+		uint sent = KeyboardInput.Send(inputs.ToArray());
 		if (sent == submitted)
 			return true;
 
@@ -473,7 +464,7 @@ public class HotkeyManager : IDisposable
 		// Wait until user releases modifier keys from the original chord to avoid contamination
 		WaitForModifierRelease(timeoutMs: AppConstants.ModifierReleaseTimeoutMs);
 
-		var inputs = new List<INPUT>();
+		var inputs = new List<KeyboardInput.INPUT>();
 
 		bool needCtrl = hotkey.Control;
 		bool needShift = hotkey.Shift;
@@ -492,7 +483,7 @@ public class HotkeyManager : IDisposable
 
 		if (inputs.Count > 0)
 		{
-			var preSent = SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+			var preSent = KeyboardInput.Send(inputs.ToArray());
 			Log($"Pre-release injected {preSent}/{inputs.Count} modifier key-ups.");
 			inputs.Clear();
 			// Brief delay after releasing modifiers. Thread.Sleep is acceptable here
@@ -515,7 +506,7 @@ public class HotkeyManager : IDisposable
 		if (hotkey.Control) inputs.Add(KeyUp(VK_CONTROL));
 
 		var count = (uint)inputs.Count;
-		var sent = SendInput(count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+		var sent = KeyboardInput.Send(inputs.ToArray());
 		bool ok = sent == count && count > 0;
 		if (!ok)
 		{
@@ -525,57 +516,14 @@ public class HotkeyManager : IDisposable
 		return ok;
 	}
 
-	private const ushort VK_CONTROL = 0x11;
-	private const ushort VK_SHIFT = 0x10;
-	private const ushort VK_MENU = 0x12; // ALT
-	private const ushort VK_LWIN = 0x5B;
+	private const ushort VK_CONTROL = KeyboardInput.VkControl;
+	private const ushort VK_SHIFT = KeyboardInput.VkShift;
+	private const ushort VK_MENU = KeyboardInput.VkAlt;
+	private const ushort VK_LWIN = KeyboardInput.VkLeftWindows;
 
-	private static INPUT KeyDown(ushort vk)
-	{
-		return new INPUT
-		{
-			type = INPUT_KEYBOARD,
-			U = new INPUTUNION
-			{
-				ki = new KEYBDINPUT
-				{
-					wVk = vk,
-					wScan = 0,
-					dwFlags = (IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0),
-					time = 0,
-					dwExtraInfo = IntPtr.Zero
-				}
-			}
-		};
-	}
+	private static KeyboardInput.INPUT KeyDown(ushort vk) => KeyboardInput.KeyDown(vk);
 
-	private static INPUT KeyUp(ushort vk)
-	{
-		return new INPUT
-		{
-			type = INPUT_KEYBOARD,
-			U = new INPUTUNION
-			{
-				ki = new KEYBDINPUT
-				{
-					wVk = vk,
-					wScan = 0,
-					dwFlags = KEYEVENTF_KEYUP | (IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0),
-					time = 0,
-					dwExtraInfo = IntPtr.Zero
-				}
-			}
-		};
-	}
-
-	private static bool IsExtended(ushort vk)
-	{
-		// Extended key flag for navigation cluster and some others
-		return vk is 0x21 /*PGUP*/ or 0x22 /*PGDN*/ or 0x23 /*END*/ or 0x24 /*HOME*/
-				or 0x25 /*LEFT*/ or 0x26 /*UP*/ or 0x27 /*RIGHT*/ or 0x28 /*DOWN*/
-				or 0x2D /*INSERT*/ or 0x2E /*DELETE*/ or 0x5B /*LWIN*/ or 0x5C /*RWIN*/
-				or 0xA1 /*RSHIFT*/ or 0xA3 /*RCONTROL*/ or 0xA5 /*RMENU(ALT)*/;
-	}
+	private static KeyboardInput.INPUT KeyUp(ushort vk) => KeyboardInput.KeyUp(vk);
 
 	private static void WaitForModifierRelease(int timeoutMs)
 	{

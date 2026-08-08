@@ -230,16 +230,38 @@ success for text that never arrived.
 
 **What to do.**
 
-1. Check the other app first. Once in a while Mutation gets the text through on a
-   second route and the warning turns out to be a false alarm, so look before you
-   paste again — otherwise you may end up with it twice.
-2. If it really is missing, your text is not lost. It is in the main window and,
-   unless the clipboard also failed, on your clipboard — paste it with **Ctrl+V**.
+1. Your text is not lost. It is in the main window and, unless the clipboard also
+   failed, on your clipboard — paste it with **Ctrl+V**.
+2. Check the other app before you paste, so you don't end up with the text twice.
 3. The usual cause is an app started with "Run as administrator", or a system dialog
    that has taken the foreground. Close it, or click into an ordinary window, and
    dictate again.
 4. Task Manager, the Windows security prompt, and some installer windows behave this
    way too. Nothing is wrong with Mutation or your microphone.
+
+### The shortcut I set to run afterwards doesn't happen
+
+**What's happening.** This is the **Send hotkey after transcription** and **Send hotkey
+after OCR** boxes in **Settings**. There are two reasons one may not arrive.
+
+The first is that dictation only sends it when the text was delivered. If you heard the
+failure beep, the shortcut is deliberately skipped — it is usually something that acts
+on the text, and running it when the text never landed would aim it at the wrong thing.
+OCR is different: it sends the shortcut either way, so a screen-reader command in that
+box reads out the error as readily as the result.
+
+The second is how the shortcut is written. Write it the ordinary way — modifier names
+joined with plus signs, like **Ctrl+V**, **Alt+F4** or **Ctrl+Shift+Delete**. Mutation
+still understands the older shorthand some settings files hold, such as `^{DEL}` for
+**Ctrl+Delete**, but the ordinary spelling is the one to reach for.
+
+**What to do.**
+
+1. Deal with the failure beep first. Whatever stopped the text arriving is stopping
+   the shortcut too, and the two entries above cover the usual causes.
+2. Retype the shortcut the plain way — **Ctrl+Delete** rather than a shorthand.
+3. You can put more than one in, separated by commas: **Ctrl+A, Ctrl+C** sends the two
+   in turn.
 
 ### Something went wrong while delivering the transcript
 
