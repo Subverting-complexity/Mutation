@@ -226,8 +226,9 @@ are in, and the call mutes.
 
 To set one up, go to **Settings** (**Ctrl+Comma**), pick **Hotkeys**, and scroll
 down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
-and "To" boxes, and press **Save**. Each row shows a small status marker: a tick
-once the mapping is live, or an error marker with a message if something is wrong.
+and "To" boxes, and press **Save**. If something is wrong with a row, a marker
+appears beside the "From" box and the reason is written underneath, where a screen
+reader reads it out as soon as it turns up.
 A mapping whose "From" combination is already taken gets a "Duplicate 'From'
 hotkey" message — again comparing the keys rather than the spelling. That covers
 another mapping, any shortcut higher up the Hotkeys page, and any of your prompt

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <UserControl
 	x:Class="Mutation.Ui.Views.SettingsUi.Pages.HotkeysSettingsPage"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -57,6 +57,7 @@
 									<Grid.RowDefinitions>
 										<RowDefinition Height="Auto" />
 										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
 									</Grid.RowDefinitions>
 
 									<Grid Grid.Row="0" Grid.Column="0">
@@ -103,6 +104,31 @@
 										Click="HotkeyRouterDelete_Click"
 										Tag="{x:Bind}" />
 
+									<!-- What is wrong with this row: the validation message or the duplicate
+									     notice, whichever UpdateCombinedError picked. The marker beside the
+									     "From" box carries the same words, but a marker announces nothing
+									     when it appears — an AutomationProperties.Name is read when you land
+									     on the element, and you have to know it is there to land on it. So
+									     this row's errors reached this app's reader only by hunting, while
+									     the same message on the hotkey rows above has been read out since
+									     issue #243 (issue #346).
+
+									     Assertive, where the notices below are polite, so an error is not
+									     left queued behind a message about spelling. The two never both have
+									     something to say about one box — the notice stands down while the
+									     box has an error — so this is which of them interrupts, not a race
+									     between them. -->
+									<TextBlock
+										Grid.Row="1"
+										Grid.Column="0"
+										Grid.ColumnSpan="3"
+										views:LiveText.Message="{x:Bind BindingErrorMessage, Mode=OneWay}"
+										Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+										Visibility="Collapsed"
+										AutomationProperties.LiveSetting="Assertive"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										TextWrapping="Wrap" />
+
 									<!-- Says what the box above it rewrote itself to when the user left it.
 									     One region per box, under that box: the two are tabbed through one
 									     after the other, so a shared one would be taken down by entering
@@ -114,7 +140,7 @@
 									     caption would normally take: this app's reader is low-vision, and a
 									     message worth showing at all is worth being able to read. -->
 									<TextBlock
-										Grid.Row="1"
+										Grid.Row="2"
 										Grid.Column="0"
 										views:LiveText.Message="{x:Bind FromCommitAnnouncement, Mode=OneWay}"
 										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -124,7 +150,7 @@
 										TextWrapping="Wrap" />
 
 									<TextBlock
-										Grid.Row="1"
+										Grid.Row="2"
 										Grid.Column="1"
 										views:LiveText.Message="{x:Bind ToCommitAnnouncement, Mode=OneWay}"
 										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
