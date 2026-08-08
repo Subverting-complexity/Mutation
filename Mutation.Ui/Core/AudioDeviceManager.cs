@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Mutation.Ui;
 
@@ -32,7 +33,14 @@ namespace Mutation.Ui;
 public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointProvider
 {
 	private readonly MMDeviceEnumerator _deviceEnumerator;
-	private readonly MuteStateController _muteState;
+	private readonly ICaptureDeviceChangeNotifier _deviceChangeNotifier;
+	// Null until InitializeAsync has read the hardware mute state. Volatile because the
+	// UI thread reads it (IsMuted) while the initialization worker publishes it.
+	private volatile MuteStateController? _muteState;
+	// The one initialization run, so every caller waits on the same work rather than
+	// starting a second enumeration. Guarded by _initializationGate.
+	private Task? _initialization;
+	private readonly object _initializationGate = new();
 	// Guards the capture-device list and the selected-microphone fields against the
 	// background thread that OS device-change notifications arrive on: a hot-plug
 	// re-enumeration must not race a selection or a property read. Held for field
@@ -45,6 +53,12 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// The describable subset of _captureDevices, cached so a UI read is a field read
 	// rather than a projection. Rebuilt with the list it is derived from.
 	private IReadOnlyList<CaptureDeviceInfo> _captureDeviceInfos = Array.Empty<CaptureDeviceInfo>();
+	// False until the first enumeration has published a list. Nothing "changed" when a
+	// device set appears where there was none, and the initial population is the caller's
+	// own job — since startup moved off the UI thread the UI is already subscribed by
+	// then, and raising here would have it adopt the first device out from under the
+	// persisted choice InitializeAsync is about to restore (issue #308).
+	private bool _hasEnumerated;
 	private MMDevice? _microphone;
 	private CaptureDeviceInfo? _microphoneInfo;
 	private int _microphoneDeviceIndex = -1;
@@ -69,17 +83,65 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// re-resolve it later.
 	private sealed record CaptureDeviceEntry(MMDevice Device, CaptureDeviceInfo? Info);
 
+	/// <summary>
+	/// Deliberately does no device work. This type is resolved on the UI thread while the
+	/// main window is being built, and every call it used to make here — enumerating the
+	/// capture endpoints, describing each one, reading a mute state — is a COM call that
+	/// can take seconds on a machine with a USB microphone that is slow to enumerate, a
+	/// Bluetooth headset still connecting, or a wedged driver. On the UI thread that is
+	/// the window not appearing and the screen reader with nothing to announce
+	/// (issue #308). <see cref="InitializeAsync"/> does that work off-thread.
+	/// </summary>
 	public AudioDeviceManager(MMDeviceEnumerator deviceEnumerator, ICaptureDeviceChangeNotifier deviceChangeNotifier)
 	{
 		_deviceEnumerator = deviceEnumerator ?? throw new ArgumentNullException(nameof(deviceEnumerator));
-		if (deviceChangeNotifier is null)
-			throw new ArgumentNullException(nameof(deviceChangeNotifier));
-		RefreshCaptureDevices();
-		_muteState = new MuteStateController(this, ReadInitialMuteState());
+		_deviceChangeNotifier = deviceChangeNotifier ?? throw new ArgumentNullException(nameof(deviceChangeNotifier));
+	}
 
-		// Subscribe only after _muteState exists, so a notification that
-		// arrives during construction cannot reach a half-built object.
-		deviceChangeNotifier.CaptureDevicesChanged += OnCaptureDevicesChanged;
+	/// <summary>
+	/// Enumerates the capture devices, adopts the OS default microphone, and reads the
+	/// hardware mute state — all on a thread-pool thread, so a slow audio stack delays
+	/// the microphone controls settling rather than the window opening (issue #308).
+	///
+	/// <para>
+	/// Idempotent: every caller gets the same task, so a second call cannot start a
+	/// second enumeration. The returned task faults only if the whole run threw; the
+	/// individual device calls already swallow their own failures and simply leave less
+	/// selected.
+	/// </para>
+	/// </summary>
+	public Task InitializeAsync()
+	{
+		lock (_initializationGate)
+			return _initialization ??= Task.Run(Initialize);
+	}
+
+	/// <summary>
+	/// True once <see cref="InitializeAsync"/> has finished, successfully or not. Until
+	/// then there is no device list, no selection, and no confirmed mute state.
+	/// </summary>
+	public bool IsInitialized => _initialization is { IsCompleted: true };
+
+	private void Initialize()
+	{
+		// Held across the whole run so a mute toggle — which takes this gate on its own
+		// background thread — cannot reach a half-built object, and so the toggle simply
+		// waits for startup instead of needing a "not ready yet" answer of its own.
+		lock (_comGate)
+		{
+			RefreshCaptureDevices();
+
+			// Before the mute read, so the read can prefer the device the user will
+			// actually be on: the startup beep is meant to tell them whether *their*
+			// microphone is live.
+			EnsureDefaultMicrophoneSelected();
+
+			_muteState = new MuteStateController(this, ReadInitialMuteState());
+		}
+
+		// Subscribed only after _muteState exists, so a hot-plug notification that
+		// arrives during startup cannot reach a half-built object.
+		_deviceChangeNotifier.CaptureDevicesChanged += OnCaptureDevicesChanged;
 	}
 
 	// When a microphone is added or removed at the OS level, re-enumerate so
@@ -91,7 +153,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		lock (_comGate)
 		{
 			RefreshCaptureDevices();
-			_muteState.SynchronizeDevices();
+			// Null-safe purely as a backstop: the notifier is subscribed after the state
+			// is built, so this cannot be null in practice.
+			_muteState?.SynchronizeDevices();
 		}
 	}
 
@@ -118,7 +182,11 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// Reflects the aggregate mute state that was actually written to the
 	// capture devices and confirmed by read-back — not an optimistic guess
 	// and not a stale read of a single unrelated device instance.
-	public bool IsMuted => _muteState.IsMuted;
+	//
+	// Read on the UI thread, so it never waits for startup: before initialization
+	// finishes it reports unmuted, which is what it already reported on a machine whose
+	// devices could not be read.
+	public bool IsMuted => _muteState?.IsMuted ?? false;
 
 	// Private because it is only safe under _comGate: it disposes wrappers that an
 	// in-flight endpoint batch may still be driving, and only the COM-serialized
@@ -141,10 +209,27 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 
 		IReadOnlyList<CaptureDeviceEntry> superseded;
 		bool listChanged;
+		MMDevice? abandonedSelection = null;
 		lock (_sync)
 		{
 			superseded = _captureDevices;
-			listChanged = !SameDeviceIds(_captureDeviceInfos, infos);
+			listChanged = _hasEnumerated && !SameDeviceIds(_captureDeviceInfos, infos);
+			_hasEnumerated = true;
+
+			// The selected microphone is not in the new enumeration — unplugged, disabled,
+			// or otherwise gone. Let the selection go with it. Keeping the stale ID is what
+			// made re-plugging the only microphone a dead end: the ID comes back, and
+			// CaptureDeviceSelectionPlanner reads "still present" as "nothing about the
+			// user's audio changed", so capture is never re-opened and a blind user is
+			// never told their microphone is back (issue #313).
+			if (_microphoneInfo is { } selected && !ContainsDeviceId(infos, selected.Id))
+			{
+				abandonedSelection = _microphone;
+				_microphone = null;
+				_microphoneInfo = null;
+				_microphoneDeviceIndex = -1;
+			}
+
 			_captureDevices = devices;
 			_captureDeviceInfos = infos;
 		}
@@ -161,8 +246,29 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		// user just chose would leave the selected mic dead until restart.
 		DisposeSuperseded(superseded.Select(entry => entry.Device), IsSelectedMicrophone);
 
+		// A selection just dropped is normally one of the wrappers the pass above released
+		// — it is no longer the selection, so it is no longer skipped. The exception is the
+		// default endpoint EnsureDefaultMicrophoneSelected adopts, which never belonged to
+		// an enumeration and so would otherwise be left to finalization.
+		if (abandonedSelection is not null
+			&& !superseded.Any(entry => ReferenceEquals(entry.Device, abandonedSelection)))
+			DisposeQuietly(abandonedSelection);
+
 		if (listChanged)
 			RaiseCaptureDeviceListChanged();
+	}
+
+	// Whether an enumeration still contains a given endpoint ID. Internal so the rule
+	// behind the dropped selection above is unit-testable without CoreAudio devices.
+	internal static bool ContainsDeviceId(IReadOnlyList<CaptureDeviceInfo> devices, string deviceId)
+	{
+		for (int i = 0; i < devices.Count; i++)
+		{
+			if (string.Equals(devices[i].Id, deviceId, StringComparison.OrdinalIgnoreCase))
+				return true;
+		}
+
+		return false;
 	}
 
 	// Notifies subscribers off the enumerating thread, so no handler code runs under
@@ -299,7 +405,10 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 			entry => entry.Info is not null
 				&& string.Equals(entry.Info.Id, deviceId, StringComparison.OrdinalIgnoreCase));
 
-	public void EnsureDefaultMicrophoneSelected()
+	// Adopts the OS default capture endpoint when nothing is selected yet. Private
+	// because it is part of startup: it is COM and winmm work that belongs on
+	// InitializeAsync's worker, and a UI-thread caller is exactly what issue #308 was.
+	private void EnsureDefaultMicrophoneSelected()
 	{
 		lock (_sync)
 		{
@@ -313,10 +422,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		try
 		{
 			// COM: resolved outside _sync so a stalled enumerator cannot block the
-			// property readers on the UI thread. Every call stays inside the guard —
-			// this runs from the window constructor, where a throw from a flaky device
-			// would surface as a fatal startup error instead of simply leaving no
-			// microphone selected.
+			// property readers on the UI thread. Every call stays inside the guard — a
+			// throw from a flaky device would otherwise fault the startup task instead of
+			// simply leaving no microphone selected.
 			defaultMic = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
 			if (defaultMic is null)
 				return;
@@ -394,10 +502,18 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	public MuteToggleResult ToggleMute()
 	{
 		// Serialize with the device-change handler so a hot-plug refresh
-		// cannot swap the device list out from under an in-flight toggle.
+		// cannot swap the device list out from under an in-flight toggle. Initialize
+		// holds the same gate across building the mute state, so a toggle pressed during
+		// startup simply waits for the devices rather than being turned away.
 		lock (_comGate)
 		{
-			return _muteState.Toggle();
+			// Only reachable when startup itself threw, which leaves no device list to
+			// write to. Reported as an unconfirmed, unmuted state — the same answer a
+			// machine whose endpoints all refuse to be written already gets.
+			if (_muteState is not { } state)
+				return new MuteToggleResult(Success: false, IsMuted: false);
+
+			return state.Toggle();
 		}
 	}
 
@@ -472,8 +588,9 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// instance carrying the same device ID, so its COM proxy is live again. This
 	// is the level-side mirror of RefreshEndpoints() for mute — both recover a
 	// stale proxy by re-acquiring from a fresh enumeration. A no-op when no mic
-	// is selected; if the previously-selected device is gone, the stale
-	// reference is left in place for the caller's retry to fail against.
+	// is selected; if the previously-selected device is gone, the re-enumeration has
+	// already dropped and released it (issue #313) and the caller's retry runs against
+	// no endpoint at all rather than a dead proxy.
 	private void RefreshActiveMicrophone()
 	{
 		MMDevice? previous;
@@ -489,9 +606,10 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		if (previous is null || id is null)
 			return;
 
-		// RefreshCaptureDevices deliberately preserves the selected wrapper, so
-		// `previous` is still live here; it is disposed once a fresh instance
-		// replaces it below.
+		// RefreshCaptureDevices preserves the selected wrapper as long as its device is
+		// still there, so `previous` is live below and is disposed once a fresh instance
+		// replaces it. When the device has gone the re-enumeration drops the selection
+		// and releases the wrapper itself, and the lookup below finds nothing.
 		RefreshCaptureDevices();
 
 		CaptureDeviceEntry? fresh;
@@ -501,6 +619,8 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 				e => e.Info is not null && string.Equals(e.Info.Id, id, StringComparison.OrdinalIgnoreCase));
 		}
 
+		// `previous` is not disposed here: either it was never superseded, or the
+		// re-enumeration that dropped it has already released it.
 		if (fresh is null)
 			return;
 
@@ -571,12 +691,19 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 	// Best-effort read of the current device mute state at startup so the
 	// tracked state starts in sync with the hardware. Defaults to unmuted if
 	// no device can be read.
+	//
+	// The selected microphone is read first. The startup beep this seeds is meant to tell
+	// the user whether *their* microphone is live, and on a machine whose first enumerated
+	// device is some other, muted endpoint that answer was simply the wrong device's
+	// (issue #308).
 	private bool ReadInitialMuteState()
 	{
 		List<MMDevice> devices;
 		lock (_sync)
 		{
 			devices = _captureDevices.Select(entry => entry.Device).ToList();
+			if (_microphone is { } selected)
+				devices.Insert(0, selected);
 		}
 
 		foreach (var device in devices)

@@ -277,6 +277,41 @@ mute state. The microphone may still be live — please try again."
    **Microphone** card. Setting the input level can also fail if a device is busy or
    was just unplugged — you will be told, and can try again.
 
+### The microphone list says "Finding microphones..." and stays that way
+
+**What's happening.** Mutation asks Windows which microphones the PC has as soon as it
+starts, but it does not hold the window shut while it waits. On most PCs the answer
+comes back before you notice. A microphone whose driver has got stuck, or a Bluetooth
+headset that never finishes connecting, can leave the question unanswered.
+
+**What to do.**
+
+1. Give it a few seconds. A USB microphone that has just been plugged in, or a headset
+   still pairing, is often simply slow.
+2. Unplug the microphone, wait a moment, and plug it back in. Mutation notices and says
+   "Microphone connected. Now using ..." when it comes back.
+3. If Mutation says "Could not read the microphones on this computer", close it,
+   reconnect your microphone, and start it again.
+4. Check the microphone works elsewhere — Windows Settings has a sound page that shows
+   a test bar moving when you speak.
+
+### Dictation says it is waiting for the microphone
+
+**What's happening.** You pressed the dictation shortcut while Mutation was still
+opening a microphone. Rather than record from the one you have just switched away
+from, it holds your press until the right one is ready. You hear a low two-tone sound
+that falls, and see "Waiting for the microphone to be ready".
+
+**What to do.**
+
+1. Wait a beat. Normally the start beep follows within a second or two and recording
+   begins as usual.
+2. If you get the failure beep and "The microphone is still not ready, so nothing was
+   recorded", the device did not open in time. Press the shortcut again to try once
+   more.
+3. If it keeps failing, pick a different microphone on the **Microphone** card. A
+   Bluetooth headset that is half-connected is the usual culprit.
+
 ### No voices in the voice list, or the voice sounds wrong
 
 **What's happening.** The voices Mutation offers for reading aloud come from Windows

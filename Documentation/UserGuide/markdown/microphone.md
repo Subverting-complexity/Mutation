@@ -66,6 +66,17 @@ This choice does not affect muting. Muting always covers every microphone,
 whichever one is selected. Your choice is remembered the next time you start
 Mutation.
 
+### When Mutation starts
+
+Finding out which microphones a PC has can take a moment — longer if one of them is
+a USB mic that is still waking up, or a Bluetooth headset that is still connecting.
+Mutation does not hold the window shut while it asks. The window opens straight
+away, and the dropdown says "Finding microphones..." until the answer comes back.
+
+When it does, the dropdown fills in, your saved microphone is selected, and a
+message tells you which one you are on: "Using ...". If the PC has no microphones
+at all, you get "No microphones are available." instead.
+
 Some microphones take a moment to hand over — a USB mic that has just been plugged
 in, or a Bluetooth headset waking up. Mutation waits for it in the background, so
 the window stays usable and you keep your place in the dropdown while it works. If
@@ -129,6 +140,10 @@ updates the list on its own.
   microphone in the list and tells you: "The selected microphone was disconnected.
   Now using ...".
 - **No microphones at all** — you get a message saying none are available.
+- **A microphone comes back** — plug it in again and Mutation picks it up, starts
+  listening to it, and says "Microphone connected. Now using ...". This matters most
+  on a PC with only one microphone: you were told when it went away, so you are told
+  when it returns.
 
 There is one more nicety. If you are muted and then plug in a new microphone, the
 new one comes up muted too. Connecting a headset mid-call will not quietly put you

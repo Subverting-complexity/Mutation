@@ -50,7 +50,7 @@ Your microphone and the little sounds Mutation makes.
 | Microphone visualization | Shows a live waveform of the microphone input while recording. Turn it off to save a bit of CPU. |
 | Toggle microphone mute | The shortcut that mutes and unmutes everything. |
 | Use custom beeps | Play your own sound files instead of the built-in beeps for status cues. |
-| Beep files | One file each for Success, Failure, Start, End, Mute and Unmute. **Browse...** picks a file, and the small play button lets you hear it. |
+| Beep files | One file each for Success, Failure, Start, End, Mute and Unmute. **Browse...** picks a file, and the small play button lets you hear it. The low falling "waiting for the microphone" sound is built in and always plays as-is. |
 
 ### Screen capture & OCR
 

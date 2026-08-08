@@ -21,6 +21,31 @@ If you prefer clicking, the **Speech to Text** card on the main window has a
 > **Shift+Alt+U** is just the default. Every shortcut in Mutation can be changed.
 > Open **Settings** with **Ctrl+Comma** and look on the **Hotkeys** tab.
 
+## When the microphone is not ready yet
+
+Some microphones take a second or two to open — a Bluetooth headset, or a USB mic
+you have only just switched to. If you press the dictation shortcut in that gap,
+Mutation holds your press rather than recording from the microphone you have just
+left.
+
+You hear a low two-tone sound that falls, and you see "Waiting for the microphone
+to be ready — recording will start in a moment." As soon as the microphone opens,
+the usual start beep plays and recording begins.
+
+The low falling sound is worth learning, because it is the opposite of the two-tone
+sound that rises when something has succeeded. Falling means "not yet".
+
+Pressing the shortcut again while you are waiting does not start a second recording.
+Mutation just says "Still waiting for the microphone."
+
+If the microphone still has not opened after eight seconds, Mutation gives up rather
+than leave you waiting: you get the failure beep and "The microphone is still not
+ready, so nothing was recorded." Press the shortcut again to try once more, or pick
+a different microphone on the **Microphone** card.
+
+Stopping a recording never waits. Once you are recording, the microphone is already
+open, and your press to stop takes effect straight away.
+
 ## Changed your mind while it is transcribing
 
 While Mutation is turning your recording into text, the **Raw Transcript** box
