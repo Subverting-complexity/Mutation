@@ -158,6 +158,24 @@ different pages.
    to right, top to bottom, which is better for a plain block of text that Natural has
    scrambled. Each has its own shortcut, so you can just try the other one.
 
+### OCR read the text but could not copy it to the clipboard
+
+**What's happening.** Only one program can have the clipboard open at a time. Just
+after a screenshot, a clipboard manager or your screen reader often opens it to look at
+the picture that arrived — and for that moment nothing else can write to it. Mutation
+waits and tries again a few times, which is usually enough. When it is not, you hear
+the message "The text was recognised, but it could not be copied to the clipboard. It
+is in the OCR results box."
+
+This is not a failed reading. The text is there, in the **OCR result** box on the
+**Visual Capture** card, and any shortcut you set to run afterwards still fires, so a
+screen reader can read it out of the box as usual.
+
+**What to do.** Copy the text out of the **OCR result** box, or press the OCR shortcut
+again — the second attempt almost always gets in. If it happens every time, a clipboard
+manager or clipboard-history tool is the usual culprit; closing it or turning off its
+monitoring settles it.
+
 ### OCR skipped a file for being too large
 
 **What's happening.** There is a maximum size for a file or page sent for OCR, so a
@@ -268,8 +286,15 @@ The first is that dictation only sends it when the text was delivered. If you he
 failure beep, the shortcut is deliberately skipped — it is usually something that acts
 on the text, and running it when the text never landed would aim it at the wrong thing.
 OCR is different: it sends the shortcut either way, so a screen-reader command in that
-box reads out the error as readily as the result. The one exception is a batch of
-documents you cancelled — nothing is copied then, so nothing is sent.
+box reads out the error as readily as the result. There are two exceptions. A batch of
+documents you cancelled sends nothing, because nothing is copied then. And an OCR
+shortcut pressed while a capture is already on screen sends nothing either — nothing
+happened, so there is nothing new to read, and the keystroke would land in the capture
+overlay rather than where you aimed it.
+
+Cancelling a capture does still send it, so a screen-reader shortcut reads out the
+"cancelled" message. It waits a moment first, until the window you were in has the
+keyboard back.
 
 The second is how the shortcut is written. Write it the ordinary way — modifier names
 joined with plus signs, like **Ctrl+V**, **Alt+F4** or **Ctrl+Shift+Delete**. Mutation

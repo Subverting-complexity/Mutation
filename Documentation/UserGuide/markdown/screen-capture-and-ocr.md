@@ -95,6 +95,13 @@ read.
 Either way, the success beep then says the text is on your clipboard — or the failure
 beep says something went wrong, and the status area tells you what.
 
+Now and then another program has the clipboard open at the moment Mutation wants to
+copy to it — a clipboard manager, or your screen reader taking a look at the
+screenshot that went there a second earlier. Mutation waits a moment and tries again a
+few times. If it still cannot get in, the reading itself is not lost: the text is in
+the **OCR result** box as usual, and a message says it could not be copied to the
+clipboard. That way you know to copy it out of the box yourself.
+
 ## Reading a batch of files at once
 
 The **OCR documents** button handles whole files rather than screenshots. Click it,
@@ -150,6 +157,16 @@ shortcut in that box reads out the error just as readily as the result.
 
 It is sent after a batch of documents as well, not only after a screenshot or a
 clipboard image. It is not sent if you cancel a batch, since nothing is copied then.
+
+Two more times it holds back rather than firing:
+
+- **You press an OCR shortcut while a capture is already on screen.** Nothing has
+  happened, so there is nothing new to read. Mutation brings the capture you already
+  have back to the front and sends nothing — otherwise the keystroke would land in the
+  capture overlay.
+- **You cancel a capture.** The keystroke is still sent, so a screen-reader shortcut
+  reads out the "cancelled" message. It just waits until the window you were in has
+  the keyboard back, so it goes where you meant it to.
 
 The rest of the options are covered in [The Settings window](settings.md).
 

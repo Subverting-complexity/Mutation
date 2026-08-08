@@ -277,6 +277,12 @@ end beep is the first thing you hear, and it says your picture has been sent off
 read.</p>
 <p>Either way, the success beep then says the text is on your clipboard — or the failure
 beep says something went wrong, and the status area tells you what.</p>
+<p>Now and then another program has the clipboard open at the moment Mutation wants to
+copy to it — a clipboard manager, or your screen reader taking a look at the
+screenshot that went there a second earlier. Mutation waits a moment and tries again a
+few times. If it still cannot get in, the reading itself is not lost: the text is in
+the <strong>OCR result</strong> box as usual, and a message says it could not be copied to the
+clipboard. That way you know to copy it out of the box yourself.</p>
 <h2 id="reading-a-batch-of-files-at-once">Reading a batch of files at once</h2>
 <p>The <strong>OCR documents</strong> button handles whole files rather than screenshots. Click it,
 pick one or more files, and Mutation reads them all.</p>
@@ -319,6 +325,16 @@ automatically. It is sent whether the run found text or failed, so a screen-read
 shortcut in that box reads out the error just as readily as the result.</p>
 <p>It is sent after a batch of documents as well, not only after a screenshot or a
 clipboard image. It is not sent if you cancel a batch, since nothing is copied then.</p>
+<p>Two more times it holds back rather than firing:</p>
+<ul>
+<li><strong>You press an OCR shortcut while a capture is already on screen.</strong> Nothing has
+happened, so there is nothing new to read. Mutation brings the capture you already
+have back to the front and sends nothing — otherwise the keystroke would land in the
+capture overlay.</li>
+<li><strong>You cancel a capture.</strong> The keystroke is still sent, so a screen-reader shortcut
+reads out the &quot;cancelled&quot; message. It just waits until the window you were in has
+the keyboard back, so it goes where you meant it to.</li>
+</ul>
 <p>The rest of the options are covered in <a href="settings.html">The Settings window</a>.</p>
 <h2 id="where-to-next">Where to next</h2>
 <ul>
