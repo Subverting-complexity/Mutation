@@ -63,7 +63,8 @@ Reading text out of pictures. OCR just means "pulling the words out of an image"
 | Use free tier | Use the free OCR tier, which limits how many pages each document can contain. |
 | Invert screenshot before OCR | Flips the image colours first, which helps a lot with light text on a dark background. |
 | Max document size (MB) | Biggest file or page Mutation will send. Anything larger is skipped before upload, so you never accidentally send something huge. Set it to 0 for no limit. |
-| Send hotkey after OCR | Optional keystrokes sent to the app you are in once the text is delivered — **Ctrl+V** to paste, for example. |
+| Paste OCR text into the active app | On by default. Puts the recognised text straight into whatever you were working in. Turn it off and the text still reaches your clipboard and the **OCR result** box. |
+| Send hotkey after OCR | Optional keystrokes sent to the app you are in once the text has been delivered — a screen reader command that reads it back, for example. It comes after the paste above. |
 
 The timeout and the "how many at a time" numbers have sensible defaults and hover
 help. Leave them alone unless something is timing out on you.

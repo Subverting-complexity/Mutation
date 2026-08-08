@@ -138,6 +138,36 @@ public class PostOperationHotkeyCoverageTests
 		Assert.Equal(8, publishes);
 	}
 
+	/// <summary>
+	/// The paste and the configured shortcut leave together, on every OCR path.
+	/// <para>
+	/// Split into two sends they would be two timers racing, and the loser decides whether the
+	/// screen-reader command reads the pasted text or what was on screen before it. Composing
+	/// them is also the only place that asks whether there is anything worth pasting, so a path
+	/// that passed the setting straight through would paste after a failed read (issue #355).
+	/// </para>
+	/// </summary>
+	[Fact]
+	public void Every_OCR_send_composes_the_paste_and_the_shortcut_as_one_sequence()
+	{
+		var source = MainWindowSource();
+
+		// Every read of the setting, wherever it sits relative to the send — the two OCR paths
+		// write the call differently, and a third would be free to write it a third way.
+		var reads = LinesCalling(source, line => line.Contains(OcrSetting, StringComparison.Ordinal));
+
+		Assert.NotEmpty(reads);
+
+		var bare = reads
+			.Where(line => !source[line].Contains("PostOperationHotkey.AfterOcr(", StringComparison.Ordinal))
+			.Select(line => $"MainWindow.xaml.cs:{line + 1}: {source[line].Trim()}")
+			.ToList();
+
+		Assert.True(bare.Count == 0,
+			"An OCR path sends the configured shortcut without composing the paste with it:\n" +
+			string.Join("\n", bare));
+	}
+
 	[Fact]
 	public void Every_transcript_delivery_is_followed_by_the_configured_shortcut()
 	{

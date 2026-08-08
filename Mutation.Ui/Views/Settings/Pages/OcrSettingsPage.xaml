@@ -93,6 +93,11 @@
 			<controls:InfoHint Text="{StaticResource Help.Ocr.InvertScreenshot}" VerticalAlignment="Center" />
 		</StackPanel>
 
+		<StackPanel Orientation="Horizontal" Spacing="6">
+			<ToggleSwitch x:Name="TogglePasteOcrText" Header="Paste OCR text into the active app" AutomationProperties.HelpText="{StaticResource Help.Ocr.PasteIntoActiveApp}" Toggled="TogglePasteOcrText_Toggled" />
+			<controls:InfoHint Text="{StaticResource Help.Ocr.PasteIntoActiveApp}" VerticalAlignment="Center" />
+		</StackPanel>
+
 		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" HelpText="{StaticResource Help.Ocr.SendHotkeyAfter}" AllowEmpty="True" AllowSendKeysSyntax="True" />
 
 		<TextBlock Text="OCR action hotkeys appear in the Hotkeys tab."

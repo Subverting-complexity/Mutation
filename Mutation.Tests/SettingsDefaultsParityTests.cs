@@ -52,6 +52,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Ocr.MaxParallelDocuments, ocr.MaxParallelDocuments);
 		Assert.Equal(SettingsDefaults.Ocr.MaxParallelRequests, ocr.MaxParallelRequests);
 		Assert.Equal(SettingsDefaults.Ocr.MaxDocumentBytes, ocr.MaxDocumentBytes!.Value);
+		Assert.Equal(SettingsDefaults.Ocr.PasteOcrTextIntoActiveApplication, ocr.PasteOcrTextIntoActiveApplication);
 	}
 
 	[Fact]

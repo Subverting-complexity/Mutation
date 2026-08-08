@@ -317,6 +317,7 @@ public class HotkeyManager : IDisposable
 			return true;
 
 		bool allSentViaInput = true;
+		int sent = 0;
 		foreach (var part in parts)
 		{
 			try
@@ -337,6 +338,8 @@ public class HotkeyManager : IDisposable
 					allSentViaInput = false;
 					break;
 				}
+				++sent;
+
 				// Small gap between chords. Thread.Sleep is acceptable here because:
 				// - This runs on a background thread via Task.Run
 				// - The delay is very short (25ms)
@@ -353,11 +356,19 @@ public class HotkeyManager : IDisposable
 
 		if (!allSentViaInput)
 		{
-			// Fallback: try WinForms SendKeys mapping for complex/unsupported chords
+			// Fallback: try WinForms SendKeys mapping for complex/unsupported chords.
+			//
+			// Only the chords that have not gone yet. The loop above stops at the first one
+			// SendInput cannot express, and everything before it has already arrived in the
+			// target window — handing the whole sequence to SendKeys would send those a second
+			// time. Harmless for an idempotent chord, not harmless for a paste: OCR now sends
+			// "Ctrl+V, <your shortcut>" as one sequence, so an unexpressible shortcut behind the
+			// paste would have put the text in twice (issue #355).
+			string remaining = string.Join(", ", parts.Skip(sent));
 			try
 			{
-				string mappedHotkey = SendKeysMapper.Map(hotkey);
-				Log($"Fallback SendKeys: '{mappedHotkey}' (from '{hotkey}')");
+				string mappedHotkey = SendKeysMapper.Map(remaining);
+				Log($"Fallback SendKeys: '{mappedHotkey}' (from '{remaining}')");
 				SendKeysOnUiThread(mappedHotkey);
 			}
 			catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"SendKeys fallback failed: {ex.Message}"); }

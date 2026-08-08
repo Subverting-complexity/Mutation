@@ -47,6 +47,7 @@ public sealed partial class OcrSettingsPage : UserControl
 				: 0;
 			ToggleUseFreeTier.IsOn = ocr.UseFreeTier;
 			ToggleInvert.IsOn = ocr.InvertScreenshot;
+			TogglePasteOcrText.IsOn = ocr.PasteOcrTextIntoActiveApplication;
 			HkSendAfterOcr.Hotkey = ocr.SendHotkeyAfterOcrOperation ?? string.Empty;
 		}
 		finally { _suppressEvents = false; }
@@ -89,6 +90,12 @@ public sealed partial class OcrSettingsPage : UserControl
 	{
 		if (_suppressEvents) return;
 		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).InvertScreenshot = ToggleInvert.IsOn;
+	}
+
+	private void TogglePasteOcrText_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PasteOcrTextIntoActiveApplication = TogglePasteOcrText.IsOn;
 	}
 
 	private void WriteInt(double value, System.Action<int> apply)

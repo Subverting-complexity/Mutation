@@ -47,4 +47,80 @@ public class PostOperationHotkeyTests
 		// the one being fixed — see the test above on the failure delay.
 		Assert.True(PostOperationHotkey.ShouldSendAfterOcr(OcrRunOutcome.Answered));
 	}
+
+	[Fact]
+	public void ThereIsSomethingToPasteWhenTheTextReachedTheClipboard()
+	{
+		Assert.True(PostOperationHotkey.ClipboardHoldsOcrText(true, false, "Invoice 4021"));
+	}
+
+	[Fact]
+	public void AReadThatFoundNoTextLeavesThePictureOnTheClipboard()
+	{
+		// The trap this exists for. An empty read still comes back a success, and the copy is
+		// skipped rather than failed, because there was nothing to copy — so ClipboardCopyFailed
+		// is false and every other signal says go. What is actually on the clipboard is the
+		// screenshot the run put there a moment earlier, and pasting it drops a picture into
+		// whatever the user was writing.
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, ""));
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, "   \r\n"));
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, false, null));
+	}
+
+	[Fact]
+	public void AFailedReadAndAFailedCopyBothLeaveNothingToPaste()
+	{
+		// A failure puts its message in Message, so the text check alone would wave it through.
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(false, false, "No image on clipboard."));
+		// And a copy that never landed leaves the clipboard holding whatever preceded it (#341).
+		Assert.False(PostOperationHotkey.ClipboardHoldsOcrText(true, true, "Invoice 4021"));
+	}
+
+	[Fact]
+	public void ThePasteComesBeforeTheConfiguredShortcut()
+	{
+		// The whole reason the two travel as one sequence. The shortcut people put in "Send
+		// hotkey after OCR" is usually a screen-reader command aimed at the result, and a read
+		// that happens before the paste reads whatever was there before (issue #355).
+		Assert.Equal("Ctrl+V, ^{DEL}", PostOperationHotkey.AfterOcr(true, "^{DEL}"));
+	}
+
+	[Fact]
+	public void PastingIsAllTheresIsToSendWhenNoShortcutIsConfigured()
+	{
+		Assert.Equal("Ctrl+V", PostOperationHotkey.AfterOcr(true, null));
+		Assert.Equal("Ctrl+V", PostOperationHotkey.AfterOcr(true, "   "));
+	}
+
+	[Fact]
+	public void NotPastingLeavesTheConfiguredShortcutExactlyAsItWas()
+	{
+		Assert.Equal("^{DEL}", PostOperationHotkey.AfterOcr(false, "^{DEL}"));
+		Assert.Equal("Ctrl+C, Ctrl+V", PostOperationHotkey.AfterOcr(false, "Ctrl+C, Ctrl+V"));
+	}
+
+	[Fact]
+	public void NothingToPasteAndNothingConfiguredSendsNothing()
+	{
+		// Null rather than an empty string: SendHotkeyAfterDelay reads null as "no send", and
+		// an empty chord would otherwise reach the parser.
+		Assert.Null(PostOperationHotkey.AfterOcr(false, null));
+		Assert.Null(PostOperationHotkey.AfterOcr(false, ""));
+	}
+
+	[Fact]
+	public void ASurroundingSpaceInTheConfiguredValueDoesNotBecomeAnEmptyChord()
+	{
+		// The sequence is split on commas, so a stray space either side of the join would be
+		// harmless — but a value stored as " " must not turn into "Ctrl+V, " and read as two.
+		Assert.Equal("Ctrl+V, ^{DEL}", PostOperationHotkey.AfterOcr(true, "  ^{DEL}  "));
+	}
+
+	[Fact]
+	public void ThePasteChordIsSpelledTheWayTheParserReadsIt()
+	{
+		// "^v" would throw in Hotkey.Parse and drop the whole sequence — the configured
+		// shortcut included — to the WinForms fallback, which cannot confirm delivery (#232).
+		Assert.Equal("Ctrl+V", PostOperationHotkey.PasteChord);
+	}
 }
