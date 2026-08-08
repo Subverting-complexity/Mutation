@@ -276,12 +276,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 {
                         ApplyFormattedValue(ref _fromHotkeyText, _formattedFrom, nameof(FromHotkey));
 
-                        if (announce)
-                        {
-                                SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
-                                        FromBoxLabel, typedBeforeCommit, _fromHotkeyText, FromErrorMessage));
-                        }
-
                         // Only update underlying map if valid; do NOT clear an existing persisted value here
                         // to avoid wiping settings when a parse hiccup occurs (e.g., at startup before full init).
                         if (_isFromValid)
@@ -301,6 +295,23 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(FromBackgroundBrush));
                 UpdateCombinedError();
+
+                // Last, after UpdateCombinedError, for the same reason HotkeyEditor.Commit
+                // announces last: the row's error is an assertive live region and this is a
+                // polite one, and both are raised on the same dispatcher pass in the order they
+                // were set, so a polite notice set first would be cut off by the assertive one
+                // behind it.
+                //
+                // No reachable flow actually sets both in one call — the error settles while the
+                // user types, a commit cannot change validity that the setter has not already
+                // seen, and the one thing that can (a duplicate found through the controller)
+                // suppresses the notice anyway. Ordered this way so the two conventions on this
+                // page agree, not to fix an audible clash (issue #346).
+                if (commit && announce)
+                {
+                        SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                FromBoxLabel, typedBeforeCommit, _fromHotkeyText, FromErrorMessage));
+                }
         }
 
         /// <param name="announce">See <see cref="EvaluateFrom"/>.</param>
@@ -314,12 +325,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 if (commit)
                 {
                         ApplyFormattedValue(ref _toHotkeyText, _formattedTo, nameof(ToHotkey));
-
-                        if (announce)
-                        {
-                                SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
-                                        ToBoxLabel, typedBeforeCommit, _toHotkeyText, _toValidationMessage));
-                        }
 
                         // Only update underlying map if valid; avoid clearing persisted value on transient invalid state.
                         if (_isToValid)
@@ -335,6 +340,13 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(ToBackgroundBrush));
                 UpdateCombinedError();
+
+                // Last, after UpdateCombinedError — see EvaluateFrom.
+                if (commit && announce)
+                {
+                        SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                ToBoxLabel, typedBeforeCommit, _toHotkeyText, _toValidationMessage));
+                }
         }
 
         /// <summary>
