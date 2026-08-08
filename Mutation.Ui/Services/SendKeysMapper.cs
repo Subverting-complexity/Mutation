@@ -235,7 +235,10 @@ public static class SendKeysMapper
 		return prefix + "(" + body + ")";
 	}
 
-	private static bool LooksLikeSendKeys(string s)
+	// Internal rather than private so SendKeysReader can ask the same question before it
+	// reads anything. Two answers to "is this SendKeys?" would eventually disagree, and the
+	// place they would disagree is the '+(' case below — the one that already cost an issue.
+	internal static bool LooksLikeSendKeys(string s)
 	{
 		// Heuristic: any of these strongly implies SendKeys syntax
 		// '^', '%', '~', braces, or a group opened by SendKeys' Shift modifier.

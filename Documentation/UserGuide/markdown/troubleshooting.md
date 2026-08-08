@@ -173,6 +173,11 @@ A page that does not get through first time is sent again, and each retry plays 
 beep once more than the one before. Extra beeps during a batch are normal on a busy
 connection; they mean a page is being retried, not that anything has failed.
 
+Each try also waits longer than the one before it, up to a minute, so a page that is
+just being slow gets the room it needs. A page that never gets through is tried four
+times, which is why one stubborn page can hold things up for a few minutes before
+Mutation gives up on it and moves on.
+
 **What to do.** Listen for the announcements — Mutation names each file as it finishes,
 and calls out the page count every ten pages inside a long PDF, so you can tell it is
 still working. If you picked the wrong files, or simply want it to stop, click **Cancel

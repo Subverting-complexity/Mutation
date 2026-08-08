@@ -372,20 +372,28 @@ public class OcrServiceTests
 	// ---------------------------------------------------------------------
 
 	[Theory]
-	[InlineData(-5, 1)]   // floor at 1 second (Math.Max(1, …))
-	[InlineData(0, 1)]
-	[InlineData(1, 1)]
-	[InlineData(30, 30)]
-	[InlineData(60, 60)]
-	[InlineData(120, 60)] // ceiling at MaxTimeoutSeconds (60)
-	[InlineData(3600, 60)]
-	public void GetPerRequestTimeout_ClampsToValidRange(int configuredSeconds, int expectedSeconds)
+	[InlineData(-5, 1, 1)]   // floor at 1 second (Math.Max(1, …))
+	[InlineData(0, 1, 1)]
+	[InlineData(1, 1, 1)]
+	[InlineData(30, 1, 30)]
+	[InlineData(60, 1, 60)]
+	[InlineData(120, 1, 60)] // ceiling at MaxTimeoutSeconds (60)
+	[InlineData(3600, 1, 60)]
+	// The attempt number stretches the deadline, and the same ceiling caps every rung of
+	// the ladder rather than only the first (issue #315).
+	[InlineData(5, 2, 10)]
+	[InlineData(5, 4, 20)]
+	[InlineData(30, 2, 60)]
+	[InlineData(30, 4, 60)]
+	[InlineData(60, 3, 60)]
+	public void GetPerRequestTimeout_StretchesByAttemptAndClampsToValidRange(
+		int configuredSeconds, int attempt, int expectedSeconds)
 	{
 		var service = new OcrService("dummy-key", "https://example.com/", configuredSeconds);
 
 		MethodInfo? method = typeof(OcrService).GetMethod("GetPerRequestTimeout", BindingFlags.NonPublic | BindingFlags.Instance);
 		Assert.NotNull(method);
-		var timeout = (TimeSpan)method!.Invoke(service, null)!;
+		var timeout = (TimeSpan)method!.Invoke(service, [attempt])!;
 
 		Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), timeout);
 	}
@@ -423,11 +431,11 @@ public class OcrServiceTests
 		Assert.Throws<ArgumentNullException>(() => new OcrService("key", null, 10));
 	}
 
-	private static CancellationTokenSource CreatePerRequestDeadline(OcrService service)
+	private static CancellationTokenSource CreatePerRequestDeadline(OcrService service, int attempt = 1)
 	{
 		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestDeadline", BindingFlags.NonPublic | BindingFlags.Instance);
 		Assert.NotNull(method);
-		return (CancellationTokenSource)method!.Invoke(service, null)!;
+		return (CancellationTokenSource)method!.Invoke(service, [attempt])!;
 	}
 
 	[Fact]

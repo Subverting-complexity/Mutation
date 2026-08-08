@@ -71,6 +71,12 @@ they need you now. Routine progress updates wait their turn politely. If several
 updates arrive quickly, you hear the most recent one rather than a backlog of stale
 messages.
 
+The Settings window follows the same rule. A shortcut box that tidies up what you
+typed says so as you leave it — "Speak clipboard now reads CTRL+SHIFT+A." — and waits
+its turn, so it never talks over a warning about the same box. A box that was already
+written Mutation's way stays quiet. See
+[Keyboard shortcuts](keyboard-shortcuts.md) for what the tidying up does.
+
 ## The screenshot overlay talks you through it
 
 Grabbing part of a screen you cannot see sounds impossible. It is not.
@@ -110,6 +116,10 @@ here" shortcut, and the OCR result gets read to you the moment it is ready.
 
 You set it in **Settings**, under the shortcuts section: one box for "after OCR" and
 one for "after transcription". Leave a box empty and nothing is sent.
+
+Pick a key that no Mutation shortcut already uses. Windows hands the key straight back
+to Mutation, so a clash sets the action off again. Mutation checks for you and shows a
+**Duplicate hotkey** note under both rows, whichever way round you wrote the key.
 
 ## Alongside a screen reader and ZoomText
 

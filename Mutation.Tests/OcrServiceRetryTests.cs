@@ -55,7 +55,11 @@ public class OcrServiceRetryTests : IDisposable
 	}
 
 	private (OcrService Service, ScriptedTransport Transport, RecordingClock Clock, List<int> Announced)
-		CreateService(params Func<int, HttpResponseMessage>[] replies)
+		CreateService(params Func<int, HttpResponseMessage>[] replies) =>
+		CreateService(TimeoutSeconds, replies);
+
+	private (OcrService Service, ScriptedTransport Transport, RecordingClock Clock, List<int> Announced)
+		CreateService(int timeoutSeconds, params Func<int, HttpResponseMessage>[] replies)
 	{
 		var transport = new ScriptedTransport(replies);
 		var httpClient = new HttpClient(transport);
@@ -76,7 +80,7 @@ public class OcrServiceRetryTests : IDisposable
 
 		var clock = new RecordingClock();
 		var announced = new List<int>();
-		var service = new OcrService("test-key", "https://example.cognitiveservices.azure.com/", TimeoutSeconds, client, clock, announced.Add);
+		var service = new OcrService("test-key", "https://example.cognitiveservices.azure.com/", timeoutSeconds, client, clock, announced.Add);
 		return (service, transport, clock, announced);
 	}
 
@@ -160,20 +164,35 @@ public class OcrServiceRetryTests : IDisposable
 	}
 
 	[Fact]
-	public async Task EveryAttemptGetsTheSamePerRequestDeadline()
+	public async Task EachAttemptGivesItselfLongerThanTheLastUpToTheCeiling()
 	{
-		// Unlike the other four callers, this one does not stretch its deadline by the
-		// attempt number: the read is capped at a flat 60 seconds, so a wedged call cannot
-		// hold up an OCR batch for longer each time round. Pinned here because issue #311
-		// assumed the opposite, and because a change of mind should have to edit a test.
-		// See issue #315.
+		// Issue #315 settled what issue #311 had assumed: this service stretches its
+		// deadline by the attempt number like the other four, so a slow cold start gets
+		// more room on the retry than it had on the first try. The 60-second ceiling caps
+		// each attempt rather than only the first, so a wedged read cannot hold an OCR
+		// batch up for longer and longer.
 		var (service, _, clock, _) = CreateService(Status(HttpStatusCode.ServiceUnavailable));
 
 		await Assert.ThrowsAsync<RequestFailedException>(() =>
 			service.ExtractText(OcrReadingOrder.TopToBottomColumnAware, Image(), CancellationToken.None));
 
-		Assert.Equal([30d, 30d, 30d, 30d], clock.DeadlineSeconds);
+		Assert.Equal([30d, 60d, 60d, 60d], clock.DeadlineSeconds);
 		Assert.Equal([500d, 1000d, 1500d], clock.BackoffMilliseconds);
+	}
+
+	[Fact]
+	public async Task AShortTimeoutStretchesAllTheWayUpTheLadder()
+	{
+		// With the ceiling well out of reach, every rung is longer than the one before —
+		// the point of stretching in the first place. Read alongside the test above, which
+		// is the same ladder run into the cap.
+		var (service, _, clock, _) = CreateService(
+			timeoutSeconds: 5, Status(HttpStatusCode.ServiceUnavailable));
+
+		await Assert.ThrowsAsync<RequestFailedException>(() =>
+			service.ExtractText(OcrReadingOrder.TopToBottomColumnAware, Image(), CancellationToken.None));
+
+		Assert.Equal([5d, 10d, 15d, 20d], clock.DeadlineSeconds);
 	}
 
 	[Fact]

@@ -89,9 +89,21 @@ internal static class HotkeyConflictFinder
 
 	/// <summary>
 	/// Every chord one entry puts on the keyboard: one for a registered shortcut, and one per
-	/// step for a sent sequence. Anything that does not parse — half-typed text, or the
-	/// SendKeys syntax the "send key after" boxes also accept — yields nothing, because there
-	/// is no chord to compare.
+	/// step for a sent sequence. Half-typed text yields nothing, because there is no chord to
+	/// compare.
+	/// <para>
+	/// A sent step is read as a chord first and as Windows' SendKeys shorthand only if that
+	/// fails, because the two spellings collide on <c>+</c>: the one in <c>Ctrl+F5</c>
+	/// separates a chord, the one in <c>+{F5}</c> is SendKeys' Shift. Reading the shorthand at
+	/// all is new — it used to yield nothing, so <c>^{F5}</c> silently took no part in the
+	/// comparison while <c>Ctrl+F5</c> was flagged correctly (issue #326).
+	/// <para>
+	/// The order does not settle every case, and does not claim to. <c>+a</c> is SendKeys for
+	/// Shift+A, but <see cref="Hotkey.TryParse"/> reads it as plain A and so answers first.
+	/// That predates this and is a miss rather than a wrong flag; the reader is reached only
+	/// where the chord parser has already given up.
+	/// </para>
+	/// </para>
 	/// </summary>
 	private static IEnumerable<Hotkey> ChordsIn(ConfiguredHotkey entry)
 	{
@@ -108,7 +120,13 @@ internal static class HotkeyConflictFinder
 		foreach (string step in entry.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 		{
 			if (Hotkey.TryParse(step, out var chord))
+			{
 				yield return chord;
+				continue;
+			}
+
+			foreach (var sent in SendKeysReader.ChordsIn(step))
+				yield return sent;
 		}
 	}
 }
