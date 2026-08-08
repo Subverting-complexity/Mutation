@@ -236,6 +236,130 @@ public class HotkeyConflictFinderTests
 		Assert.Throws<ArgumentNullException>(() => DuplicateIndexes(null!));
 	}
 
+	// ----- Several lists at once (issue #321) -----
+	//
+	// The hotkey table is one table for the whole app, so a chord one list holds is a chord no
+	// other list can also have. Each Settings list used to check only itself, and a core hotkey
+	// and a router mapping could both claim CTRL+ALT+G with no badge on either row — the user
+	// found out from the failure dialog after saving.
+
+	[Fact]
+	public void A_core_hotkey_and_a_route_claiming_one_chord_flag_each_other()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("CTRL+ALT+G"), Claimed("CTRL+ALT+H")),
+			Configured(Claimed("CTRL+ALT+G"))]);
+
+		Assert.Equal(new[] { 0 }, Sorted(perList[0]));
+		Assert.Equal(new[] { 0 }, Sorted(perList[1]));
+	}
+
+	[Fact]
+	public void A_clash_across_lists_is_found_however_each_side_spells_it()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("SHIFT+CTRL+A")),
+			Configured(Claimed("ctrl-shift-a"))]);
+
+		Assert.Equal(new[] { 0 }, Sorted(perList[0]));
+		Assert.Equal(new[] { 0 }, Sorted(perList[1]));
+	}
+
+	[Fact]
+	public void Each_list_gets_positions_within_itself()
+	{
+		// The lists are answered as one and handed back separately, so a screen can flag its
+		// own rows without knowing where its list sat in the queue.
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("F1"), Claimed("F2"), Claimed("F3")),
+			Configured(Claimed("F9"), Claimed("F3"))]);
+
+		Assert.Equal(new[] { 2 }, Sorted(perList[0]));
+		Assert.Equal(new[] { 1 }, Sorted(perList[1]));
+	}
+
+	[Fact]
+	public void A_third_list_that_cannot_be_flagged_still_takes_part()
+	{
+		// Per-prompt shortcuts are edited in their own window, so the Hotkeys page has no row
+		// to flag for them — but they are registered from the same table, so a core hotkey that
+		// collides with one has to hear about it.
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("CTRL+ALT+G")),
+			Configured(Claimed("CTRL+ALT+H")),
+			Configured(Claimed("CTRL+ALT+G"))]);
+
+		Assert.Equal(new[] { 0 }, Sorted(perList[0]));
+		Assert.Empty(perList[1]);
+		Assert.Equal(new[] { 0 }, Sorted(perList[2]));
+	}
+
+	[Fact]
+	public void A_sent_key_still_clashes_with_a_claimed_one_in_another_list()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("ALT+J"), Sent("ALT+J")),
+			Configured(Claimed("alt+j"))]);
+
+		Assert.Equal(new[] { 0, 1 }, Sorted(perList[0]));
+		Assert.Equal(new[] { 0 }, Sorted(perList[1]));
+	}
+
+	[Fact]
+	public void Two_sent_keys_in_different_lists_are_still_not_a_clash()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Sent("CTRL+V")),
+			Configured(Sent("CTRL+V"))]);
+
+		Assert.Empty(perList[0]);
+		Assert.Empty(perList[1]);
+	}
+
+	[Fact]
+	public void Half_typed_text_in_one_list_never_clashes_with_another()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("CTRL+")),
+			Configured(Claimed("CTRL+"))]);
+
+		Assert.Empty(perList[0]);
+		Assert.Empty(perList[1]);
+	}
+
+	[Fact]
+	public void An_empty_list_answers_with_an_empty_result_and_shifts_nothing()
+	{
+		var perList = DuplicateIndexesAcross([
+			Configured(Claimed("CTRL+ALT+G")),
+			Configured(),
+			Configured(Claimed("CTRL+ALT+G"))]);
+
+		Assert.Equal(3, perList.Count);
+		Assert.Equal(new[] { 0 }, Sorted(perList[0]));
+		Assert.Empty(perList[1]);
+		Assert.Equal(new[] { 0 }, Sorted(perList[2]));
+	}
+
+	[Fact]
+	public void No_lists_at_all_answers_with_no_results()
+	{
+		Assert.Empty(DuplicateIndexesAcross([]));
+	}
+
+	[Fact]
+	public void A_missing_set_of_lists_is_refused()
+	{
+		Assert.Throws<ArgumentNullException>(() => DuplicateIndexesAcross(null!));
+	}
+
+	[Fact]
+	public void A_missing_list_among_them_is_refused()
+	{
+		Assert.Throws<ArgumentNullException>(() =>
+			DuplicateIndexesAcross([Configured(Claimed("F1")), null!]));
+	}
+
 	private static int[] Sorted(IReadOnlySet<int> indexes)
 	{
 		var sorted = new List<int>(indexes);

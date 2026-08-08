@@ -88,6 +88,56 @@ internal static class HotkeyConflictFinder
 	}
 
 	/// <summary>
+	/// The same answer for several lists at once, one result set per list, each holding
+	/// positions within its own list.
+	/// <para>
+	/// <see cref="HotkeyRegistrationTable"/> is one table for the whole app: a chord any list
+	/// holds is a chord no other list can also have. The Settings screen used to check each of
+	/// its lists only against itself, so a core hotkey and a router mapping could both claim
+	/// <c>CTRL+ALT+G</c> with no badge on either row, and whichever registered second came back
+	/// as "The shortcut is already registered." in a dialog after saving — the after-the-fact
+	/// discovery the per-list check existed to remove, just across lists instead of within one
+	/// (issue #321).
+	/// </para>
+	/// <para>
+	/// The lists are laid end to end and answered as one, which is what makes a clash between
+	/// two of them visible at all; the positions are then handed back per list so each screen
+	/// can flag its own rows.
+	/// </para>
+	/// </summary>
+	public static IReadOnlyList<IReadOnlySet<int>> DuplicateIndexesAcross(
+		IReadOnlyList<IReadOnlyList<ConfiguredHotkey>> lists)
+	{
+		if (lists is null) throw new ArgumentNullException(nameof(lists));
+
+		var flattened = new List<ConfiguredHotkey>();
+		foreach (var list in lists)
+		{
+			if (list is null) throw new ArgumentNullException(nameof(lists), "No list may be null.");
+			flattened.AddRange(list);
+		}
+
+		var duplicates = DuplicateIndexes(flattened);
+
+		var perList = new List<IReadOnlySet<int>>(lists.Count);
+		int offset = 0;
+		foreach (var list in lists)
+		{
+			var mine = new HashSet<int>();
+			for (int i = 0; i < list.Count; i++)
+			{
+				if (duplicates.Contains(offset + i))
+					mine.Add(i);
+			}
+
+			perList.Add(mine);
+			offset += list.Count;
+		}
+
+		return perList;
+	}
+
+	/// <summary>
 	/// Every chord one entry puts on the keyboard: one for a registered shortcut, and one per
 	/// step for a sent sequence. Half-typed text yields nothing, because there is no chord to
 	/// compare.

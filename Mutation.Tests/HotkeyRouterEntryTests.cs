@@ -195,4 +195,147 @@ public class HotkeyRouterEntryTests
 		Assert.False(entry.IsFromValid);
 		Assert.Equal("CTRL+SHIFT", entry.FromHotkey);
 	}
+
+	// ----- Saying out loud what the box rewrote itself to (issue #332) -----
+	//
+	// A sighted user watches "shift+ctrl+a" become "CTRL+SHIFT+A" on the way out of the box.
+	// A screen-reader user heard nothing, and the next reading of the field disagreed with
+	// what they had typed. The hotkey editor above this section was fixed for #327; these two
+	// boxes are the same defect on the same page.
+
+	[Fact]
+	public void CommittingAFromBoxThatTidiedItselfUpSaysSo()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void CommittingAToBoxThatTidiedItselfUpSaysSo()
+	{
+		// The row's two boxes are named apart, because the notice lands after the focus has
+		// moved on and "now reads CTRL+ALT+Y" alone would not say which one changed.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.ToHotkey = "alt+ctrl+y";
+		entry.CommitToHotkey();
+
+		Assert.Equal("Shortcut to send when triggered now reads CTRL+ALT+Y.", entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void ABoxAlreadyWrittenTheAppsOwnWayStaysSilent()
+	{
+		// Tabbing across a row that needs no tidying is the common case by far, and has to
+		// stay quiet or the page talks over the user on every row.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "CTRL+X";
+		entry.CommitFromHotkey();
+		entry.ToHotkey = "CTRL+B";
+		entry.CommitToHotkey();
+
+		Assert.Null(entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void HalfTypedTextIsLeftToTheErrorRatherThanAnnounced()
+	{
+		// The row already says the shortcut is unusable. Being told how it is now spelled on
+		// top of that is the less useful of the two, and both in one breath is neither.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "ctrl+shift+";
+		entry.CommitFromHotkey();
+
+		Assert.Null(entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void ADuplicateOutranksTheRewriteNotice()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.SetDuplicate(true);
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.Null(entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void AFromBoxIsStillAnnouncedWhileTheToBoxBesideItIsEmpty()
+	{
+		// Every newly added row starts with both boxes empty, so a notice that waited for the
+		// whole row to be valid would never be heard on the row most likely to need it.
+		var entry = new HotkeyRouterEntry(Map(string.Empty, string.Empty));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.False(entry.IsToValid);
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void LoadingASettingsFileThatNeedsTidyingUpSaysNothing()
+	{
+		// The constructor canonicalises too. Announcing that would read every stored row aloud
+		// on the way into the page.
+		var entry = new HotkeyRouterEntry(Map("shift+ctrl+a", "alt+ctrl+y"));
+
+		Assert.Equal("CTRL+SHIFT+A", entry.FromHotkey);
+		Assert.Null(entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void RebuildingTheRowLeavesAPendingNoticeStanding()
+	{
+		// Saving the page rewrites the backing maps and hands each row a new one. Treating
+		// that as a fresh silent load would swallow the notice for the very edit that
+		// triggered the save.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.ReplaceBackingMap(Map("CTRL+SHIFT+A", "CTRL+V"));
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void ComingBackIntoTheBoxTakesTheNoticeDown()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.ClearCommitAnnouncement();
+
+		Assert.Null(entry.CommitAnnouncement);
+	}
+
+	[Fact]
+	public void TheNoticeIsPublishedSoTheRowCanBind()
+	{
+		// The row is a data template with no code-behind to call LiveMessage.Show from, so the
+		// change notification is the whole delivery mechanism.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		var raised = new List<string?>();
+		entry.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(HotkeyRouterEntry.CommitAnnouncement))
+				raised.Add(entry.CommitAnnouncement);
+		};
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		entry.ClearCommitAnnouncement();
+
+		Assert.Equal(["Shortcut to listen for now reads CTRL+SHIFT+A.", null], raised);
+	}
 }

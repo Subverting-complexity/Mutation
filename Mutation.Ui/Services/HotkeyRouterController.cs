@@ -23,18 +23,31 @@ internal sealed class HotkeyRouterController
 	private readonly ObservableCollection<HotkeyRouterEntry> _entries;
 	private readonly List<(string From, string To)> _persistedSnapshot = new();
 	private readonly bool _autoPersist;
+	private readonly Action? _crossListDuplicateCheck;
 
 	private bool _initialized;
 	private HotkeyManager? _hotkeyManager;
 
+	/// <param name="crossListDuplicateCheck">
+	/// Runs the duplicate check on an owner that has more lists to compare than this one — the
+	/// Hotkeys page, which holds the core hotkey rows as well. Null leaves the router checking
+	/// its own "From" chords against each other, which is all it can see by itself.
+	/// <para>
+	/// The owner is expected to call back into <see cref="ConfiguredFromHotkeys"/> and
+	/// <see cref="ApplyDuplicates"/>: this list still owns its own rows, it just no longer
+	/// decides on its own which of them clash (issue #321).
+	/// </para>
+	/// </param>
 	public HotkeyRouterController(
 		ObservableCollection<HotkeyRouterEntry> entries,
 		Settings settings,
 		ISettingsManager? settingsManager,
 		DispatcherQueue dispatcherQueue,
 		ListView routerListView,
-		bool autoPersist = true)
+		bool autoPersist = true,
+		Action? crossListDuplicateCheck = null)
 	{
+		_crossListDuplicateCheck = crossListDuplicateCheck;
 		_entries = entries ?? throw new ArgumentNullException(nameof(entries));
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
@@ -105,6 +118,17 @@ internal sealed class HotkeyRouterController
 		DetachEntry(entry);
 		_entries.Remove(entry);
 		RefreshRegistrations();
+	}
+
+	/// <summary>
+	/// Takes down the row's rewrite notice as the user comes back into either of its boxes.
+	/// See <see cref="HotkeyRouterEntry.ClearCommitAnnouncement"/> for why it does not simply
+	/// stay put.
+	/// </summary>
+	public void ClearCommitAnnouncement(object sender)
+	{
+		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
+			entry.ClearCommitAnnouncement();
 	}
 
 	public void CommitFromLostFocus(object sender)
@@ -256,21 +280,51 @@ internal sealed class HotkeyRouterController
 	}
 
 	/// <summary>
-	/// Flags the routes whose "from" shortcut is already taken by another route. Compared as
-	/// chords rather than as text, so the answer is the one registration will give — the
-	/// screen used to compare the typed strings and could wave through a pair the hotkey
-	/// table then refused (issue #306).
+	/// The "From" chord of every route, in row order. Each one is claimed from Windows, and
+	/// text that does not parse yet is offered as nothing at all — it cannot be registered, so
+	/// it cannot clash.
 	/// </summary>
-	private void RecalculateDuplicates()
+	public IReadOnlyList<HotkeyConflictFinder.ConfiguredHotkey> ConfiguredFromHotkeys()
 	{
 		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_entries.Count);
 		foreach (var entry in _entries)
 			configured.Add(new(entry.IsFromValid ? entry.NormalizedFromHotkey : null, ClaimsTheChord: true));
 
-		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+		return configured;
+	}
+
+	/// <summary>
+	/// Flags the rows at <paramref name="duplicateRows"/> and clears the rest. The positions
+	/// are those of <see cref="ConfiguredFromHotkeys"/>, whoever worked them out.
+	/// </summary>
+	public void ApplyDuplicates(IReadOnlySet<int> duplicateRows)
+	{
+		if (duplicateRows is null) throw new ArgumentNullException(nameof(duplicateRows));
 
 		for (int i = 0; i < _entries.Count; i++)
-			_entries[i].SetDuplicate(duplicates.Contains(i));
+			_entries[i].SetDuplicate(duplicateRows.Contains(i));
+	}
+
+	/// <summary>
+	/// Flags the routes whose "from" shortcut is already taken. Compared as chords rather than
+	/// as text, so the answer is the one registration will give — the screen used to compare
+	/// the typed strings and could wave through a pair the hotkey table then refused (issue
+	/// #306).
+	/// <para>
+	/// Handed to the owner when it has more lists to compare than this one, because the hotkey
+	/// table is one table for the whole app and a route can be taken by a core hotkey just as
+	/// easily as by another route (issue #321).
+	/// </para>
+	/// </summary>
+	private void RecalculateDuplicates()
+	{
+		if (_crossListDuplicateCheck is not null)
+		{
+			_crossListDuplicateCheck();
+			return;
+		}
+
+		ApplyDuplicates(HotkeyConflictFinder.DuplicateIndexes(ConfiguredFromHotkeys()));
 	}
 
 	private void AttachEntry(HotkeyRouterEntry entry) =>
