@@ -22,59 +22,48 @@ public static class SendKeysMapper
 		"WIN", "WINDOWS", "CMD", "COMMAND", "META", "SUPER", "PRINTSCREEN", "PRTSC", "PRTSCR", "SYSRQ"
 	};
 
-	// Map of normalized tokens (letters/digits only, no spaces/dashes/underscores) to SendKeys pieces.
-	// Use braces for action keys; single-char literals returned as-is; reserved chars are escaped later.
+	// Map of key names to SendKeys pieces. Use braces for action keys; single-char literals
+	// returned as-is; reserved chars are escaped later.
+	//
+	// Keyed by the canonical name only — the short spellings people also write (PgDn, Esc,
+	// Bksp, ArrowUp) resolve to it through KeyNameAliases before the lookup, so this table
+	// and Hotkey.Parse take the same words. They used to be listed here and nowhere else,
+	// which is how "Alt+PgDn" came to be accepted by a send-key box and rejected by a
+	// shortcut editor (issue #329).
 	private static readonly Dictionary<string, string> KeyMap = new(StringComparer.OrdinalIgnoreCase)
 	{
 		// Control keys
 		["ENTER"] = "{ENTER}",
-		["RETURN"] = "{ENTER}",
 		["TAB"] = "{TAB}",
-		["ESC"] = "{ESC}",
 		["ESCAPE"] = "{ESC}",
-		["BACKSPACE"] = "{BACKSPACE}",
-		["BKSP"] = "{BACKSPACE}",
-		["BS"] = "{BACKSPACE}",
+		["BACK"] = "{BACKSPACE}",
 		["DELETE"] = "{DEL}",
-		["DEL"] = "{DEL}",
 		["INSERT"] = "{INS}",
-		["INS"] = "{INS}",
 		["SPACE"] = "{SPACE}",
-		["SPACEBAR"] = "{SPACE}",
 
 		// Navigation
 		["UP"] = "{UP}",
-		["UPARROW"] = "{UP}",
-		["ARROWUP"] = "{UP}",
 		["DOWN"] = "{DOWN}",
-		["DOWNARROW"] = "{DOWN}",
-		["ARROWDOWN"] = "{DOWN}",
 		["LEFT"] = "{LEFT}",
-		["LEFTARROW"] = "{LEFT}",
-		["ARROWLEFT"] = "{LEFT}",
 		["RIGHT"] = "{RIGHT}",
-		["RIGHTARROW"] = "{RIGHT}",
-		["ARROWRIGHT"] = "{RIGHT}",
 		["HOME"] = "{HOME}",
 		["END"] = "{END}",
-		["PGUP"] = "{PGUP}",
 		["PAGEUP"] = "{PGUP}",
 		["PAGEDOWN"] = "{PGDN}",
-		["PAGEDN"] = "{PGDN}",
-		["PGDN"] = "{PGDN}",
 
 		// Editing/context
-		["APPS"] = "{APPS}",
-		["CONTEXTMENU"] = "{APPS}",
+		["APPLICATION"] = "{APPS}",
+		// "Menu" is the one name the two surfaces still read differently, and deliberately
+		// so: VirtualKey.Menu is the Alt key, so aliasing it to the context-menu key would
+		// either change what an existing shortcut means or change what an existing send-key
+		// box types. Left as it has always behaved here, rather than broken either way.
 		["MENU"] = "{APPS}",
-		["BREAK"] = "{BREAK}",
+		["PAUSE"] = "{BREAK}",
 		["HELP"] = "{HELP}",
 
 		// Toggles
-		["CAPSLOCK"] = "{CAPSLOCK}",
-		["CAPS"] = "{CAPSLOCK}",
-		["NUMLOCK"] = "{NUMLOCK}",
-		["SCROLLLOCK"] = "{SCROLLLOCK}",
+		["CAPITALLOCK"] = "{CAPSLOCK}",
+		["NUMBERKEYLOCK"] = "{NUMLOCK}",
 		["SCROLL"] = "{SCROLLLOCK}",
 
 		// Numeric keypad (explicit names)
@@ -85,7 +74,9 @@ public static class SendKeysMapper
 		["DECIMAL"] = "{DECIMAL}",
 		["SEPARATOR"] = "{SEPARATOR}",
 
-		// Common symbol names → literals (escaped later if reserved)
+		// Common symbol names → literals (escaped later if reserved). These stay a
+		// send-key-only vocabulary: they name a character to type, and Windows has no
+		// virtual key for "the plus character" to register a shortcut against.
 		["PLUS"] = "+",
 		["MINUS"] = "-",
 		["DASH"] = "-",
@@ -350,7 +341,9 @@ public static class SendKeysMapper
 	private static bool TryResolveKey(string token, out string key)
 	{
 		key = "";
-		var norm = Normalize(token);
+		// Resolved through the shared alias table first, so "PgDn" and "PageDown" reach the
+		// same entry and this table needs only the one spelling (issue #329).
+		var norm = KeyNameAliases.Resolve(Normalize(token)).ToUpperInvariant();
 
 		if (TryMapFunctionKey(norm, out var fKey))
 		{

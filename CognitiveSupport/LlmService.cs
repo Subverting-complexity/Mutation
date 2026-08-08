@@ -16,11 +16,6 @@ public class LlmService : ILlmService
 	/// <param name="transport">
 	/// Test seam only; null in production. See <see cref="OpenAiClientOptionsFactory.Create"/>.
 	/// </param>
-	/// <param name="sdkRetryCount">
-	/// Test seam only; null in production. Turns the OpenAI SDK's own retries down (0 off)
-	/// so the retries a test counts are the ones this class runs, not the SDK's underneath
-	/// them. See <see cref="OpenAiClientOptionsFactory.Create"/>.
-	/// </param>
 	/// <param name="timeProvider">
 	/// Test seam only; null in production. Drives both the retry backoff and each
 	/// attempt's deadline, so a test can read back the waits that were armed instead of
@@ -32,7 +27,6 @@ public class LlmService : ILlmService
 		int timeoutSeconds = 60,
 		int retryCount = 3,
 		PipelineTransport? transport = null,
-		int? sdkRetryCount = null,
 		TimeProvider? timeProvider = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
@@ -55,12 +49,13 @@ public class LlmService : ILlmService
 
 		foreach (var model in modelList)
 		{
-			// Options disable the SDK's 100 s default network timeout so the
-			// escalating per-attempt timeouts below are the real authority.
+			// Options disable the SDK's 100 s default network timeout so the escalating
+			// per-attempt timeouts below are the real authority, and its own retry loop so
+			// the pipeline above is the only one counting (issue #318).
 			_chatClients[model.Name] = new ChatClient(
 				model.Name,
 				new ApiKeyCredential(apiKey),
-				OpenAiClientOptionsFactory.Create(transport: transport, maxRetries: sdkRetryCount));
+				OpenAiClientOptionsFactory.Create(transport: transport));
 			_modelConfigs[model.Name] = model;
 		}
 	}
@@ -143,7 +138,7 @@ public class LlmService : ILlmService
 			// Only a rejected tier is handled here. Unlike Anthropic, OpenAI Fast mode has
 			// no capacity pool or rate limit of its own, so a 429 is the account's ordinary
 			// limit — dropping the tier would not get the user served any sooner, and the
-			// SDK's own retry policy already had a go at it.
+			// retry ladder around this send already had a go at it.
 			var reason = FastModeFailure.Classify(ex.Status, ex.Message);
 			if (reason is null)
 				throw; // Nothing to do with the service tier; report it as-is.

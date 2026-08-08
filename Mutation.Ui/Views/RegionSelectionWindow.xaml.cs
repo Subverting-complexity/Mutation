@@ -33,6 +33,15 @@ public sealed partial class RegionSelectionWindow : Window
 	// without sight of the crosshair (issue #215).
 	private readonly KeyboardRegionSelector _keyboard = new();
 	private const string AnnouncementActivityId = "RegionSelection";
+	private const string CancelledAnnouncement = "Region selection cancelled.";
+
+	/// <summary>
+	/// Said only when the overlay could not take focus. Normally the Canvas's
+	/// <c>AutomationProperties.HelpText</c> carries the instructions and a reader reads them
+	/// out as focus lands — see <see cref="SelectRegionAsync"/>.
+	/// </summary>
+	private const string InstructionsAnnouncement =
+		"Select screen region. Move with the arrow keys, press Enter to set the first corner, move, then Enter again to capture. Control plus A selects the whole screen. Escape cancels.";
 
 	// Cache XAML elements to avoid reliance on generated fields
 	private Microsoft.UI.Xaml.Controls.Image? _img;
@@ -231,7 +240,7 @@ public sealed partial class RegionSelectionWindow : Window
 		// Show and activate for input (in case window was hidden for reuse)
 		try { this.AppWindow?.Show(); } catch { }
 		this.Activate();
-		TryFocusOverlay();
+		bool focused = TryFocusOverlay();
 		// Ensure TopMost without using SWP_SHOWWINDOW to avoid flicker
 		int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
 		int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -239,11 +248,16 @@ public sealed partial class RegionSelectionWindow : Window
 		int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 		SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOMOVE | SWP_NOSIZE);
 		ResetKeyboardSelection();
-		// The overlay is full-screen and topmost: without this the reader just lands on
-		// an unnamed canvas with no hint that anything is expected of it (issue #215).
-		Announce(
-			"Select screen region. Move with the arrow keys, press Enter to set the first corner, move, then Enter again to capture. Control plus A selects the whole screen. Escape cancels.",
-			AutomationNotificationKind.Other);
+		// The overlay is full-screen and topmost, so it has to say what it wants (issue
+		// #215) — but the Canvas's AutomationProperties.HelpText already says it, and a
+		// reader reads that out as focus lands here. Announcing the same thing as well raced
+		// that: the focus-change announcement interrupted the notification part-way through
+		// the sentence, so the instructions were routinely heard cut off (issue #265).
+		//
+		// The notification is kept for the one case the HelpText cannot cover: focus that
+		// did not land on the overlay at all, where nothing would read it out.
+		if (!focused)
+			Announce(InstructionsAnnouncement, AutomationNotificationKind.Other);
 		return _tcs.Task;
 	}
 
@@ -255,11 +269,7 @@ public sealed partial class RegionSelectionWindow : Window
 		var pp = e.GetCurrentPoint(_overlay);
 		if (pp.Properties.IsRightButtonPressed)
 		{
-			_dragging = false;
-			_tcs?.TrySetResult(null);
-			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
-			ResetSelection();
-			HideAndRestore();
+			CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted);
 			return;
 		}
 		// Only start selection on left button
@@ -317,11 +327,7 @@ public sealed partial class RegionSelectionWindow : Window
 		// Right click cancels
 		if (e.GetCurrentPoint(_overlay).Properties.IsRightButtonPressed)
 		{
-			_dragging = false;
-			_tcs?.TrySetResult(null);
-			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
-			ResetSelection();
-			HideAndRestore();
+			CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted);
 			return;
 		}
 		if (!_dragging) return;
@@ -377,12 +383,47 @@ public sealed partial class RegionSelectionWindow : Window
 			Math.Max(0, x2 - x1),
 			Math.Max(0, y2 - y1)
 		);
-		Announce(
+		CompleteSelection(
+			rectPx,
 			$"Region captured, {Math.Round(rectPx.Width)} by {Math.Round(rectPx.Height)} pixels.",
 			AutomationNotificationKind.ActionCompleted);
-		_tcs?.TrySetResult(rectPx);
+	}
+
+	/// <summary>
+	/// Announces the outcome, then hides the overlay and reports the result on a later
+	/// dispatcher turn.
+	/// <para>
+	/// The order is the point. These two announcements — the capture and the cancel — are
+	/// the ones issue #215 asked for, and they were the least likely of any to be heard:
+	/// raised, and then in the same turn the window was hidden and another application put
+	/// back in front. A UIA notification reaches a screen reader asynchronously, and readers
+	/// commonly discard events whose source window is gone by the time they arrive
+	/// (issue #265). Hiding a turn later leaves the overlay visible and foreground while the
+	/// event is delivered.
+	/// </para>
+	/// <para>
+	/// The result is set last, after the restore, and that matters on its own: a
+	/// <see cref="TaskCompletionSource{T}"/> may run its continuation inline, so setting it
+	/// first let the caller's next step — clipboard, OCR, a paste — begin while this
+	/// full-screen topmost window was still in front.
+	/// </para>
+	/// </summary>
+	private void CompleteSelection(Rect? result, string announcement, AutomationNotificationKind kind)
+	{
+		_dragging = false;
+		Announce(announcement, kind);
 		ResetSelection();
-		HideAndRestore();
+
+		void Finish()
+		{
+			HideAndRestore();
+			_tcs?.TrySetResult(result);
+		}
+
+		// Falling straight through when there is no queue, or it refuses the work, is what
+		// keeps a capture from hanging for ever on a lost announcement.
+		if (_dispatcherQueue is null || !_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, Finish))
+			Finish();
 	}
 
 	private void InitializeCrosshairAtCursor(System.Drawing.Rectangle bounds)
@@ -419,10 +460,7 @@ public sealed partial class RegionSelectionWindow : Window
 	{
 		if (e.Key == Windows.System.VirtualKey.Escape)
 		{
-			_dragging = false;
-			_tcs?.TrySetResult(null);
-			Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
-			HideAndRestore();
+			CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted);
 			e.Handled = true;
 			return;
 		}
@@ -521,6 +559,9 @@ public sealed partial class RegionSelectionWindow : Window
 		// Start where the pointer already is so mouse and keyboard agree, and so the
 		// caret matches the crosshair the mouse path draws on open.
 		var caret = _lastPointerPos ?? CursorInOverlayCoordinates(width, height);
+		// Everything the selector says is scaled to these, so it reads out the same unit
+		// FinishSelection announces the capture in (issue #265).
+		_keyboard.SetBitmapSize(_bmpW, _bmpH);
 		_keyboard.Reset(width, height, caret.X, caret.Y);
 	}
 
@@ -670,9 +711,14 @@ public sealed partial class RegionSelectionWindow : Window
 		}
 	}
 
-        private void TryFocusOverlay()
+        /// <summary>
+        /// True when focus landed on the overlay Canvas — which is what makes a reader read
+        /// out its name and HelpText, and so what decides whether the instructions have to be
+        /// announced separately (issue #265).
+        /// </summary>
+        private bool TryFocusOverlay()
         {
-                try { _overlay?.Focus(FocusState.Programmatic); } catch { }
+                try { return _overlay?.Focus(FocusState.Programmatic) == true; } catch { return false; }
         }
 
         private void RememberForegroundWindow()
@@ -829,15 +875,21 @@ public sealed partial class RegionSelectionWindow : Window
 			int vkCode = Marshal.ReadInt32(lParam);
 			if (vkCode == VK_ESCAPE)
 			{
-				// Cancel the selection on Escape key
+				// Cancel the selection on Escape key. The hook can run ahead of the UI
+				// thread's own message handling, so the work goes through the dispatcher;
+				// CompleteSelection then takes its own turn to hide, so the cancel is
+				// announced from a window that is still there to be announced from.
 				_dragging = false;
-				_tcs?.TrySetResult(null);
-				// Use dispatcher to ensure UI operations happen on the correct thread
-				_dispatcherQueue?.TryEnqueue(() =>
+				if (_dispatcherQueue is null || !_dispatcherQueue.TryEnqueue(
+					() => CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted)))
 				{
-					Announce("Region selection cancelled.", AutomationNotificationKind.ActionAborted);
-					HideAndRestore();
-				});
+					// Nothing will run the cancel on the queue, so it runs here — a
+					// low-level hook is delivered on the thread that installed it, which is
+					// this window's own. Merely releasing the caller instead would leave a
+					// full-screen topmost overlay on screen and a global keyboard hook
+					// installed, with the capture looking finished to everyone above.
+					CompleteSelection(null, CancelledAnnouncement, AutomationNotificationKind.ActionAborted);
+				}
 				return (IntPtr)1; // Suppress the key
 			}
 		}

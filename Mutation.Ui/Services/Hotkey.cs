@@ -166,20 +166,28 @@ public class Hotkey : IEquatable<Hotkey>
 				case "START":
 					hk.Win = true; break;
                                 default:
+                                        // The short names the "send key after…" boxes take — PgDn, Esc,
+                                        // Bksp — resolve to their full spelling here, so one key has one
+                                        // vocabulary across both surfaces (issue #329). A token that is
+                                        // not an alias comes back unchanged.
+                                        string keyName = KeyNameAliases.Resolve(token);
+
                                         // Try the "NumberN" alias first for purely-numeric tokens.
                                         // Otherwise Enum.TryParse would parse "5" as the integer value 5
                                         // and silently bind to VirtualKey.XButton1 (the int-5 enum member).
-                                        bool isAllDigits = token.Length > 0;
-                                        for (int i = 0; i < token.Length && isAllDigits; i++)
-                                                isAllDigits = char.IsDigit(token[i]);
+                                        bool isAllDigits = keyName.Length > 0;
+                                        for (int i = 0; i < keyName.Length && isAllDigits; i++)
+                                                isAllDigits = char.IsDigit(keyName[i]);
 
-                                        if (isAllDigits && Enum.TryParse<VirtualKey>("Number" + token, true, out var vk))
+                                        if (isAllDigits && Enum.TryParse<VirtualKey>("Number" + keyName, true, out var vk))
                                                 hk.Key = vk;
-                                        else if (Enum.TryParse<VirtualKey>(token, true, out vk))
+                                        else if (Enum.TryParse<VirtualKey>(keyName, true, out vk))
                                                 hk.Key = vk;
-                                        else if (Enum.TryParse<VirtualKey>("Number" + token, true, out vk))
+                                        else if (Enum.TryParse<VirtualKey>("Number" + keyName, true, out vk))
                                                 hk.Key = vk;
                                         else
+                                                // Quoted as the user wrote it, not as it was resolved: an
+                                                // alias that resolved to nothing is still their spelling.
                                                 throw new NotSupportedException($"Unsupported key '{token}'");
                                         break;
                         }

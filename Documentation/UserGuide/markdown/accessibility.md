@@ -89,10 +89,13 @@ cancels.
 
 As you move, it reads your position out. Before you set a corner you hear the caret
 position. After you set one you hear the size of the region and where its top-left
-corner sits, so you always know where on the screen you are. Hold **Ctrl** for
-one-pixel steps or **Shift** for big hundred-pixel jumps. When the capture finishes it
-tells you the size of what it grabbed, in pixels. If you press Enter twice without
-moving, it tells you the region is empty rather than silently doing nothing.
+corner sits, so you always know where on the screen you are. Hold **Ctrl** for the
+smallest step or **Shift** for big jumps. When the capture finishes it tells you the
+size of what it grabbed, in pixels. If you press Enter twice without moving, it tells
+you the region is empty rather than silently doing nothing.
+
+Every number you hear is in pixels of the picture being captured, so the size you hear
+while sizing the rectangle is the size you hear when it is captured.
 
 ## Reading aloud is a first-class feature
 

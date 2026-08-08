@@ -65,6 +65,10 @@ before — two beeps, then three, then four. A burst of end beeps part way throu
 dictation means Mutation is still working, and how many you hear tells you how far into
 its retries it has got.
 
+If the service is busy and asks Mutation to wait a moment before asking again, Mutation
+waits as long as it was asked to, up to a minute. So a gap between beeps that is longer
+than usual is the service setting the pace, not something going wrong.
+
 **What to do.**
 
 1. Give it a moment — the retries are automatic and you will hear the result.
@@ -104,6 +108,10 @@ that has gone down keeps Mutation waiting about **ten minutes** before it admits
 and up to twenty if the prompt asked for Fast mode and the service turns it away for being
 busy, because Mutation then tries the whole thing again at normal speed. Nothing is broken;
 it is still trying.
+
+If the AI service asks Mutation to wait a moment before asking again — which is what a
+busy service usually does — Mutation waits as long as it was asked to, up to a minute,
+rather than asking straight back.
 
 A prompt you started yourself puts "Processing..." in the **Formatted Transcript** box. The
 AI step after a dictation says "Processing with LLM..." in the **Raw Transcript** box

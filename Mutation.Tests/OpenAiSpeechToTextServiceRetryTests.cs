@@ -8,9 +8,11 @@ using OpenAI.Audio;
 namespace Mutation.Tests;
 
 /// <summary>
-/// Issue #311: nothing drove a retry through this service. The SDK's own retry policy is
-/// turned off here — see <see cref="OpenAiClientOptionsFactory.Create"/> — so a call count
-/// means "this many times our pipeline tried", not "this many times two nested loops did".
+/// Issue #311: nothing drove a retry through this service. A call count here means "this
+/// many times our pipeline tried", not "this many times two nested loops did" — and since
+/// issue #318 that holds in production too, because
+/// <see cref="OpenAiClientOptionsFactory.Create"/> ships with the SDK's own retry policy
+/// off rather than leaving it on for everyone but the tests.
 /// </summary>
 public class OpenAiSpeechToTextServiceRetryTests : IDisposable
 {
@@ -48,8 +50,7 @@ public class OpenAiSpeechToTextServiceRetryTests : IDisposable
 			"whisper-1",
 			new ApiKeyCredential("test-key"),
 			OpenAiClientOptionsFactory.Create(
-				transport: new HttpClientPipelineTransport(httpClient),
-				maxRetries: 0));
+				transport: new HttpClientPipelineTransport(httpClient)));
 
 		var announced = new List<int>();
 		var service = new OpenAiSpeechToTextService("Whisper", audioClient, BaseTimeoutSeconds, clock, announced.Add);
@@ -62,10 +63,16 @@ public class OpenAiSpeechToTextServiceRetryTests : IDisposable
 			Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
 		};
 
-	private static Func<int, HttpResponseMessage> Status(HttpStatusCode status) =>
-		_ => new HttpResponseMessage(status)
+	private static Func<int, HttpResponseMessage> Status(HttpStatusCode status, string? retryAfter = null) =>
+		_ =>
 		{
-			Content = new StringContent("""{"error":{"message":"nope"}}""", System.Text.Encoding.UTF8, "application/json")
+			var response = new HttpResponseMessage(status)
+			{
+				Content = new StringContent("""{"error":{"message":"nope"}}""", System.Text.Encoding.UTF8, "application/json")
+			};
+			if (retryAfter is not null)
+				response.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
+			return response;
 		};
 
 	private static Func<int, HttpResponseMessage> Dropped() =>
@@ -139,6 +146,34 @@ public class OpenAiSpeechToTextServiceRetryTests : IDisposable
 			service.ConvertAudioToText("", WriteAudioFile(), CancellationToken.None));
 
 		Assert.Equal(1, handler.Calls);
+	}
+
+	[Fact]
+	public async Task APersistentRateLimitCostsFourRequestsAndNotSixteen()
+	{
+		// The number issue #318 is about: our four attempts used to wrap the SDK's own three
+		// retries. Nothing here caps the SDK any more, because the factory ships with it off.
+		var (service, handler, _, _) = CreateService(Status(HttpStatusCode.TooManyRequests));
+
+		await Assert.ThrowsAsync<ClientResultException>(() =>
+			service.ConvertAudioToText("", WriteAudioFile(), CancellationToken.None));
+
+		Assert.Equal(4, handler.Calls);
+	}
+
+	[Fact]
+	public async Task ARateLimitThatAsksForAParticularWaitGetsIt()
+	{
+		// Honouring Retry-After was the one thing the SDK's loop did better than ours, so it
+		// moved into TransientRetry rather than being lost with it (issue #318).
+		var (service, _, clock, _) = CreateService(
+			Status(HttpStatusCode.TooManyRequests, retryAfter: "2"),
+			Ok(TranscriptBody));
+
+		string text = await service.ConvertAudioToText("", WriteAudioFile(), CancellationToken.None);
+
+		Assert.Equal("the recovered transcript", text);
+		Assert.Equal([2000d], clock.BackoffMilliseconds);
 	}
 
 	[Fact]

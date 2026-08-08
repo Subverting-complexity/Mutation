@@ -6,9 +6,10 @@ namespace CognitiveSupport;
 
 /// <summary>
 /// The retry shape every remote-service call in this assembly shares: a linear 500 ms
-/// backoff, and the number of the attempt in flight, which the bodies use to stretch
-/// their per-attempt timeout and — in the three services that make a sound — to beep
-/// once more with each retry so the listener can hear how deep in it is.
+/// backoff — or the wait the service itself asked for, when it sent one — and the number of
+/// the attempt in flight, which the bodies use to stretch their per-attempt timeout and — in
+/// the three services that make a sound — to beep once more with each retry so the listener
+/// can hear how deep in it is.
 /// </summary>
 /// <remarks>
 /// The attempt number reaches the body as an argument, and lives for the rest of its
@@ -68,9 +69,8 @@ internal static class TransientRetry
 		if (retryCount <= 0)
 			return ResiliencePipeline.Empty;
 
-		var builder = new ResiliencePipelineBuilder();
-		if (timeProvider is not null)
-			builder.TimeProvider = timeProvider;
+		var clock = timeProvider ?? TimeProvider.System;
+		var builder = new ResiliencePipelineBuilder { TimeProvider = clock };
 
 		return builder
 			.AddRetry(new RetryStrategyOptions
@@ -79,6 +79,16 @@ internal static class TransientRetry
 				MaxRetryAttempts = retryCount,
 				BackoffType = DelayBackoffType.Linear,
 				Delay = FirstDelay,
+				// A service that answered with a Retry-After gets the wait it asked for;
+				// everything else returns null here and falls back to the linear backoff
+				// above. This is the only part of the stack that listens to a rate limit
+				// now that the OpenAI SDK's own retry loop is off (issue #318).
+				//
+				// Null is the fallback signal and TimeSpan.Zero is not — Polly reads zero as
+				// a real delay of no time — so RetryAfterHint answers null for every wait
+				// that is not longer than nothing.
+				DelayGenerator = args => ValueTask.FromResult(
+					RetryAfterHint.From(args.Outcome.Exception, clock.GetUtcNow())),
 				OnRetry = args =>
 				{
 					// AttemptNumber counts the attempt that just failed, from zero, so the
