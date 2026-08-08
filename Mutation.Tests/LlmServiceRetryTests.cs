@@ -156,6 +156,25 @@ public class LlmServiceRetryTests : IDisposable
 		Assert.Equal([2000d], clock.BackoffMilliseconds);
 	}
 
+	[Theory]
+	[InlineData("0")]
+	[InlineData("-1")]
+	public async Task ARateLimitAskingForNoWaitAtAllDoesNotCollapseTheLadder(string retryAfter)
+	{
+		// The header comes from the server, so a bad one must not be able to delete our own
+		// backoff and run all four attempts inside a few milliseconds — which is the
+		// hammering the whole change exists to stop.
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.TooManyRequests, ErrorBody("slow down"), retryAfter: retryAfter);
+		var (service, clock) = CreateService(handler);
+
+		await Assert.ThrowsAsync<ClientResultException>(() =>
+			service.CreateChatCompletion(Messages(), Model));
+
+		Assert.Equal(4, handler.Requests.Count);
+		Assert.Equal([500d, 1000d, 1500d], clock.BackoffMilliseconds);
+	}
+
 	[Fact]
 	public async Task AFailureThatAsksForNothingKeepsTheLinearBackoff()
 	{

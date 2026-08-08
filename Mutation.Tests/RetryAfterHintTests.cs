@@ -35,16 +35,17 @@ public class RetryAfterHintTests
 		Assert.Equal(TimeSpan.FromSeconds(30), RetryAfterHint.Parse("Sat, 08 Aug 2026 12:00:30 GMT", Now));
 	}
 
-	[Fact]
-	public void A_date_already_past_means_go_now_rather_than_go_back()
+	[Theory]
+	[InlineData("0")]
+	[InlineData("-5")]
+	[InlineData("Sat, 08 Aug 2026 11:59:00 GMT")] // already past
+	[InlineData("Sat, 08 Aug 2026 12:00:00 GMT")] // exactly now
+	public void A_wait_of_no_time_at_all_leaves_the_backoff_in_charge(string header)
 	{
-		Assert.Equal(TimeSpan.Zero, RetryAfterHint.Parse("Sat, 08 Aug 2026 11:59:00 GMT", Now));
-	}
-
-	[Fact]
-	public void A_negative_count_means_go_now_too()
-	{
-		Assert.Equal(TimeSpan.Zero, RetryAfterHint.Parse("-5", Now));
+		// Never TimeSpan.Zero. Polly reads a returned zero as a real delay of no time, which
+		// would run the whole ladder back-to-back in a few milliseconds — on the say-so of a
+		// header the server sends. Null is what puts the linear backoff back in charge.
+		Assert.Null(RetryAfterHint.Parse(header, Now));
 	}
 
 	[Theory]
@@ -57,6 +58,14 @@ public class RetryAfterHintTests
 		Assert.Equal(RetryAfterHint.Cap, RetryAfterHint.Parse(header, Now));
 	}
 
+	[Fact]
+	public void A_number_too_big_for_a_TimeSpan_is_cut_to_the_cap_rather_than_overflowing()
+	{
+		// TimeSpan.FromSeconds throws on a number this size, so the cap has to be applied
+		// before the conversion rather than after it.
+		Assert.Equal(RetryAfterHint.Cap, RetryAfterHint.Parse("1000000000000000000", Now));
+	}
+
 	[Theory]
 	[InlineData(null)]
 	[InlineData("")]
@@ -64,6 +73,7 @@ public class RetryAfterHintTests
 	[InlineData("soon")]
 	[InlineData("NaN")]
 	[InlineData("Infinity")]
+	[InlineData("1E400")] // overflows a double, so it arrives as infinity rather than failing
 	public void Anything_unreadable_leaves_the_backoff_in_charge(string? header)
 	{
 		// Null is the "no opinion" answer, and it is what puts the caller's own linear

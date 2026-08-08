@@ -83,6 +83,10 @@ internal static class TransientRetry
 				// everything else returns null here and falls back to the linear backoff
 				// above. This is the only part of the stack that listens to a rate limit
 				// now that the OpenAI SDK's own retry loop is off (issue #318).
+				//
+				// Null is the fallback signal and TimeSpan.Zero is not — Polly reads zero as
+				// a real delay of no time — so RetryAfterHint answers null for every wait
+				// that is not longer than nothing.
 				DelayGenerator = args => ValueTask.FromResult(
 					RetryAfterHint.From(args.Outcome.Exception, clock.GetUtcNow())),
 				OnRetry = args =>

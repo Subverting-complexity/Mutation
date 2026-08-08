@@ -46,6 +46,14 @@ internal static class RetryAfterHint
 	/// <summary>
 	/// RFC 9110 allows either a count of seconds or an HTTP date; OpenAI sends seconds, but
 	/// a proxy in front of it need not. Anything else is ignored rather than guessed at.
+	/// <para>
+	/// Only a wait longer than nothing is answered with. Zero, a negative count, and a date
+	/// that has already passed all mean "no wait", and the caller reads null as "no opinion"
+	/// and keeps its own backoff — which is the whole point, because Polly treats a returned
+	/// <see cref="TimeSpan.Zero"/> as a real delay of no time at all. Honouring it would run
+	/// the entire ladder back-to-back in a few milliseconds, on the say-so of a header the
+	/// server controls: the exact hammering this change was made to stop.
+	/// </para>
 	/// </summary>
 	internal static TimeSpan? Parse(string? headerValue, DateTimeOffset now)
 	{
@@ -59,9 +67,16 @@ internal static class RetryAfterHint
 		// way round, so the numeric reading has to win to be reachable at all.
 		if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
 		{
-			if (double.IsNaN(seconds) || double.IsInfinity(seconds))
+			// "NaN" and "Infinity" are words double.TryParse accepts, and a number too big
+			// for a double overflows to infinity rather than failing to parse. None of them
+			// is a wait; they are unreadable, like "soon".
+			if (!double.IsFinite(seconds) || seconds <= 0d)
 				return null;
-			wait = TimeSpan.FromSeconds(Math.Clamp(seconds, 0d, Cap.TotalSeconds));
+			// Compared before converting: TimeSpan.FromSeconds overflows on a large enough
+			// finite number, and a header is free to carry one.
+			if (seconds >= Cap.TotalSeconds)
+				return Cap;
+			wait = TimeSpan.FromSeconds(seconds);
 		}
 		else if (DateTimeOffset.TryParse(
 			text,
@@ -76,9 +91,8 @@ internal static class RetryAfterHint
 			return null;
 		}
 
-		// A date already in the past means "you may go now", not "go back in time".
-		if (wait < TimeSpan.Zero)
-			return TimeSpan.Zero;
+		if (wait <= TimeSpan.Zero)
+			return null;
 
 		return wait > Cap ? Cap : wait;
 	}

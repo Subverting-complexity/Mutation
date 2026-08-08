@@ -20,8 +20,15 @@ namespace CognitiveSupport;
 /// <para>
 /// The one thing the SDK's loop did better was honour the <c>Retry-After</c> header a 429
 /// arrives with. That moved to <see cref="RetryAfterHint"/>, which
-/// <see cref="TransientRetry"/> consults on every retry — so it now benefits the Deepgram,
-/// Anthropic and OCR paths too, not just the two OpenAI-SDK ones.
+/// <see cref="TransientRetry"/> consults on every retry, so nothing was lost here.
+/// </para>
+/// <para>
+/// It reaches only the two OpenAI-SDK services, because a <c>Retry-After</c> can only be
+/// read off an exception that carries the response — <c>ClientResultException</c>. The
+/// Anthropic, Deepgram and OCR ladders throw exceptions that do not
+/// (<c>HttpRequestException</c>, Deepgram's own, Azure's <c>RequestFailedException</c>), so
+/// they keep the plain linear backoff they have always had. Widening it is a change to each
+/// of those services, not to this one.
 /// </para>
 /// </summary>
 public static class OpenAiClientOptionsFactory

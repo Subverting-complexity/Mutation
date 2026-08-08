@@ -31,6 +31,11 @@ public class OpenAiClientOptionsFactoryTests
 		// It used to be left alone, so the SDK's three retries ran inside our four and one
 		// outage cost up to sixteen requests. Production takes the same setting as the
 		// tests now, which is what makes a counted request count mean anything (issue #318).
+		//
+		// The count itself is not readable off the policy, so this says only that one is
+		// installed. What pins the number is behavioural, and lives where the requests can
+		// be counted: LlmServiceRetryTests and OpenAiSpeechToTextServiceRetryTests both have
+		// an APersistentRateLimitCostsFourRequestsAndNotSixteen.
 		Assert.IsType<ClientRetryPolicy>(OpenAiClientOptionsFactory.Create().RetryPolicy);
 	}
 
