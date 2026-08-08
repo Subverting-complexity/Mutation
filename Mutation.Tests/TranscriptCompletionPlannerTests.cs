@@ -1,4 +1,4 @@
-using CognitiveSupport;
+﻿using CognitiveSupport;
 using Mutation.Ui.Core;
 
 namespace Mutation.Tests;
@@ -6,7 +6,7 @@ namespace Mutation.Tests;
 /// <summary>
 /// What the user hears and what runs when a transcript finishes.
 /// <para>
-/// Issue #325: a delivery that had in fact landed was reported as failed, so dictation
+/// PR #328: a delivery that had in fact landed was reported as failed, so dictation
 /// ended on the failure beep and the shortcut configured to run afterwards was skipped.
 /// Both came from one decision, and it was three lines inline in two handlers where
 /// nothing could reach it.

@@ -1,4 +1,4 @@
-using CognitiveSupport;
+﻿using CognitiveSupport;
 
 namespace Mutation.Ui.Core;
 
@@ -29,7 +29,7 @@ internal readonly record struct TranscriptCompletionPlan(
 /// This was three lines inline in two handlers, which made it invisible that all three
 /// outcomes hang together: the success beep, the status, and the shortcut sent afterwards
 /// are one decision, and when a delivery was wrongly reported as failed the user lost all
-/// three at once (issue #325).
+/// three at once (PR #328).
 /// </para>
 /// </summary>
 internal static class TranscriptCompletionPlanner

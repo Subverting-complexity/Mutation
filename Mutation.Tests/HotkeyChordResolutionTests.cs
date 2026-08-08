@@ -1,4 +1,4 @@
-using Mutation.Ui.Services;
+﻿using Mutation.Ui.Services;
 using Windows.System;
 
 namespace Mutation.Tests;
@@ -7,7 +7,7 @@ namespace Mutation.Tests;
 /// Which shortcuts <see cref="HotkeyManager.SendHotkey"/> can put through SendInput, which
 /// is the only path that reports whether the keystrokes were delivered.
 /// <para>
-/// Issue #325: anything that fell off this path went to the WinForms SendKeys fallback,
+/// PR #328: anything that fell off this path went to the WinForms SendKeys fallback,
 /// which answers nothing — so the shortcut sent after transcription and after OCR could
 /// stop arriving with no beep, no message, and no log line saying so.
 /// </para>

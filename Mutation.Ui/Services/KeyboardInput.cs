@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Runtime.InteropServices;
 
@@ -12,7 +12,7 @@ namespace Mutation.Ui.Services;
 /// <c>INPUT</c> — and the real one carries a union of MOUSEINPUT, KEYBDINPUT and
 /// HARDWAREINPUT, sized by the largest of the three. Declaring only the keyboard arm
 /// makes the struct 32 bytes on x64 where Windows wants 40, so every call returned
-/// zero events sent and nothing was ever typed (issue #325).
+/// zero events sent and nothing was ever typed (PR #328).
 /// </para>
 /// <para>
 /// Nothing said so. The keystrokes silently went nowhere and the app fell through to

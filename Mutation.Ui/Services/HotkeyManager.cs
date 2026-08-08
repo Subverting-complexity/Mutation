@@ -375,7 +375,7 @@ public class HotkeyManager : IDisposable
 	/// "CTRL+DELETE", while the two "send this afterwards" boxes have always also accepted
 	/// SendKeys notation, and settings saved years ago still hold "^{DEL}". Reading the
 	/// second form here is what puts it on the SendInput path, where a failure to deliver
-	/// can be seen (issue #325).
+	/// can be seen (PR #328).
 	/// </remarks>
 	internal static Hotkey? ResolveChord(string text)
 	{
