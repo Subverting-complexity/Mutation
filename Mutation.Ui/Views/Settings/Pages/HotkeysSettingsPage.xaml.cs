@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views.SettingsUi.Controls;
 
@@ -36,12 +37,19 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_routerController.Initialize();
 	}
 
+	/// <param name="Registers">
+	/// Whether this shortcut is claimed from Windows. The "Send key after…" entries are typed
+	/// out to whichever app is in front rather than registered, so they cannot clash with
+	/// anything — sending the same key after OCR and after transcription is an ordinary way to
+	/// set the app up, and used to be reported as a duplicate (issue #306).
+	/// </param>
 	private sealed record HotkeySpec(
 		string Label,
 		Func<Settings, string?> Getter,
 		Action<Settings, string?> Setter,
 		bool AllowEmpty,
-		string? Default = null);
+		string? Default = null,
+		bool Registers = true);
 
 	private sealed class HotkeyRow
 	{
@@ -81,7 +89,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		new HotkeySpec("Send key after OCR (optional)",
 			s => s.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
 			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).SendHotkeyAfterOcrOperation = v,
-			true, null),
+			true, null, Registers: false),
 
 		new HotkeySpec("Speech to text",
 			s => s.SpeechToTextSettings?.SpeechToTextHotKey,
@@ -94,7 +102,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		new HotkeySpec("Send key after transcription (optional)",
 			s => s.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
 			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SendHotkeyAfterTranscriptionOperation = v,
-			true, null),
+			true, null, Registers: false),
 
 		new HotkeySpec("Speak clipboard",
 			s => s.TextToSpeechSettings?.SpeakClipboard,
@@ -192,20 +200,14 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	private void RecomputeDuplicates()
 	{
-		var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		var configured = new List<string?>(_rows.Count);
 		foreach (var row in _rows)
-		{
-			var hk = (row.Spec.Getter(_settings) ?? string.Empty).Trim();
-			if (string.IsNullOrEmpty(hk)) continue;
-			counts[hk] = counts.TryGetValue(hk, out var n) ? n + 1 : 1;
-		}
+			configured.Add(row.Spec.Registers ? row.Spec.Getter(_settings) : null);
 
-		foreach (var row in _rows)
-		{
-			var hk = (row.Spec.Getter(_settings) ?? string.Empty).Trim();
-			bool isDup = !string.IsNullOrEmpty(hk) && counts.TryGetValue(hk, out var n) && n > 1;
-			row.DuplicateBadge.Visibility = isDup ? Visibility.Visible : Visibility.Collapsed;
-		}
+		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+
+		for (int i = 0; i < _rows.Count; i++)
+			_rows[i].DuplicateBadge.Visibility = duplicates.Contains(i) ? Visibility.Visible : Visibility.Collapsed;
 	}
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>

@@ -151,46 +151,58 @@ public class SessionSelectionPlannerTests
 	}
 
 	[Fact]
-	public void A_selection_that_has_left_the_list_is_kept_when_no_preferred_path_is_given()
+	public void A_selection_that_has_left_the_list_falls_back_to_the_newest()
 	{
 		var deleted = Session("deleted.ogg");
 		var newest = Session("newest.ogg");
 
 		var chosen = SessionSelectionPlanner.ChooseSelection(List(newest), deleted, preferredPath: null);
 
-		// Pinned as-is rather than endorsed: retention cleanup can remove the selected file
-		// while it stays selected, and pressing Play then reports "Audio file not found"
-		// instead of moving on to a recording that exists. Tracked separately.
-		Assert.Same(deleted, chosen);
+		// Retention cleanup removes the selected recording underneath the user. Leaving it
+		// selected made Play announce "Audio file not found", which for someone working by ear
+		// reads as a broken button rather than as a recording that is gone (issue #303).
+		Assert.Same(newest, chosen);
 	}
 
 	[Fact]
-	public void PathsEqual_matches_the_same_file_written_two_ways()
+	public void A_selection_that_has_left_an_emptied_list_selects_nothing()
 	{
-		string direct = Path.Combine(Path.GetTempPath(), "recording.ogg");
-		string roundabout = Path.Combine(Path.GetTempPath(), "sub", "..", "RECORDING.ogg");
+		var deleted = Session("deleted.ogg");
 
-		Assert.True(SessionSelectionPlanner.PathsEqual(direct, roundabout));
+		Assert.Null(SessionSelectionPlanner.ChooseSelection(List(), deleted, preferredPath: null));
 	}
 
 	[Fact]
-	public void PathsEqual_separates_different_files()
+	public void A_kept_selection_is_the_instance_the_rebuilt_list_holds()
 	{
-		Assert.False(SessionSelectionPlanner.PathsEqual(
-			Path.Combine(Path.GetTempPath(), "one.ogg"),
-			Path.Combine(Path.GetTempPath(), "two.ogg")));
+		// The list is rebuilt from disk on every refresh, so the entry naming the selected
+		// recording is a new object each time. Returning the caller's stale instance instead
+		// would make IndexOf report -1, and Previous/Next would start from the top of the list.
+		var stale = Session("selected.ogg");
+		var rebuilt = Session("selected.ogg");
+
+		var chosen = SessionSelectionPlanner.ChooseSelection(
+			List(Session("newest.ogg"), rebuilt),
+			stale,
+			preferredPath: null);
+
+		Assert.Same(rebuilt, chosen);
 	}
 
-	[Theory]
-	[InlineData(null, "c:/a.ogg")]
-	[InlineData("c:/a.ogg", null)]
-	[InlineData("", "")]
-	[InlineData("   ", "   ")]
-	public void PathsEqual_treats_a_missing_path_as_matching_nothing(string? first, string? second)
+	[Fact]
+	public void A_selection_spelled_differently_by_the_rebuilt_list_still_counts_as_present()
 	{
-		// Two sessions with no path are not "the same recording" — treating them as equal
-		// would make an unsaved session match whatever else has no path.
-		Assert.False(SessionSelectionPlanner.PathsEqual(first, second));
+		var selected = new SpeechSession(
+			Path.Combine(Path.GetTempPath(), "sub", "..", "Selected.ogg"),
+			new DateTime(2026, 1, 1));
+		var rebuilt = Session("selected.ogg");
+
+		var chosen = SessionSelectionPlanner.ChooseSelection(
+			List(Session("newest.ogg"), rebuilt),
+			selected,
+			preferredPath: null);
+
+		Assert.Same(rebuilt, chosen);
 	}
 
 	[Theory]

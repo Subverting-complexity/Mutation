@@ -153,7 +153,7 @@ public class SpeechToTextManager : IDisposable
 
 				sessions.Sort((left, right) => right.Timestamp.CompareTo(left.Timestamp));
 
-				if (_currentRecordingSession != null && !sessions.Any(s => PathsEqual(s.FilePath, _currentRecordingSession.FilePath)))
+				if (_currentRecordingSession != null && !sessions.Any(s => PathEquality.SamePath(s.FilePath, _currentRecordingSession.FilePath)))
 					sessions.Insert(0, _currentRecordingSession);
 
 				return sessions.ToArray();
@@ -668,9 +668,6 @@ public class SpeechToTextManager : IDisposable
 			return false;
 		}
 	}
-
-	private static bool PathsEqual(string left, string right) =>
-			  string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
 	public void Dispose()
 	{

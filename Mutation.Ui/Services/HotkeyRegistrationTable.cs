@@ -41,16 +41,19 @@ internal sealed class HotkeyRegistrationTable
 		bool Success,
 		string? ErrorMessage);
 
-	private sealed record Entry(Action Callback, string NormalizedHotkey, HotkeyGroup Group);
+	private sealed record Entry(Action Callback, Hotkey Hotkey, HotkeyGroup Group);
 
 	private readonly IHotkeyPlatform _platform;
 	private readonly Action<string>? _log;
 	private readonly Dictionary<int, Entry> _entries = new();
 
-	// A normalized form of every live shortcut, so a duplicate is refused before Windows is
-	// asked. Windows reports a second registration of a chord this process already owns as a
-	// plain failure, which is indistinguishable from another app holding it.
-	private readonly HashSet<string> _registered = new(StringComparer.Ordinal);
+	// Every live shortcut, so a duplicate is refused before Windows is asked. Windows reports
+	// a second registration of a chord this process already owns as a plain failure, which is
+	// indistinguishable from another app holding it.
+	//
+	// Chords, not normalized strings: Hotkey carries value equality, so membership no longer
+	// depends on any one spelling agreeing with any other (issue #306).
+	private readonly HashSet<Hotkey> _registered = new();
 
 	private int _nextId;
 
@@ -64,7 +67,7 @@ internal sealed class HotkeyRegistrationTable
 	public int Count => _entries.Count;
 
 	/// <summary>Whether <paramref name="hotkey"/> is currently bound by this process.</summary>
-	public bool IsRegistered(Hotkey hotkey) => _registered.Contains(NormalizeHotkey(hotkey));
+	public bool IsRegistered(Hotkey hotkey) => _registered.Contains(hotkey);
 
 	/// <summary>The live ids belonging to <paramref name="group"/>, in registration order.</summary>
 	public IReadOnlyList<int> IdsIn(HotkeyGroup group)
@@ -90,7 +93,7 @@ internal sealed class HotkeyRegistrationTable
 		if (callback is null) throw new ArgumentNullException(nameof(callback));
 
 		string norm = NormalizeHotkey(hotkey);
-		if (_registered.Contains(norm))
+		if (_registered.Contains(hotkey))
 		{
 			Log($"Duplicate hotkey detected: {norm}");
 			return new RegistrationOutcome(norm, NoId, false, "The shortcut is already registered.");
@@ -105,8 +108,11 @@ internal sealed class HotkeyRegistrationTable
 			return new RegistrationOutcome(norm, id, false, message);
 		}
 
-		_entries[id] = new Entry(callback, norm, group);
-		_registered.Add(norm);
+		// A copy, because Hotkey is mutable and a caller that edits the instance it handed us
+		// would otherwise move it inside the set and leave the chord permanently unbindable.
+		Hotkey held = hotkey.Clone();
+		_entries[id] = new Entry(callback, held, group);
+		_registered.Add(held);
 		Log($"Hotkey registered: {norm} (id={id}, group={group})");
 		return new RegistrationOutcome(norm, id, true, null);
 	}
@@ -163,7 +169,7 @@ internal sealed class HotkeyRegistrationTable
 
 		_platform.Unregister(id);
 		_entries.Remove(id);
-		_registered.Remove(entry.NormalizedHotkey);
+		_registered.Remove(entry.Hotkey);
 	}
 
 	/// <summary>
@@ -184,19 +190,11 @@ internal sealed class HotkeyRegistrationTable
 	}
 
 	/// <summary>
-	/// A deterministic text form of a chord — fixed modifier order, upper-cased key — so
-	/// that two spellings of the same shortcut compare equal for duplicate detection.
+	/// The chord as text, for a log line or a message to the user. Duplicate detection no
+	/// longer goes through here — <see cref="Hotkey"/> compares by value — so this is a
+	/// spelling, not an identity.
 	/// </summary>
-	public static string NormalizeHotkey(Hotkey hotkey)
-	{
-		var sb = new System.Text.StringBuilder(32);
-		if (hotkey.Control) sb.Append("CTRL+");
-		if (hotkey.Shift) sb.Append("SHIFT+");
-		if (hotkey.Alt) sb.Append("ALT+");
-		if (hotkey.Win) sb.Append("WIN+");
-		sb.Append(hotkey.Key.ToString().ToUpperInvariant());
-		return sb.ToString();
-	}
+	public static string NormalizeHotkey(Hotkey hotkey) => hotkey.ToString();
 
 	private void Log(string message) => _log?.Invoke(message);
 }

@@ -527,7 +527,7 @@ public class AudioSessionManager : IDisposable
         // IsPlaying: decoding now happens off the UI thread, so there is a window where a file
         // is on its way to the speakers without being audible yet. Pressing the button in that
         // window has to stop it, not queue up a second copy of the same recording.
-        if (_playingSession != null && SessionSelectionPlanner.PathsEqual(_playingSession.FilePath, session.FilePath))
+        if (_playingSession != null && PathEquality.SamePath(_playingSession.FilePath, session.FilePath))
         {
             StopPlayback();
             return;

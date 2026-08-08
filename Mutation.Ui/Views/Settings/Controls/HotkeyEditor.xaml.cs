@@ -280,18 +280,18 @@ public sealed partial class HotkeyEditor : UserControl
 			or VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu
 			or VirtualKey.LeftWindows or VirtualKey.RightWindows;
 
-	private static string FormatHotkey(VirtualKeyModifiers mods, VirtualKey key)
-	{
-		var parts = new List<string>();
-		if ((mods & VirtualKeyModifiers.Control) != 0) parts.Add("CTRL");
-		if ((mods & VirtualKeyModifiers.Shift) != 0) parts.Add("SHIFT");
-		if ((mods & VirtualKeyModifiers.Menu) != 0) parts.Add("ALT");
-		if ((mods & VirtualKeyModifiers.Windows) != 0) parts.Add("WIN");
-
-		string keyName = key.ToString();
-		if (keyName.StartsWith("Number", StringComparison.Ordinal) && keyName.Length == 7)
-			keyName = keyName.Substring(6);
-		parts.Add(keyName.ToUpperInvariant());
-		return string.Join('+', parts);
-	}
+	/// <summary>
+	/// The recorded chord as text. Built through <see cref="Mutation.Ui.Services.Hotkey"/> so
+	/// what the box shows is the same canonical spelling registration and duplicate detection
+	/// use, rather than a third copy of the same formatting rules (issue #306).
+	/// </summary>
+	private static string FormatHotkey(VirtualKeyModifiers mods, VirtualKey key) =>
+		new Mutation.Ui.Services.Hotkey
+		{
+			Control = (mods & VirtualKeyModifiers.Control) != 0,
+			Shift = (mods & VirtualKeyModifiers.Shift) != 0,
+			Alt = (mods & VirtualKeyModifiers.Menu) != 0,
+			Win = (mods & VirtualKeyModifiers.Windows) != 0,
+			Key = key,
+		}.ToString();
 }

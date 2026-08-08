@@ -125,7 +125,11 @@ readers announce it straight away.
   you typed.
 - **The same combination used twice inside Mutation** — an orange **Duplicate
   hotkey** note appears under both rows. Give one of them a different combination,
-  otherwise only one of the two will ever fire.
+  otherwise only one of the two will ever fire. Mutation compares the keys, not the
+  spelling, so typing one as **Ctrl+Alt+G** and the other as **ctrl-alt-g** is still
+  caught. The two optional "send a key afterwards" boxes are left out of this check:
+  those keys go to whatever app you are in rather than being claimed by Mutation, so
+  putting the same one in both is perfectly fine.
 - **Another app already owns it** — Mutation cannot tell until it actually tries to
   claim the combination. When it fails, you get a beep and a message titled "Some
   hotkeys could not be registered", listing each action, its combination, and the
@@ -168,7 +172,8 @@ down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
 Two mappings listening for the same "From" combination get a "Duplicate 'From'
-hotkey" message. **Delete** removes a mapping.
+hotkey" message — again comparing the keys rather than the spelling. **Delete**
+removes a mapping.
 
 > As the in-app help puts it: map one shortcut to another so a single key press can
 > trigger a more complex shortcut. Changes apply when you save settings.

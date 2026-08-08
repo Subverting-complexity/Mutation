@@ -211,6 +211,10 @@ oldest ones beyond that. You can set this anywhere from 1 to 500 in **Settings**
 under **Recording sessions to keep**. A recording that is still in progress is
 never deleted.
 
+If the recording you had selected is one of the ones cleared away, Mutation moves
+your selection to the newest recording instead. So **Play selected session** always
+plays something real, rather than reporting that the file cannot be found.
+
 ## Transcribing a file you already have
 
 You don't have to record inside Mutation. If someone sends you a voice note, or you

@@ -169,8 +169,11 @@ public class HotkeyTests
 	}
 
 	[Fact]
-	public void ToString_ModifierOrderIsShiftControlAltWindows()
+	public void ToString_ModifierOrderIsCtrlShiftAltWin()
 	{
+		// The one canonical spelling in the app. This used to be a third form —
+		// "Shift+Control+Alt+Windows+A" — against the CTRL+SHIFT+ALT+WIN the registration
+		// table and the hotkey editor both produced (issue #306).
 		var hk = new Hotkey
 		{
 			Alt = true,
@@ -179,21 +182,103 @@ public class HotkeyTests
 			Win = true,
 			Key = VirtualKey.A,
 		};
-		Assert.Equal("Shift+Control+Alt+Windows+A", hk.ToString());
+		Assert.Equal("CTRL+SHIFT+ALT+WIN+A", hk.ToString());
 	}
 
 	[Fact]
 	public void ToString_NumberKey_StripsNumberPrefix()
 	{
 		var hk = new Hotkey { Control = true, Key = VirtualKey.Number5 };
-		Assert.Equal("Control+5", hk.ToString());
+		Assert.Equal("CTRL+5", hk.ToString());
 	}
 
 	[Fact]
 	public void ToString_NonNumberKey_KeepsName()
 	{
 		var hk = new Hotkey { Control = true, Key = VirtualKey.Delete };
-		Assert.Equal("Control+Delete", hk.ToString());
+		Assert.Equal("CTRL+DELETE", hk.ToString());
+	}
+
+	[Fact]
+	public void ToString_AgreesWithTheRegistrationTables_normalized_form()
+	{
+		// Registration reports the chord it refused by this name. If the two ever drifted, the
+		// message would name a shortcut the user cannot find on the Settings screen.
+		var hk = new Hotkey { Control = true, Shift = true, Key = VirtualKey.F1 };
+
+		Assert.Equal(HotkeyRegistrationTable.NormalizeHotkey(hk), hk.ToString());
+	}
+
+	// ----- Value equality -----
+
+	[Fact]
+	public void Two_spellings_of_one_chord_are_equal()
+	{
+		Assert.Equal(Hotkey.Parse("Ctrl-Shift-A"), Hotkey.Parse("SHIFT+CONTROL+a"));
+	}
+
+	[Fact]
+	public void Equal_chords_share_a_hash_code()
+	{
+		// Without this a HashSet<Hotkey> would hold both spellings, and duplicate detection
+		// would wave through a shortcut that is already taken.
+		Assert.Equal(
+			Hotkey.Parse("Ctrl-Shift-A").GetHashCode(),
+			Hotkey.Parse("SHIFT+CONTROL+a").GetHashCode());
+	}
+
+	[Fact]
+	public void A_different_key_is_a_different_chord()
+	{
+		Assert.NotEqual(Hotkey.Parse("Ctrl+A"), Hotkey.Parse("Ctrl+B"));
+	}
+
+	[Fact]
+	public void A_missing_modifier_is_a_different_chord()
+	{
+		Assert.NotEqual(Hotkey.Parse("Ctrl+Shift+A"), Hotkey.Parse("Ctrl+A"));
+	}
+
+	[Fact]
+	public void A_chord_is_never_equal_to_null_or_to_another_type()
+	{
+		var hk = Hotkey.Parse("Ctrl+A");
+
+		Assert.False(hk.Equals(null));
+		Assert.False(hk.Equals("CTRL+A"));
+	}
+
+	[Fact]
+	public void A_clone_equals_the_chord_it_came_from()
+	{
+		var original = Hotkey.Parse("Ctrl+Alt+Delete");
+
+		Assert.Equal(original, original.Clone());
+	}
+
+	// ----- TryParse -----
+
+	[Fact]
+	public void TryParse_returns_the_chord_for_text_that_parses()
+	{
+		Assert.True(Hotkey.TryParse("Ctrl+Alt+G", out var hk));
+		Assert.Equal(Hotkey.Parse("Ctrl+Alt+G"), hk);
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	[InlineData("   ")]
+	[InlineData("CTRL+")]
+	[InlineData("Ctrl+Shift")]
+	[InlineData("^v")]
+	[InlineData("Ctrl+NotAKey")]
+	public void TryParse_answers_false_rather_than_throwing(string? text)
+	{
+		// Duplicate detection runs over whatever the user has typed so far, where half-finished
+		// text is routine rather than an error.
+		Assert.False(Hotkey.TryParse(text, out var hk));
+		Assert.Null(hk);
 	}
 
 	// ----- Round-trip -----
