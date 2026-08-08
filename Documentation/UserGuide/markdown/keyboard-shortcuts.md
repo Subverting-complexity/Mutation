@@ -115,6 +115,11 @@ same combination look the same. That tidied version is what gets saved, so a
 shortcut you typed into the settings file by hand comes back tidied once Mutation
 has opened that page.
 
+When the box does change what you typed, Mutation says so, and a screen reader
+reads it out: "Speak clipboard now reads CTRL+SHIFT+A". You get that only when
+something actually changed, so tabbing down a page of shortcuts that are already
+written Mutation's way stays quiet.
+
 The two optional "send a key afterwards" boxes are the exception: they keep
 whatever you type, exactly as you typed it, because what goes in them is not
 always a plain combination. There is more on them below. The **Clear** button
@@ -161,9 +166,11 @@ They hold more than one plain combination can say:
   you already know it.
 
 Because of those two, Mutation leaves these boxes exactly as you type them rather
-than tidying them up. They are also the one thing on this page not checked against
-your other shortcuts when you write them in the shorthand style, so if you do,
-check yourself that no Mutation shortcut already uses that key.
+than tidying them up. Both spellings are still checked against your other
+shortcuts, so writing `^{F5}` while some Mutation shortcut is **Ctrl+F5** is
+flagged exactly as writing **Ctrl+F5** would be. Plain words are the exception:
+type `hello` into one of these boxes and Mutation types the word for you, so there
+is no shortcut there to clash with anything.
 
 ## Choosing combinations that won't clash
 

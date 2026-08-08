@@ -89,9 +89,15 @@ internal static class HotkeyConflictFinder
 
 	/// <summary>
 	/// Every chord one entry puts on the keyboard: one for a registered shortcut, and one per
-	/// step for a sent sequence. Anything that does not parse — half-typed text, or the
-	/// SendKeys syntax the "send key after" boxes also accept — yields nothing, because there
-	/// is no chord to compare.
+	/// step for a sent sequence. Half-typed text yields nothing, because there is no chord to
+	/// compare.
+	/// <para>
+	/// A sent step is read as a chord first and as Windows' SendKeys shorthand only if that
+	/// fails, which is the order the ambiguity needs: the <c>+</c> in <c>Ctrl+F5</c> separates
+	/// a chord, while the one in <c>+{F5}</c> is SendKeys' Shift. Reading the shorthand at all
+	/// is new — it used to yield nothing, so <c>^{F5}</c> silently took no part in the
+	/// comparison while <c>Ctrl+F5</c> was flagged correctly (issue #326).
+	/// </para>
 	/// </summary>
 	private static IEnumerable<Hotkey> ChordsIn(ConfiguredHotkey entry)
 	{
@@ -108,7 +114,13 @@ internal static class HotkeyConflictFinder
 		foreach (string step in entry.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 		{
 			if (Hotkey.TryParse(step, out var chord))
+			{
 				yield return chord;
+				continue;
+			}
+
+			foreach (var sent in SendKeysReader.ChordsIn(step))
+				yield return sent;
 		}
 	}
 }

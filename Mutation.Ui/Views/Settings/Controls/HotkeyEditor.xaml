@@ -69,5 +69,15 @@
 				   AutomationProperties.LiveSetting="Assertive"
 				   Style="{StaticResource CaptionTextBlockStyle}"
 				   TextWrapping="Wrap" />
+		<!-- Its own region, and a polite one. Sharing the validation block would put a
+		     rewrite notice in critical red and let it overwrite an error the user still
+		     needs; polite means it waits its turn rather than cutting across the next
+		     field the user has already tabbed into (issue #327). -->
+		<TextBlock x:Name="CommitAnnouncement"
+				   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+				   Visibility="Collapsed"
+				   AutomationProperties.LiveSetting="Polite"
+				   Style="{StaticResource CaptionTextBlockStyle}"
+				   TextWrapping="Wrap" />
 	</StackPanel>
 </UserControl>

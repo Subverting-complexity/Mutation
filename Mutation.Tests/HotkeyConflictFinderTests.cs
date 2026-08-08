@@ -147,10 +147,58 @@ public class HotkeyConflictFinderTests
 	}
 
 	[Fact]
-	public void SendKeys_syntax_in_a_sent_value_is_skipped_rather_than_misread()
+	public void SendKeys_syntax_in_a_sent_value_is_read_back_and_compared()
 	{
-		// The send-key boxes also accept SendKeys syntax, which is not a chord at all.
-		Assert.Empty(DuplicateIndexes(Configured(Claimed("CTRL+V"), Sent("^v"))));
+		// The send-key boxes accept both spellings of one shortcut. This one used to take no
+		// part in the comparison at all, so "^v" against Ctrl+V raised nothing while
+		// "Ctrl+V" against Ctrl+V was flagged (issue #326).
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL+V"), Sent("^v")))));
+	}
+
+	[Fact]
+	public void The_case_from_the_issue_is_flagged_either_way_it_is_written()
+	{
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL+F5"), Sent("^{F5}")))));
+	}
+
+	[Fact]
+	public void Every_chord_a_SendKeys_group_presses_is_compared()
+	{
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL+SHIFT+B"), Sent("^+(ab)")))));
+	}
+
+	[Fact]
+	public void A_SendKeys_value_that_clashes_with_nothing_is_left_alone()
+	{
+		Assert.Empty(DuplicateIndexes(Configured(Claimed("CTRL+ALT+G"), Sent("^{F5}"))));
+	}
+
+	[Fact]
+	public void Two_send_boxes_holding_the_same_SendKeys_value_are_not_a_clash()
+	{
+		// Sending the same key after OCR and after transcription is an ordinary way to set
+		// the app up. Reading the shorthand must not turn that into a complaint.
+		Assert.Empty(DuplicateIndexes(Configured(Sent("^{F5}"), Sent("^{F5}"))));
+	}
+
+	[Fact]
+	public void Text_typed_out_by_a_send_box_is_not_mistaken_for_shortcuts()
+	{
+		// "hello" types five letters. Reading five one-key shortcuts out of it would flag a
+		// row that clashes with nothing at all.
+		Assert.Empty(DuplicateIndexes(Configured(Claimed("H"), Claimed("O"), Sent("hello"))));
+	}
+
+	[Fact]
+	public void A_plain_chord_still_wins_over_the_SendKeys_reading_of_the_same_text()
+	{
+		// The '+' in "Ctrl+F5" separates a chord; the one in "+{F5}" is SendKeys' Shift.
+		// Reading a chord first is what keeps the two apart.
+		Assert.Equal(new[] { 0, 1 }, Sorted(DuplicateIndexes(Configured(
+			Claimed("CTRL+F5"), Sent("Ctrl+F5")))));
 	}
 
 	// ----- Nothing to compare -----

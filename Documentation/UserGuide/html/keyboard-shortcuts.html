@@ -380,6 +380,10 @@ either way — Mutation just writes it one way everywhere, so two boxes holding 
 same combination look the same. That tidied version is what gets saved, so a
 shortcut you typed into the settings file by hand comes back tidied once Mutation
 has opened that page.</p>
+<p>When the box does change what you typed, Mutation says so, and a screen reader
+reads it out: &quot;Speak clipboard now reads CTRL+SHIFT+A&quot;. You get that only when
+something actually changed, so tabbing down a page of shortcuts that are already
+written Mutation's way stays quiet.</p>
 <p>The two optional &quot;send a key afterwards&quot; boxes are the exception: they keep
 whatever you type, exactly as you typed it, because what goes in them is not
 always a plain combination. There is more on them below. The <strong>Clear</strong> button
@@ -423,9 +427,11 @@ never need it — <strong>Ctrl+F5</strong> does the same job and reads better �
 you already know it.</li>
 </ul>
 <p>Because of those two, Mutation leaves these boxes exactly as you type them rather
-than tidying them up. They are also the one thing on this page not checked against
-your other shortcuts when you write them in the shorthand style, so if you do,
-check yourself that no Mutation shortcut already uses that key.</p>
+than tidying them up. Both spellings are still checked against your other
+shortcuts, so writing <code>^{F5}</code> while some Mutation shortcut is <strong>Ctrl+F5</strong> is
+flagged exactly as writing <strong>Ctrl+F5</strong> would be. Plain words are the exception:
+type <code>hello</code> into one of these boxes and Mutation types the word for you, so there
+is no shortcut there to clash with anything.</p>
 <h2 id="choosing-combinations-that-wont-clash">Choosing combinations that won't clash</h2>
 <ol>
 <li><strong>Use three modifiers.</strong> Combinations like <strong>Ctrl+Shift+Alt+Q</strong> are almost never

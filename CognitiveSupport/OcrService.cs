@@ -81,7 +81,26 @@ public class OcrService : IOcrService, IDisposable
 	private static ImageAnalysisClient CreateImageAnalysisClient(string endpoint, string key) =>
 		 new(new Uri(endpoint), new AzureKeyCredential(key));
 
-	private TimeSpan GetPerRequestTimeout() => TimeSpan.FromSeconds(Math.Max(1, Math.Min(_timeoutSeconds, MaxTimeoutSeconds)));
+	/// <summary>
+	/// How long attempt <paramref name="attempt"/> waits: the configured timeout multiplied
+	/// by the attempt number, never more than <see cref="MaxTimeoutSeconds"/>.
+	/// <para>
+	/// The multiplication is the shape all five retrying services share, and it is here for
+	/// the reason it is there: the first call after a reboot pays for DNS, TLS and JIT warmup
+	/// all at once, and three more attempts of exactly the same length are no likelier to fit
+	/// than the first was. This one used to arm every attempt with the same flat value, which
+	/// issue #311 assumed was already false and issue #315 settled.
+	/// </para>
+	/// <para>
+	/// The ceiling is what keeps that from running away. It is a cap on each attempt rather
+	/// than on the first, so an OCR batch — many reads against a 20-a-minute limit — cannot
+	/// have one wedged image hold it up for longer and longer: with the default 30 seconds
+	/// the ladder is 30, 60, 60, 60, so the worst case is three and a half minutes rather
+	/// than the five an uncapped 30/60/90/120 would cost.
+	/// </para>
+	/// </summary>
+	private TimeSpan GetPerRequestTimeout(int attempt) =>
+		TimeSpan.FromSeconds(Math.Clamp((long)_timeoutSeconds * Math.Max(1, attempt), 1, MaxTimeoutSeconds));
 
 	/// <summary>
 	/// Arms this attempt's deadline. It is its own source rather than a <c>CancelAfter</c>
@@ -90,8 +109,8 @@ public class OcrService : IOcrService, IDisposable
 	/// the injected clock is what lets a test read the deadline back. The caller links it
 	/// to the overall token and disposes both.
 	/// </summary>
-	private CancellationTokenSource CreatePerRequestDeadline() =>
-		new(GetPerRequestTimeout(), _timeProvider);
+	private CancellationTokenSource CreatePerRequestDeadline(int attempt) =>
+		new(GetPerRequestTimeout(attempt), _timeProvider);
 
 
 	private async Task<string> ExecuteReadInternal(
@@ -106,7 +125,7 @@ public class OcrService : IOcrService, IDisposable
 
 		imageStream.Seek(0, SeekOrigin.Begin);
 
-		return await ReadInternal(ocrReadingOrder, imageStream, overallCancellationToken).ConfigureAwait(false);
+		return await ReadInternal(ocrReadingOrder, imageStream, attempt, overallCancellationToken).ConfigureAwait(false);
 	}
 
 
@@ -195,13 +214,14 @@ public class OcrService : IOcrService, IDisposable
 	private async Task<string> ReadInternal(
 		OcrReadingOrder ocrReadingOrder,
 		Stream imageStream,
+		int attempt,
 		CancellationToken overallCancellationToken)
 	{
 		imageStream = EnsureMinimumImageSize(imageStream);
 
 		await SharedRateLimiter.WaitAsync(overallCancellationToken).ConfigureAwait(false);
 
-		using var deadline = CreatePerRequestDeadline();
+		using var deadline = CreatePerRequestDeadline(attempt);
 		using var requestCts = CancellationTokenSource.CreateLinkedTokenSource(overallCancellationToken, deadline.Token);
 
 		var binaryData = BinaryData.FromStream(imageStream);

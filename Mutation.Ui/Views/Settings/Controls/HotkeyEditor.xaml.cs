@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Windows.System;
 
@@ -202,32 +203,45 @@ public sealed partial class HotkeyEditor : UserControl
 	/// #243).
 	/// </para>
 	/// </summary>
-	private void Validate(string text)
+	private void Validate(string text) => LiveMessage.Show(ValidationText, ValidationMessageFor(text));
+
+	/// <summary>What is wrong with <paramref name="text"/>, or null when nothing is.</summary>
+	private string? ValidationMessageFor(string? text)
 	{
 		string trimmed = text?.Trim() ?? string.Empty;
 		if (string.IsNullOrEmpty(trimmed))
-		{
-			LiveMessage.Show(ValidationText, AllowEmpty ? null : "Enter a hotkey.");
-			return;
-		}
+			return AllowEmpty ? null : "Enter a hotkey.";
 
-		LiveMessage.Show(ValidationText, HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax));
+		return HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax);
 	}
 
 	private void Commit()
 	{
+		string typed = HotkeyTextBox.Text ?? string.Empty;
+
 		// SendKeys syntax is not a chord, so it is kept exactly as typed. Anything else goes
 		// through the one canonical spelling the app uses everywhere (issue #323).
 		string committed = AllowSendKeysSyntax
-			? (HotkeyTextBox.Text ?? string.Empty).Trim()
-			: Mutation.Ui.Services.Hotkey.Canonicalize(HotkeyTextBox.Text);
+			? typed.Trim()
+			: Mutation.Ui.Services.Hotkey.Canonicalize(typed);
 
-		if (!string.Equals(committed, HotkeyTextBox.Text, StringComparison.Ordinal))
+		if (!string.Equals(committed, typed, StringComparison.Ordinal))
 		{
 			_suppressTextChanged = true;
 			try { HotkeyTextBox.Text = committed; }
 			finally { _suppressTextChanged = false; }
 		}
+
+		// Suppressing TextChanged also suppressed everything downstream of it, so the box
+		// could rewrite its own contents in complete silence and leave the validation message
+		// describing text that is no longer there (issue #327). Both live regions are brought
+		// up to date against what the box now holds; each one stays quiet when its message has
+		// not changed, so a row that was already canonical says nothing.
+		string? validation = ValidationMessageFor(committed);
+		LiveMessage.Show(ValidationText, validation);
+		LiveMessage.Show(
+			CommitAnnouncement,
+			HotkeyCommitAnnouncement.For(Header, typed, committed, validation));
 
 		if (!string.Equals(Hotkey, committed, StringComparison.Ordinal))
 			Hotkey = committed;
