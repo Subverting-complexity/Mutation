@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -16,7 +16,7 @@ namespace Mutation.Ui.Services;
 /// a setting saved in SendKeys notation could only ever reach
 /// <c>System.Windows.Forms.SendKeys.SendWait</c>, which answers nothing about whether the
 /// target window took them — so a shortcut that quietly stopped arriving looked exactly
-/// like one that worked (issue #325).
+/// like one that worked (PR #328).
 /// </para>
 /// <para>
 /// Deliberately narrow. Only modifier prefixes and a single key are recognised; anything

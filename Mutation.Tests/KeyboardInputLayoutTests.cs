@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Mutation.Ui.Services;
 
 namespace Mutation.Tests;
@@ -7,7 +7,7 @@ namespace Mutation.Tests;
 /// The size of the INPUT struct, which is the one thing Windows validates before it will
 /// deliver a single keystroke.
 /// <para>
-/// Issue #325: the struct declared only the keyboard arm of the union, so it measured 32
+/// PR #328: the struct declared only the keyboard arm of the union, so it measured 32
 /// bytes in a 64-bit process where Windows requires 40. Every SendInput call in the app
 /// answered "0 events sent, ERROR_INVALID_PARAMETER" — pastes, typed dictation, and every
 /// configured send-a-shortcut-afterwards. Nothing about the code looked wrong, which is

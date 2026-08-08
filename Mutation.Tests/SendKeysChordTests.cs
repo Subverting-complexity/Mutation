@@ -1,4 +1,4 @@
-using Mutation.Ui.Services;
+﻿using Mutation.Ui.Services;
 using Windows.System;
 
 namespace Mutation.Tests;
@@ -6,7 +6,7 @@ namespace Mutation.Tests;
 /// <summary>
 /// Reading a shortcut written in SendKeys notation back into a chord.
 /// <para>
-/// Issue #325: the two "send this shortcut afterwards" settings accept SendKeys notation,
+/// PR #328: the two "send this shortcut afterwards" settings accept SendKeys notation,
 /// and a settings file saved years ago holds "^{DEL}". Nothing could parse that, so it
 /// only ever reached the WinForms fallback, which cannot say whether the keystrokes
 /// arrived. These tests pin the readings so those settings keep going down the path that
