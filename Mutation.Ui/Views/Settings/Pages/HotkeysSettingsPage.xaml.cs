@@ -48,13 +48,29 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	/// one (issue #306). They are still checked against the shortcuts Mutation does claim,
 	/// because Windows routes a synthesized keystroke back to whoever registered it.
 	/// </param>
-	private sealed record HotkeySpec(
+	internal sealed record HotkeySpec(
 		string Label,
 		Func<Settings, string?> Getter,
 		Action<Settings, string?> Setter,
 		bool AllowEmpty,
 		string? Default = null,
-		bool Registers = true);
+		bool Registers = true)
+	{
+		/// <summary>
+		/// Whether this row's box also accepts SendKeys syntax, the way the same two values
+		/// already do on the OCR and Speech pages. This page used to leave the flag off, so a
+		/// working <c>^{F5}</c> was read out here as "Unsupported key" — on the page whose job
+		/// is telling the user which shortcuts are wrong (issue #322).
+		/// <para>
+		/// It follows from <see cref="Registers"/> because the reason is the same one: a value
+		/// that is typed out rather than claimed is a keystroke to send, and a keystroke to
+		/// send is what SendKeys syntax spells. Derived rather than a flag of its own so the
+		/// two cannot be set to disagree — a row that is not registered but must be a plain
+		/// chord would need its own flag, and there is no such row.
+		/// </para>
+		/// </summary>
+		public bool AllowsSendKeysSyntax => !Registers;
+	}
 
 	private sealed class HotkeyRow
 	{
@@ -64,7 +80,12 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		public required TextBlock DuplicateBadge { get; init; }
 	}
 
-	private static readonly HotkeySpec[] Specs = new[]
+	/// <summary>
+	/// Every row on the page, in the order it appears. Reachable from tests because the flags
+	/// on it decide what each box accepts, and the page itself cannot be built without a WinUI
+	/// host (issue #304 tracks that seam).
+	/// </summary>
+	internal static readonly HotkeySpec[] Specs = new[]
 	{
 		new HotkeySpec("Toggle microphone mute",
 			s => s.AudioSettings?.MicrophoneToggleMuteHotKey,
@@ -150,11 +171,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			{
 				Header = spec.Label,
 				AllowEmpty = spec.AllowEmpty,
-				// The "Send key after…" rows are typed out rather than registered, so they
-				// accept SendKeys syntax — as they already do on the OCR and Speech pages. This
-				// page used to leave the flag off, so a working `^{F5}` was read out here as an
-				// error on the very page whose job is saying which shortcuts are wrong (#322).
-				AllowSendKeysSyntax = !spec.Registers,
+				AllowSendKeysSyntax = spec.AllowsSendKeysSyntax,
 				Hotkey = spec.Getter(_settings) ?? string.Empty,
 			};
 			var dupBadge = new TextBlock
