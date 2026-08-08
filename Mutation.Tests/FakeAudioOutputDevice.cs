@@ -28,8 +28,16 @@ internal sealed class FakeAudioOutputDevice : IAudioOutputDevice
 
 	public event EventHandler<StoppedEventArgs>? PlaybackStopped;
 
+	/// <summary>
+	/// The chain the player handed over to be played. A real device pulls samples from this;
+	/// a test can pull from it too, which is the only way to observe what the time-stretch
+	/// stage actually did to the audio.
+	/// </summary>
+	public IWaveProvider? Provider { get; private set; }
+
 	public void Init(IWaveProvider waveProvider)
 	{
+		Provider = waveProvider;
 	}
 
 	public void Play() => PlaybackState = PlaybackState.Playing;

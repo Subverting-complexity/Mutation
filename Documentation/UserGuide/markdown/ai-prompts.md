@@ -53,6 +53,8 @@ Three pointers for writing a good one:
 
 There is a **Test Run** button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.
 
+If a test run is taking longer than you want to wait, press **Test Run** again. Mutation gives up on the request, you hear the failure beep, and a "Test run cancelled." box appears when it has let go. Pressing **Save** or **Cancel**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
+
 Then press **Save**, or **Cancel** to throw it away.
 
 ---
@@ -106,6 +108,22 @@ Under **AI assistance** in **Settings** there are two knobs worth knowing about.
 **Request timeout** is how long Mutation waits for the model to respond before giving up. If you regularly send long documents and see things time out, raise it.
 
 **Retries** is how many times Mutation quietly tries again after a failed request, before telling you it did not work. The default of three is there for a good reason: it helps the very first request after you reboot succeed while your network is still warming up.
+
+Those two multiply. With the standard 60 seconds and three retries, a service that has gone down keeps Mutation waiting about **ten minutes** before it gives up — and up to twenty if the prompt asked for Fast mode and the service turns it away for being busy, because Mutation then tries the whole thing again at normal speed. The retries are silent, so the wait sounds like nothing happening. It is worth knowing how to stop it.
+
+### Stopping a prompt that is taking too long
+
+Mutation runs one prompt at a time, so **starting any prompt while another is already running stops the one that is running** instead of queueing behind it. Press its shortcut again, press **Run** on any row, or press **Process with LLM** — all of them stop the request in flight.
+
+You hear the failure beep and a message naming what stopped — "Cancelling LLM processing for 'Fix Grammar'..." — then "LLM processing cancelled." once the request has let go, and the **Formatted Transcript** box empties itself. Press again while it is still winding down and you hear "Already stopping."
+
+Because any prompt stops the running one, the prompt you just pressed does **not** then run. Press it once more, after you hear that the first one has stopped, to actually run it.
+
+Nothing is lost. Your original text is still on the clipboard where you copied it from, so you can try again whenever you like — or pick a different prompt.
+
+If a dictation is in its AI step, prompts wait their turn instead: you are told "Still finishing the dictation's LLM step — try again shortly." Stop that one first, from the main window, and then run your prompt.
+
+Closing the Mutation window stops an AI request too, so you never have to wait for one before you can quit.
 
 ---
 

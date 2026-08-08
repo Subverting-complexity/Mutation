@@ -53,7 +53,8 @@ public class LlmService : ILlmService
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
 		string llmModelName,
-		LlmRequestOptions? requestOptions = null)
+		LlmRequestOptions? requestOptions = null,
+		CancellationToken cancellationToken = default)
 	{
 		if (!_chatClients.ContainsKey(llmModelName))
 			throw new ArgumentException($"{llmModelName} is not one of the configured models. The following are the available, configured models: {string.Join(",", _chatClients.Keys)}", nameof(llmModelName));
@@ -79,12 +80,17 @@ public class LlmService : ILlmService
 		{
 			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
 
-			return await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, _) =>
+			// Handing the token to the pipeline is what makes the ladder escapable, and it
+			// is the whole mechanism: Polly checks it at the head of every attempt and
+			// waits on it during the backoff, so an outside cancel ends the retry loop
+			// there rather than being re-read as one more transient blip (issue #256).
+			return await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 			{
 				int timeout = _timeoutSeconds * attempt;
-				using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
-				return await client.CompleteChatAsync(openAiMessages, options, timeoutCts.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+				using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+				using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
+				return await client.CompleteChatAsync(openAiMessages, options, linkedCts.Token).ConfigureAwait(false);
+			}, cancellationToken).ConfigureAwait(false);
 		}
 
 		ClientResult<ChatCompletion> result = fastMode

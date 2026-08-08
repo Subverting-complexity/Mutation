@@ -220,6 +220,34 @@ size (MB)</strong> and try again.</li>
 <li>If your service accepts larger uploads than OpenAI does, raise the number, or set
 it to 0 to never split.</li>
 </ol>
+<h3 id="the-ai-seems-stuck-on-processing">The AI seems stuck on &quot;Processing...&quot;</h3>
+<p><strong>What's happening.</strong> The AI runs over the internet too, and Mutation retries a failed
+request, giving each attempt a longer window than the last. The retries are silent, so a
+long wait sounds exactly like nothing happening. With the standard settings an AI service
+that has gone down keeps Mutation waiting about <strong>ten minutes</strong> before it admits defeat —
+and up to twenty if the prompt asked for Fast mode and the service turns it away for being
+busy, because Mutation then tries the whole thing again at normal speed. Nothing is broken;
+it is still trying.</p>
+<p>A prompt you started yourself puts &quot;Processing...&quot; in the <strong>Formatted Transcript</strong> box. The
+AI step after a dictation says &quot;Processing with LLM...&quot; in the <strong>Raw Transcript</strong> box
+instead.</p>
+<p><strong>What to do.</strong></p>
+<ol>
+<li>Stop it. If the AI step followed a dictation, both <strong>Record</strong> and <strong>Record and
+Format</strong> are still available, renamed to <strong>Stop LLM processing</strong> — or press
+<strong>Shift+Alt+U</strong> or <strong>Shift+Alt+I</strong> again. For a prompt you started yourself, press
+its shortcut again, or <strong>Run</strong> on any row, or <strong>Process with LLM</strong>.</li>
+<li>Listen for the two messages. &quot;Cancelling LLM processing...&quot; means your press landed;
+&quot;LLM processing cancelled.&quot; means the request has actually let go. In between, a
+further press answers &quot;Already stopping.&quot; rather than doing anything new.</li>
+<li>Cancelling a dictation's AI step keeps the dictation. You hear the success beep and
+&quot;LLM processing cancelled. Transcript ready.&quot;, and your words are in both boxes and on
+the clipboard — you lose the tidying up, never what you said.</li>
+<li>Closing the Mutation window also stops an AI request, so you never have to wait for
+one to finish before you can quit.</li>
+<li>If it happens often, lower <strong>Request timeout</strong> or <strong>Retries</strong> under <strong>AI
+assistance</strong> in <strong>Settings</strong> so Mutation gives up sooner and tells you.</li>
+</ol>
 <h3 id="ocr-returns-nothing-useful-or-the-wrong-reading-order">OCR returns nothing useful, or the wrong reading order</h3>
 <p><strong>What's happening.</strong> OCR reads text out of a picture. If the picture is small,
 blurry, or is light text on a dark background, there may be nothing recognisable in

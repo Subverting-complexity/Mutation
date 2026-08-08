@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Mutation.Ui.Core;
 
 namespace Mutation.Tests;
@@ -107,5 +108,47 @@ public class RecordingUiPlannerTests
 	public void OnlyRecording_SoundsTheStartBeep()
 	{
 		Assert.Single(Enum.GetValues<RecordingActivity>(), a => RecordingUiPlanner.For(a).PlayStartBeep);
+	}
+
+	// ----- The language-model step, added for issue #256.
+
+	[Fact]
+	public void ProcessingWithLlm_NamesItsOwnStep_NotTheOneThatHasFinished()
+	{
+		// Reported as Transcribing, the button and the box both said "Transcribing..." for
+		// the whole model call — minutes of it — naming a step that had already finished.
+		var plan = RecordingUiPlanner.For(RecordingActivity.ProcessingWithLlm);
+
+		Assert.Equal("Processing with LLM...", plan.TranscriptText);
+		Assert.NotEqual("Transcribing...", plan.TranscriptText);
+		Assert.NotEqual("Transcribing...", plan.ButtonLabel);
+		Assert.False(plan.PlayStartBeep);
+		Assert.True(plan.TranscriptReadOnly);
+	}
+
+	[Fact]
+	public void ProcessingWithLlm_LeavesItsButtonLive_SoTheCancelIsNotHotkeyOnly()
+	{
+		// The one busy state whose button stays enabled. Disabled, the cancel existed only
+		// on the shortcut: a screen-reader user tabbing the window found a dimmed control
+		// and no way to stop the longest wait in the flow (issue #256).
+		var plan = RecordingUiPlanner.For(RecordingActivity.ProcessingWithLlm);
+
+		Assert.True(plan.ButtonEnabled);
+		Assert.Contains("Stop", plan.ButtonLabel);
+	}
+
+	[Fact]
+	public void EveryActivityHasItsOwnButtonLabel()
+	{
+		// A label shared between two activities tells a screen-reader user the wrong thing
+		// about at least one of them.
+		var labels = Enum.GetValues<RecordingActivity>()
+			.Select(a => RecordingUiPlanner.For(a).ButtonLabel)
+			.ToList();
+
+		// Idle and Cancelled are deliberately identical — Cancelled *is* idle, plus the
+		// cleared box — so they count once between them.
+		Assert.Equal(labels.Count - 1, labels.Distinct().Count());
 	}
 }

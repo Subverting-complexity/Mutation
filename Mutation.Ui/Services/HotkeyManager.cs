@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml;
 using Mutation.Ui.Core;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -16,20 +15,14 @@ namespace Mutation.Ui.Services;
 public class HotkeyManager : IDisposable
 {
 	private readonly IntPtr _hwnd;
-	private readonly Dictionary<int, Action> _callbacks = new();
-	// Track a normalized representation of each registered hotkey so we can avoid
-	// attempting duplicate registrations (which Windows will report as a failure
-	// even though one instance is already active).
-	private readonly HashSet<string> _registeredHotkeys = new(StringComparer.Ordinal);
-    private readonly List<int> _routerIds = new();
-    private readonly Dictionary<int, string> _routerNormalizedHotkeys = new();
 
-    private readonly List<int> _promptIds = new();
-    private readonly Dictionary<int, string> _promptNormalizedHotkeys = new();
+	// Which shortcuts are taken, which id carries which callback, and which ids a refresh
+	// has to release. Extracted so those rules can be tested without a window handle — see
+	// HotkeyRegistrationTable.
+	private readonly HotkeyRegistrationTable _registrations;
 
 	private readonly Settings _settings;
 	private static SynchronizationContext? s_uiCtx;
-	private int _id;
 	private IntPtr _prevWndProc;
 	private WndProcDelegate? _newWndProc;
 	private GCHandle _wndProcHandle;
@@ -91,42 +84,21 @@ public class HotkeyManager : IDisposable
                 return failures;
         }
 
-        private readonly struct HotkeyRegistrationAttempt
-        {
-                public HotkeyRegistrationAttempt(string normalizedHotkey, int id, bool success, string? errorMessage)
-                {
-                        NormalizedHotkey = normalizedHotkey;
-                        Id = id;
-                        Success = success;
-                        ErrorMessage = errorMessage;
-                }
-
-                public string NormalizedHotkey { get; }
-                public int Id { get; }
-                public bool Success { get; }
-                public string? ErrorMessage { get; }
-        }
-
 	private const int WM_HOTKEY = 0x0312;
 	private const int GWLP_WNDPROC = -4;
 
 	// Modifier flags live in HotkeyModifiers so their composition — including
 	// MOD_NOREPEAT — can be tested without a window handle.
 
-        [DllImport("user32.dll", SetLastError = true)] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-	[DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+	// RegisterHotKey/UnregisterHotKey live in Win32HotkeyPlatform, behind IHotkeyPlatform.
 	[DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr newProc);
 	[DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 	[DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 	[DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
-	[DllImport("user32.dll")] static extern uint MapVirtualKey(uint uCode, uint uMapType);
-
-	private const uint MAPVK_VK_TO_VSC = 0x0;
 
 	private const int INPUT_KEYBOARD = 1;
 	private const uint KEYEVENTF_KEYUP = 0x0002;
 	private const uint KEYEVENTF_UNICODE = 0x0004;
-	private const uint KEYEVENTF_SCANCODE = 0x0008;
 	private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -158,6 +130,7 @@ public class HotkeyManager : IDisposable
 	{
 		_hwnd = WindowNative.GetWindowHandle(window);
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
+		_registrations = new HotkeyRegistrationTable(new Win32HotkeyPlatform(_hwnd), Log);
 		_newWndProc = WndProc;
 		_wndProcHandle = GCHandle.Alloc(_newWndProc);
 		_prevWndProc = SetWindowLongPtr(_hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(_newWndProc));
@@ -167,8 +140,7 @@ public class HotkeyManager : IDisposable
 
 	        public int RegisterHotkey(Hotkey hotkey, Action callback)
 	        {
-	                var attempt = RegisterHotkeyInternal(hotkey, callback);
-	                return attempt.Id;
+	                return _registrations.Register(hotkey, callback, HotkeyRegistrationTable.HotkeyGroup.Core).Id;
 	        }
 
 	        // Registers a core (non-router) hotkey and returns a failure description when the
@@ -184,55 +156,13 @@ public class HotkeyManager : IDisposable
 	                        return parseFailure;
 	                }
 
-	                var attempt = RegisterHotkeyInternal(Hotkey.Parse(hotkeyText!), callback);
+	                var attempt = _registrations.Register(Hotkey.Parse(hotkeyText!), callback, HotkeyRegistrationTable.HotkeyGroup.Core);
 	                if (attempt.Success)
 	                        return null;
 
 	                return new HotkeyBindingFailure(description, hotkeyText!.Trim(),
 	                        attempt.ErrorMessage ?? "The shortcut could not be registered.");
 	        }
-
-	        private HotkeyRegistrationAttempt RegisterHotkeyInternal(Hotkey hotkey, Action callback)
-        {
-                string norm = NormalizeHotkey(hotkey);
-                if (_registeredHotkeys.Contains(norm))
-                {
-                        Log($"Duplicate hotkey detected: {norm}");
-                        return new HotkeyRegistrationAttempt(norm, -1, success: false, errorMessage: "The shortcut is already registered.");
-                }
-
-                int id = Interlocked.Increment(ref _id);
-                uint mods = HotkeyModifiers.Compose(hotkey);
-				bool success = RegisterHotKey(_hwnd, id, mods, (uint)hotkey.Key);
-                if (success)
-                {
-                        _callbacks[id] = callback;
-                        _registeredHotkeys.Add(norm);
-                        Log($"Hotkey registered: {norm} (id={id})");
-                        return new HotkeyRegistrationAttempt(norm, id, true, null);
-                }
-
-				if (_registeredHotkeys.Contains(norm))
-                {
-                        Log($"RegisterHotKey reported failure but hotkey already active (suppressing): {norm}");
-                        return new HotkeyRegistrationAttempt(norm, id, true, null);
-                }
-
-                int error = Marshal.GetLastWin32Error();
-                string? message = null;
-                if (error != 0)
-                {
-                        message = error switch
-                        {
-                                1409 => "The shortcut is already registered by another application.",
-                                _ => new Win32Exception(error).Message
-                        };
-                }
-                message ??= "Failed to register the shortcut.";
-
-                Log($"Hotkey registration FAILED: {norm} (error={error})");
-                return new HotkeyRegistrationAttempt(norm, id, false, message);
-        }
 
         public IReadOnlyList<HotkeyRegistrationResult> RegisterRouterHotkeys()
         {
@@ -257,15 +187,9 @@ public class HotkeyManager : IDisposable
 			                        try
 			                        {
 			                                var hotkey = Hotkey.Parse(map.FromHotKey!);
-			                                var attempt = RegisterHotkeyInternal(hotkey, () => SendHotkeyAfterDelay(map.ToHotKey!, Constants.FailureSendHotkeyDelay));
+			                                var attempt = _registrations.Register(hotkey, () => SendHotkeyAfterDelay(map.ToHotKey!, Constants.FailureSendHotkeyDelay), HotkeyRegistrationTable.HotkeyGroup.Router);
                                 if (attempt.Success)
                                 {
-                                        if (attempt.Id > 0)
-                                        {
-                                                _routerIds.Add(attempt.Id);
-                                                _routerNormalizedHotkeys[attempt.Id] = attempt.NormalizedHotkey;
-                                        }
-
                                         Log($"Router registered: From='{map.FromHotKey}' -> To='{map.ToHotKey}', id={attempt.Id}");
                                         results.Add(new HotkeyRegistrationResult(map, attempt.NormalizedHotkey, true, attempt.Id, null));
                                 }
@@ -304,18 +228,7 @@ public class HotkeyManager : IDisposable
 
         private void ClearRouterHotkeys()
         {
-                foreach (var id in _routerIds)
-                {
-                        UnregisterHotKey(_hwnd, id);
-                        _callbacks.Remove(id);
-                        if (_routerNormalizedHotkeys.TryGetValue(id, out var norm))
-                        {
-                                _routerNormalizedHotkeys.Remove(id);
-                                _registeredHotkeys.Remove(norm);
-                        }
-                }
-
-                _routerIds.Clear();
+                _registrations.ClearGroup(HotkeyRegistrationTable.HotkeyGroup.Router);
         }
 
         // Registers each prompt's optional hotkey and returns the ones that could not be bound,
@@ -341,16 +254,8 @@ public class HotkeyManager : IDisposable
                     continue;
                 }
 
-                var attempt = RegisterHotkeyInternal(Hotkey.Parse(prompt.Hotkey), () => callback(prompt));
-                if (attempt.Success)
-                {
-                    if (attempt.Id > 0)
-                    {
-                        _promptIds.Add(attempt.Id);
-                        _promptNormalizedHotkeys[attempt.Id] = attempt.NormalizedHotkey;
-                    }
-                }
-                else
+                var attempt = _registrations.Register(Hotkey.Parse(prompt.Hotkey), () => callback(prompt), HotkeyRegistrationTable.HotkeyGroup.Prompt);
+                if (!attempt.Success)
                 {
                     Log($"Prompt hotkey registration FAILED: {description} ({prompt.Hotkey}) - {attempt.ErrorMessage}");
                     failures.Add(new HotkeyBindingFailure(description, prompt.Hotkey.Trim(),
@@ -363,30 +268,12 @@ public class HotkeyManager : IDisposable
 
         public void ClearPromptHotkeys()
         {
-            foreach (var id in _promptIds)
-            {
-                UnregisterHotKey(_hwnd, id);
-                _callbacks.Remove(id);
-                if (_promptNormalizedHotkeys.TryGetValue(id, out var norm))
-                {
-                    _promptNormalizedHotkeys.Remove(id);
-                    _registeredHotkeys.Remove(norm);
-                }
-            }
-            _promptIds.Clear();
-            _promptNormalizedHotkeys.Clear();
+            _registrations.ClearGroup(HotkeyRegistrationTable.HotkeyGroup.Prompt);
         }
 
         public void UnregisterAll()
         {
-                foreach (var kvp in _callbacks)
-                        UnregisterHotKey(_hwnd, kvp.Key);
-                _callbacks.Clear();
-                _routerIds.Clear();
-                _routerNormalizedHotkeys.Clear();
-                _promptIds.Clear();
-                _promptNormalizedHotkeys.Clear();
-                _registeredHotkeys.Clear();
+                _registrations.ClearAll();
         }
 
         // Clears ALL registrations (core + router + prompt) so the caller can
@@ -402,8 +289,7 @@ public class HotkeyManager : IDisposable
 		{
 			int id = wParam.ToInt32();
 			Log($"WM_HOTKEY received: id={id}");
-			if (_callbacks.TryGetValue(id, out var cb))
-				cb();
+			_registrations.Dispatch(id);
 			return IntPtr.Zero;
 		}
 		return CallWindowProc(_prevWndProc, hWnd, msg, wParam, lParam);
@@ -757,18 +643,6 @@ public class HotkeyManager : IDisposable
 	{
 		var line = $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}";
 		s_logChannel.Writer.TryWrite(line);
-	}
-
-	private static string NormalizeHotkey(Hotkey hk)
-	{
-		// Construct a deterministic modifier order & uppercase key for set membership
-		var sb = new System.Text.StringBuilder(32);
-		if (hk.Control) sb.Append("CTRL+");
-		if (hk.Shift) sb.Append("SHIFT+");
-		if (hk.Alt) sb.Append("ALT+");
-		if (hk.Win) sb.Append("WIN+");
-		sb.Append(hk.Key.ToString().ToUpperInvariant());
-		return sb.ToString();
 	}
 
 	public void Dispose()

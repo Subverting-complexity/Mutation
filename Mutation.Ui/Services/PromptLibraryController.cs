@@ -4,6 +4,7 @@ using Mutation.Ui.Views;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace Mutation.Ui.Services;
 
@@ -15,6 +16,9 @@ internal sealed class PromptLibraryController
 	private readonly ListView _promptListView;
 	private readonly Action<LlmSettings.LlmPrompt> _executePrompt;
 	private readonly Action<IReadOnlyList<HotkeyManager.HotkeyBindingFailure>>? _reportHotkeyFailures;
+	// Handed to every prompt editor this controller opens, so closing the app stops a
+	// Test Run in flight instead of leaving it climbing the retry ladder (issue #256).
+	private readonly CancellationToken _shutdownToken;
 
 	private HotkeyManager? _hotkeyManager;
 
@@ -24,7 +28,8 @@ internal sealed class PromptLibraryController
 		TranscriptFormatter transcriptFormatter,
 		ListView promptListView,
 		Action<LlmSettings.LlmPrompt> executePrompt,
-		Action<IReadOnlyList<HotkeyManager.HotkeyBindingFailure>>? reportHotkeyFailures = null)
+		Action<IReadOnlyList<HotkeyManager.HotkeyBindingFailure>>? reportHotkeyFailures = null,
+		CancellationToken shutdownToken = default)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
@@ -32,6 +37,7 @@ internal sealed class PromptLibraryController
 		_promptListView = promptListView ?? throw new ArgumentNullException(nameof(promptListView));
 		_executePrompt = executePrompt ?? throw new ArgumentNullException(nameof(executePrompt));
 		_reportHotkeyFailures = reportHotkeyFailures;
+		_shutdownToken = shutdownToken;
 	}
 
 	public void Initialize()
@@ -72,7 +78,7 @@ internal sealed class PromptLibraryController
 		if (_settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(null, _transcriptFormatter, GetAvailableModelNames());
+		var dialog = new PromptEditorWindow(null, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken);
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -98,7 +104,7 @@ internal sealed class PromptLibraryController
 		if (prompt == null || _settings.LlmSettings == null)
 			return;
 
-		var dialog = new PromptEditorWindow(prompt, _transcriptFormatter, GetAvailableModelNames());
+		var dialog = new PromptEditorWindow(prompt, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken);
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{

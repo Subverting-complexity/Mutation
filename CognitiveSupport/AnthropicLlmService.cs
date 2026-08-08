@@ -49,7 +49,8 @@ public class AnthropicLlmService : ILlmService
 	public async Task<string> CreateChatCompletion(
 		IList<LlmChatMessage> messages,
 		string llmModelName,
-		LlmRequestOptions? options = null)
+		LlmRequestOptions? options = null,
+		CancellationToken cancellationToken = default)
 	{
 		options ??= LlmRequestOptions.Default;
 
@@ -86,8 +87,8 @@ public class AnthropicLlmService : ILlmService
 		};
 
 		string responseBody = options.FastMode
-			? await SendWithFastModeFallbackAsync(request, options).ConfigureAwait(false)
-			: await SendAsync(request, fastMode: false).ConfigureAwait(false);
+			? await SendWithFastModeFallbackAsync(request, options, cancellationToken).ConfigureAwait(false)
+			: await SendAsync(request, fastMode: false, cancellationToken).ConfigureAwait(false);
 
 		return ExtractText(responseBody);
 	}
@@ -99,12 +100,15 @@ public class AnthropicLlmService : ILlmService
 	/// a billing surprise — which is what makes recovering without a prompt safe here.
 	/// The user's Fast mode setting is never rewritten; access may be granted later.
 	/// </summary>
-	private async Task<string> SendWithFastModeFallbackAsync(AnthropicRequest request, LlmRequestOptions options)
+	private async Task<string> SendWithFastModeFallbackAsync(
+		AnthropicRequest request,
+		LlmRequestOptions options,
+		CancellationToken cancellationToken)
 	{
 		FastModeFallback fallback;
 		try
 		{
-			return await SendAsync(request, fastMode: true).ConfigureAwait(false);
+			return await SendAsync(request, fastMode: true, cancellationToken).ConfigureAwait(false);
 		}
 		catch (NonTransientLlmException ex)
 		{
@@ -121,7 +125,7 @@ public class AnthropicLlmService : ILlmService
 		}
 
 		ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fallback));
-		string body = await SendAsync(request, fastMode: false).ConfigureAwait(false);
+		string body = await SendAsync(request, fastMode: false, cancellationToken).ConfigureAwait(false);
 
 		// Announced only after the standard-speed retry succeeded, so the user is never
 		// told "it ran at standard speed" for a request that then failed outright.
@@ -129,7 +133,7 @@ public class AnthropicLlmService : ILlmService
 		return body;
 	}
 
-	private async Task<string> SendAsync(AnthropicRequest request, bool fastMode)
+	private async Task<string> SendAsync(AnthropicRequest request, bool fastMode, CancellationToken cancellationToken)
 	{
 		string jsonBody = Serialize(request, fastMode);
 
@@ -145,10 +149,16 @@ public class AnthropicLlmService : ILlmService
 		// fallback starts from 1 rather than inheriting the abandoned send's stretched
 		// timeout — the attempt lives in Polly's per-execution context, not in the shared
 		// pipeline.
-		string responseBody = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, _) =>
+		//
+		// Handing the token to the pipeline is what makes the ladder escapable, and it is
+		// the whole mechanism: Polly checks it at the head of every attempt and waits on it
+		// during the backoff, so an outside cancel ends the retry loop there rather than
+		// being re-read as one more transient blip (issue #256).
+		string responseBody = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
 			int timeout = _timeoutSeconds * attempt;
-			using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
 			// HttpRequestMessage is single-use; rebuild it for each attempt.
 			using var httpRequest = new HttpRequestMessage(HttpMethod.Post, ApiUrl);
@@ -159,9 +169,9 @@ public class AnthropicLlmService : ILlmService
 				httpRequest.Headers.Add("anthropic-beta", FastModeBeta);
 			httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-			using var httpResponse = await _httpClient.SendAsync(httpRequest, timeoutCts.Token).ConfigureAwait(false);
+			using var httpResponse = await _httpClient.SendAsync(httpRequest, linkedCts.Token).ConfigureAwait(false);
 
-			string body = await httpResponse.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+			string body = await httpResponse.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
 
 			if (!httpResponse.IsSuccessStatusCode)
 			{
@@ -190,7 +200,7 @@ public class AnthropicLlmService : ILlmService
 			}
 
 			return body;
-		}).ConfigureAwait(false);
+		}, cancellationToken).ConfigureAwait(false);
 
 		return responseBody;
 	}

@@ -167,8 +167,14 @@ Open <strong>Settings</strong> with <strong>Ctrl+Comma</strong> and look on the 
 <h2 id="changed-your-mind-while-it-is-transcribing">Changed your mind while it is transcribing</h2>
 <p>While Mutation is turning your recording into text, the <strong>Raw Transcript</strong> box
 reads &quot;Transcribing...&quot; and the buttons are greyed out. Press <strong>Shift+Alt+U</strong> once
-more and it gives up on that recording. You hear the failure beep and &quot;Transcription
-cancelled.&quot;, the box empties itself, and everything is yours to use again.</p>
+more and it gives up on that recording.</p>
+<p>You hear two things, a second or so apart. First the failure beep and &quot;Cancelling
+transcription...&quot; — that is Mutation telling you your keypress arrived. Then, once the
+transcription has actually let go, &quot;Transcription cancelled.&quot; The box empties itself
+and everything is yours to use again.</p>
+<p>If you press again in between, you hear &quot;Already stopping.&quot; Nothing has gone wrong —
+your first press landed, and Mutation is waiting for the transcription service to let
+go of the request.</p>
 <p>Your recording is not lost. It is still the session Mutation has selected, so you
 can press <strong>Retry transcription</strong> to send it off again — or step back to it later
 with the <strong>older</strong> and <strong>newer</strong> arrow buttons.</p>
@@ -179,6 +185,22 @@ ramble a bit, and what comes back is already tidied into proper sentences.</p>
 <p>On the main window this is the <strong>Record and Format</strong> button, next to <strong>Record</strong>.</p>
 <p>Which prompt runs is up to you: it's the one you have marked as <strong>Auto-Run</strong>. See
 <a href="ai-prompts.html">Using AI prompts on your text</a> for how to set that up.</p>
+<h2 id="changed-your-mind-while-the-ai-is-tidying-up">Changed your mind while the AI is tidying up</h2>
+<p>The AI step happens after the transcription, and it can take a lot longer. If the
+service is down, Mutation keeps trying — giving each attempt a longer window than the
+last — for about <strong>ten minutes</strong> before it gives up. So this is the wait you are most
+likely to want out of.</p>
+<p>While it runs, the <strong>Raw Transcript</strong> box reads &quot;Processing with LLM...&quot; — LLM is just
+the app's short name for the AI. Both <strong>Record</strong> and <strong>Record and Format</strong> stay
+available, renamed to <strong>Stop LLM processing</strong>. Press either button, or press
+<strong>Shift+Alt+I</strong> or <strong>Shift+Alt+U</strong> again. Any of those gives up on the AI step.</p>
+<p>You hear the failure beep and &quot;Cancelling LLM processing...&quot; Then, once the request has
+let go, the success beep and &quot;LLM processing cancelled. Transcript ready.&quot; Press again
+while it is still winding down and you hear &quot;Already stopping.&quot; — the first press
+did register; the AI is just taking a moment to let go.</p>
+<p>Your dictation is not thrown away with it. Everything you said is still transcribed,
+still in both boxes, and still on your clipboard — just without the AI's tidying up.
+Cancelling costs you the polish, never the words.</p>
 <h2 id="where-the-text-ends-up">Where the text ends up</h2>
 <p>Once a recording is transcribed, the text lands in three places at once:</p>
 <ul>
