@@ -116,6 +116,13 @@ public sealed partial class MainWindow : Window, IDisposable
 	// silently skipped — leaving the combo and the live device permanently disagreeing.
 	// UI thread only.
 	private string? _requestedMicrophoneId;
+	// Set when the constructor skips its inline capture start because restoring the
+	// persisted microphone queued a switch. If that switch then fails, nothing is
+	// capturing at all and the waveform would stay dead for the session — unlike a
+	// mid-session failure, which leaves the previous device's capture running
+	// untouched and must not be disturbed. Cleared by the first switch that lands.
+	// UI thread only.
+	private bool _startupCapturePending;
 	// Set as soon as the window starts closing, so async continuations that resume
 	// afterwards do not touch torn-down controls.
 	private bool _isClosing;
@@ -265,6 +272,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		// wait for, and this is what gets the waveform going.
 		if (_requestedMicrophoneId is null)
 			_microphoneVisualization.StartCapture();
+		else
+			_startupCapturePending = true;
 
 		CmbSpeechService.ItemsSource = _speechServices;
 		CmbSpeechService.DisplayMemberPath = nameof(ISpeechToTextService.ServiceName);
@@ -2733,6 +2742,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		switch (result.Outcome)
 		{
 			case Mutation.Ui.Core.MicrophoneSwitchOutcome.Switched:
+				// This switch opened capture, so there is no longer a startup start
+				// waiting to be made good.
+				_startupCapturePending = false;
+
 				// Re-sync the level controls to the newly-selected device (support and
 				// current level may differ) and re-assert the pinned level on it.
 				if (_micLevelInitialized)
@@ -2763,21 +2776,22 @@ public sealed partial class MainWindow : Window, IDisposable
 		_requestedMicrophoneId ?? _audioDeviceManager.SelectedMicrophone?.Id;
 
 	// Undoes what a switch that did not take left behind. The manager is still on the
-	// previous device, so everything the UI thread wrote ahead of the attempt has to
-	// follow it back:
-	//
-	// - The requested ID, or the next pick would be compared against a microphone
-	//   that is not the one being recorded from.
-	// - The persisted name, or one transient device fault destroys the last choice
-	//   that worked and every later launch starts on the microphone that failed.
-	//
-	// Capture is re-opened on the device that is live, because a failed switch never
-	// reaches its own capture restart — and at startup the inline start is skipped in
-	// favour of the switch, so without this the waveform and the level meter would
-	// stay dead for the whole session.
+	// previous device, so what the UI thread wrote ahead of the attempt has to follow
+	// it back: the requested ID, or the next pick would be compared against a
+	// microphone that is not the one being recorded from, and the persisted name, or
+	// one transient device fault destroys the last choice that worked and every later
+	// launch starts on the microphone that failed.
 	//
 	// Skipped entirely if the user has already asked for something else in the
-	// meantime: that request is the one that owns this state now.
+	// meantime: that request is the one that owns this state now, and because all of
+	// this is UI-thread-serial it has already written both fields itself.
+	//
+	// Does not cover a window closed mid-switch. PersistClosingState runs as the close
+	// sequence's first step, so by the time a failure lands there is nothing left to
+	// roll back into — the optimistic name is already on disk. That costs one startup
+	// on the device that failed, which then rolls back for real. The alternative,
+	// writing the name only on success, loses the choice every time a *successful*
+	// switch is still running at close, and that is the common case.
 	private void RollBackFailedMicrophoneSwitch(Mutation.Ui.Core.CaptureDeviceInfo attempted)
 	{
 		if (!string.Equals(_requestedMicrophoneId, attempted.Id, StringComparison.OrdinalIgnoreCase))
@@ -2786,13 +2800,27 @@ public sealed partial class MainWindow : Window, IDisposable
 		var live = _audioDeviceManager.SelectedMicrophone;
 		_requestedMicrophoneId = live?.Id;
 
-		if (_settings.AudioSettings != null)
+		// Only over a name worth having. With no live device there is nothing better
+		// to record, and blanking the setting would erase the user's choice for good —
+		// the next launch would silently adopt whatever device sorts first, every
+		// time. Keeping the name they last picked at least gets them back onto it when
+		// the device returns.
+		if (_settings.AudioSettings != null && !string.IsNullOrWhiteSpace(live?.FriendlyName))
 		{
-			_settings.AudioSettings.ActiveCaptureDeviceFullName = live?.FriendlyName;
+			_settings.AudioSettings.ActiveCaptureDeviceFullName = live.FriendlyName;
 			_settingsSaveDebouncer.Trigger();
 		}
 
-		_ = _microphoneSwitch.RestartCaptureAsync();
+		// Capture is only re-opened when the startup start was skipped in favour of
+		// this switch, so nothing is running at all. A mid-session failure is left
+		// alone on purpose: the switch never reached its own capture restart, which
+		// means the previous device is still open and streaming, and cycling
+		// waveInClose/waveInOpen on a healthy handle to recover from someone else's
+		// failure is how a user with working capture ends up with none. A live device
+		// is required too — without one the restart could only report "device not
+		// resolved", talking over the message that actually tells them what to do.
+		if (_startupCapturePending && live is not null)
+			_ = _microphoneSwitch.RestartCaptureAsync();
 	}
 
 	private void MicWaveToggle_Click(object sender, RoutedEventArgs e)

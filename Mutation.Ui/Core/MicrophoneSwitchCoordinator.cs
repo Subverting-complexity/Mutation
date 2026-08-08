@@ -251,14 +251,21 @@ public sealed class MicrophoneSwitchCoordinator
 					_restartCapture();
 					break;
 
-				default:
+				case RequestKind.Switch:
 					// The device may have been unplugged between the click and this
 					// call; the selection is left where it was and the caller says so.
+					// Never null here — SwitchAsync is the only way to reach this kind
+					// and it rejects an empty ID.
 					if (!_selectDevice(deviceId!))
 						return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Unavailable);
 
 					_restartCapture();
 					break;
+
+				default:
+					// A kind added later must land here rather than quietly taking the
+					// switch branch and dereferencing a device ID it does not carry.
+					throw new NotSupportedException($"Unhandled microphone request kind: {kind}.");
 			}
 
 			return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Switched);
