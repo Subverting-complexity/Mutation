@@ -90,6 +90,16 @@ public static class SendKeysReader
 			return chords;
 
 		string s = sendKeys.Trim();
+
+		// Only text that is actually shorthand gets read as shorthand, and the question is
+		// put to the same judge the mapper uses so the two cannot drift apart. Without this,
+		// half-typed chord text is read as something it is not: "Ctrl+Alt" on the way to
+		// "Ctrl+Alt+G" has a '+' in it, and SendKeys' '+' is Shift, so the row would report
+		// Shift+A and collide with any row genuinely holding Shift+A. A duplicate badge on a
+		// shortcut that is fine is the one outcome worse than the silence this replaces.
+		if (!SendKeysMapper.LooksLikeSendKeys(s))
+			return chords;
+
 		int i = 0;
 
 		while (i < s.Length)

@@ -182,6 +182,31 @@ public class SendKeysReaderTests
 		Assert.Empty(Read(sendKeys));
 	}
 
+	[Theory]
+	[InlineData("Ctrl+Alt")]
+	[InlineData("Ctrl+Shift")]
+	[InlineData("Shift+")]
+	[InlineData("Ctrl+F5")]
+	[InlineData("Ctrl+V, Enter")]
+	[InlineData("Ctrl+(AB)")]
+	public void ChordTextIsNotReadAsShorthandHoweverFinishedItIs(string chordText)
+	{
+		// A '+' is SendKeys' Shift and a chord's separator both. Read as shorthand,
+		// "Ctrl+Alt" on the way to "Ctrl+Alt+G" would report Shift+A and collide with any
+		// row genuinely holding Shift+A — a duplicate badge on a shortcut that is fine.
+		// The finished spellings are here too: those are the caller's job, read as chords
+		// before this reader is ever asked.
+		Assert.Empty(Read(chordText));
+	}
+
+	[Fact]
+	public void AShiftGroupAtTheStartIsStillShorthand()
+	{
+		// "+(" is the ambiguous one. Nothing precedes this '+', so it is not a chord
+		// separator and the group really is SendKeys' Shift.
+		Assert.Equal(["SHIFT+A", "SHIFT+B"], Read("+(ab)"));
+	}
+
 	[Fact]
 	public void AnUnknownKeyNameIsSkippedWithoutLosingTheRest()
 	{
