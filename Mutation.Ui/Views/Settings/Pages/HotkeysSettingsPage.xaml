@@ -65,7 +65,7 @@
 													HorizontalAlignment="Stretch"
 													AutomationProperties.Name="Shortcut to listen for"
 													ToolTipService.ToolTip="Shortcut to listen for"
-													GotFocus="HotkeyRouterBox_GotFocus"
+													GotFocus="HotkeyRouterFrom_GotFocus"
 													LostFocus="HotkeyRouterFrom_LostFocus" />
 											</Border>
 											<FontIcon
@@ -87,7 +87,7 @@
 												HorizontalAlignment="Stretch"
 												AutomationProperties.Name="Shortcut to send when triggered"
 												ToolTipService.ToolTip="Shortcut to send when triggered"
-												GotFocus="HotkeyRouterBox_GotFocus"
+												GotFocus="HotkeyRouterTo_GotFocus"
 												LostFocus="HotkeyRouterTo_LostFocus" />
 										</Border>
 
@@ -100,6 +100,26 @@
 											Tag="{x:Bind}" />
 									</Grid>
 
+									<!-- What is wrong with this row: the validation message or the duplicate
+									     notice, whichever UpdateCombinedError picked. The marker beside the
+									     "From" box carries the same words, but a marker announces nothing when
+									     it appears — an AutomationProperties.Name is read when you land on
+									     the element, and you have to know it is there to land on it. So a
+									     router row's errors reached this app's reader only by hunting, while
+									     the same message on the hotkey rows above has been read out since
+									     issue #243 (issue #346).
+
+									     Assertive, and raised before the polite notices below it, because
+									     UpdateCombinedError runs before the announce step in EvaluateFrom:
+									     the urgent news goes first and the tidy-up notice waits its turn. -->
+									<TextBlock
+										views:LiveText.Message="{x:Bind BindingErrorMessage, Mode=OneWay}"
+										Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+										Visibility="Collapsed"
+										AutomationProperties.LiveSetting="Assertive"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										TextWrapping="Wrap" />
+
 									<!-- Says what a box rewrote itself to when the user left it. A polite
 									     region of its own, so it waits its turn rather than cutting across
 									     the next field, and so it cannot overwrite the row's error. Bound
@@ -107,14 +127,36 @@
 									     LiveMessage.Show from (issue #332). Full-contrast text rather than
 									     the secondary brush a caption would normally take: this app's
 									     reader is low-vision, and a message worth showing at all is worth
-									     being able to read. -->
-									<TextBlock
-										views:LiveText.Message="{x:Bind CommitAnnouncement, Mode=OneWay}"
-										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-										Visibility="Collapsed"
-										AutomationProperties.LiveSetting="Polite"
-										Style="{StaticResource CaptionTextBlockStyle}"
-										TextWrapping="Wrap" />
+									     being able to read.
+
+									     One region per box rather than one per row. Each box takes its own
+									     notice down on the way in, and the row's two boxes are next to each
+									     other in the tab order — so a shared notice was cleared by the very
+									     Tab that produced it, before the queued announcement could be
+									     spoken (issue #344). -->
+									<Grid ColumnSpacing="12">
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="2*" />
+											<ColumnDefinition Width="2*" />
+											<ColumnDefinition Width="Auto" />
+										</Grid.ColumnDefinitions>
+										<TextBlock
+											Grid.Column="0"
+											views:LiveText.Message="{x:Bind FromCommitAnnouncement, Mode=OneWay}"
+											Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+											Visibility="Collapsed"
+											AutomationProperties.LiveSetting="Polite"
+											Style="{StaticResource CaptionTextBlockStyle}"
+											TextWrapping="Wrap" />
+										<TextBlock
+											Grid.Column="1"
+											views:LiveText.Message="{x:Bind ToCommitAnnouncement, Mode=OneWay}"
+											Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+											Visibility="Collapsed"
+											AutomationProperties.LiveSetting="Polite"
+											Style="{StaticResource CaptionTextBlockStyle}"
+											TextWrapping="Wrap" />
+									</Grid>
 								</StackPanel>
 							</DataTemplate>
 						</ListView.ItemTemplate>

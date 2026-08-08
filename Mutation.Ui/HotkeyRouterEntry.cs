@@ -38,7 +38,8 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         private HotkeyBindingState _bindingState = HotkeyBindingState.Inactive;
         private string? _bindingError;
         private string? _combinedError;
-        private string? _commitAnnouncement;
+        private string? _fromCommitAnnouncement;
+        private string? _toCommitAnnouncement;
 
         /// <summary>
         /// What the two boxes are called to a screen reader, matching the
@@ -166,15 +167,24 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         public string? BindingErrorMessage => _combinedError;
 
         /// <summary>
-        /// What to tell a screen-reader user about the box that just tidied itself up, or null
-        /// when there is nothing worth interrupting for.
+        /// What to tell a screen-reader user about the "From" box after it tidied itself up, or
+        /// null when there is nothing worth interrupting for.
         /// <para>
         /// Bound to a live region in the row template through
         /// <see cref="Mutation.Ui.Views.LiveText"/>, because a row in a list has no code-behind
         /// to call <c>LiveMessage.Show</c> from (issue #332).
         /// </para>
+        /// <para>
+        /// One per box, not one per row. The row's two boxes each take their notice down on the
+        /// way in, so a single shared notice was destroyed by the very Tab that produced it:
+        /// leaving "From" set it, entering "To" cleared it, and both ran before the announcement
+        /// the clearing had already queued could be spoken (issue #344).
+        /// </para>
         /// </summary>
-        public string? CommitAnnouncement => _commitAnnouncement;
+        public string? FromCommitAnnouncement => _fromCommitAnnouncement;
+
+        /// <summary>The same, for the "To" box.</summary>
+        public string? ToCommitAnnouncement => _toCommitAnnouncement;
 
         public void CommitFromHotkey()
         {
@@ -187,13 +197,20 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         }
 
         /// <summary>
-        /// Takes down the last notice on the way back into either box. It described something
-        /// that happened when the user left, and left standing it becomes a line of
+        /// Takes down the "From" box's last notice on the way back into it. It described
+        /// something that happened when the user left, and left standing it becomes a line of
         /// ordinary-looking text under the row — read out as current content by anyone going
         /// down the page afterwards. Clearing it also means the same rewrite happening twice is
         /// announced twice, rather than the second one being swallowed as an unchanged message.
+        /// <para>
+        /// It clears only its own box. Clearing the row's took down the "From" notice as focus
+        /// arrived in "To", which is where focus goes next (issue #344).
+        /// </para>
         /// </summary>
-        public void ClearCommitAnnouncement() => SetCommitAnnouncement(null);
+        public void ClearFromCommitAnnouncement() => SetFromCommitAnnouncement(null);
+
+        /// <summary>The same, for the "To" box.</summary>
+        public void ClearToCommitAnnouncement() => SetToCommitAnnouncement(null);
 
         public void SetDuplicate(bool isDuplicate)
         {
@@ -248,7 +265,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
 
                         if (announce)
                         {
-                                SetCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                SetFromCommitAnnouncement(HotkeyCommitAnnouncement.For(
                                         FromBoxLabel, typedBeforeCommit, _fromHotkeyText, FromErrorMessage));
                         }
 
@@ -287,7 +304,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
 
                         if (announce)
                         {
-                                SetCommitAnnouncement(HotkeyCommitAnnouncement.For(
+                                SetToCommitAnnouncement(HotkeyCommitAnnouncement.For(
                                         ToBoxLabel, typedBeforeCommit, _toHotkeyText, _toValidationMessage));
                         }
 
@@ -317,13 +334,22 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         /// </summary>
         private string? FromErrorMessage => _isDuplicate ? DuplicateFromMessage : _fromValidationMessage;
 
-        private void SetCommitAnnouncement(string? message)
+        private void SetFromCommitAnnouncement(string? message)
         {
-                if (string.Equals(_commitAnnouncement, message, StringComparison.Ordinal))
+                if (string.Equals(_fromCommitAnnouncement, message, StringComparison.Ordinal))
                         return;
 
-                _commitAnnouncement = message;
-                OnPropertyChanged(nameof(CommitAnnouncement));
+                _fromCommitAnnouncement = message;
+                OnPropertyChanged(nameof(FromCommitAnnouncement));
+        }
+
+        private void SetToCommitAnnouncement(string? message)
+        {
+                if (string.Equals(_toCommitAnnouncement, message, StringComparison.Ordinal))
+                        return;
+
+                _toCommitAnnouncement = message;
+                OnPropertyChanged(nameof(ToCommitAnnouncement));
         }
 
         private void ApplyFormattedValue(ref string storage, string? formatted, string propertyName)

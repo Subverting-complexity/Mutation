@@ -121,14 +121,21 @@ internal sealed class HotkeyRouterController
 	}
 
 	/// <summary>
-	/// Takes down the row's rewrite notice as the user comes back into either of its boxes.
-	/// See <see cref="HotkeyRouterEntry.ClearCommitAnnouncement"/> for why it does not simply
-	/// stay put.
+	/// Takes down the "From" box's rewrite notice as the user comes back into it. See
+	/// <see cref="HotkeyRouterEntry.ClearFromCommitAnnouncement"/> for why it does not simply
+	/// stay put, and why each box clears only its own (issue #344).
 	/// </summary>
-	public void ClearCommitAnnouncement(object sender)
+	public void ClearFromCommitAnnouncement(object sender)
 	{
 		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
-			entry.ClearCommitAnnouncement();
+			entry.ClearFromCommitAnnouncement();
+	}
+
+	/// <summary>The same, for the "To" box.</summary>
+	public void ClearToCommitAnnouncement(object sender)
+	{
+		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
+			entry.ClearToCommitAnnouncement();
 	}
 
 	public void CommitFromLostFocus(object sender)
