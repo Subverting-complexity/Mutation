@@ -93,6 +93,36 @@ public class HotkeyButtonLabelCacheTests
 			cache.Resolve(button, button.NameFromMarkup, "Send transcript through the configured language model", null));
 	}
 
+	// Issue #309: a busy state cached the name it had just set, and that name already had
+	// the shortcut composed into it. The next hotkey-only refresh read it back and composed
+	// a second one — "Stop LLM processing, SHIFT+ALT+U, SHIFT+ALT+U" — which is the stale-
+	// name class of defect #214 established the cache to prevent.
+	//
+	// This states the contract; it cannot enforce it. The caller lives in MainWindow and
+	// needs a XAML tree, so nothing here would catch a call site that started pre-composing
+	// again. What prevents that is structural: MainWindow.SetButtonAccessibleLabel is now
+	// the only place a hotkey is composed into a name, and it takes the label and the
+	// hotkey separately. If a second composition site ever appears, this test is the note
+	// explaining why it must not.
+	[Fact]
+	public void AStateLabelIsStoredBare_SoARefreshComposesTheHotkeyExactlyOnce()
+	{
+		var cache = new HotkeyButtonLabelCache();
+		var button = new FakeButton("Record");
+		const string Hotkey = "SHIFT+ALT+U";
+
+		// What a busy state pushes in. It must be the bare label, never the composed name.
+		cache.Set(button, "Stop LLM processing");
+
+		// What a later hotkey-only refresh reads back, and then composes from.
+		string resolved = cache.Resolve(button, button.NameFromMarkup, "Start or stop speech capture", null);
+		string composed = HotkeyAccessibleText.ComposeName(resolved, Hotkey);
+
+		Assert.Equal("Stop LLM processing", resolved);
+		Assert.Equal("Stop LLM processing, SHIFT+ALT+U", composed);
+		Assert.DoesNotContain("SHIFT+ALT+U, SHIFT+ALT+U", composed);
+	}
+
 	[Fact]
 	public void ButtonsDoNotShareLabels()
 	{

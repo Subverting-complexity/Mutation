@@ -53,7 +53,7 @@ Three pointers for writing a good one:
 
 There is a **Test Run** button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.
 
-If a test run is taking longer than you want to wait, press **Test Run** again. Mutation gives up on the request, you hear the failure beep, and a "Test run cancelled." box appears when it has let go. Pressing **Save** or **Cancel**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
+If a test run is taking longer than you want to wait, press **Test Run** again. You hear the failure beep and "Cancelling the test run...", then "Test run cancelled." once it has let go — both on the status line at the bottom of the editor, so your place in the prompt is not disturbed. Press again while it is still winding down and you hear "Already stopping." Pressing **Save** or **Cancel**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
 
 Then press **Save**, or **Cancel** to throw it away.
 

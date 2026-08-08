@@ -1,5 +1,7 @@
 using CognitiveSupport;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
@@ -28,6 +30,14 @@ public sealed partial class PromptEditorWindow : Window
     // turn into an ObjectDisposedException.
     private readonly LlmOperationState _testRun = new();
 
+    // Closes the status bar after a few seconds, the way MainWindow's does, so a stopped
+    // test run does not leave "Test run cancelled." standing over the editor for the rest
+    // of the session — and does not keep stealing height from the prompt box.
+    private readonly DispatcherTimer _statusDismissTimer;
+
+    // Matches MainWindow's status bar, so the two windows behave the same way.
+    private static readonly TimeSpan StatusDismissDelay = TimeSpan.FromSeconds(6);
+
     // True once this editor has closed, so a test run unwinding afterwards knows to stay
     // silent rather than reaching for a dialog on a window that has gone.
     private bool _closed;
@@ -46,6 +56,9 @@ public sealed partial class PromptEditorWindow : Window
         _formatter = formatter;
         _shutdownToken = shutdownToken;
         this.Closed += PromptEditorWindow_Closed;
+
+        _statusDismissTimer = new DispatcherTimer { Interval = StatusDismissDelay };
+        _statusDismissTimer.Tick += StatusDismissTimer_Tick;
 
         // Set window size
         IntPtr hWnd = WindowNative.GetWindowHandle(this);
@@ -167,17 +180,28 @@ public sealed partial class PromptEditorWindow : Window
             // they are (the reasoning issue #227 settled for the OCR Cancel button).
             // Without this the second click started a second run, whose Begin cancelled the
             // first, and the button silently ate both.
-            if (_testRun.Running)
+            switch (CancellablePressPlanner.For(_testRun.Running, _testRun.CancelRequested))
             {
-                if (!_testRun.CancelRequested)
-                {
+                case CancellablePressAction.AlreadyStopping:
+                    // A repeat press on a stop already asked for. Answered rather than
+                    // ignored: an enabled button that produces silence reads as one that
+                    // did not register (#309). No second beep — the first press already
+                    // acknowledged audibly, and the stop it refers to has not changed.
+                    ShowStatus("Test Run", CancellationMessages.AlreadyStopping, InfoBarSeverity.Informational);
+                    return;
+
+                case CancellablePressAction.Cancel:
                     _testRun.Cancel();
-                    // The beep is the immediate acknowledgement; the run announces its own
-                    // outcome in a dialog when it lets go, so nothing is said twice.
+                    // Progress, then completion — the same split the rest of the app makes.
+                    // The beep lands immediately; the run says it has actually let go when
+                    // it unwinds, which can be seconds later.
                     BeepPlayer.Play(BeepType.Failure);
-                }
-                return;
+                    ShowStatus("Test Run", "Cancelling the test run...", InfoBarSeverity.Informational);
+                    return;
             }
+
+            // Starting afresh, so last run's outcome stops standing over this one.
+            HideStatus();
 
             var dataPackageView = Clipboard.GetContent();
             if (dataPackageView.Contains(StandardDataFormats.Text))
@@ -240,10 +264,10 @@ public sealed partial class PromptEditorWindow : Window
         }
         catch (OperationCanceledException) when (testToken.IsCancellationRequested)
         {
-            // Stopped from the Test Run button while the editor is still open. Said out
-            // loud: this window has no status line, so the dialog is the only channel it
-            // has, and a button that produces silence reads as one that did not register.
-            ShowInfo("Test Run", "Test run cancelled.");
+            // Stopped from the Test Run button while the editor is still open. On the
+            // status line rather than in a dialog: the user asked for this, so there is no
+            // reason to take their focus away from the prompt they were editing.
+            ShowStatus("Test Run", "Test run cancelled.", InfoBarSeverity.Informational);
         }
         catch (Exception ex)
         {
@@ -258,24 +282,75 @@ public sealed partial class PromptEditorWindow : Window
     {
         this.Closed -= PromptEditorWindow_Closed;
         _closed = true;
+        _statusDismissTimer.Stop();
+        _statusDismissTimer.Tick -= StatusDismissTimer_Tick;
         // Signal only. Disposal belongs to the run's own handle, which is the one place
         // that knows every retry has finished. A no-op when nothing is running.
         _testRun.Cancel();
     }
 
-    // The plain-titled sibling of ShowError, for outcomes that are not failures. Same
-    // channel because it is the only one this window has.
-    private async void ShowInfo(string title, string message)
+    /// <summary>
+    /// This window's status line, for outcomes that are not failures. Mirrors
+    /// MainWindow.ShowStatus, including the explicit UIA notification: WinUI announces an
+    /// InfoBar only on its closed-to-open transition, so a second message while the bar is
+    /// already open would never be spoken (issue #164).
+    /// </summary>
+    private void ShowStatus(string title, string message, InfoBarSeverity severity)
     {
-        var dialog = new ContentDialog
+        message = ErrorLogger.RedactSecrets(message ?? string.Empty);
+
+        StatusInfoBar.Title = title;
+        StatusInfoBar.Message = message;
+        StatusInfoBar.Severity = severity;
+        StatusInfoBar.IsOpen = true;
+        AutomationProperties.SetName(StatusInfoBar, $"{title} status");
+        AutomationProperties.SetHelpText(StatusInfoBar, message);
+
+        _statusDismissTimer.Stop();
+        _statusDismissTimer.Start();
+
+        string announcement = StatusAnnouncement.ComposeText(title, message);
+        if (announcement.Length == 0)
+            return;
+
+        try
         {
-            Title = title,
-            Content = message,
-            CloseButtonText = "OK",
-            XamlRoot = this.Content.XamlRoot
-        };
-        await dialog.ShowAsync();
+            // CreatePeerForElement, not FromElement, so the very first status announces too.
+            var peer = FrameworkElementAutomationPeer.CreatePeerForElement(StatusInfoBar);
+            peer?.RaiseNotificationEvent(
+                StatusAnnouncement.GetKind(severity),
+                StatusAnnouncement.GetProcessing(severity),
+                announcement,
+                PromptEditorActivityId);
+        }
+        catch (Exception ex)
+        {
+            // One call site is inside a catch block of an async void handler, where an
+            // escaping exception reaches the global handler and the user is told nothing
+            // about the failure they were being told about. The status bar itself is
+            // already updated by this point, so the announcement is the only casualty.
+            ErrorLogger.LogError("Prompt editor status announcement", ex);
+        }
     }
+
+    /// <summary>
+    /// Its own activity id, not the window-wide one. Notifications are deduplicated per
+    /// activity, and the main window keeps raising its own while this editor is open —
+    /// sharing the id would let one supersede the other. RegionSelectionWindow, the other
+    /// separate window that announces, does the same.
+    /// </summary>
+    private const string PromptEditorActivityId = "Mutation.PromptEditor.Status";
+
+    private void HideStatus()
+    {
+        _statusDismissTimer.Stop();
+        StatusInfoBar.IsOpen = false;
+    }
+
+    private void StatusDismissTimer_Tick(object? sender, object e) => HideStatus();
+
+    // The user dismissed it themselves; the timer has nothing left to close.
+    private void StatusInfoBar_CloseButtonClick(InfoBar sender, object args) => _statusDismissTimer.Stop();
 
     private async void ShowError(string message)
     {

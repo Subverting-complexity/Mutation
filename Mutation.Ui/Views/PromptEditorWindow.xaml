@@ -88,13 +88,36 @@
                  AutomationProperties.HelpText="System instructions sent to the language model ahead of the text being processed."
                  ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
-        <StackPanel Orientation="Horizontal" Grid.Row="3" Spacing="12" HorizontalAlignment="Right">
-            <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click"
-                    AutomationProperties.Name="Test run"
-                    AutomationProperties.HelpText="Runs this prompt against the current clipboard content, using the settings above, without saving."
-                    ToolTipService.ToolTip="Run the prompt against current clipboard content" />
-            <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="BtnSave_Click" />
-            <Button x:Name="BtnCancel" Content="Cancel" Click="BtnCancel_Click" />
-        </StackPanel>
+        <Grid Grid.Row="3" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- This window's only non-modal channel. A test run that is stopped, or a
+                 repeat press on a stop already asked for, is said here rather than in a
+                 dialog: an outcome the user asked for does not warrant stealing focus,
+                 and silence from a button reads as one that did not register (#309). -->
+            <InfoBar
+                x:Name="StatusInfoBar"
+                Grid.Column="0"
+                Title="Status"
+                IsOpen="False"
+                IsClosable="True"
+                CloseButtonClick="StatusInfoBar_CloseButtonClick"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Prompt editor status"
+                AutomationProperties.LiveSetting="Polite"
+                AutomationProperties.HelpText="Latest status message for this prompt" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                <Button x:Name="BtnTest" Content="Test Run" Click="BtnTest_Click"
+                        AutomationProperties.Name="Test run"
+                        AutomationProperties.HelpText="Runs this prompt against the current clipboard content, using the settings above, without saving. Press it again while a run is going to stop it."
+                        ToolTipService.ToolTip="Run the prompt against current clipboard content" />
+                <Button x:Name="BtnSave" Content="Save" Style="{StaticResource AccentButtonStyle}" Click="BtnSave_Click" />
+                <Button x:Name="BtnCancel" Content="Cancel" Click="BtnCancel_Click" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

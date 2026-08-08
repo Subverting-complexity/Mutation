@@ -2101,21 +2101,20 @@ public sealed partial class MainWindow : Window, IDisposable
 			// the press — two model calls at once is not what anybody asked for — but it is
 			// only honest if the message names what stopped, or the user is left wondering
 			// why prompt B did nothing.
-			if (_promptLlmOperation.Running)
+			switch (CancellablePressPlanner.For(_promptLlmOperation.Running, _promptLlmOperation.CancelRequested))
 			{
-				if (_promptLlmOperation.CancelRequested)
-				{
+				case CancellablePressAction.AlreadyStopping:
 					// A repeat press on a stop already asked for. Answered rather than
 					// ignored: silence from a shortcut reads as one that did not register.
 					// No second beep — the first press already acknowledged audibly.
 					ShowStatus("Processing", CancellationMessages.AlreadyStopping, InfoBarSeverity.Informational);
 					return;
-				}
 
-				_promptLlmOperation.Cancel();
-				BeepPlayer.Play(BeepType.Failure);
-				ShowStatus("Processing", ComposePromptCancelMessage(), InfoBarSeverity.Informational);
-				return;
+				case CancellablePressAction.Cancel:
+					_promptLlmOperation.Cancel();
+					BeepPlayer.Play(BeepType.Failure);
+					ShowStatus("Processing", ComposePromptCancelMessage(), InfoBarSeverity.Informational);
+					return;
 			}
 
 			BeepPlayer.Play(BeepType.Start);
@@ -2270,7 +2269,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			?? new SolidColorBrush(Microsoft.UI.Colors.Gray);
 	}
 
-	private void UpdateSpeechButtonVisuals(string label, string glyph, bool isEnabled = true)
+	private void UpdateSpeechButtonVisuals(string label, string glyph, bool isEnabled = true, string? description = null)
 	{
 		// isEnabled is honoured in every branch. It used to be read only by the last
 		// one, which made the caller's choice silently inert for the Record and Stop
@@ -2302,12 +2301,44 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Transcribing / Processing
 			BtnSpeechToTextIcon.Glyph = glyph;
 			BtnSpeechToText.IsEnabled = isEnabled;
-			SetButtonAccessibleLabel(BtnSpeechToText, label);
+			SetBusyButtonState(
+				BtnSpeechToText,
+				label,
+				description,
+				_settings.SpeechToTextSettings?.SpeechToTextHotKey);
 
 			BtnSpeechToTextWithFormatIcon.Glyph = glyph;
 			BtnSpeechToTextWithFormat.IsEnabled = isEnabled;
-			SetButtonAccessibleLabel(BtnSpeechToTextWithFormat, label);
+			SetBusyButtonState(
+				BtnSpeechToTextWithFormat,
+				label,
+				description,
+				_settings.SpeechToTextSettings?.SpeechToTextWithLlmProcessingHotKey);
 		}
+	}
+
+	/// <summary>
+	/// Names a button for the state it is in, and says the same thing in its tooltip.
+	/// </summary>
+	/// <param name="hotkey">
+	/// Named even while the button is disabled. The shortcut is registered globally, so it
+	/// keeps working when the button it belongs to does not — and during a transcription
+	/// that shortcut is the only way to cancel. Withholding it there would hide the escape
+	/// hatch from the one user who most needs to be told about it. (AutomationProperties
+	/// announces AcceleratorKey regardless, so withholding it achieved nothing anyway.)
+	/// </param>
+	private void SetBusyButtonState(Button button, string label, string? description, string? hotkey)
+	{
+		SetButtonAccessibleLabel(button, label, hotkey);
+
+		// Left alone when the plan states no description, so a caller that only means to
+		// change the name cannot silently blank a tooltip it knows nothing about.
+		if (string.IsNullOrWhiteSpace(description))
+			return;
+
+		string tooltip = HotkeyAccessibleText.ComposeTooltip(description, hotkey);
+		ToolTipService.SetToolTip(button, tooltip);
+		AutomationProperties.SetHelpText(button, tooltip);
 	}
 
         private void UpdatePlaybackButtonVisuals(string automationName, string glyph)
@@ -2454,7 +2485,7 @@ public sealed partial class MainWindow : Window, IDisposable
             UpdateRecordingActionAvailability();
 
             var plan = RecordingUiPlanner.For(activity);
-            UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled);
+            UpdateSpeechButtonVisuals(plan.ButtonLabel, GlyphFor(activity), plan.ButtonEnabled, plan.ButtonDescription);
             TxtRawTranscript.IsReadOnly = plan.TranscriptReadOnly;
             // Null means "leave whatever is in the box"; empty means "clear it", which is
             // how a cancelled run takes its own "Transcribing..." back out (#295).
@@ -2567,10 +2598,16 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Sets a state label on a button whose hotkey affordances are not being touched
 	// (e.g. the disabled "Transcribing…" state), keeping the label cache in step so a
 	// later hotkey refresh does not undo it.
-	private void SetButtonAccessibleLabel(Button button, string label)
+	//
+	// The cache holds BARE labels — ConfigureButtonHotkey composes the shortcut in when it
+	// refreshes, reading whatever is cached. Handing it a name that already had the
+	// shortcut in it made it compose a second one on the next refresh, so a settings save
+	// during the model call left the button announcing "Stop LLM processing, SHIFT+ALT+U,
+	// SHIFT+ALT+U" (issue #309). The composition happens here and only here.
+	private void SetButtonAccessibleLabel(Button button, string label, string? hotkey = null)
 	{
 		_buttonAccessibleLabels.Set(button, label);
-		AutomationProperties.SetName(button, label);
+		AutomationProperties.SetName(button, HotkeyAccessibleText.ComposeName(label, hotkey));
 	}
 
 	private static void UpdateHotkeyText(TextBlock? hotkeyTextBlock, string? hotkey)
