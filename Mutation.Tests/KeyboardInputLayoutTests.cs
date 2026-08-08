@@ -96,4 +96,54 @@ public class KeyboardInputLayoutTests
 	{
 		Assert.Equal(0u, KeyboardInput.Send(Array.Empty<KeyboardInput.INPUT>()));
 	}
+
+	[Theory]
+	[InlineData((ushort)0x11)] // Ctrl
+	[InlineData((ushort)0x10)] // Shift
+	[InlineData((ushort)0x12)] // Alt
+	[InlineData((ushort)0x56)] // V
+	[InlineData((ushort)0x2E)] // Delete
+	[InlineData((ushort)0x24)] // Home
+	[InlineData((ushort)0x70)] // F1
+	public void KeyDown_CarriesTheScanCodeTheKeyboardWouldReport(ushort virtualKey)
+	{
+		// Issue #335. A chord injected with a scan code of zero carries no key position, and
+		// a screen reader or magnifier watching the keyboard through a low-level hook reads
+		// the position. It sees a key that is at no place on the keyboard, decides this is
+		// not its shortcut, and does nothing — while SendInput reports every event accepted,
+		// so nothing anywhere says the shortcut was ignored.
+		var input = KeyboardInput.KeyDown(virtualKey);
+
+		Assert.NotEqual(0, input.U.ki.wScan);
+		Assert.Equal(KeyboardInput.ScanCode(virtualKey), input.U.ki.wScan);
+	}
+
+	[Fact]
+	public void KeyUp_CarriesTheSameScanCodeAsItsKeyDown()
+	{
+		// A press and its release have to name the same physical key, or a watcher that
+		// pairs them by position never sees the release and holds the chord down.
+		const ushort delete = 0x2E;
+
+		Assert.Equal(KeyboardInput.KeyDown(delete).U.ki.wScan, KeyboardInput.KeyUp(delete).U.ki.wScan);
+	}
+
+	[Fact]
+	public void ExtendedKeys_KeepBothTheScanCodeAndTheExtendedFlag()
+	{
+		// Delete's scan code is the keypad period's; the extended flag is the only thing
+		// telling the two apart. Adding the scan code must not cost the flag.
+		var input = KeyboardInput.KeyDown(0x2E);
+
+		Assert.NotEqual(0, input.U.ki.wScan);
+		Assert.Equal(KeyboardInput.KeyEventExtendedKey, input.U.ki.dwFlags & KeyboardInput.KeyEventExtendedKey);
+	}
+
+	[Fact]
+	public void ScanCode_ForAKeyTheLayoutHasNoPositionFor_IsZeroRatherThanAThrow()
+	{
+		// There is no key for VK_PROCESSKEY. Zero is what the struct held before this was
+		// filled in at all, so an unmappable key is no worse off than it used to be.
+		Assert.Equal(0, KeyboardInput.ScanCode(0xE5));
+	}
 }

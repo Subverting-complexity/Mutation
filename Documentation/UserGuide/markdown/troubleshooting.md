@@ -261,7 +261,8 @@ The first is that dictation only sends it when the text was delivered. If you he
 failure beep, the shortcut is deliberately skipped — it is usually something that acts
 on the text, and running it when the text never landed would aim it at the wrong thing.
 OCR is different: it sends the shortcut either way, so a screen-reader command in that
-box reads out the error as readily as the result.
+box reads out the error as readily as the result. The one exception is a batch of
+documents you cancelled — nothing is copied then, so nothing is sent.
 
 The second is how the shortcut is written. Write it the ordinary way — modifier names
 joined with plus signs, like **Ctrl+V**, **Alt+F4** or **Ctrl+Shift+Delete**. Mutation

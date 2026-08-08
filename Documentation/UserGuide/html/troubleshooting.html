@@ -360,7 +360,8 @@ after OCR</strong> boxes in <strong>Settings</strong>. There are two reasons one
 failure beep, the shortcut is deliberately skipped — it is usually something that acts
 on the text, and running it when the text never landed would aim it at the wrong thing.
 OCR is different: it sends the shortcut either way, so a screen-reader command in that
-box reads out the error as readily as the result.</p>
+box reads out the error as readily as the result. The one exception is a batch of
+documents you cancelled — nothing is copied then, so nothing is sent.</p>
 <p>The second is how the shortcut is written. Write it the ordinary way — modifier names
 joined with plus signs, like <strong>Ctrl+V</strong>, <strong>Alt+F4</strong> or <strong>Ctrl+Shift+Delete</strong>. Mutation
 still understands the older shorthand some settings files hold, such as <code>^{DEL}</code> for

@@ -148,6 +148,9 @@ your choosing once the text is ready — handy for kicking off your screen reade
 automatically. It is sent whether the run found text or failed, so a screen-reader
 shortcut in that box reads out the error just as readily as the result.
 
+It now fires after a batch of documents too, not only after a screenshot or a clipboard
+image. It does not fire if you cancel a batch, since nothing is copied then.
+
 The rest of the options are covered in [The Settings window](settings.md).
 
 ## Where to next
