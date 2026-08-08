@@ -65,9 +65,11 @@ before — two beeps, then three, then four. A burst of end beeps part way throu
 dictation means Mutation is still working, and how many you hear tells you how far into
 its retries it has got.
 
-If the service is busy and asks Mutation to wait a moment before asking again, Mutation
-waits as long as it was asked to, up to a minute. So a gap between beeps that is longer
-than usual is the service setting the pace, not something going wrong.
+Some services answer a busy moment by telling Mutation how long to wait before asking
+again. When Mutation is told, it waits that long, up to a minute — so a gap between
+beeps that is longer than usual is the service setting the pace, not something going
+wrong. Deepgram does not tell Mutation, so its retries come at the usual short
+intervals.
 
 Not everything is worth another go. If the service turns the request down for a reason
 that will not change — your key was rejected, or the recording is bigger than it

@@ -240,6 +240,42 @@ public class HotkeyRouterControllerTests
 		Assert.False(first.IsDuplicate);
 	}
 
+	// ----- The rewrite notice surviving the refresh that follows it (issue #332) -----
+
+	[Fact]
+	public void RefreshRegistrations_LeavesTheNoticeFromTheCommitThatTriggeredItStanding()
+	{
+		// The real sequence when the user tabs out of a "From" box: the box commits and
+		// announces, and the controller then refreshes — which re-commits every row, including
+		// this one. That second pass finds nothing left to change, and an announcing one would
+		// take the notice back down again before it had been spoken.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V"));
+		entries.Add(entry);
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_DoesNotInventANoticeForRowsTheUserDidNotTouch()
+	{
+		// The bookkeeping commit runs over every row. A row loaded from a settings file that
+		// needs tidying up would otherwise announce itself the first time anything on the page
+		// changed.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var untouched = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+C", "Ctrl+V"));
+		entries.Add(untouched);
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Null(untouched.FromCommitAnnouncement);
+		Assert.Null(untouched.ToCommitAnnouncement);
+	}
+
 	// ----- Handing the check to an owner that sees more lists (issue #321) -----
 
 	[Fact]
