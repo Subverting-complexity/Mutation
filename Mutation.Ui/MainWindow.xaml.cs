@@ -1016,11 +1016,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.TopToBottomColumnAware);
-			PublishOcrResult(result);
-			if (result.Success)
-				ShowStatus("Screenshot & OCR", "Text captured from screenshot.", InfoBarSeverity.Success);
-			else
-				ShowStatus("Screenshot & OCR", result.Message, InfoBarSeverity.Error);
+			PublishOcrResult(result, "Screenshot & OCR", "Text captured from screenshot.");
 		}
 		catch (Exception ex)
 		{
@@ -1035,11 +1031,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.TakeScreenshotAndExtractTextAsync(OcrReadingOrder.LeftToRightTopToBottom);
-			PublishOcrResult(result);
-			if (result.Success)
-				ShowStatus("Screenshot & OCR (left-to-right)", "Text captured from screenshot using left-to-right reading order.", InfoBarSeverity.Success);
-			else
-				ShowStatus("Screenshot & OCR (left-to-right)", result.Message, InfoBarSeverity.Error);
+			PublishOcrResult(result, "Screenshot & OCR (left-to-right)", "Text captured from screenshot using left-to-right reading order.");
 		}
 		catch (Exception ex)
 		{
@@ -1054,11 +1046,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
-			PublishOcrResult(result);
-			if (result.Success)
-				ShowStatus("OCR", "Clipboard image converted to text.", InfoBarSeverity.Success);
-			else
-				ShowStatus("OCR", result.Message, InfoBarSeverity.Warning);
+			PublishOcrResult(result, "OCR", "Clipboard image converted to text.", InfoBarSeverity.Warning);
 		}
 		catch (Exception ex)
 		{
@@ -1431,11 +1419,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		{
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
-			PublishOcrResult(result);
-			if (result.Success)
-				ShowStatus("OCR (left-to-right)", "Clipboard image converted using left-to-right reading order.", InfoBarSeverity.Success);
-			else
-				ShowStatus("OCR (left-to-right)", result.Message, InfoBarSeverity.Warning);
+			PublishOcrResult(result, "OCR (left-to-right)", "Clipboard image converted using left-to-right reading order.", InfoBarSeverity.Warning);
 		}
 		catch (Exception ex)
 		{
@@ -3558,7 +3542,17 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// the shortcut with it after the text had already landed.
 	/// </para>
 	/// </summary>
-	private void PublishOcrResult(OcrResult result)
+	/// <param name="statusTitle">
+	/// The heading for this path's status line, or null for the four hotkey paths, which have
+	/// no status of their own: the shortcut runs, the reader reads the OCR box, and a status
+	/// would be one more thing between the user and the answer. A failed copy is said even
+	/// then, because it is the only way they would learn of it.
+	/// </param>
+	private void PublishOcrResult(
+		OcrResult result,
+		string? statusTitle = null,
+		string? successMessage = null,
+		InfoBarSeverity failureSeverity = InfoBarSeverity.Error)
 	{
 		SetOcrText(result.Message);
 
@@ -3567,8 +3561,22 @@ public sealed partial class MainWindow : Window, IDisposable
 				_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
 				PostOperationHotkey.OcrDelay(result.Success));
 
-		if (result.ClipboardCopyFailed)
-			ShowStatus("OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
+		// The clipboard warning outranks the success line, and says so here rather than being
+		// followed by it. The four button paths used to announce their own success afterwards,
+		// which would leave the user believing a copy that did not happen.
+		if (result.Success && result.ClipboardCopyFailed)
+		{
+			ShowStatus(statusTitle ?? "OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
+			return;
+		}
+
+		if (statusTitle is null)
+			return;
+
+		if (result.Success)
+			ShowStatus(statusTitle, successMessage ?? string.Empty, InfoBarSeverity.Success);
+		else
+			ShowStatus(statusTitle, result.Message, failureSeverity);
 	}
 
 	internal void SetOcrText(string message)
