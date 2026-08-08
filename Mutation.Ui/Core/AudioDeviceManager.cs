@@ -17,9 +17,11 @@ namespace Mutation.Ui;
 ///
 /// <c>_sync</c> guards the device fields and is only ever held for a field read or
 /// swap — never across a COM call. The UI thread takes it (the CaptureDeviceInfos,
-/// SelectedMicrophone and MicrophoneDeviceIndex properties, SelectMicrophoneById,
-/// GetEndpoint), so anything that can block on hardware must stay outside it or the
-/// window and the screen reader freeze with it.
+/// SelectedMicrophone and MicrophoneDeviceIndex properties, GetEndpoint), so anything
+/// that can block on hardware must stay outside it or the window and the screen reader
+/// freeze with it. SelectMicrophoneById runs on MicrophoneSwitchCoordinator's worker
+/// (issue #267) and obeys the same rule, because the properties it races are still
+/// read from the UI thread.
 ///
 /// <c>_comGate</c> serializes the operations that actually talk to the devices — the
 /// mute toggle, the level-endpoint refresh, and the hot-plug re-sync — so two of them
