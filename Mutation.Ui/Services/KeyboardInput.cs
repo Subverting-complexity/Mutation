@@ -107,6 +107,14 @@ internal static class KeyboardInput
 	/// <summary>MAPVK_VK_TO_VSC — a virtual key to the scan code of the key that carries it.</summary>
 	private const uint MapVkToScanCode = 0;
 
+	/// <summary>
+	/// MAPVK_VK_TO_VSC_EX — the same, with the prefix byte in the high byte: 0xE0 for an
+	/// extended key. Consulted only for the flag; the scan code itself still comes from
+	/// <see cref="MapVkToScanCode"/>, because the low byte of the two agrees everywhere the
+	/// extended one answers at all.
+	/// </summary>
+	private const uint MapVkToScanCodeEx = 4;
+
 	[DllImport("user32.dll")]
 	private static extern uint MapVirtualKey(uint code, uint mapType);
 
@@ -179,13 +187,35 @@ internal static class KeyboardInput
 	};
 
 	/// <summary>
-	/// The navigation cluster and the right-hand modifiers, which share their virtual-key
-	/// code with a numeric-keypad key and are told apart by this flag. Delete without it
-	/// arrives as the keypad's period.
+	/// Whether the key needs the 0xE0 prefix that tells it apart from the numeric-keypad key
+	/// sharing its scan code. Delete without it arrives as the keypad's full stop.
 	/// </summary>
+	/// <remarks>
+	/// Asked of Windows and of the list below, because neither knows all of it.
+	/// <para>
+	/// The list cannot be dropped: <c>MapVirtualKey</c> answers the navigation cluster with
+	/// the keypad's own scan code and no prefix — Delete is 0x0053, Home 0x0047 — because a
+	/// virtual key alone does not say which of the two keys was pressed. Believing it there
+	/// would put the full stop back.
+	/// </para>
+	/// <para>
+	/// And the list is not enough on its own: it was written by hand and had never been
+	/// checked against Windows. It was missing the context-menu key and the keypad's divide,
+	/// both of which the "send key after…" boxes accept by name, and it claimed right Shift
+	/// is extended when it is not — that one is scan 0x36 with no prefix, and prefixing it
+	/// produces the filler keystroke Windows emits around keypad sequences, which hooks throw
+	/// away (PR #339).
+	/// </para>
+	/// </remarks>
 	public static bool IsExtended(ushort virtualKey) =>
+		NamedExtendedKeys(virtualKey) || (MapVirtualKey(virtualKey, MapVkToScanCodeEx) & 0xFF00) == 0xE000;
+
+	/// <summary>
+	/// The keys Windows will not admit are extended, because their virtual key is shared with
+	/// a keypad key and it cannot tell which was meant.
+	/// </summary>
+	private static bool NamedExtendedKeys(ushort virtualKey) =>
 		virtualKey is 0x21 /*PGUP*/ or 0x22 /*PGDN*/ or 0x23 /*END*/ or 0x24 /*HOME*/
 			or 0x25 /*LEFT*/ or 0x26 /*UP*/ or 0x27 /*RIGHT*/ or 0x28 /*DOWN*/
-			or 0x2D /*INSERT*/ or 0x2E /*DELETE*/ or 0x5B /*LWIN*/ or 0x5C /*RWIN*/
-			or 0xA1 /*RSHIFT*/ or 0xA3 /*RCONTROL*/ or 0xA5 /*RMENU(ALT)*/;
+			or 0x2D /*INSERT*/ or 0x2E /*DELETE*/;
 }

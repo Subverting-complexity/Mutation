@@ -139,6 +139,47 @@ public class KeyboardInputLayoutTests
 		Assert.Equal(KeyboardInput.KeyEventExtendedKey, input.U.ki.dwFlags & KeyboardInput.KeyEventExtendedKey);
 	}
 
+	[Theory]
+	[InlineData((ushort)0x5B)] // Left Windows
+	[InlineData((ushort)0x5C)] // Right Windows
+	[InlineData((ushort)0xA3)] // Right Ctrl
+	[InlineData((ushort)0xA5)] // Right Alt
+	[InlineData((ushort)0x5D)] // Context menu
+	[InlineData((ushort)0x6F)] // Keypad divide
+	public void KeysWindowsCallsExtended_AreMarkedExtended(ushort virtualKey)
+	{
+		// The last two were missing from the hand-written list, and both are reachable by
+		// name from the "send key after…" boxes. Windows is asked as well as the list now.
+		Assert.True(KeyboardInput.IsExtended(virtualKey));
+	}
+
+	[Theory]
+	[InlineData((ushort)0xA1)] // Right Shift — scan 0x36, and genuinely not extended
+	[InlineData((ushort)0xA0)] // Left Shift
+	[InlineData((ushort)0xA2)] // Left Ctrl
+	[InlineData((ushort)0x90)] // Num Lock
+	[InlineData((ushort)0x56)] // V
+	public void KeysWindowsDoesNotCallExtended_AreNotMarkedExtended(ushort virtualKey)
+	{
+		// Right Shift was on the list and should never have been. Prefixing it produces the
+		// filler keystroke Windows emits around keypad sequences, which hooks discard.
+		Assert.False(KeyboardInput.IsExtended(virtualKey));
+	}
+
+	[Theory]
+	[InlineData((ushort)0x2E)] // Delete
+	[InlineData((ushort)0x24)] // Home
+	[InlineData((ushort)0x21)] // Page Up
+	[InlineData((ushort)0x25)] // Left
+	[InlineData((ushort)0x2D)] // Insert
+	public void TheNavigationCluster_StaysExtendedThoughWindowsWillNotSaySo(ushort virtualKey)
+	{
+		// MapVirtualKey answers these with the keypad's scan code and no prefix, because a
+		// virtual key alone does not say which of the twinned keys was pressed. Deferring to
+		// it here would turn Delete back into the keypad's full stop.
+		Assert.True(KeyboardInput.IsExtended(virtualKey));
+	}
+
 	[Fact]
 	public void ScanCode_ForAKeyTheLayoutHasNoPositionFor_IsZeroRatherThanAThrow()
 	{

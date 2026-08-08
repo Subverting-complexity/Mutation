@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Mutation.Tests;
 
@@ -30,32 +31,53 @@ public class PostOperationHotkeyCoverageTests
 	private const string Send = "SendHotkeyAfterDelay";
 
 	/// <summary>
-	/// How far after the result is published the send may sit. Wide enough for the status
-	/// branches an OCR handler ends with, narrow enough that a send belonging to the next
-	/// handler cannot be mistaken for this one's.
+	/// How far after a result is published the send may sit — enough for the status branches
+	/// an OCR handler ends with. A search is additionally stopped at the next publish, so a
+	/// send belonging to the following handler can never stand in for a missing one: the four
+	/// hotkey handlers sit about thirteen lines apart, well inside this.
 	/// </summary>
 	private const int WindowLines = 25;
 
+	/// <summary>
+	/// Resolved by the compiler from this file's own location, so it cannot drift when the
+	/// tests are run from a published or copied output directory.
+	/// </summary>
+	private static string MainWindowPath([CallerFilePath] string thisFile = "") =>
+		Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "Mutation.Ui", "MainWindow.xaml.cs");
+
 	private static string[] MainWindowSource()
 	{
-		string relative = Path.Combine("Mutation.Ui", "MainWindow.xaml.cs");
-
-		var directory = new DirectoryInfo(AppContext.BaseDirectory);
-		while (directory is not null && !File.Exists(Path.Combine(directory.FullName, relative)))
-			directory = directory.Parent;
-
-		Assert.True(directory is not null, $"{relative} not found above {AppContext.BaseDirectory}");
-		return File.ReadAllLines(Path.Combine(directory!.FullName, relative));
+		string path = Path.GetFullPath(MainWindowPath());
+		Assert.True(File.Exists(path), $"MainWindow.xaml.cs not found at {path}");
+		return File.ReadAllLines(path);
 	}
 
-	private static IEnumerable<int> LinesCalling(string[] source, string fragment) =>
+	private static List<int> LinesCalling(string[] source, Func<string, bool> matches) =>
 		source.Select((line, index) => (line, index))
-			.Where(entry => entry.line.Contains(fragment, StringComparison.Ordinal))
-			.Select(entry => entry.index);
+			.Where(entry => matches(entry.line))
+			.Select(entry => entry.index)
+			.ToList();
 
-	private static bool SendsWithin(string[] source, int from, string setting)
+	/// <summary>
+	/// Where an OCR result reaches the user: <c>SetOcrText</c> fills the OCR box and enables
+	/// the download button. Matched by call shape rather than by argument name, so a new
+	/// handler naming its result something else is still seen. The declaration is excluded.
+	/// </summary>
+	private static List<int> OcrPublishes(string[] source) =>
+		LinesCalling(source, line =>
+			line.Contains("SetOcrText(", StringComparison.Ordinal) &&
+			!line.Contains("void SetOcrText(", StringComparison.Ordinal));
+
+	/// <summary>
+	/// Where a transcript run is decided finished. All three delivery sites — dictation, an
+	/// LLM prompt run, and formatting — go through the planner.
+	/// </summary>
+	private static List<int> TranscriptPlans(string[] source) =>
+		LinesCalling(source, line => line.Contains("TranscriptCompletionPlanner.Plan(", StringComparison.Ordinal));
+
+	private static bool SendsWithin(string[] source, int from, int stopBefore, string setting)
 	{
-		int last = Math.Min(source.Length - 1, from + WindowLines);
+		int last = Math.Min(Math.Min(source.Length - 1, from + WindowLines), stopBefore - 1);
 		for (int i = from; i <= last; i++)
 		{
 			if (!source[i].Contains(Send, StringComparison.Ordinal))
@@ -71,23 +93,31 @@ public class PostOperationHotkeyCoverageTests
 		return false;
 	}
 
+	private static List<string> Unsent(string[] source, List<int> publishes, string setting)
+	{
+		var missing = new List<string>();
+		for (int n = 0; n < publishes.Count; n++)
+		{
+			int stopBefore = n + 1 < publishes.Count ? publishes[n + 1] : source.Length;
+			if (!SendsWithin(source, publishes[n], stopBefore, setting))
+				missing.Add($"MainWindow.xaml.cs:{publishes[n] + 1}: {source[publishes[n]].Trim()}");
+		}
+
+		return missing;
+	}
+
 	[Fact]
 	public void Every_OCR_result_shown_to_the_user_is_followed_by_the_configured_shortcut()
 	{
 		var source = MainWindowSource();
+		var publishes = OcrPublishes(source);
 
-		// SetOcrText is how an OCR result reaches the user: it fills the OCR box and enables
-		// the download button. Its own declaration is not a call, so it is excluded by the
-		// parenthesis-and-argument shape.
-		var publishes = LinesCalling(source, "SetOcrText(result.")
-			.ToList();
+		// Not an exact count: a tenth OCR handler that does send is a correct change and
+		// should not fail here. This only catches the search itself matching nothing after
+		// a rename, which would make the test pass by asking nothing.
+		Assert.NotEmpty(publishes);
 
-		Assert.Equal(9, publishes.Count);
-
-		var unsent = publishes
-			.Where(line => !SendsWithin(source, line, OcrSetting))
-			.Select(line => $"MainWindow.xaml.cs:{line + 1}: {source[line].Trim()}")
-			.ToList();
+		var unsent = Unsent(source, publishes, OcrSetting);
 
 		Assert.True(unsent.Count == 0,
 			"An OCR result is shown to the user with no configured shortcut sent after it:\n" +
@@ -98,17 +128,11 @@ public class PostOperationHotkeyCoverageTests
 	public void Every_transcript_delivery_is_followed_by_the_configured_shortcut()
 	{
 		var source = MainWindowSource();
+		var plans = TranscriptPlans(source);
 
-		// The planner is what decides a transcript run is finished, and all three delivery
-		// sites — dictation, an LLM prompt run, and formatting — go through it.
-		var plans = LinesCalling(source, "TranscriptCompletionPlanner.Plan(").ToList();
+		Assert.NotEmpty(plans);
 
-		Assert.Equal(3, plans.Count);
-
-		var unsent = plans
-			.Where(line => !SendsWithin(source, line, TranscriptionSetting))
-			.Select(line => $"MainWindow.xaml.cs:{line + 1}: {source[line].Trim()}")
-			.ToList();
+		var unsent = Unsent(source, plans, TranscriptionSetting);
 
 		Assert.True(unsent.Count == 0,
 			"A transcript is delivered with no configured shortcut sent after it:\n" +
@@ -119,17 +143,23 @@ public class PostOperationHotkeyCoverageTests
 	public void The_shortcut_is_sent_before_the_beep_and_the_status_that_can_throw()
 	{
 		var source = MainWindowSource();
+		var plans = TranscriptPlans(source);
+
+		Assert.NotEmpty(plans);
 
 		// Ordering, not presence. The send used to be the last statement of each block, after
 		// BeepPlayer.Play and ShowStatus — and ShowStatus builds an automation peer and starts
 		// a timer, the operation issue #234 was filed about throwing. A throw there took the
 		// shortcut with it, after the text had already reached the clipboard.
-		foreach (int plan in LinesCalling(source, "TranscriptCompletionPlanner.Plan("))
+		foreach (int plan in plans)
 		{
-			int send = Enumerable.Range(plan, Math.Min(WindowLines, source.Length - plan))
-				.First(i => source[i].Contains(Send, StringComparison.Ordinal));
-			int beep = Enumerable.Range(plan, Math.Min(WindowLines, source.Length - plan))
-				.First(i => source[i].Contains("BeepPlayer.Play(plan.Beep)", StringComparison.Ordinal));
+			var window = Enumerable.Range(plan, Math.Min(WindowLines, source.Length - plan)).ToList();
+			int send = window.FirstOrDefault(i => source[i].Contains(Send, StringComparison.Ordinal), -1);
+			int beep = window.FirstOrDefault(i => source[i].Contains("BeepPlayer.Play(plan.Beep)", StringComparison.Ordinal), -1);
+
+			Assert.True(send >= 0 && beep >= 0,
+				$"MainWindow.xaml.cs:{plan + 1}: expected both a send and a beep within " +
+				$"{WindowLines} lines of the plan, found send={send + 1} beep={beep + 1}.");
 
 			Assert.True(send < beep,
 				$"MainWindow.xaml.cs:{plan + 1}: the shortcut is sent after the beep and status, " +
