@@ -33,6 +33,30 @@ continue to implementation. Never stop to ask "Ready to implement?"
 Work on **one story at a time** in a **fresh session per story**.
 Complete it (PR created) or mark it blocked before starting the next.
 
+### Claim the story first
+
+**Before reading any code**, for every story you pick up:
+
+1. `gh issue edit <n> --add-assignee @me --add-label status-in-progress --remove-label status-ready`
+2. Move its card to **In Progress** on the board.
+
+Then start. Not after planning, not at PR time — first.
+
+**An assigned issue is taken.** Pick a different one, whatever the board
+column says. The Ready column is not a claim, and neither is a lifecycle
+label on its own.
+
+More than one session runs against this repo at once, and the board is the
+only thing they share. On 2026-08-08 three sessions each picked #332, #321
+and #316 out of Ready, built the same fixes, and raced to merge: two
+sessions' work was thrown away, and the issues went from `status-ready`
+straight to closed with no session ever having claimed them. Claiming costs
+one command. Not claiming cost most of a session, twice.
+
+This applies whether or not you invoke a workflow skill. Going straight from
+the board to the code is exactly the path that skips the claim — which is
+how it happened.
+
 ### Build Principles
 
 - One responsibility per file.
