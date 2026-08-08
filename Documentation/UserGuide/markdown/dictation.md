@@ -180,6 +180,9 @@ If the transcript could not be delivered — you hear the failure beep — the s
 not sent. It usually acts on the text, and sending it when nothing arrived would aim it
 at whatever was there before.
 
+It is sent after every way of finishing a transcript: dictating, running a prompt over
+one, and the **Format transcript** button, which used to be the one that stayed silent.
+
 Write the shortcut the ordinary way, like **Ctrl+V** or **Ctrl+Shift+Delete**. You can
 list more than one, separated by commas, and they are sent in turn.
 

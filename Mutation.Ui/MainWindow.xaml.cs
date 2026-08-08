@@ -1061,7 +1061,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.TopToBottomColumnAware);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, PostOperationHotkey.OcrDelay(result.Success));
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("OCR", "Clipboard image converted to text.", InfoBarSeverity.Success);
 			else
@@ -1147,6 +1147,15 @@ public sealed partial class MainWindow : Window, IDisposable
 
                         var result = await _ocrManager.ExtractTextFromFilesAsync(paths, OcrReadingOrder.TopToBottomColumnAware, run.Token, progress);
 			SetOcrText(result.Text);
+
+			// The one OCR path that never sent the configured shortcut, though it is the
+			// path where the user has waited longest and most wants to hear the answer.
+			// Sent here rather than after the branches below, and only once the run has
+			// reached a result: a cancelled batch never gets this far, so the shortcut is
+			// not aimed at whatever the OCR box still held from last time (issue #335).
+			HotkeyManager.SendHotkeyAfterDelay(
+				_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
+				PostOperationHotkey.OcrDelay(result.Success));
 
 			if (result.SuccessCount == 0)
 			{
@@ -1422,7 +1431,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			if (!await EnsureOcrConfiguredAsync()) return;
 			var result = await _ocrManager.ExtractTextFromClipboardImageAsync(OcrReadingOrder.LeftToRightTopToBottom);
 			SetOcrText(result.Message);
-			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation ?? string.Empty, PostOperationHotkey.OcrDelay(result.Success));
+			HotkeyManager.SendHotkeyAfterDelay(_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation, PostOperationHotkey.OcrDelay(result.Success));
 			if (result.Success)
 				ShowStatus("OCR (left-to-right)", "Clipboard image converted using left-to-right reading order.", InfoBarSeverity.Success);
 			else
@@ -2365,17 +2374,25 @@ public sealed partial class MainWindow : Window, IDisposable
 		TxtFormatTranscript.Text = formatted;
 		bool copied = await _clipboard.TrySetTextAsync(formatted);
 		var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
-		string? failure = TranscriptDeliveryMessages.Failure(copied, outcome, "formatted transcript");
-		if (failure is null)
-		{
-			BeepPlayer.Play(BeepType.Success);
-			ShowStatus("Formatting", "Transcript formatted and copied.", InfoBarSeverity.Success);
-		}
-		else
-		{
-			BeepPlayer.Play(BeepType.Failure);
-			ShowStatus("Formatting", failure, InfoBarSeverity.Error);
-		}
+
+		// Through the planner like the other two delivery sites. This one kept its own
+		// copy of the beep-and-message half and had no idea the shortcut was the third
+		// part of the same decision, so formatting a transcript delivered the text and
+		// then did nothing the user had asked for afterwards (issue #335).
+		var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "formatted transcript");
+
+		// Before the beep and the status, either of which can throw — a status builds an
+		// automation peer and starts a timer (issue #234). The text has already landed by
+		// this point, so the shortcut that acts on it should not be the thing that is lost.
+		if (plan.SendConfiguredHotkey)
+			HotkeyManager.SendHotkeyAfterDelay(
+				_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
+				PostOperationHotkey.SuccessDelayMs);
+
+		BeepPlayer.Play(plan.Beep);
+		ShowStatus("Formatting",
+			plan.FailureMessage ?? "Transcript formatted and copied.",
+			plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
 	}
 
 	public async void BtnProcessLlm_Click(object? sender, RoutedEventArgs? e)
@@ -2501,17 +2518,21 @@ public sealed partial class MainWindow : Window, IDisposable
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
 
+			// Ahead of the beep and the status rather than after them. Both can throw —
+			// ShowStatus builds an automation peer and starts a timer, which is what
+			// issue #234 was about — and the catch below would then swallow the shortcut
+			// as well, after the text had already been delivered (issue #335).
+			if (plan.SendConfiguredHotkey)
+				HotkeyManager.SendHotkeyAfterDelay(
+					_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
+					PostOperationHotkey.SuccessDelayMs);
+
 			BeepPlayer.Play(plan.Beep);
 			ShowStatus("Processing",
 				FastModeMessages.AppendTo(
 					plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
 					fastModeNotice),
 				plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
-
-			if (plan.SendConfiguredHotkey)
-				HotkeyManager.SendHotkeyAfterDelay(
-					_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
-					PostOperationHotkey.SuccessDelayMs);
         }
         catch (OperationCanceledException) when (_isClosing || _shutdownCts.IsCancellationRequested)
         {
@@ -2786,15 +2807,19 @@ public sealed partial class MainWindow : Window, IDisposable
 				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
 				var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "transcript");
 
-				BeepPlayer.Play(plan.Beep);
-				ShowStatus("Speech to Text",
-					FastModeMessages.AppendTo(plan.FailureMessage ?? successMessage, fastModeNotice),
-					plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
-
+				// Ahead of the beep and the status rather than after them. A throw from
+				// either lands in onFailure below, which announces that the delivery went
+				// wrong — but the transcript is on the clipboard and already pasted by
+				// then, and the user's shortcut would have been lost with it (issue #335).
 				if (plan.SendConfiguredHotkey)
 					HotkeyManager.SendHotkeyAfterDelay(
 						_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
 						PostOperationHotkey.SuccessDelayMs);
+
+				BeepPlayer.Play(plan.Beep);
+				ShowStatus("Speech to Text",
+					FastModeMessages.AppendTo(plan.FailureMessage ?? successMessage, fastModeNotice),
+					plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
 			},
 			onFailure: ex =>
 			{

@@ -20,6 +20,16 @@ namespace Mutation.Ui.Services;
 /// pasted into another window was announced as a failure it had not had, and the
 /// shortcut configured to run afterwards was skipped along with it.
 /// </para>
+/// <para>
+/// The contents matter for the same reason the size does. A key press describes both
+/// what the key means (the virtual key) and where it is (the scan code), and this sent
+/// only the first. Ordinary applications read the meaning and were content; screen
+/// readers and magnifiers watch the keyboard through a low-level hook and read the
+/// position, so a shortcut arriving from nowhere on the keyboard was not the shortcut
+/// they were waiting for and they let it pass. Once PR #328 made SendInput work, that
+/// became the whole of the "send this shortcut afterwards" feature failing — quietly,
+/// because Windows accepted every event (issue #335).
+/// </para>
 /// </summary>
 internal static class KeyboardInput
 {
@@ -94,6 +104,12 @@ internal static class KeyboardInput
 	[DllImport("user32.dll", SetLastError = true)]
 	private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+	/// <summary>MAPVK_VK_TO_VSC — a virtual key to the scan code of the key that carries it.</summary>
+	private const uint MapVkToScanCode = 0;
+
+	[DllImport("user32.dll")]
+	private static extern uint MapVirtualKey(uint code, uint mapType);
+
 	/// <summary>
 	/// Submits <paramref name="inputs"/> and reports how many Windows accepted. Fewer than
 	/// were submitted means the foreground application refused them — usually because it
@@ -117,6 +133,13 @@ internal static class KeyboardInput
 
 	public static INPUT UnicodeUp(char character) => Unicode(character, KeyEventUnicode | KeyEventKeyUp);
 
+	/// <summary>
+	/// The scan code the keyboard itself would report for <paramref name="virtualKey"/> —
+	/// what the key's physical position is, as opposed to what it means. Zero when the
+	/// current layout has no position for it.
+	/// </summary>
+	public static ushort ScanCode(ushort virtualKey) => (ushort)MapVirtualKey(virtualKey, MapVkToScanCode);
+
 	private static INPUT Key(ushort virtualKey, uint flags) => new()
 	{
 		type = InputKeyboard,
@@ -125,7 +148,13 @@ internal static class KeyboardInput
 			ki = new KEYBDINPUT
 			{
 				wVk = virtualKey,
-				wScan = 0,
+				// Filled, not left at zero. A real key press carries both the virtual key
+				// and the position it came from, and anything reading the keyboard through
+				// a low-level hook — screen readers and magnifiers above all — is entitled
+				// to look at the position. A chord injected with a scan code of zero is
+				// simply not the shortcut they are watching for, so it is discarded without
+				// a word, while SendInput reports every event accepted (issue #335).
+				wScan = ScanCode(virtualKey),
 				dwFlags = flags,
 				time = 0,
 				dwExtraInfo = IntPtr.Zero,
