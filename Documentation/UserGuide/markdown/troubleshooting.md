@@ -171,10 +171,34 @@ This is not a failed reading. The text is there, in the **OCR result** box on th
 **Visual Capture** card, and any shortcut you set to run afterwards still fires, so a
 screen reader can read it out of the box as usual.
 
+Mutation does not paste it for you this time, though. Pasting takes the text off the
+clipboard, and the clipboard is exactly what did not get it — you would end up with
+whatever was there before, most likely the screenshot.
+
 **What to do.** Copy the text out of the **OCR result** box, or press the OCR shortcut
 again — the second attempt almost always gets in. If it happens every time, a clipboard
 manager or clipboard-history tool is the usual culprit; closing it or turning off its
 monitoring settles it.
+
+### OCR text isn't landing in the app I'm working in
+
+**What's happening.** Mutation normally pastes the recognised text where your cursor
+was. There are four reasons it would not.
+
+- The **Paste OCR text into the active app** setting is switched off. It lives under
+  **Screen capture & OCR** in **Settings** (**Ctrl+Comma**), and is on by default.
+- You started the reading with a button in the Mutation window instead of a shortcut.
+  The app you were working in is then Mutation, so there is nowhere else to paste. Use
+  the shortcut — **Shift+Alt+J** and friends — from the app you want the text in.
+- The reading found no text, or its text never reached the clipboard. Both are covered
+  by their own entries above.
+- It was a batch of documents. Those are always started from the Mutation window, so
+  the point above applies.
+
+**What to do.** Check the setting first. If it is on and you used a shortcut, your
+text is still on the clipboard and in the **OCR result** box — paste it with
+**Ctrl+V**, and see [A shortcut does nothing](#a-shortcut-does-nothing) if keystrokes
+Mutation sends never seem to arrive.
 
 ### OCR skipped a file for being too large
 
@@ -251,8 +275,9 @@ window."
 1. Your text is not lost. Open the main window and copy it from there.
 2. Clipboard manager tools and remote-desktop sessions are the usual culprits. Closing
    or pausing one often fixes it for good.
-3. If you rely on the text landing in another app automatically, set the "send keys
-   after" option to **Ctrl+V** so Mutation pastes for you once the copy succeeds.
+3. If you rely on the text landing in another app automatically, check **Insert
+   preference** under **Interface** in **Settings**. Set to *Paste into 3rd party
+   application*, Mutation pastes for you whenever the copy succeeds.
 
 ### Mutation says it could not send the text to the other app
 

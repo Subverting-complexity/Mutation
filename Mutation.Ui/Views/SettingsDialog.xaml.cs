@@ -87,7 +87,7 @@ public sealed partial class SettingsDialog : ContentDialog
 		_allCategories.Add(new SettingsCategoryItem("audio", "Audio", "Microphone capture, mute hotkey, beeps.", "",
 			new[] { "audio", "microphone", "capture", "mute", "beep", "visualization" }));
 		_allCategories.Add(new SettingsCategoryItem("ocr", "Screen capture & OCR", "Screenshot automation, OCR, Azure vision.", "",
-			new[] { "ocr", "azure", "screenshot", "vision", "endpoint", "free tier" }));
+			new[] { "ocr", "azure", "screenshot", "vision", "endpoint", "free tier", "paste" }));
 		_allCategories.Add(new SettingsCategoryItem("speech", "Speech to Text", "Transcription providers and recording behavior.", "",
 			new[] { "speech", "stt", "whisper", "deepgram", "transcription", "temp directory", "timeout" }));
 		_allCategories.Add(new SettingsCategoryItem("apikeys", "API keys", "Central provider keys: OpenAI, Anthropic, Deepgram.", "",

@@ -34,6 +34,7 @@ internal static class SettingsDefaults
 		public const int MaxParallelRequestsLimit = 20;
 		public const long MaxDocumentBytes = 10L * 1024 * 1024;
 		public const int MaxDocumentSizeMbUiMax = 500;
+		public const bool PasteOcrTextIntoActiveApplication = true;
 	}
 
 	public static class Speech

@@ -39,4 +39,33 @@ internal static class PostOperationHotkey
 	/// </para>
 	/// </summary>
 	public static bool ShouldSendAfterOcr(OcrRunOutcome outcome) => outcome != OcrRunOutcome.Refused;
+
+	/// <summary>The chord that pastes, spelled the way <c>Hotkey.Parse</c> reads it.</summary>
+	/// <remarks>
+	/// "Ctrl+V", not "^v": the parser has no caret syntax, so the shorthand would throw and drop
+	/// the whole sequence to the WinForms fallback, which cannot say whether it was delivered.
+	/// </remarks>
+	public const string PasteChord = "Ctrl+V";
+
+	/// <summary>
+	/// Everything an OCR run sends to the other window, in order: the paste, when the user has
+	/// asked for the recognised text to land in the app they were working in, then whatever they
+	/// configured to run afterwards. Null when there is nothing to send.
+	/// <para>
+	/// One comma-separated string rather than two sends, because the order is the whole point.
+	/// The shortcut people put in "Send hotkey after OCR" is usually a screen-reader command
+	/// aimed at the result, and a command that reads before the paste arrives reads the wrong
+	/// thing. A single sequence is delivered chord by chord in order by <c>SendHotkey</c>, so
+	/// the two cannot race.
+	/// </para>
+	/// </summary>
+	public static string? AfterOcr(bool paste, string? configured)
+	{
+		string? trimmed = string.IsNullOrWhiteSpace(configured) ? null : configured.Trim();
+
+		if (!paste)
+			return trimmed;
+
+		return trimmed is null ? PasteChord : $"{PasteChord}, {trimmed}";
+	}
 }

@@ -47,4 +47,52 @@ public class PostOperationHotkeyTests
 		// the one being fixed — see the test above on the failure delay.
 		Assert.True(PostOperationHotkey.ShouldSendAfterOcr(OcrRunOutcome.Answered));
 	}
+
+	[Fact]
+	public void ThePasteComesBeforeTheConfiguredShortcut()
+	{
+		// The whole reason the two travel as one sequence. The shortcut people put in "Send
+		// hotkey after OCR" is usually a screen-reader command aimed at the result, and a read
+		// that happens before the paste reads whatever was there before (issue #355).
+		Assert.Equal("Ctrl+V, ^{DEL}", PostOperationHotkey.AfterOcr(true, "^{DEL}"));
+	}
+
+	[Fact]
+	public void PastingIsAllTheresIsToSendWhenNoShortcutIsConfigured()
+	{
+		Assert.Equal("Ctrl+V", PostOperationHotkey.AfterOcr(true, null));
+		Assert.Equal("Ctrl+V", PostOperationHotkey.AfterOcr(true, "   "));
+	}
+
+	[Fact]
+	public void NotPastingLeavesTheConfiguredShortcutExactlyAsItWas()
+	{
+		Assert.Equal("^{DEL}", PostOperationHotkey.AfterOcr(false, "^{DEL}"));
+		Assert.Equal("Ctrl+C, Ctrl+V", PostOperationHotkey.AfterOcr(false, "Ctrl+C, Ctrl+V"));
+	}
+
+	[Fact]
+	public void NothingToPasteAndNothingConfiguredSendsNothing()
+	{
+		// Null rather than an empty string: SendHotkeyAfterDelay reads null as "no send", and
+		// an empty chord would otherwise reach the parser.
+		Assert.Null(PostOperationHotkey.AfterOcr(false, null));
+		Assert.Null(PostOperationHotkey.AfterOcr(false, ""));
+	}
+
+	[Fact]
+	public void ASurroundingSpaceInTheConfiguredValueDoesNotBecomeAnEmptyChord()
+	{
+		// The sequence is split on commas, so a stray space either side of the join would be
+		// harmless — but a value stored as " " must not turn into "Ctrl+V, " and read as two.
+		Assert.Equal("Ctrl+V, ^{DEL}", PostOperationHotkey.AfterOcr(true, "  ^{DEL}  "));
+	}
+
+	[Fact]
+	public void ThePasteChordIsSpelledTheWayTheParserReadsIt()
+	{
+		// "^v" would throw in Hotkey.Parse and drop the whole sequence — the configured
+		// shortcut included — to the WinForms fallback, which cannot confirm delivery (#232).
+		Assert.Equal("Ctrl+V", PostOperationHotkey.PasteChord);
+	}
 }

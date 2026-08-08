@@ -269,6 +269,12 @@ labels this one <strong>(L→R)</strong>. Choose it for tables, spreadsheets, fo
 <p>In all four OCR cases the text lands on your clipboard, ready to paste, and also
 appears in the <strong>OCR result</strong> box at the bottom of the card so you can read it in
 place.</p>
+<p>Mutation also pastes it for you. Say you are writing an email, press <strong>Shift+Alt+J</strong>,
+and pick a rectangle off a web page: a moment later that text is sitting in your email,
+where the cursor was. You did not have to switch to Mutation or press <strong>Ctrl+V</strong>.</p>
+<p>This is the <strong>Paste OCR text into the active app</strong> setting, and it starts switched on.
+Turn it off if you would rather paste it yourself — see
+<a href="#a-few-settings-worth-knowing">A few settings worth knowing</a> below.</p>
 <p>You can follow all of this by ear.</p>
 <p>With <strong>Screenshot &amp; OCR</strong>, the start beep says the overlay is ready for you to pick a
 rectangle. The end beep says your picture has been captured and sent off to be read.</p>
@@ -318,11 +324,21 @@ you turn <strong>Use free tier</strong> off.</li>
 <li><strong>Max document size (MB)</strong> — any file or page bigger than this is skipped instead of
 being uploaded, so you never accidentally send something enormous. Set it to 0 to
 remove the limit.</li>
+<li><strong>Paste OCR text into the active app</strong> — on by default. Puts the text straight into
+whatever you were working in when the reading finishes. Switch it off and the text
+still goes to your clipboard and the <strong>OCR result</strong> box; you just paste it yourself.</li>
 </ul>
+<p>Mutation holds the paste back when there is nothing worth pasting: a reading that found
+no text, and a reading whose text could not reach the clipboard. It also holds back when
+you started the job from a button in the Mutation window rather than by shortcut, since
+&quot;the app you were working in&quot; is Mutation itself. That is why a batch of documents is
+copied but not pasted.</p>
 <p>There is also an optional <strong>Send hotkey after OCR</strong> setting, which fires a keystroke of
 your choosing once the text is ready — handy for kicking off your screen reader
 automatically. It is sent whether the run found text or failed, so a screen-reader
 shortcut in that box reads out the error just as readily as the result.</p>
+<p>It always comes after the paste, never before, so a screen-reader shortcut in that box
+reads the text that has just arrived rather than whatever was there a moment earlier.</p>
 <p>It is sent after a batch of documents as well, not only after a screenshot or a
 clipboard image. It is not sent if you cancel a batch, since nothing is copied then.</p>
 <p>Two more times it holds back rather than firing:</p>

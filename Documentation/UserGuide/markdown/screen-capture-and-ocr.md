@@ -83,6 +83,14 @@ In all four OCR cases the text lands on your clipboard, ready to paste, and also
 appears in the **OCR result** box at the bottom of the card so you can read it in
 place.
 
+Mutation also pastes it for you. Say you are writing an email, press **Shift+Alt+J**,
+and pick a rectangle off a web page: a moment later that text is sitting in your email,
+where the cursor was. You did not have to switch to Mutation or press **Ctrl+V**.
+
+This is the **Paste OCR text into the active app** setting, and it starts switched on.
+Turn it off if you would rather paste it yourself — see
+[A few settings worth knowing](#a-few-settings-worth-knowing) below.
+
 You can follow all of this by ear.
 
 With **Screenshot & OCR**, the start beep says the overlay is ready for you to pick a
@@ -149,11 +157,23 @@ These live under **Screen capture & OCR** in **Settings** (**Ctrl+Comma**).
 - **Max document size (MB)** — any file or page bigger than this is skipped instead of
   being uploaded, so you never accidentally send something enormous. Set it to 0 to
   remove the limit.
+- **Paste OCR text into the active app** — on by default. Puts the text straight into
+  whatever you were working in when the reading finishes. Switch it off and the text
+  still goes to your clipboard and the **OCR result** box; you just paste it yourself.
+
+Mutation holds the paste back when there is nothing worth pasting: a reading that found
+no text, and a reading whose text could not reach the clipboard. It also holds back when
+you started the job from a button in the Mutation window rather than by shortcut, since
+"the app you were working in" is Mutation itself. That is why a batch of documents is
+copied but not pasted.
 
 There is also an optional **Send hotkey after OCR** setting, which fires a keystroke of
 your choosing once the text is ready — handy for kicking off your screen reader
 automatically. It is sent whether the run found text or failed, so a screen-reader
 shortcut in that box reads out the error just as readily as the result.
+
+It always comes after the paste, never before, so a screen-reader shortcut in that box
+reads the text that has just arrived rather than whatever was there a moment earlier.
 
 It is sent after a batch of documents as well, not only after a screenshot or a
 clipboard image. It is not sent if you cancel a batch, since nothing is copied then.

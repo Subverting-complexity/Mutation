@@ -1134,8 +1134,15 @@ public sealed partial class MainWindow : Window, IDisposable
 			// Sent here rather than after the branches below, and only once the run has
 			// reached a result: a cancelled batch never gets this far, so the shortcut is
 			// not aimed at whatever the OCR box still held from last time (issue #335).
+			//
+			// The paste asks the same question the other eight paths ask and normally
+			// answers no here, because a batch is started from a picker in this window and
+			// this window still has the keyboard when it ends. That is the answer worth
+			// having: forty pages arriving in whatever control happens to be focused is not
+			// what the setting is for.
+			bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed);
 			HotkeyManager.SendHotkeyAfterDelay(
-				_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
+				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
 				PostOperationHotkey.OcrDelay(result.Success));
 
 			if (result.SuccessCount == 0)
@@ -3452,13 +3459,8 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (string.IsNullOrWhiteSpace(text))
 			return TranscriptDeliveryOutcome.Delivered;
 
-		var windowHandle = WindowNative.GetWindowHandle(this);
-		if (windowHandle != IntPtr.Zero)
-		{
-			var foregroundWindow = GetForegroundWindow();
-			if (foregroundWindow == windowHandle)
-				return TranscriptDeliveryOutcome.Delivered;
-		}
+		if (IsThisWindowInForeground())
+			return TranscriptDeliveryOutcome.Delivered;
 
 		switch (_insertOption)
 		{
@@ -3556,9 +3558,10 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		SetOcrText(result.Message);
 
+		bool paste = ShouldPasteOcrText(result.Success, result.ClipboardCopyFailed);
 		if (PostOperationHotkey.ShouldSendAfterOcr(result.Outcome))
 			HotkeyManager.SendHotkeyAfterDelay(
-				_settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
+				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
 				PostOperationHotkey.OcrDelay(result.Success));
 
 		// The clipboard warning outranks the success line, and says so here rather than being
@@ -3577,6 +3580,35 @@ public sealed partial class MainWindow : Window, IDisposable
 			ShowStatus(statusTitle, successMessage ?? string.Empty, InfoBarSeverity.Success);
 		else
 			ShowStatus(statusTitle, result.Message, failureSeverity);
+	}
+
+	/// <summary>
+	/// Whether an OCR run should paste its text into the application the user was working in
+	/// before the shortcut configured to run afterwards.
+	/// <para>
+	/// Three ways the answer is no even when the setting is on, and all three are about there
+	/// being nothing worth pasting. A run that recognised nothing has no text; a run whose copy
+	/// failed left the clipboard holding whatever was there before — on the screenshot paths,
+	/// the screenshot itself (issue #341); and a run finished while this window still has the
+	/// keyboard was started from a button here, so the paste would land in Mutation rather than
+	/// anywhere the user meant.
+	/// </para>
+	/// </summary>
+	private bool ShouldPasteOcrText(bool success, bool clipboardCopyFailed) =>
+		_settings.AzureComputerVisionSettings?.PasteOcrTextIntoActiveApplication == true
+		&& success
+		&& !clipboardCopyFailed
+		&& !IsThisWindowInForeground();
+
+	/// <summary>
+	/// True when Mutation's own window has the keyboard, so injected keystrokes aimed at "the
+	/// active application" would land back here. Treated as false when the handle cannot be
+	/// read: the delivery paths would rather try and fail visibly than silently do nothing.
+	/// </summary>
+	private bool IsThisWindowInForeground()
+	{
+		var windowHandle = WindowNative.GetWindowHandle(this);
+		return windowHandle != IntPtr.Zero && GetForegroundWindow() == windowHandle;
 	}
 
 	internal void SetOcrText(string message)

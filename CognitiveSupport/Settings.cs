@@ -126,6 +126,13 @@ public class AzureComputerVisionSettings
 	// If this is not null, this hotkey will be sent to the system after an OCR operation completes.
 	public string? SendHotkeyAfterOcrOperation { get; set; }
 
+	// Pastes the recognised text into whatever application had the keyboard, the way the
+	// dictation "Paste into 3rd party application" preference does. Sent just before
+	// SendHotkeyAfterOcrOperation, so a screen-reader command configured there reads the
+	// text where it landed. On by default; a settings file written before this existed has
+	// no such key, and keeping the initializer is what turns it on for those files too.
+	public bool PasteOcrTextIntoActiveApplication { get; set; } = true;
+
 	public string? ApiKey { get; set; }
 	public string? Endpoint { get; set; }
 	public int TimeoutSeconds { get; set; } = 10;

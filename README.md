@@ -25,7 +25,8 @@ Mutation supports two OCR reading orders via Azure **Computer Vision**:
 | `ScreenshotOcrHotKey` | Take a screenshot and OCR it with **Natural** layout in one step. |
 | `OcrLeftToRightTopToBottomHotKey` | OCR the clipboard image with **Basic** layout. |
 | `ScreenshotLeftToRightTopToBottomOcrHotKey` | Take a screenshot and OCR it with **Basic** layout in one step. |
-| `SendHotkeyAfterOcrOperation` | Sends a specified hotkey after OCR completes (e.g., to trigger screen reader). |
+| `PasteOcrTextIntoActiveApplication` | Pastes the recognised text into the app that had the keyboard when OCR finishes. On by default; the text is copied to the clipboard either way. |
+| `SendHotkeyAfterOcrOperation` | Sends a specified hotkey after OCR completes (e.g., to trigger screen reader). Sent after the paste above, so a reader command reads what landed. |
 
 **Selecting the region with the keyboard:**
 
@@ -198,6 +199,7 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "OcrLeftToRightTopToBottomHotKey": "Ctrl+Shift+L",
     "ScreenshotLeftToRightTopToBottomOcrHotKey": "Ctrl+Shift+K",
     "SendHotkeyAfterOcrOperation": "Ctrl+Alt+C",
+    "PasteOcrTextIntoActiveApplication": true,
     "InvertScreenshot": false,
     "UseFreeTier": true,
     "FreeTierPageLimit": 2,

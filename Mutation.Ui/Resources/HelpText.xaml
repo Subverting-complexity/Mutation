@@ -17,7 +17,8 @@
 	<x:String x:Key="Help.Ocr.UseFreeTier">Use the free OCR tier, which limits how many pages each document can contain.</x:String>
 	<x:String x:Key="Help.Ocr.InvertScreenshot">Invert image colors before OCR to improve accuracy on light text over a dark background.</x:String>
 	<x:String x:Key="Help.Ocr.MaxDocumentSize">Maximum size of a file or page sent for OCR. Larger files are skipped before upload to avoid unexpectedly large uploads. Set to 0 for no limit.</x:String>
-	<x:String x:Key="Help.Ocr.SendHotkeyAfter">Optional keystrokes sent to the active app after OCR text is delivered, for example CTRL+V to paste.</x:String>
+	<x:String x:Key="Help.Ocr.PasteIntoActiveApp">Paste the recognised text into whatever app you were working in, as soon as OCR finishes. The text is always copied to the clipboard; this decides whether Mutation also pastes it for you.</x:String>
+	<x:String x:Key="Help.Ocr.SendHotkeyAfter">Optional keystrokes sent to the active app once the OCR text has been delivered, for example a screen reader command that reads it back.</x:String>
 
 	<!-- Interface -->
 	<x:String x:Key="Help.Interface.MaxVisibleLines">Caps the height of the transcript and OCR text boxes on the main window.</x:String>
