@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -217,9 +216,11 @@ public sealed partial class HotkeyEditor : UserControl
 
 	private void Commit()
 	{
+		// SendKeys syntax is not a chord, so it is kept exactly as typed. Anything else goes
+		// through the one canonical spelling the app uses everywhere (issue #323).
 		string committed = AllowSendKeysSyntax
 			? (HotkeyTextBox.Text ?? string.Empty).Trim()
-			: Normalize(HotkeyTextBox.Text);
+			: Mutation.Ui.Services.Hotkey.Canonicalize(HotkeyTextBox.Text);
 
 		if (!string.Equals(committed, HotkeyTextBox.Text, StringComparison.Ordinal))
 		{
@@ -232,19 +233,6 @@ public sealed partial class HotkeyEditor : UserControl
 			Hotkey = committed;
 
 		HotkeyCommitted?.Invoke(this, committed);
-	}
-
-	private static string Normalize(string? value)
-	{
-		if (string.IsNullOrWhiteSpace(value))
-			return string.Empty;
-
-		var parts = value.Split(Mutation.Ui.Services.Hotkey.TokenSeparators,
-			StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		var normalized = new List<string>(parts.Length);
-		foreach (var p in parts)
-			normalized.Add(p.ToUpperInvariant());
-		return string.Join('+', normalized);
 	}
 
 	private static VirtualKeyModifiers GetCurrentModifiers()
