@@ -97,6 +97,13 @@ public class HotkeyButtonLabelCacheTests
 	// the shortcut composed into it. The next hotkey-only refresh read it back and composed
 	// a second one — "Stop LLM processing, SHIFT+ALT+U, SHIFT+ALT+U" — which is the stale-
 	// name class of defect #214 established the cache to prevent.
+	//
+	// This states the contract; it cannot enforce it. The caller lives in MainWindow and
+	// needs a XAML tree, so nothing here would catch a call site that started pre-composing
+	// again. What prevents that is structural: MainWindow.SetButtonAccessibleLabel is now
+	// the only place a hotkey is composed into a name, and it takes the label and the
+	// hotkey separately. If a second composition site ever appears, this test is the note
+	// explaining why it must not.
 	[Fact]
 	public void AStateLabelIsStoredBare_SoARefreshComposesTheHotkeyExactlyOnce()
 	{
