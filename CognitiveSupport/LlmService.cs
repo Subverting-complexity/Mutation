@@ -11,16 +11,29 @@ public class LlmService : ILlmService
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
 	private readonly ResiliencePipeline _retryPipeline;
+	private readonly TimeProvider _timeProvider;
 
 	/// <param name="transport">
 	/// Test seam only; null in production. See <see cref="OpenAiClientOptionsFactory.Create"/>.
+	/// </param>
+	/// <param name="sdkRetryCount">
+	/// Test seam only; null in production. Turns the OpenAI SDK's own retries down (0 off)
+	/// so the retries a test counts are the ones this class runs, not the SDK's underneath
+	/// them. See <see cref="OpenAiClientOptionsFactory.Create"/>.
+	/// </param>
+	/// <param name="timeProvider">
+	/// Test seam only; null in production. Drives both the retry backoff and each
+	/// attempt's deadline, so a test can read back the waits that were armed instead of
+	/// sitting through them.
 	/// </param>
 	public LlmService(
 		string apiKey,
 		IEnumerable<LlmModelConfig> models,
 		int timeoutSeconds = 60,
 		int retryCount = 3,
-		PipelineTransport? transport = null)
+		PipelineTransport? transport = null,
+		int? sdkRetryCount = null,
+		TimeProvider? timeProvider = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 
@@ -29,6 +42,7 @@ public class LlmService : ILlmService
 		_chatClients = new Dictionary<string, ChatClient>(LlmModelIndex.NameComparer);
 		_modelConfigs = new Dictionary<string, LlmModelConfig>(LlmModelIndex.NameComparer);
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
+		_timeProvider = timeProvider ?? TimeProvider.System;
 
 		// The OpenAI SDK reports API errors as ClientResultException; only transient
 		// statuses (429, 5xx, connection failures) are retried, so a permanent 4xx such as
@@ -36,7 +50,8 @@ public class LlmService : ILlmService
 		_retryPipeline = TransientRetry.Pipeline(
 			retryCount,
 			TransientRetry.Transient()
-				.Handle<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status)));
+				.Handle<ClientResultException>(ex => LlmHttpStatus.IsTransient(ex.Status)),
+			timeProvider);
 
 		foreach (var model in modelList)
 		{
@@ -45,7 +60,7 @@ public class LlmService : ILlmService
 			_chatClients[model.Name] = new ChatClient(
 				model.Name,
 				new ApiKeyCredential(apiKey),
-				OpenAiClientOptionsFactory.Create(transport: transport));
+				OpenAiClientOptionsFactory.Create(transport: transport, maxRetries: sdkRetryCount));
 			_modelConfigs[model.Name] = model;
 		}
 	}
@@ -87,7 +102,7 @@ public class LlmService : ILlmService
 			return await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 			{
 				int timeout = _timeoutSeconds * attempt;
-				using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+				using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout), _timeProvider);
 				using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 				return await client.CompleteChatAsync(openAiMessages, options, linkedCts.Token).ConfigureAwait(false);
 			}, cancellationToken).ConfigureAwait(false);

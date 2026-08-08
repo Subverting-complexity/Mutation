@@ -423,42 +423,44 @@ public class OcrServiceTests
 		Assert.Throws<ArgumentNullException>(() => new OcrService("key", null, 10));
 	}
 
-	private static CancellationTokenSource CreatePerRequestCts(OcrService service, CancellationToken overallToken)
+	private static CancellationTokenSource CreatePerRequestDeadline(OcrService service)
 	{
-		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestCancellationTokenSource", BindingFlags.NonPublic | BindingFlags.Instance);
+		MethodInfo? method = typeof(OcrService).GetMethod("CreatePerRequestDeadline", BindingFlags.NonPublic | BindingFlags.Instance);
 		Assert.NotNull(method);
-		return (CancellationTokenSource)method!.Invoke(service, new object[] { overallToken })!;
+		return (CancellationTokenSource)method!.Invoke(service, null)!;
 	}
 
 	[Fact]
-	public void CreatePerRequestCancellationTokenSource_IsLinkedToTheOverallToken()
+	public void PerRequestDeadline_LinksWithTheOverallTokenWithoutCancellingItself()
 	{
-		var service = new OcrService("dummy-key", "https://example.com/", 1);
+		// ReadInternal links the two, so an outside cancel has to reach the request even
+		// though the deadline is now its own source.
+		var service = new OcrService("dummy-key", "https://example.com/", 30);
 
 		using var overall = new CancellationTokenSource();
-		using var cts = CreatePerRequestCts(service, overall.Token);
+		using var deadline = CreatePerRequestDeadline(service);
+		using var linked = CancellationTokenSource.CreateLinkedTokenSource(overall.Token, deadline.Token);
 
-		Assert.False(cts.IsCancellationRequested);
+		Assert.False(linked.IsCancellationRequested);
 
 		overall.Cancel();
-		Assert.True(cts.Token.IsCancellationRequested);
+		Assert.True(linked.Token.IsCancellationRequested);
+		Assert.False(deadline.IsCancellationRequested);
 	}
 
 	[Fact]
-	public void CreatePerRequestCancellationTokenSource_SelfCancelsAfterThePerRequestTimeout()
+	public void PerRequestDeadline_SelfCancelsAfterThePerRequestTimeout()
 	{
 		// The timeout is what stops a wedged Azure call hanging the batch, and linking
 		// alone does not provide it. A one-second service timeout with a ten-second wait
-		// leaves ample slack on a loaded agent while still failing if CancelAfter is lost.
+		// leaves ample slack on a loaded agent while still failing if the deadline is lost.
 		var service = new OcrService("dummy-key", "https://example.com/", 1);
 
-		using var overall = new CancellationTokenSource();
-		using var cts = CreatePerRequestCts(service, overall.Token);
+		using var deadline = CreatePerRequestDeadline(service);
 
 		Assert.True(
-			cts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10)),
+			deadline.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10)),
 			"The per-request source never cancelled itself, so no per-request timeout is scheduled.");
-		Assert.False(overall.IsCancellationRequested);
 	}
 
 	// ---------------------------------------------------------------------

@@ -17,7 +17,18 @@ public static class OpenAiClientOptionsFactory
 	/// the exact request the SDK puts on the wire can be asserted, the way
 	/// <see cref="AnthropicLlmService"/>'s injected HttpClient already allows.
 	/// </param>
-	public static OpenAIClientOptions Create(Uri? endpoint = null, PipelineTransport? transport = null)
+	/// <param name="maxRetries">
+	/// Caps the SDK's <em>own</em> retry policy, which is a separate loop from the one in
+	/// <see cref="TransientRetry"/>. Left null in production, where the SDK's default
+	/// three retries are wanted. A test that counts requests passes 0: otherwise a single
+	/// transient reply is retried by the SDK before the caller-level pipeline ever sees
+	/// it, and the request count measures two nested retry loops at once rather than the
+	/// one under test (issue #311).
+	/// </param>
+	public static OpenAIClientOptions Create(
+		Uri? endpoint = null,
+		PipelineTransport? transport = null,
+		int? maxRetries = null)
 	{
 		var options = new OpenAIClientOptions
 		{
@@ -27,6 +38,8 @@ public static class OpenAiClientOptionsFactory
 			options.Endpoint = endpoint;
 		if (transport is not null)
 			options.Transport = transport;
+		if (maxRetries is not null)
+			options.RetryPolicy = new ClientRetryPolicy(maxRetries.Value);
 		return options;
 	}
 }

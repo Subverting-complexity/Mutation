@@ -25,14 +25,49 @@ public class OcrService : IOcrService, IDisposable
         private string Endpoint { get; }
         private ImageAnalysisClient ImageAnalysisClient { get; }
         private readonly int _timeoutSeconds;
+	private readonly TimeProvider _timeProvider;
+	private readonly Action<int> _announceAttempt;
+	// Holds no call state, so one pipeline serves every read, concurrent or not. Built per
+	// instance rather than shared statically only so the clock behind it can be replaced;
+	// the app makes one of these, so that costs nothing.
+	private readonly ResiliencePipeline _retryPipeline;
 	private static RequestRateLimiter SharedRateLimiter = new(20, TimeSpan.FromMinutes(1));
 
-	public OcrService(string? subscriptionKey, string? endpoint, int timeoutSeconds = 30)
+	/// <param name="imageAnalysisClient">
+	/// Test seam only; null in production, where the client is built from the endpoint and
+	/// key above. Substituting one is what lets a test drive a read to completion — and so
+	/// exercise the retry ladder around it — without an Azure account, the way
+	/// <see cref="AnthropicLlmService"/>'s injected HttpClient already allows (issue #311).
+	/// </param>
+	/// <param name="timeProvider">
+	/// Test seam only; null in production. Drives both the retry backoff and each
+	/// attempt's deadline, so a test can read back the waits that were armed instead of
+	/// sitting through them.
+	/// </param>
+	/// <param name="announceAttempt">
+	/// Test seam only; null in production, where it beeps. Substituting it is what lets a
+	/// test assert the attempt number the listener is told about — and, just as usefully,
+	/// keeps a suite that drives real retries from playing sounds at whoever ran it.
+	/// </param>
+	public OcrService(
+		string? subscriptionKey,
+		string? endpoint,
+		int timeoutSeconds = 30,
+		ImageAnalysisClient? imageAnalysisClient = null,
+		TimeProvider? timeProvider = null,
+		Action<int>? announceAttempt = null)
 	{
 		SubscriptionKey = subscriptionKey ?? throw new ArgumentNullException(nameof(subscriptionKey));
 		Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-		ImageAnalysisClient = CreateImageAnalysisClient(Endpoint, SubscriptionKey);
+		ImageAnalysisClient = imageAnalysisClient ?? CreateImageAnalysisClient(Endpoint, SubscriptionKey);
 		_timeoutSeconds = Math.Max(1, Math.Min(timeoutSeconds, MaxTimeoutSeconds));
+		_timeProvider = timeProvider ?? TimeProvider.System;
+		_announceAttempt = announceAttempt ?? (attempt => this.Beep(attempt));
+		_retryPipeline = TransientRetry.Pipeline(
+			retryCount: 3,
+			TransientRetry.Transient()
+				.Handle<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500),
+			timeProvider);
 	}
 
 	public Task<string> ExtractText(
@@ -46,20 +81,17 @@ public class OcrService : IOcrService, IDisposable
 	private static ImageAnalysisClient CreateImageAnalysisClient(string endpoint, string key) =>
 		 new(new Uri(endpoint), new AzureKeyCredential(key));
 
-	// Holds no call state, so one pipeline serves every read, concurrent or not.
-	private static readonly ResiliencePipeline RetryPipeline = TransientRetry.Pipeline(
-		retryCount: 3,
-		TransientRetry.Transient()
-			.Handle<RequestFailedException>(ex => ex.Status == 429 || ex.Status >= 500));
-
 	private TimeSpan GetPerRequestTimeout() => TimeSpan.FromSeconds(Math.Max(1, Math.Min(_timeoutSeconds, MaxTimeoutSeconds)));
 
-	private CancellationTokenSource CreatePerRequestCancellationTokenSource(CancellationToken overallToken)
-	{
-		var cts = CancellationTokenSource.CreateLinkedTokenSource(overallToken);
-		cts.CancelAfter(GetPerRequestTimeout());
-		return cts;
-	}
+	/// <summary>
+	/// Arms this attempt's deadline. It is its own source rather than a <c>CancelAfter</c>
+	/// on the linked one because <see cref="CancellationTokenSource"/> accepts a
+	/// <see cref="TimeProvider"/> only in its constructor, and routing the deadline through
+	/// the injected clock is what lets a test read the deadline back. The caller links it
+	/// to the overall token and disposes both.
+	/// </summary>
+	private CancellationTokenSource CreatePerRequestDeadline() =>
+		new(GetPerRequestTimeout(), _timeProvider);
 
 
 	private async Task<string> ExecuteReadInternal(
@@ -68,8 +100,9 @@ public class OcrService : IOcrService, IDisposable
 		int attempt,
 		CancellationToken overallCancellationToken)
 	{
-		// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
-		this.Beep(attempt);
+		// The default announcer swallows the first, non-retry attempt itself and beeps
+		// once per attempt after that; every attempt is reported here regardless.
+		_announceAttempt(attempt);
 
 		imageStream.Seek(0, SeekOrigin.Begin);
 
@@ -85,7 +118,7 @@ public class OcrService : IOcrService, IDisposable
 		// Buffer the stream into a byte array so we can create a new stream for each retry
 		byte[] imageBytes = BufferImage(imageStream);
 
-		return await RetryPipeline.ExecuteWithAttemptAsync(
+		return await _retryPipeline.ExecuteWithAttemptAsync(
 			async (attempt, overallToken) =>
 			{
 				var ms = new MemoryStream(imageBytes, writable: false);
@@ -168,8 +201,9 @@ public class OcrService : IOcrService, IDisposable
 
 		await SharedRateLimiter.WaitAsync(overallCancellationToken).ConfigureAwait(false);
 
-		using var requestCts = CreatePerRequestCancellationTokenSource(overallCancellationToken);
-		
+		using var deadline = CreatePerRequestDeadline();
+		using var requestCts = CancellationTokenSource.CreateLinkedTokenSource(overallCancellationToken, deadline.Token);
+
 		var binaryData = BinaryData.FromStream(imageStream);
 
 		ImageAnalysisResult result = await ImageAnalysisClient.AnalyzeAsync(

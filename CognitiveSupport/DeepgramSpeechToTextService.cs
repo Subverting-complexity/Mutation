@@ -10,23 +10,41 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 	public string ServiceName { get; init; }
 
 	// Holds no call state, so one pipeline serves every transcription, concurrent or not.
-	private static readonly ResiliencePipeline RetryPipeline =
-		TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient());
+	// Built per instance rather than shared statically only so the clock behind it can be
+	// replaced; the app makes one of these, so that costs nothing.
+	private readonly ResiliencePipeline _retryPipeline;
 
 	private readonly string _modelId;
 	private readonly Deepgram.Clients.Interfaces.v1.IListenRESTClient _deepgramClient;
 	private readonly int _timeoutSeconds;
+	private readonly TimeProvider _timeProvider;
+	private readonly Action<int> _announceAttempt;
 
+	/// <param name="timeProvider">
+	/// Test seam only; null in production. Drives both the retry backoff and each
+	/// attempt's deadline, so a test can read back the waits that were armed instead of
+	/// sitting through them.
+	/// </param>
+	/// <param name="announceAttempt">
+	/// Test seam only; null in production, where it beeps. Substituting it is what lets a
+	/// test assert the attempt number the listener is told about — and, just as usefully,
+	/// keeps a suite that drives real retries from playing sounds at whoever ran it.
+	/// </param>
 	public DeepgramSpeechToTextService(
 		string serviceName,
 		Deepgram.Clients.Interfaces.v1.IListenRESTClient deepgramClient,
 		string modelId,
-		int timeoutSeconds = 10)
+		int timeoutSeconds = 10,
+		TimeProvider? timeProvider = null,
+		Action<int>? announceAttempt = null)
 	{
 		ServiceName = serviceName;
 		_deepgramClient = deepgramClient ?? throw new ArgumentNullException(nameof(deepgramClient));
 		_modelId = modelId ?? throw new ArgumentNullException(nameof(modelId), "Check your Deepgram API documentation for supported modelIds.");
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 10;
+		_timeProvider = timeProvider ?? TimeProvider.System;
+		_announceAttempt = announceAttempt ?? (attempt => this.Beep(attempt));
+		_retryPipeline = TransientRetry.Pipeline(retryCount: 3, TransientRetry.Transient(), timeProvider);
 	}
 
 	public async Task<string> ConvertAudioToText(
@@ -42,17 +60,18 @@ public class DeepgramSpeechToTextService : ISpeechToTextService
 
 		var audioBytes = await File.ReadAllBytesAsync(audioffilePath, overallCancellationToken).ConfigureAwait(false);
 
-		var response = await RetryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
+		var response = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
 			int baseTimeout = timeoutSeconds ?? _timeoutSeconds;
 			// Linear backoff for timeout duration, but respect the requested timeout as a minimum for the first attempt.
 			// Removing the 60s cap to allow for longer file transcriptions.
 			int timeout = baseTimeout * attempt;
-			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout), _timeProvider);
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
-			// Beep swallows the first, non-retry attempt itself; retries beep once per attempt.
-			this.Beep(attempt);
+			// The default announcer swallows the first, non-retry attempt itself and beeps once
+			// per attempt after that; every attempt is reported here regardless.
+			_announceAttempt(attempt);
 
 			return await TranscribeViaDeepgram(keyterms, audioBytes, linkedCts).ConfigureAwait(false);
 		}, overallCancellationToken).ConfigureAwait(false);
