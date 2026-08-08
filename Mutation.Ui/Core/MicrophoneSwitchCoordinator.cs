@@ -45,9 +45,25 @@ public sealed class MicrophoneSwitchCoordinator
 	private readonly Action<Exception>? _onError;
 	private readonly object _gate = new();
 
+	// What a queued request asks the worker to do.
+	private enum RequestKind
+	{
+		// Select the requested device, then point capture at it.
+		Switch,
+
+		// Re-open capture on whatever device is already selected, without touching
+		// the selection. For recovering capture that a failed switch left with
+		// nothing running.
+		Restart,
+
+		// Release capture; there is no device to record from.
+		Release,
+	}
+
 	// The request most recently made but not yet picked up, and the awaiter tied to
-	// it. A null ID means "no device — release capture". Both are cleared the moment
-	// the worker picks the request up. Guarded by _gate.
+	// it. All three are cleared the moment the worker picks the request up. Guarded
+	// by _gate.
+	private RequestKind _pendingKind;
 	private string? _pendingDeviceId;
 	private TaskCompletionSource<MicrophoneSwitchResult?>? _pendingCompletion;
 
@@ -97,8 +113,19 @@ public sealed class MicrophoneSwitchCoordinator
 		if (string.IsNullOrEmpty(deviceId))
 			throw new ArgumentException("A device ID is required.", nameof(deviceId));
 
-		return EnqueueAsync(deviceId);
+		return EnqueueAsync(RequestKind.Switch, deviceId);
 	}
+
+	/// <summary>
+	/// Requests that capture be re-opened on the device that is already selected,
+	/// without changing the selection. A switch that reports
+	/// <see cref="MicrophoneSwitchOutcome.Unavailable"/> or
+	/// <see cref="MicrophoneSwitchOutcome.Failed"/> never reaches its capture restart,
+	/// which at app startup means nothing is capturing at all; this puts the waveform
+	/// and the level meter back on the device that is actually live rather than
+	/// leaving them dead for the session.
+	/// </summary>
+	public Task<MicrophoneSwitchResult?> RestartCaptureAsync() => EnqueueAsync(RequestKind.Restart, null);
 
 	/// <summary>
 	/// Requests that capture be released, for when the selection has become no device
@@ -106,9 +133,9 @@ public sealed class MicrophoneSwitchCoordinator
 	/// overtaken by one, and closing the capture handle — a winmm call like any other
 	/// — stays off the UI thread.
 	/// </summary>
-	public Task<MicrophoneSwitchResult?> ReleaseAsync() => EnqueueAsync(null);
+	public Task<MicrophoneSwitchResult?> ReleaseAsync() => EnqueueAsync(RequestKind.Release, null);
 
-	private Task<MicrophoneSwitchResult?> EnqueueAsync(string? deviceId)
+	private Task<MicrophoneSwitchResult?> EnqueueAsync(RequestKind kind, string? deviceId)
 	{
 		TaskCompletionSource<MicrophoneSwitchResult?>? superseded;
 		var mine = new TaskCompletionSource<MicrophoneSwitchResult?>(
@@ -120,6 +147,7 @@ public sealed class MicrophoneSwitchCoordinator
 			// Any request still queued (not yet started) is now stale — this newer one
 			// replaces it.
 			superseded = _pendingCompletion;
+			_pendingKind = kind;
 			_pendingDeviceId = deviceId;
 			_pendingCompletion = mine;
 
@@ -173,6 +201,7 @@ public sealed class MicrophoneSwitchCoordinator
 	{
 		while (true)
 		{
+			RequestKind kind;
 			string? deviceId;
 			TaskCompletionSource<MicrophoneSwitchResult?> completion;
 
@@ -184,13 +213,14 @@ public sealed class MicrophoneSwitchCoordinator
 					return;
 				}
 
+				kind = _pendingKind;
 				deviceId = _pendingDeviceId;
 				completion = _pendingCompletion;
 				_pendingDeviceId = null;
 				_pendingCompletion = null;
 			}
 
-			MicrophoneSwitchResult result = Apply(deviceId);
+			MicrophoneSwitchResult result = Apply(kind, deviceId);
 
 			// A newer request arrived while this one was running. It is about to
 			// re-point the device and will report its own outcome, so this one reports
@@ -207,22 +237,30 @@ public sealed class MicrophoneSwitchCoordinator
 		}
 	}
 
-	private MicrophoneSwitchResult Apply(string? deviceId)
+	private MicrophoneSwitchResult Apply(RequestKind kind, string? deviceId)
 	{
 		try
 		{
-			if (deviceId is null)
+			switch (kind)
 			{
-				_stopCapture();
-				return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Switched);
+				case RequestKind.Release:
+					_stopCapture();
+					break;
+
+				case RequestKind.Restart:
+					_restartCapture();
+					break;
+
+				default:
+					// The device may have been unplugged between the click and this
+					// call; the selection is left where it was and the caller says so.
+					if (!_selectDevice(deviceId!))
+						return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Unavailable);
+
+					_restartCapture();
+					break;
 			}
 
-			// The device may have been unplugged between the click and this call; the
-			// selection is left where it was and the caller says so.
-			if (!_selectDevice(deviceId))
-				return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Unavailable);
-
-			_restartCapture();
 			return new MicrophoneSwitchResult(MicrophoneSwitchOutcome.Switched);
 		}
 		catch (Exception ex)

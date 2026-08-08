@@ -227,6 +227,78 @@ public class MicrophoneSwitchCoordinatorTests
 	}
 
 	[Fact]
+	public async Task RestartCaptureAsync_ReopensCaptureWithoutTouchingTheSelection()
+	{
+		int selects = 0;
+		int stops = 0;
+		int restarts = 0;
+		var coordinator = Create(
+			selectDevice: _ => { Interlocked.Increment(ref selects); return true; },
+			restartCapture: () => Interlocked.Increment(ref restarts),
+			stopCapture: () => Interlocked.Increment(ref stops));
+
+		var result = await coordinator.RestartCaptureAsync();
+
+		Assert.Equal(MicrophoneSwitchOutcome.Switched, result!.Value.Outcome);
+		Assert.Equal(1, restarts);
+		Assert.Equal(0, selects);
+		Assert.Equal(0, stops);
+	}
+
+	[Fact]
+	public async Task RestartCaptureAsync_AfterAFailedSwitch_PutsCaptureBackOnTheLiveDevice()
+	{
+		// The recovery the UI runs when a switch does not take: Apply never reaches
+		// the capture restart on an Unavailable or Failed switch, which at startup
+		// leaves nothing capturing at all.
+		var steps = new ConcurrentQueue<string>();
+		var coordinator = Create(
+			selectDevice: id => { steps.Enqueue($"select:{id}"); return false; },
+			restartCapture: () => steps.Enqueue("restart"));
+
+		var failed = await coordinator.SwitchAsync("mic-gone");
+		var recovery = await coordinator.RestartCaptureAsync();
+
+		Assert.Equal(MicrophoneSwitchOutcome.Unavailable, failed!.Value.Outcome);
+		Assert.Equal(MicrophoneSwitchOutcome.Switched, recovery!.Value.Outcome);
+		Assert.Equal(new[] { "select:mic-gone", "restart" }, steps);
+	}
+
+	[Fact]
+	public async Task RestartCaptureAsync_IsSupersededByANewerSwitchLikeAnyOtherRequest()
+	{
+		var started = new ManualResetEventSlim(false);
+		var release = new ManualResetEventSlim(false);
+		var steps = new ConcurrentQueue<string>();
+		var coordinator = Create(
+			selectDevice: id =>
+			{
+				steps.Enqueue($"select:{id}");
+				if (id == "mic-a")
+				{
+					started.Set();
+					release.Wait();
+				}
+				return true;
+			},
+			restartCapture: () => steps.Enqueue("restart"));
+
+		var first = coordinator.SwitchAsync("mic-a");
+		Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the first switch did not start");
+
+		var recovery = coordinator.RestartCaptureAsync();
+		var newer = coordinator.SwitchAsync("mic-b");
+
+		Assert.Null(await recovery);
+
+		release.Set();
+		await first;
+
+		Assert.Equal(MicrophoneSwitchOutcome.Switched, (await newer)!.Value.Outcome);
+		Assert.Equal(new[] { "select:mic-a", "restart", "select:mic-b", "restart" }, steps);
+	}
+
+	[Fact]
 	public async Task ReleaseAsync_AndSwitchAsync_ShareOneWorkerSoTheyCannotOvertakeEachOther()
 	{
 		var started = new ManualResetEventSlim(false);
