@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CognitiveSupport;
@@ -10,7 +10,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
-using Mutation.Ui.Views;
 using Mutation.Ui.Views.SettingsUi.Controls;
 
 namespace Mutation.Ui.Views.SettingsUi.Pages;
