@@ -302,8 +302,11 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	private void HotkeyRouterDelete_Click(object sender, RoutedEventArgs e) =>
 		_routerController.DeleteMapping(sender);
 
-	private void HotkeyRouterBox_GotFocus(object sender, RoutedEventArgs e) =>
-		_routerController.ClearCommitAnnouncement(sender);
+	private void HotkeyRouterFrom_GotFocus(object sender, RoutedEventArgs e) =>
+		_routerController.ClearFromCommitAnnouncement(sender);
+
+	private void HotkeyRouterTo_GotFocus(object sender, RoutedEventArgs e) =>
+		_routerController.ClearToCommitAnnouncement(sender);
 
 	private void HotkeyRouterFrom_LostFocus(object sender, RoutedEventArgs e) =>
 		_routerController.CommitFromLostFocus(sender);

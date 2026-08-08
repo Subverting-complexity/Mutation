@@ -121,14 +121,23 @@ internal sealed class HotkeyRouterController
 	}
 
 	/// <summary>
-	/// Takes down the row's rewrite notice as the user comes back into either of its boxes.
-	/// See <see cref="HotkeyRouterEntry.ClearCommitAnnouncement"/> for why it does not simply
-	/// stay put.
+	/// Takes down the "From" box's rewrite notice as the user comes back into it. See
+	/// <see cref="HotkeyRouterEntry.ClearFromCommitAnnouncement"/> for why it does not simply
+	/// stay put — and note that entering one box leaves the other box's notice alone, because
+	/// tabbing from "From" to "To" is how a mapping is filled in and would otherwise wipe the
+	/// first notice before it had been read out.
 	/// </summary>
-	public void ClearCommitAnnouncement(object sender)
+	public void ClearFromCommitAnnouncement(object sender)
 	{
 		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
-			entry.ClearCommitAnnouncement();
+			entry.ClearFromCommitAnnouncement();
+	}
+
+	/// <summary>The same, for the "To" box.</summary>
+	public void ClearToCommitAnnouncement(object sender)
+	{
+		if (sender is FrameworkElement { DataContext: HotkeyRouterEntry entry })
+			entry.ClearToCommitAnnouncement();
 	}
 
 	public void CommitFromLostFocus(object sender)
@@ -153,11 +162,12 @@ internal sealed class HotkeyRouterController
 	{
 		_settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
 
+		// Silently. This runs over every row on every refresh, including the one the user
+		// just edited — which has already committed and announced. An announcing pass here
+		// finds nothing left to change and would take that notice straight back down again
+		// (issue #332).
 		foreach (var entry in _entries)
-		{
-			entry.CommitFromHotkey();
-			entry.CommitToHotkey();
-		}
+			entry.CommitSilently();
 
 		var validEntries = _entries
 			.Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)

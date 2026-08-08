@@ -211,7 +211,7 @@ public class HotkeyRouterEntryTests
 		entry.FromHotkey = "shift+ctrl+a";
 		entry.CommitFromHotkey();
 
-		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -224,7 +224,35 @@ public class HotkeyRouterEntryTests
 		entry.ToHotkey = "alt+ctrl+y";
 		entry.CommitToHotkey();
 
-		Assert.Equal("Shortcut to send when triggered now reads CTRL+ALT+Y.", entry.CommitAnnouncement);
+		Assert.Equal("Shortcut to send when triggered now reads CTRL+ALT+Y.", entry.ToCommitAnnouncement);
+	}
+
+	[Fact]
+	public void EachBoxKeepsItsOwnNotice()
+	{
+		// Tabbing from "From" to "To" is how a mapping gets filled in. One notice for the row
+		// would mean the second box's commit — which usually changes nothing — took down the
+		// first box's notice before it had been read out.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+		entry.CommitToHotkey();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
+		Assert.Null(entry.ToCommitAnnouncement);
+	}
+
+	[Fact]
+	public void ComingBackIntoOneBoxLeavesTheOtherBoxsNoticeAlone()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.ClearToCommitAnnouncement();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -239,7 +267,8 @@ public class HotkeyRouterEntryTests
 		entry.ToHotkey = "CTRL+B";
 		entry.CommitToHotkey();
 
-		Assert.Null(entry.CommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
+		Assert.Null(entry.ToCommitAnnouncement);
 	}
 
 	[Fact]
@@ -252,7 +281,7 @@ public class HotkeyRouterEntryTests
 		entry.FromHotkey = "ctrl+shift+";
 		entry.CommitFromHotkey();
 
-		Assert.Null(entry.CommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -264,7 +293,27 @@ public class HotkeyRouterEntryTests
 		entry.FromHotkey = "shift+ctrl+a";
 		entry.CommitFromHotkey();
 
-		Assert.Null(entry.CommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
+	}
+
+	[Fact]
+	public void ADuplicateFoundDuringTheCommitStillOutranksTheNotice()
+	{
+		// The real ordering on the page: typing raises FromHotkey, the controller recalculates
+		// duplicates from that, and the flag is already set by the time the commit decides
+		// whether to announce.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(HotkeyRouterEntry.FromHotkey))
+				entry.SetDuplicate(true);
+		};
+
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		Assert.True(entry.IsDuplicate);
+		Assert.Null(entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -278,7 +327,7 @@ public class HotkeyRouterEntryTests
 		entry.CommitFromHotkey();
 
 		Assert.False(entry.IsToValid);
-		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -289,7 +338,23 @@ public class HotkeyRouterEntryTests
 		var entry = new HotkeyRouterEntry(Map("shift+ctrl+a", "alt+ctrl+y"));
 
 		Assert.Equal("CTRL+SHIFT+A", entry.FromHotkey);
-		Assert.Null(entry.CommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
+		Assert.Null(entry.ToCommitAnnouncement);
+	}
+
+	[Fact]
+	public void TheBookkeepingCommitLeavesAPendingNoticeStanding()
+	{
+		// The controller re-commits every row on every refresh, including the one the user has
+		// just edited and which has just announced. An announcing pass there finds nothing left
+		// to change and would take the notice straight back down again.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.FromHotkey = "shift+ctrl+a";
+		entry.CommitFromHotkey();
+
+		entry.CommitSilently();
+
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -304,7 +369,7 @@ public class HotkeyRouterEntryTests
 
 		entry.ReplaceBackingMap(Map("CTRL+SHIFT+A", "CTRL+V"));
 
-		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.CommitAnnouncement);
+		Assert.Equal("Shortcut to listen for now reads CTRL+SHIFT+A.", entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -314,9 +379,9 @@ public class HotkeyRouterEntryTests
 		entry.FromHotkey = "shift+ctrl+a";
 		entry.CommitFromHotkey();
 
-		entry.ClearCommitAnnouncement();
+		entry.ClearFromCommitAnnouncement();
 
-		Assert.Null(entry.CommitAnnouncement);
+		Assert.Null(entry.FromCommitAnnouncement);
 	}
 
 	[Fact]
@@ -328,13 +393,13 @@ public class HotkeyRouterEntryTests
 		var raised = new List<string?>();
 		entry.PropertyChanged += (_, e) =>
 		{
-			if (e.PropertyName == nameof(HotkeyRouterEntry.CommitAnnouncement))
-				raised.Add(entry.CommitAnnouncement);
+			if (e.PropertyName == nameof(HotkeyRouterEntry.FromCommitAnnouncement))
+				raised.Add(entry.FromCommitAnnouncement);
 		};
 
 		entry.FromHotkey = "shift+ctrl+a";
 		entry.CommitFromHotkey();
-		entry.ClearCommitAnnouncement();
+		entry.ClearFromCommitAnnouncement();
 
 		Assert.Equal(["Shortcut to listen for now reads CTRL+SHIFT+A.", null], raised);
 	}
