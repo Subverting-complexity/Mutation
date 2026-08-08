@@ -176,12 +176,16 @@ write, so a stale id fails loudly instead of mutating the wrong board.
 
 | Status      | Purpose key       | Option ID  |
 | ----------- | ----------------- | ---------- |
-| Backlog     | `col-backlog`     | `f75ad846` |
-| Ready       | `col-ready`       | `6bff5a53` |
-| In Progress | `col-in-progress` | `47fc9ee4` |
-| In Review   | `col-in-review`   | `211e0ac6` |
-| Blocked     | `col-blocked`     | `311b4541` |
-| Done        | `col-done`        | `98236657` |
+| Backlog     | `col-backlog`     | `79aacfe5` |
+| Ready       | `col-ready`       | `e61d226b` |
+| In Progress | `col-in-progress` | `c74f4105` |
+| In Review   | `col-in-review`   | `75905803` |
+| Blocked     | `col-blocked`     | `8ebf6b74` |
+| Done        | `col-done`        | `751f4aa8` |
+
+Renaming or reordering a Status option regenerates **every** option ID and
+clears the Status value on every board item. If you rename one, re-read the
+IDs above and re-apply each item's Status afterwards.
 
 ## Reference Docs
 
