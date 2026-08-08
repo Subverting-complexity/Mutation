@@ -72,6 +72,23 @@ public class SessionRetentionPlannerTests
 	}
 
 	[Fact]
+	public void ExcludedSession_IsMatchedHoweverItsPathIsSpelled()
+	{
+		// The exclusion list is built from what the UI has in hand — the selected recording, the
+		// one playing — while the sessions come from a directory scan, so the two spellings need
+		// not match character for character. A miss here deletes a recording that was meant to
+		// survive, which is the one failure in this unit the user cannot undo (issue #306).
+		var sessions = MakeSessions(15);
+		var active = sessions[0];
+		var exclusions = new List<string> { @"C:\sessions\sub\..\SESSION_000.WAV" };
+
+		var toDelete = SessionRetentionPlanner.SelectSessionsToDelete(sessions, exclusions, 5);
+
+		Assert.DoesNotContain(active.FilePath, toDelete.Select(s => s.FilePath));
+		Assert.Equal(10, toDelete.Count);
+	}
+
+	[Fact]
 	public void EmptyInput_DeletesNothing()
 	{
 		Assert.Empty(SessionRetentionPlanner.SelectSessionsToDelete(new List<SpeechSession>(), NoExclusions(), 10));

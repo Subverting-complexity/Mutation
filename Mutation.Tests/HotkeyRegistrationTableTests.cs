@@ -306,6 +306,22 @@ public class HotkeyRegistrationTableTests
 	}
 
 	[Fact]
+	public void A_chord_held_by_one_group_is_refused_to_another()
+	{
+		// The groups decide what a refresh releases, not who may bind what — one set of live
+		// chords covers all three. This is why the Settings screen has to check a core shortcut
+		// against a router mapping, which it still does not (issue #321).
+		var (table, platform) = NewTable();
+
+		table.Register(Hotkey.Parse("Ctrl-Shift-A"), () => { }, HotkeyGroup.Core);
+		var second = table.Register(Hotkey.Parse("SHIFT+CONTROL+a"), () => { }, HotkeyGroup.Router);
+
+		Assert.False(second.Success);
+		Assert.Equal("The shortcut is already registered.", second.ErrorMessage);
+		Assert.Single(platform.Bound);
+	}
+
+	[Fact]
 	public void NormalizeHotkey_puts_the_modifiers_in_one_fixed_order()
 	{
 		var chord = new Hotkey { Win = true, Alt = true, Shift = true, Control = true, Key = VirtualKey.F1 };

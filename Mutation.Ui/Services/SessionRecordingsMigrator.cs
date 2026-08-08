@@ -1,4 +1,5 @@
 using CognitiveSupport;
+using Mutation.Ui.Core;
 using System;
 using System.IO;
 
@@ -20,7 +21,7 @@ internal static class SessionRecordingsMigrator
 
 			if (!Directory.Exists(legacySessions))
 				return;
-			if (string.Equals(Path.GetFullPath(legacySessions), Path.GetFullPath(newSessions), StringComparison.OrdinalIgnoreCase))
+			if (PathEquality.SamePath(legacySessions, newSessions))
 				return;
 
 			Directory.CreateDirectory(newSessions);

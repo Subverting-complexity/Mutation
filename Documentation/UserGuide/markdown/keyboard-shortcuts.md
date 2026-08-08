@@ -124,8 +124,16 @@ readers announce it straight away.
 - **A key Mutation does not recognise** — "Unsupported key", followed by the key
   you typed.
 - **The same combination used twice inside Mutation** — an orange **Duplicate
-  hotkey** note appears under both rows. Give one of them a different combination,
-  otherwise only one of the two will ever fire.
+  hotkey** note appears under both rows, and is read out the moment it turns up while
+  you are editing. Give one of them a different combination, otherwise only one of the
+  two will ever fire.
+  Mutation compares the keys, not the spelling, so writing one as
+  **Ctrl+Shift+A** and the other as **Shift+Ctrl+A** is still caught.
+- **The same combination in a "send a key afterwards" box and a real shortcut** —
+  also flagged, and worth fixing. Windows hands that key straight back to Mutation,
+  so the action would set itself off again and again. Putting the same key in *both*
+  "send a key afterwards" boxes is fine, though, and is not flagged: those keys go to
+  whatever app you are in, so there is nothing for them to clash over.
 - **Another app already owns it** — Mutation cannot tell until it actually tries to
   claim the combination. When it fails, you get a beep and a message titled "Some
   hotkeys could not be registered", listing each action, its combination, and the
@@ -168,7 +176,8 @@ down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
 Two mappings listening for the same "From" combination get a "Duplicate 'From'
-hotkey" message. **Delete** removes a mapping.
+hotkey" message — again comparing the keys rather than the spelling. **Delete**
+removes a mapping.
 
 > As the in-app help puts it: map one shortcut to another so a single key press can
 > trigger a more complex shortcut. Changes apply when you save settings.

@@ -153,7 +153,7 @@ public class SpeechToTextManager : IDisposable
 
 				sessions.Sort((left, right) => right.Timestamp.CompareTo(left.Timestamp));
 
-				if (_currentRecordingSession != null && !sessions.Any(s => PathsEqual(s.FilePath, _currentRecordingSession.FilePath)))
+				if (_currentRecordingSession != null && !sessions.Any(s => PathEquality.SamePath(s.FilePath, _currentRecordingSession.FilePath)))
 					sessions.Insert(0, _currentRecordingSession);
 
 				return sessions.ToArray();
@@ -468,7 +468,11 @@ public class SpeechToTextManager : IDisposable
 		if (exclusionPaths is null)
 			exclusionPaths = Array.Empty<string>();
 
-		var exclusions = new HashSet<string>(exclusionPaths.Where(p => !string.IsNullOrWhiteSpace(p)), StringComparer.OrdinalIgnoreCase);
+		// Normalized, because a miss here deletes a recording that was meant to be kept — the
+		// one selected, the one playing, or the one still being recorded. This used to be a
+		// plain case-insensitive compare, so a path spelled differently from the one the
+		// session scan produced would not have matched (issue #306).
+		var exclusions = new List<string>(exclusionPaths.Where(p => !string.IsNullOrWhiteSpace(p)));
 
 		lock (_sessionLock)
 		{
@@ -479,7 +483,7 @@ public class SpeechToTextManager : IDisposable
 		return Task.Run(() => CleanupSessionsInternal(exclusions));
 	}
 
-	private void CleanupSessionsInternal(HashSet<string> exclusions)
+	private void CleanupSessionsInternal(IReadOnlyCollection<string> exclusions)
 	{
 		try
 		{
@@ -668,9 +672,6 @@ public class SpeechToTextManager : IDisposable
 			return false;
 		}
 	}
-
-	private static bool PathsEqual(string left, string right) =>
-			  string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
 	public void Dispose()
 	{

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -194,35 +194,25 @@ public sealed partial class HotkeyEditor : UserControl
 		RecordLabel.Text = "Record";
 	}
 
+	/// <summary>
+	/// Shows what is wrong with the text in the box, or clears the message when it is fine.
+	/// <para>
+	/// Routed through <see cref="LiveMessage"/> so the message is actually announced. It
+	/// carried the live setting and nothing else, which the user guide has been describing as
+	/// "screen readers announce it straight away" — true only with the event raised (issue
+	/// #243).
+	/// </para>
+	/// </summary>
 	private void Validate(string text)
 	{
 		string trimmed = text?.Trim() ?? string.Empty;
 		if (string.IsNullOrEmpty(trimmed))
 		{
-			if (AllowEmpty)
-			{
-				ValidationText.Visibility = Visibility.Collapsed;
-				ValidationText.Text = string.Empty;
-			}
-			else
-			{
-				ValidationText.Visibility = Visibility.Visible;
-				ValidationText.Text = "Enter a hotkey.";
-			}
+			LiveMessage.Show(ValidationText, AllowEmpty ? null : "Enter a hotkey.");
 			return;
 		}
 
-		string? error = HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax);
-		if (error is null)
-		{
-			ValidationText.Visibility = Visibility.Collapsed;
-			ValidationText.Text = string.Empty;
-		}
-		else
-		{
-			ValidationText.Visibility = Visibility.Visible;
-			ValidationText.Text = error;
-		}
+		LiveMessage.Show(ValidationText, HotkeyValidator.Validate(trimmed, AllowSendKeysSyntax));
 	}
 
 	private void Commit()
@@ -280,18 +270,25 @@ public sealed partial class HotkeyEditor : UserControl
 			or VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu
 			or VirtualKey.LeftWindows or VirtualKey.RightWindows;
 
+	/// <summary>
+	/// The recorded chord as text, or nothing when there is no key to record. Built through
+	/// <see cref="Mutation.Ui.Services.Hotkey"/> so what the box shows is the same canonical
+	/// spelling registration and duplicate detection use, rather than a third copy of the same
+	/// formatting rules (issue #306). The caller ignores an empty result, which leaves the box
+	/// as it was rather than committing a placeholder that is not a shortcut.
+	/// </summary>
 	private static string FormatHotkey(VirtualKeyModifiers mods, VirtualKey key)
 	{
-		var parts = new List<string>();
-		if ((mods & VirtualKeyModifiers.Control) != 0) parts.Add("CTRL");
-		if ((mods & VirtualKeyModifiers.Shift) != 0) parts.Add("SHIFT");
-		if ((mods & VirtualKeyModifiers.Menu) != 0) parts.Add("ALT");
-		if ((mods & VirtualKeyModifiers.Windows) != 0) parts.Add("WIN");
+		if (key == VirtualKey.None)
+			return string.Empty;
 
-		string keyName = key.ToString();
-		if (keyName.StartsWith("Number", StringComparison.Ordinal) && keyName.Length == 7)
-			keyName = keyName.Substring(6);
-		parts.Add(keyName.ToUpperInvariant());
-		return string.Join('+', parts);
+		return new Mutation.Ui.Services.Hotkey
+		{
+			Control = (mods & VirtualKeyModifiers.Control) != 0,
+			Shift = (mods & VirtualKeyModifiers.Shift) != 0,
+			Alt = (mods & VirtualKeyModifiers.Menu) != 0,
+			Win = (mods & VirtualKeyModifiers.Windows) != 0,
+			Key = key,
+		}.ToString();
 	}
 }

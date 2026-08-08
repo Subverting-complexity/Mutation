@@ -1,11 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CognitiveSupport;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using Mutation.Ui.Views.SettingsUi.Controls;
 
@@ -13,6 +16,8 @@ namespace Mutation.Ui.Views.SettingsUi.Pages;
 
 public sealed partial class HotkeysSettingsPage : UserControl
 {
+	private const string DuplicateBadgeText = "Duplicate hotkey";
+
 	private readonly Settings _settings;
 	private readonly List<HotkeyRow> _rows = new();
 	private readonly HotkeyRouterController _routerController;
@@ -36,12 +41,20 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		_routerController.Initialize();
 	}
 
+	/// <param name="Registers">
+	/// Whether this shortcut is claimed from Windows. The "Send key after…" entries are typed
+	/// out to whichever app is in front rather than registered, so two of them holding the same
+	/// key is an ordinary way to set the app up and not a conflict — it used to be reported as
+	/// one (issue #306). They are still checked against the shortcuts Mutation does claim,
+	/// because Windows routes a synthesized keystroke back to whoever registered it.
+	/// </param>
 	private sealed record HotkeySpec(
 		string Label,
 		Func<Settings, string?> Getter,
 		Action<Settings, string?> Setter,
 		bool AllowEmpty,
-		string? Default = null);
+		string? Default = null,
+		bool Registers = true);
 
 	private sealed class HotkeyRow
 	{
@@ -81,7 +94,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		new HotkeySpec("Send key after OCR (optional)",
 			s => s.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation,
 			(s, v) => (s.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).SendHotkeyAfterOcrOperation = v,
-			true, null),
+			true, null, Registers: false),
 
 		new HotkeySpec("Speech to text",
 			s => s.SpeechToTextSettings?.SpeechToTextHotKey,
@@ -94,7 +107,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 		new HotkeySpec("Send key after transcription (optional)",
 			s => s.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
 			(s, v) => (s.SpeechToTextSettings ??= new SpeechToTextSettings()).SendHotkeyAfterTranscriptionOperation = v,
-			true, null),
+			true, null, Registers: false),
 
 		new HotkeySpec("Speak clipboard",
 			s => s.TextToSpeechSettings?.SpeakClipboard,
@@ -141,11 +154,15 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			};
 			var dupBadge = new TextBlock
 			{
-				Text = "Duplicate hotkey",
+				Text = string.Empty,
 				Foreground = new SolidColorBrush(Microsoft.UI.Colors.OrangeRed),
 				Visibility = Visibility.Collapsed,
 				Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
 			};
+			// Announced the moment it appears — LiveMessage does the raising, this only marks
+			// the text as worth announcing. A warning only a sighted user notices is no
+			// warning here.
+			AutomationProperties.SetLiveSetting(dupBadge, AutomationLiveSetting.Assertive);
 
 			Grid editorRow = new() { ColumnSpacing = 8 };
 			editorRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -192,21 +209,18 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	private void RecomputeDuplicates()
 	{
-		var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_rows.Count);
 		foreach (var row in _rows)
-		{
-			var hk = (row.Spec.Getter(_settings) ?? string.Empty).Trim();
-			if (string.IsNullOrEmpty(hk)) continue;
-			counts[hk] = counts.TryGetValue(hk, out var n) ? n + 1 : 1;
-		}
+			configured.Add(new(row.Spec.Getter(_settings), row.Spec.Registers));
 
-		foreach (var row in _rows)
-		{
-			var hk = (row.Spec.Getter(_settings) ?? string.Empty).Trim();
-			bool isDup = !string.IsNullOrEmpty(hk) && counts.TryGetValue(hk, out var n) && n > 1;
-			row.DuplicateBadge.Visibility = isDup ? Visibility.Visible : Visibility.Collapsed;
-		}
+		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+
+		for (int i = 0; i < _rows.Count; i++)
+			ShowDuplicateBadge(_rows[i].DuplicateBadge, duplicates.Contains(i));
 	}
+
+	private static void ShowDuplicateBadge(TextBlock badge, bool isDuplicate) =>
+		LiveMessage.Show(badge, isDuplicate ? DuplicateBadgeText : null);
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
 		_routerController.AddNewMapping();

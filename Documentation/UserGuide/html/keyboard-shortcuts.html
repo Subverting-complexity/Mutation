@@ -387,8 +387,16 @@ its own is not a shortcut; it needs a letter, number, or other key on the end.</
 <li><strong>A key Mutation does not recognise</strong> — &quot;Unsupported key&quot;, followed by the key
 you typed.</li>
 <li><strong>The same combination used twice inside Mutation</strong> — an orange <strong>Duplicate
-hotkey</strong> note appears under both rows. Give one of them a different combination,
-otherwise only one of the two will ever fire.</li>
+hotkey</strong> note appears under both rows, and is read out the moment it turns up while
+you are editing. Give one of them a different combination, otherwise only one of the
+two will ever fire.
+Mutation compares the keys, not the spelling, so writing one as
+<strong>Ctrl+Shift+A</strong> and the other as <strong>Shift+Ctrl+A</strong> is still caught.</li>
+<li><strong>The same combination in a &quot;send a key afterwards&quot; box and a real shortcut</strong> —
+also flagged, and worth fixing. Windows hands that key straight back to Mutation,
+so the action would set itself off again and again. Putting the same key in <em>both</em>
+&quot;send a key afterwards&quot; boxes is fine, though, and is not flagged: those keys go to
+whatever app you are in, so there is nothing for them to clash over.</li>
 <li><strong>Another app already owns it</strong> — Mutation cannot tell until it actually tries to
 claim the combination. When it fails, you get a beep and a message titled &quot;Some
 hotkeys could not be registered&quot;, listing each action, its combination, and the
@@ -428,7 +436,8 @@ down to the <strong>Hotkey Router</strong> section. Press <strong>Add mapping</s
 and &quot;To&quot; boxes, and press <strong>Save</strong>. Each row shows a small status marker: a tick
 once the mapping is live, or an error marker with a message if something is wrong.
 Two mappings listening for the same &quot;From&quot; combination get a &quot;Duplicate 'From'
-hotkey&quot; message. <strong>Delete</strong> removes a mapping.</p>
+hotkey&quot; message — again comparing the keys rather than the spelling. <strong>Delete</strong>
+removes a mapping.</p>
 <blockquote>
 <p>As the in-app help puts it: map one shortcut to another so a single key press can
 trigger a more complex shortcut. Changes apply when you save settings.</p>

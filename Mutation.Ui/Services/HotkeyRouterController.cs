@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Mutation.Ui;
+using Mutation.Ui.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -254,18 +255,22 @@ internal sealed class HotkeyRouterController
 		return false;
 	}
 
+	/// <summary>
+	/// Flags the routes whose "from" shortcut is already taken by another route. Compared as
+	/// chords rather than as text, so the answer is the one registration will give — the
+	/// screen used to compare the typed strings and could wave through a pair the hotkey
+	/// table then refused (issue #306).
+	/// </summary>
 	private void RecalculateDuplicates()
 	{
-		var duplicates = _entries
-			.Where(e => e.IsFromValid && e.NormalizedFromHotkey is not null)
-			.GroupBy(e => e.NormalizedFromHotkey!, StringComparer.OrdinalIgnoreCase)
-			.Where(g => g.Count() > 1)
-			.SelectMany(g => g);
-
-		var duplicateSet = new HashSet<HotkeyRouterEntry>(duplicates);
-
+		var configured = new List<HotkeyConflictFinder.ConfiguredHotkey>(_entries.Count);
 		foreach (var entry in _entries)
-			entry.SetDuplicate(duplicateSet.Contains(entry));
+			configured.Add(new(entry.IsFromValid ? entry.NormalizedFromHotkey : null, ClaimsTheChord: true));
+
+		var duplicates = HotkeyConflictFinder.DuplicateIndexes(configured);
+
+		for (int i = 0; i < _entries.Count; i++)
+			_entries[i].SetDuplicate(duplicates.Contains(i));
 	}
 
 	private void AttachEntry(HotkeyRouterEntry entry) =>

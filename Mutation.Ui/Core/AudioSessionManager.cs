@@ -161,6 +161,24 @@ public class AudioSessionManager : IDisposable
         _playbackPlayer.PlaybackFailed += PlaybackPlayer_PlaybackFailed;
     }
 
+    /// <summary>
+    /// What the user is told when Play finds the selected recording gone. Both halves in one
+    /// message: the recording is missing, and — when the refresh has moved on to another one —
+    /// which recording the buttons now act on. A user working by ear has nothing else to tell
+    /// them the selection changed under them.
+    /// </summary>
+    /// <param name="nowSelected">
+    /// The selection after the refresh. Null once the list is empty, and the same recording
+    /// when it is still listed despite the file being gone, which is not worth mentioning.
+    /// </param>
+    internal static string DescribeMissingRecording(SpeechSession missing, SpeechSession? nowSelected)
+    {
+        if (nowSelected is null || PathEquality.SamePath(missing.FilePath, nowSelected.FilePath))
+            return "Audio file not found.";
+
+        return $"Audio file not found. Selected {nowSelected.FileName} instead.";
+    }
+
     public void RefreshSessions(SpeechSession? preferredSelection = null, string? preferredPath = null)
     {
         var snapshot = _speechManager.GetSessions();
@@ -547,7 +565,7 @@ public class AudioSessionManager : IDisposable
         // IsPlaying: decoding now happens off the UI thread, so there is a window where a file
         // is on its way to the speakers without being audible yet. Pressing the button in that
         // window has to stop it, not queue up a second copy of the same recording.
-        if (_playingSession != null && SessionSelectionPlanner.PathsEqual(_playingSession.FilePath, session.FilePath))
+        if (_playingSession != null && PathEquality.SamePath(_playingSession.FilePath, session.FilePath))
         {
             StopPlayback();
             return;
@@ -559,8 +577,13 @@ public class AudioSessionManager : IDisposable
 
             if (!File.Exists(session.FilePath))
             {
-                StatusMessage?.Invoke(this, "Audio file not found.");
+                // Refreshed first, then announced once. The refresh drops the recording that is
+                // gone and lands the selection on another one, and the user has to hear both
+                // halves — Retry transcription would otherwise go on to act on a recording they
+                // never chose. One message, because status announcements supersede rather than
+                // queue, so a second call here would talk over the first.
                 RefreshSessions();
+                StatusMessage?.Invoke(this, DescribeMissingRecording(session, SelectedSession));
                 return;
             }
 

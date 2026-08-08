@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 namespace Mutation.Ui.Core;
@@ -18,29 +17,23 @@ namespace Mutation.Ui.Core;
 internal static class SessionSelectionPlanner
 {
 	/// <summary>
-	/// Whether two recording paths name the same file. Different spellings of one path —
-	/// relative versus absolute, mixed case — have to compare equal, because the path a
-	/// caller remembered and the path the session list rebuilt from need not match
-	/// character for character. A blank path matches nothing, not even another blank.
-	/// </summary>
-	public static bool PathsEqual(string? first, string? second)
-	{
-		if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(second))
-			return false;
-
-		return string.Equals(Path.GetFullPath(first), Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
-	}
-
-	/// <summary>
 	/// Picks the selection for a freshly rebuilt session list: the caller's preferred
-	/// recording when it names one and it is still there, otherwise the newest recording,
-	/// and nothing at all once the list is empty.
+	/// recording when it names one and it is still there, otherwise whatever was selected
+	/// before if that is still there, otherwise the newest recording — and nothing at all
+	/// once the list is empty.
 	/// </summary>
 	/// <param name="currentSelection">
 	/// What was selected before the rebuild. Kept when no preferred path is given and the
-	/// list is not empty — including when it is no longer in the list, which is what the
-	/// caller does today and is pinned by test rather than endorsed.
+	/// same recording is still listed; dropped in favour of the newest one when it is not,
+	/// because retention cleanup can delete the selected file underneath the user and
+	/// leaving it selected turns Play into "Audio file not found" (issue #303).
 	/// </param>
+	/// <returns>
+	/// An entry of <paramref name="sessions"/>, never a stale instance from a previous
+	/// rebuild. <see cref="SpeechSession"/> is a record, so a stale instance would still have
+	/// compared equal and been found by <c>IndexOf</c> — this is not load-bearing, it just
+	/// keeps the selection and the list pointing at one object.
+	/// </returns>
 	public static SpeechSession? ChooseSelection(
 		IReadOnlyList<SpeechSession> sessions,
 		SpeechSession? currentSelection,
@@ -48,15 +41,14 @@ internal static class SessionSelectionPlanner
 	{
 		if (sessions is null) throw new ArgumentNullException(nameof(sessions));
 
-		SpeechSession? selection = currentSelection;
+		string? wantedPath = string.IsNullOrWhiteSpace(preferredPath)
+			? currentSelection?.FilePath
+			: preferredPath;
 
-		if (!string.IsNullOrWhiteSpace(preferredPath))
-			selection = sessions.FirstOrDefault(s => PathsEqual(s.FilePath, preferredPath));
+		SpeechSession? selection = sessions.FirstOrDefault(s => PathEquality.SamePath(s.FilePath, wantedPath));
 
 		if (selection is null && sessions.Count > 0)
 			selection = sessions[0];
-		else if (sessions.Count == 0)
-			selection = null;
 
 		return selection;
 	}
