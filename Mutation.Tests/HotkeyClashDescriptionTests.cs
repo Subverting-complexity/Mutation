@@ -130,6 +130,24 @@ public class HotkeyClashDescriptionTests
 			HotkeyClashDescription.For("CTRL+ALT+P", sent));
 	}
 
+	[Theory]
+	[InlineData("^{F5}")]
+	[InlineData("CTRL+A, CTRL+ALT+P")]
+	public void A_send_key_row_is_asked_about_the_way_a_send_key_row_is_read(string configured)
+	{
+		// The Hotkeys page asks this for its rows too, and two of them are not claimed from
+		// Windows: their value may be a comma-separated sequence, and it may be spelled in
+		// SendKeys shorthand. Asked as though it were one claimed chord, "^{F5}" parses as
+		// nothing and the badge would have no name to show.
+		var prompts = new[]
+		{
+			SummarizePrompt with { Text = "CTRL+F5" },
+			SummarizePrompt with { Name = "the LLM prompt \"Tidy up\"", Text = "CTRL+ALT+P" },
+		};
+
+		Assert.NotEmpty(HotkeyClashDescription.NamesHolding(configured, prompts, claimsTheChord: false));
+	}
+
 	[Fact]
 	public void Two_other_prompts_clashing_with_each_other_are_not_this_prompt_s_problem()
 	{

@@ -21,9 +21,12 @@ internal static class HotkeyClashDescription
 	/// is free. Blank and half-typed text is free by definition — it cannot be registered, so
 	/// it cannot be taken.
 	/// </summary>
-	public static string? For(string? hotkey, IReadOnlyList<NamedHotkey> claimedElsewhere)
+	public static string? For(
+		string? hotkey,
+		IReadOnlyList<NamedHotkey> claimedElsewhere,
+		bool claimsTheChord = true)
 	{
-		var names = NamesHolding(hotkey, claimedElsewhere);
+		var names = NamesHolding(hotkey, claimedElsewhere, claimsTheChord);
 		return names.Count == 0 ? null : $"Already used by {JoinNames(names)}.";
 	}
 
@@ -40,7 +43,17 @@ internal static class HotkeyClashDescription
 	/// key is not claimed, unparseable text is not a chord — still decide each answer.
 	/// </para>
 	/// </summary>
-	public static IReadOnlyList<string> NamesHolding(string? hotkey, IReadOnlyList<NamedHotkey> claimedElsewhere)
+	/// <param name="claimsTheChord">
+	/// Whether <paramref name="hotkey"/> is claimed from Windows. True for a prompt's shortcut,
+	/// which is what the prompt editor asks about. False for a "Send key after…" value, which
+	/// is read differently — it may be a comma-separated sequence, and it may be spelled in
+	/// SendKeys shorthand. Left at true, <c>^{F5}</c> in such a box parses as nothing at all
+	/// and the answer comes back empty rather than naming what holds it.
+	/// </param>
+	public static IReadOnlyList<string> NamesHolding(
+		string? hotkey,
+		IReadOnlyList<NamedHotkey> claimedElsewhere,
+		bool claimsTheChord = true)
 	{
 		if (claimedElsewhere is null) throw new ArgumentNullException(nameof(claimedElsewhere));
 
@@ -48,7 +61,7 @@ internal static class HotkeyClashDescription
 		if (string.IsNullOrWhiteSpace(hotkey))
 			return names;
 
-		var mine = new[] { new HotkeyConflictFinder.ConfiguredHotkey(hotkey, ClaimsTheChord: true) };
+		var mine = new[] { new HotkeyConflictFinder.ConfiguredHotkey(hotkey, claimsTheChord) };
 
 		foreach (var other in claimedElsewhere)
 		{

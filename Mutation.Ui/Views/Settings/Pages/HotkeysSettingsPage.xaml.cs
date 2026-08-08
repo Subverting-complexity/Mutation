@@ -168,14 +168,22 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	/// — the badge names the prompt instead, which is the difference between a warning the user
 	/// can act on and one that only says something is wrong somewhere (issue #336).
 	/// </summary>
-	private static string PromptClashBadge(HotkeyRow row, IReadOnlyList<NamedHotkey> prompts)
+	/// <remarks>
+	/// Asked with the same two things the cross-list check was given — the saved value, not
+	/// what is in the box, and the row's own <see cref="HotkeySpec.Registers"/> flag — so the
+	/// two cannot disagree about what this row holds. The flag matters on the two "Send key
+	/// after…" rows: their value may be a comma-separated sequence or SendKeys shorthand, and
+	/// asking about it as though it were a single claimed chord parses <c>^{F5}</c> as nothing
+	/// and comes back with no name to show.
+	/// </remarks>
+	private string PromptClashBadge(HotkeyRow row, IReadOnlyList<NamedHotkey> prompts)
 	{
-		var names = HotkeyClashDescription.NamesHolding(row.Editor.Hotkey, prompts);
+		var names = HotkeyClashDescription.NamesHolding(
+			row.Spec.Getter(_settings), prompts, row.Spec.Registers);
 
-		// The cross-list check already said this row clashes with a prompt, so an empty answer
-		// here means the two disagree — which they can, because that check reads the saved
-		// setting and this one reads the box. Falling back keeps the badge honest rather than
-		// blank.
+		// A guard rather than an expected branch: the caller only reaches here because the
+		// cross-list check found a prompt clash on this row, and this asks the same question of
+		// the same values. A badge that named nothing would still be better than a blank one.
 		return names.Count == 0
 			? "Also used by an LLM prompt"
 			: $"Also used by {string.Join(", ", names)}";
