@@ -4,6 +4,108 @@
 <!-- The sections below are suggestions from the github-workflow plugin.   -->
 <!-- Edit, reorder, or remove anything that doesn't fit your workflow.     -->
 
+## Communication Style
+
+These rules govern everything you write for me to read: chat replies,
+status updates, questions you ask me, and the summary at the end of a
+piece of work. They do not govern code comments, commit messages or pull
+request bodies, which have a different audience and their own conventions.
+They also do not govern the user guide, which is written for someone who
+is not a developer and has its own tone rules under **Documentation**
+below.
+
+### Simplified Technical English, plus Zinsser
+
+Write in Simplified Technical English (ASD-STE100) where practical, and
+follow William Zinsser's four principles of good writing: simplicity,
+brevity, clarity, humanity.
+
+- Use short, direct sentences and the active voice.
+- Use simple, precise words. Give each technical term one meaning and keep
+  that meaning everywhere.
+- Cut unnecessary words, repetition, and clutter.
+- Make instructions and explanations easy to understand the first time.
+- Keep the writing natural and human. Do not sound mechanical or like a
+  technical manual unless the task asks for that style.
+- Keep the technical accuracy, terminology, nuance, and detail that the
+  content needs. Brevity is not a licence to leave things out.
+- When elegant wording and easy comprehension conflict, choose easy
+  comprehension.
+- Avoid jargon, idioms, metaphors, and complex sentence structures unless
+  accuracy needs them.
+
+### Explain, do not just label
+
+Explain things the way you would to a capable colleague who does not know
+this codebase and is not reading the diff alongside you.
+
+- Lead with what actually happens, in plain words, before naming the file,
+  function or library it happens in. A name is a label for something I
+  already understand, not a substitute for understanding it.
+- Prefer a short narrative to a list of identifiers. Where a change has a
+  cause, a consequence and a trade-off, say all three as sentences.
+- Write in full sentences. Do not compress into headline fragments or
+  strings of bare identifiers.
+- Where something is subtle, say why it is subtle and what would go wrong
+  if it were done the obvious way. The failure a design prevents is
+  usually the clearest explanation of it available.
+- Say what a user of this software would actually notice. "Nothing changes
+  for the user" is a useful sentence and worth writing.
+- Be explicit about what you did not verify, and about what cannot be
+  verified in an agent session at all, rather than leaving me to infer it
+  from what you left out.
+
+### Name things, never cite a bare number
+
+Never refer to a work item by bare number or ID. Every mention of an issue
+or pull request carries a short plain-English description of what it is:
+"the quality-gate build-integrity issue (#437)", not "#437". Lead with the
+human-readable name and put the number in parentheses as a lookup key,
+never the reverse.
+
+This matters most in lists of candidates, where a run of bare numbers is
+unreadable noise. I do not carry the number-to-topic mapping in my head.
+In tables, give titles their own column. The same goes for milestone
+titles, branch names and label sets: describe the thing, then cite the
+identifier. It holds for everything you file in passing too: write "filed
+bug #45 about the stuck progress bar", not "filed bug #45", even where a
+plugin or skill shows you the bare-number form.
+
+### End a finished piece of work with a clear closing summary
+
+When you finish a chunk of work, end your reply with a plain summary of
+what happened. A chunk of work means the whole run: you built it, you
+opened the pull request, you reviewed it, you made the fixes, and you
+merged it.
+
+Write one to three paragraphs in simple English. Say which stories are
+finished, by number and title, and say what was actually done in each, in
+terms of what the software now does. Do not make me read back through the
+session to work out where things landed.
+
+The last paragraph must say that the merge was done. Say it plainly, in
+its own sentence, near the end: which pull request merged, into which
+branch, and that it is now on `main`. If a merge did not happen, say that
+just as plainly and say what is blocking it.
+
+### Where these rules meet the project's own conventions
+
+Two places in this repository push the other way. These rules win in both,
+with one narrow exception.
+
+The `github-workflow` plugin, its skills, and this repository's own board
+tooling present work items as bare numbers, and the branch convention in
+`ClaudeProject.md` builds a branch name out of one
+(`feature/{number}/{short-desc}`). In prose you write for me, name the
+thing and put the number in brackets, whatever form the tool showed you.
+The exception is a literal identifier a machine consumes — a `gh` command
+argument, a branch name, a URL, a file path. There the number is the
+value, so use it as-is and describe it in the surrounding sentence.
+
+The **Autonomous Execution** rule below says never to stop and ask
+permission to continue. That governs whether you ask, not how you write.
+When a question is genuinely necessary, ask it in the style above.
+
 ## Tech Stack & Build
 
 This is a .NET 10 solution; `Mutation.Ui` is a **WinUI 3** project (not WPF).
@@ -47,11 +149,14 @@ column says. The Ready column is not a claim, and neither is a lifecycle
 label on its own.
 
 More than one session runs against this repo at once, and the board is the
-only thing they share. On 2026-08-08 three sessions each picked #332, #321
-and #316 out of Ready, built the same fixes, and raced to merge: two
-sessions' work was thrown away, and the issues went from `status-ready`
-straight to closed with no session ever having claimed them. Claiming costs
-one command. Not claiming cost most of a session, twice.
+only thing they share. On 2026-08-08 three sessions each picked the same
+three issues out of Ready — the router's From and To boxes rewriting
+themselves silently (#332), a core hotkey and a router mapping both able to
+claim the same chord (#321), and Deepgram never retrying a server-side
+failure (#316) — built the same fixes, and raced to merge: two sessions'
+work was thrown away, and the issues went from `status-ready` straight to
+closed with no session ever having claimed them. Claiming costs one
+command. Not claiming cost most of a session, twice.
 
 This applies whether or not you invoke a workflow skill. Going straight from
 the board to the code is exactly the path that skips the claim — which is
