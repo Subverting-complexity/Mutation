@@ -200,6 +200,87 @@ public class CursorAnchorTests
 	}
 
 	[Fact]
+	public void LateRestoreFromAFinishedCapture_CannotMoveTheNextCapturesPointer()
+	{
+		// The overlay window is created once and reused, so one anchor serves every capture the
+		// app makes. A restore deferred by one capture — onto a dispatcher turn, or onto the
+		// continuation that waits for the foreground to be handed back — could still be pending
+		// when the next capture starts. Without the stamp it would haul the pointer back to the
+		// previous capture's position, which is the very jump this feature exists to prevent.
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+
+		anchor.Capture();
+		int firstCapture = anchor.Generation;
+
+		// The next capture begins, from somewhere else entirely.
+		cursor.Position = new CursorPoint(1200, 800);
+		anchor.Capture();
+
+		cursor.Position = new CursorPoint(1210, 805);
+		Assert.False(anchor.RestoreIfCurrent(firstCapture));
+		Assert.Empty(cursor.Writes);
+
+		// The live anchor still works.
+		Assert.True(anchor.RestoreIfCurrent(anchor.Generation));
+		Assert.Equal(new CursorPoint(1200, 800), cursor.Position);
+	}
+
+	[Fact]
+	public void LateTidyUpFromAFinishedCapture_DoesNotThrowAwayTheNextCapturesAnchor()
+	{
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+
+		anchor.Capture();
+		int firstCapture = anchor.Generation;
+
+		cursor.Position = new CursorPoint(1200, 800);
+		anchor.Capture();
+
+		anchor.ClearIfCurrent(firstCapture);
+
+		Assert.True(anchor.HasAnchor);
+		Assert.Equal(new CursorPoint(1200, 800), anchor.Anchor);
+	}
+
+	[Fact]
+	public void ClearEndsTheGeneration_SoNothingStillPendingCanRestore()
+	{
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+
+		anchor.Capture();
+		int generation = anchor.Generation;
+		anchor.Clear();
+
+		cursor.Position = new CursorPoint(10, 10);
+		Assert.False(anchor.RestoreIfCurrent(generation));
+		Assert.Empty(cursor.Writes);
+	}
+
+	[Fact]
+	public void FailedCaptureStillEndsTheGeneration()
+	{
+		// A capture that could not read the pointer replaces the anchor with nothing. Work
+		// deferred by the previous capture must not carry on defending the old position through
+		// the gap.
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+
+		anchor.Capture();
+		int firstCapture = anchor.Generation;
+
+		cursor.CanRead = false;
+		Assert.False(anchor.Capture());
+
+		cursor.CanRead = true;
+		cursor.Position = new CursorPoint(10, 10);
+		Assert.False(anchor.RestoreIfCurrent(firstCapture));
+		Assert.Empty(cursor.Writes);
+	}
+
+	[Fact]
 	public void CapturedAnchorIsReadable()
 	{
 		var cursor = new FakeCursor(-1920, 40);

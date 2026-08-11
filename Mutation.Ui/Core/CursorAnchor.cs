@@ -55,12 +55,27 @@ public sealed class CursorAnchor
 	public CursorPoint Anchor => _anchor;
 
 	/// <summary>
+	/// Which anchor this is. Changes on every <see cref="Capture"/> and every
+	/// <see cref="Clear"/>, so work that was scheduled against one anchor can tell that a newer
+	/// one has replaced it.
+	/// <para>
+	/// The capture overlay is created once and reused, so one anchor serves every capture the
+	/// app ever makes. Some of the restores are deferred — onto a dispatcher turn, or onto a
+	/// continuation that waits for the foreground to be handed back — and a slow one could
+	/// otherwise still be pending when the next capture starts, and clear or restore against an
+	/// anchor that belongs to a capture that finished.
+	/// </para>
+	/// </summary>
+	public int Generation { get; private set; }
+
+	/// <summary>
 	/// Remembers where the pointer is now, replacing any position remembered before. Returns
 	/// whether a position was read; a failure leaves nothing remembered, so a later
 	/// <see cref="Restore"/> does nothing rather than send the pointer to a stale place.
 	/// </summary>
 	public bool Capture()
 	{
+		Generation++;
 		if (_cursor.TryGet(out var position))
 		{
 			_anchor = position;
@@ -103,12 +118,31 @@ public sealed class CursorAnchor
 	}
 
 	/// <summary>
+	/// As <see cref="Restore"/>, but does nothing unless <paramref name="generation"/> is still
+	/// the current one. Deferred work uses this so a restore scheduled by a capture that has
+	/// since finished cannot move the pointer during the next one.
+	/// </summary>
+	public bool RestoreIfCurrent(int generation) => generation == Generation && Restore();
+
+	/// <summary>
 	/// Forgets the remembered position, so nothing can be restored to it later. Called once a
 	/// capture is over and the pointer belongs to the user again.
 	/// </summary>
 	public void Clear()
 	{
+		Generation++;
 		_anchor = default;
 		HasAnchor = false;
+	}
+
+	/// <summary>
+	/// As <see cref="Clear"/>, but does nothing unless <paramref name="generation"/> is still
+	/// the current one — so a late tidy-up from a finished capture cannot throw away the anchor
+	/// the next capture has just taken.
+	/// </summary>
+	public void ClearIfCurrent(int generation)
+	{
+		if (generation == Generation)
+			Clear();
 	}
 }

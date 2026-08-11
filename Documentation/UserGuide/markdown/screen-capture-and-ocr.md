@@ -42,16 +42,15 @@ Those two sentences are what the **Screenshot to clipboard** shortcut says. Pres
 "Screenshot already in progress", in the **OCR result** box rather than in the status
 area.
 
+Your mouse pointer stays put through all of this. Whatever it was resting on when you
+pressed the shortcut, it is still there when the overlay opens and still there when the
+overlay goes away. So you can pick the rectangle with the mouse or the keyboard, either
+way, without the pointer wandering off first.
+
 ### Picking the rectangle with the mouse
 
 Hold the left mouse button down at one corner of the area you want, drag to the
 opposite corner, and let go. That is it. A right-click cancels instead.
-
-The mouse pointer stays put throughout. Whatever you were pointing at when you pressed
-the shortcut is still under the pointer when the overlay comes up, so you can start
-dragging straight away. When you let go, the pointer stays exactly where you released
-it as the overlay disappears. Some magnifiers and screen readers move the pointer
-whenever a new window takes over, and Mutation puts it back.
 
 ### Picking the rectangle with the keyboard
 

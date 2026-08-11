@@ -651,14 +651,20 @@ public sealed partial class RegionSelectionWindow : Window
 		if (_dispatcherQueue is null)
 			return;
 
+		// Read now, not inside the callback: this identifies the anchor being defended, so a
+		// turn that runs late cannot act on behalf of a capture that has already finished.
+		int generation = _cursorAnchor.Generation;
+
 		_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
 		{
-			// The user got in first. A drag in flight owns the pointer, and moving it now would
-			// redraw someone's rectangle from under them.
-			if (_dragging)
+			var allowed = CursorRestorePolicy.Decide(_dragging, _keyboard.HasAnchor);
+			if (allowed == DeferredCursorRestore.StandDown)
 				return;
 
-			if (!_cursorAnchor.Restore())
+			if (!_cursorAnchor.RestoreIfCurrent(generation))
+				return;
+
+			if (allowed != DeferredCursorRestore.MoveAndReseed)
 				return;
 
 			// The pointer really had been moved, so the crosshair and the keyboard caret were
@@ -675,29 +681,38 @@ public sealed partial class RegionSelectionWindow : Window
 	/// Puts the pointer back once more after the window that was in front before the overlay
 	/// opened has the keyboard again, then stops defending the position.
 	/// <para>
-	/// Handing the foreground back is itself a focus change, and the restore ladder that does it
-	/// can run tens of milliseconds after the overlay hides — well after the inline restore in
-	/// <see cref="CompleteSelection"/>. The continuation runs on the thread pool, which is fine:
-	/// setting the pointer position is not tied to a thread.
+	/// Handing the foreground back is itself a focus change, and it is not instant: the ladder in
+	/// <see cref="HideAndRestore"/> retries on a later dispatcher turn and then, if that fails
+	/// too, waits <see cref="FocusRetryDelayMilliseconds"/> before a last attempt. So this can
+	/// land a good hundred milliseconds after the button came up, and someone who released the
+	/// drag and immediately moved the mouse elsewhere will feel it tug back. That is the trade
+	/// the story asks for — a pointer that does not jump is worth more here than one that never
+	/// argues — but it is a real cost, not a free win.
+	/// </para>
+	/// <para>
+	/// The continuation runs on the thread pool, which is fine: setting the pointer position is
+	/// not tied to a thread. It is stamped with the anchor it was registered against, so a
+	/// handback that somehow outlives its own capture cannot touch the next one's pointer.
 	/// </para>
 	/// </summary>
 	private void RestoreCursorAfterForegroundHandback()
 	{
+		int generation = _cursorAnchor.Generation;
 		var handback = ForegroundHandedBack;
 		if (handback.IsCompleted)
 		{
 			// The foreground went back synchronously, so the restore just done in
 			// CompleteSelection already covered it.
-			_cursorAnchor.Clear();
+			_cursorAnchor.ClearIfCurrent(generation);
 			return;
 		}
 
 		_ = handback.ContinueWith(
 			_ =>
 			{
-				_cursorAnchor.Restore();
+				_cursorAnchor.RestoreIfCurrent(generation);
 				// The capture is over and the pointer belongs to the user again.
-				_cursorAnchor.Clear();
+				_cursorAnchor.ClearIfCurrent(generation);
 			},
 			System.Threading.CancellationToken.None,
 			TaskContinuationOptions.None,
