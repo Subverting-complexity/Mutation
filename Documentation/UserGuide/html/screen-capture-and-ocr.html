@@ -286,9 +286,15 @@ beep says something went wrong, and the status area tells you what.</p>
 <p>Now and then another program has the clipboard open at the moment Mutation wants to
 copy to it — a clipboard manager, or your screen reader taking a look at the
 screenshot that went there a second earlier. Mutation waits a moment and tries again a
-few times. If it still cannot get in, the reading itself is not lost: the text is in
-the <strong>OCR result</strong> box as usual, and a message says it could not be copied to the
-clipboard. That way you know to copy it out of the box yourself.</p>
+few times, for the picture and for the text alike. That is usually enough and you never
+notice it.</p>
+<p>When it is not enough, nothing is thrown away. A plain <strong>Screenshot to clipboard</strong> tells
+you the clipboard was busy and asks you to press the shortcut again. A <strong>Screenshot &amp;
+OCR</strong> still reads the text, because the reading works from the picture Mutation is
+holding and never needed the clipboard for it — you get the text on your clipboard and
+in the <strong>OCR result</strong> box, and a message telling you that only the picture did not make
+it. And if the text is the part that could not be copied, it is still in the <strong>OCR
+result</strong> box for you to copy out yourself.</p>
 <h2 id="reading-a-batch-of-files-at-once">Reading a batch of files at once</h2>
 <p>The <strong>OCR documents</strong> button handles whole files rather than screenshots. Click it,
 pick one or more files, and Mutation reads them all.</p>

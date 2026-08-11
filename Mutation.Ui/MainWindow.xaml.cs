@@ -490,10 +490,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				// distinguish a captured region from a cancelled one.
 				try
 				{
-					if (await _ocrManager.TakeScreenshotToClipboardAsync())
-						ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
-					else
-						ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+					AnnounceScreenshotOutcome(await _ocrManager.TakeScreenshotToClipboardAsync());
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
 			});
@@ -998,10 +995,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		try
 		{
 			// Cancelling the region overlay used to be announced as a success.
-			if (await _ocrManager.TakeScreenshotToClipboardAsync())
-				ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
-			else
-				ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+			AnnounceScreenshotOutcome(await _ocrManager.TakeScreenshotToClipboardAsync());
 		}
 		catch (Exception ex)
 		{
@@ -3545,6 +3539,47 @@ public sealed partial class MainWindow : Window, IDisposable
 		"The text was recognised, but it could not be copied to the clipboard. It is in the OCR results box.";
 
 	/// <summary>
+	/// Said when a plain screenshot was captured but the clipboard would not take it. It names
+	/// the cause, because the cause is the whole of the advice: something else has the clipboard
+	/// for a moment, and pressing the shortcut again almost always gets in.
+	/// </summary>
+	private const string ScreenshotClipboardBusyMessage =
+		"Another program is using the clipboard, so the screenshot was not copied. Press the shortcut again.";
+
+	/// <summary>
+	/// Said when a screenshot was read successfully but the picture itself did not reach the
+	/// clipboard. Leads with the good news, because the text is what the user asked for and it
+	/// is safely on the clipboard — only the picture is missing.
+	/// </summary>
+	private const string ScreenshotImageCopyFailedMessage =
+		"The text was recognised and copied, but the screenshot picture could not be put on the clipboard.";
+
+	/// <summary>
+	/// Says which of the three things a plain screenshot capture did. Shared by the shortcut and
+	/// the button, so both tell the user the same thing.
+	/// <para>
+	/// A busy clipboard is a status line, not an error dialog. It used to be a dialog, because
+	/// the failure arrived here as a thrown exception (issue #360) — and a modal box the user has
+	/// to dismiss is the wrong weight for something that clears on its own in under a second.
+	/// </para>
+	/// </summary>
+	private void AnnounceScreenshotOutcome(ScreenshotToClipboardOutcome outcome)
+	{
+		switch (outcome)
+		{
+			case ScreenshotToClipboardOutcome.Copied:
+				ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
+				break;
+			case ScreenshotToClipboardOutcome.ClipboardUnavailable:
+				ShowStatus("Screenshot", ScreenshotClipboardBusyMessage, InfoBarSeverity.Error);
+				break;
+			default:
+				ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+				break;
+		}
+	}
+
+	/// <summary>
 	/// Puts an OCR run's answer in front of the user: the text, or the error, in the OCR box;
 	/// then the shortcut configured to run afterwards; then a word about the clipboard if it
 	/// would not take the text.
@@ -3587,6 +3622,16 @@ public sealed partial class MainWindow : Window, IDisposable
 		if (result.Success && result.ClipboardCopyFailed)
 		{
 			ShowStatus(statusTitle ?? "OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
+			return;
+		}
+
+		// The picture not reaching the clipboard is worth a word, but only when the reading
+		// itself worked. A run that recognised nothing has an error to show instead, and that
+		// error is the news — a second sentence about the clipboard behind it would bury the
+		// reason there is no text, and the clipboard is then simply unchanged.
+		if (result.Success && result.ScreenshotCopyFailed)
+		{
+			ShowStatus(statusTitle ?? "OCR", ScreenshotImageCopyFailedMessage, InfoBarSeverity.Warning);
 			return;
 		}
 

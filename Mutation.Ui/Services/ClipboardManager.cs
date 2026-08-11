@@ -24,9 +24,10 @@ public class ClipboardManager
 	/// Where the retrying calls on this class are made. Null means "make them wherever the
 	/// caller is", which is what the tests that do not care about threading get.
 	/// <para>
-	/// It covers the methods that retry, not every method here. <see cref="SetText"/> is
-	/// synchronous and cannot hop, and <see cref="SetImageAsync"/> has neither a retry nor a
-	/// hop — see issue #360. Both predate this and both are called from the UI thread today.
+	/// It covers the methods that retry, not every method here. <see cref="SetText"/> and
+	/// <see cref="SetImageAsync"/> are the single attempts the retrying methods are built from,
+	/// so they are made wherever their caller already is — which, going through
+	/// <see cref="TrySetTextAsync"/> or <see cref="TrySetImageAsync"/>, is the UI thread.
 	/// </para>
 	/// </param>
 	public ClipboardManager(IUiThreadDispatcher? uiThread = null)
@@ -259,7 +260,32 @@ public class ClipboardManager
 		return bytes;
 	}
 
-	public async Task SetImageAsync(SoftwareBitmap bitmap)
+	/// <summary>
+	/// Puts <paramref name="bitmap"/> on the clipboard, retrying while another process holds the
+	/// clipboard open. Returns false when it stayed unavailable after retries.
+	/// <para>
+	/// This is the screenshot write, and it opens the widest race in the app: it is the moment a
+	/// clipboard manager or a screen reader notices something arrived and opens the clipboard to
+	/// look at it. It used to be the one asynchronous write here with neither a retry nor a
+	/// thread hop, and it reported failure by throwing, which reached the hotkey handler as an
+	/// error dialog (issue #360). It now answers with a bool like every sibling, leaving the
+	/// caller to decide what a busy clipboard is worth saying.
+	/// </para>
+	/// </summary>
+	public virtual Task<bool> TrySetImageAsync(SoftwareBitmap bitmap)
+	{
+		if (bitmap is null)
+			return Task.FromResult(false);
+
+		return RetryOnUiThreadAsync(() => SetImageAsync(bitmap));
+	}
+
+	/// <summary>
+	/// One attempt at putting an image on the clipboard. Split out and virtual for the same
+	/// reason <see cref="SetText"/> is: nothing in a test can reach the real Windows clipboard,
+	/// so without a seam here no test could check that a busy clipboard is retried.
+	/// </summary>
+	protected virtual async Task SetImageAsync(SoftwareBitmap bitmap)
 	{
 		var data = new DataPackage();
 		var stream = new InMemoryRandomAccessStream();

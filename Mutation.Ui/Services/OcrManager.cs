@@ -37,11 +37,19 @@ namespace Mutation.Ui.Services;
 /// only alongside <c>Success</c>: a run that recognised nothing had nothing to copy, and does
 /// not report a copy that never happened as having failed (issue #341).
 /// </param>
+/// <param name="ScreenshotCopyFailed">
+/// True when the screenshot this run read from did not itself reach the clipboard. Separate from
+/// <paramref name="ClipboardCopyFailed"/> because the two are independent: the reading works from
+/// the captured bitmap in hand, so a picture that never got to the clipboard says nothing about
+/// whether the text that followed it did (issue #360). Always false for the paths that never put
+/// a picture on the clipboard.
+/// </param>
 public record OcrResult(
 	bool Success,
 	string Message,
 	OcrRunOutcome Outcome = OcrRunOutcome.Answered,
-	bool ClipboardCopyFailed = false);
+	bool ClipboardCopyFailed = false,
+	bool ScreenshotCopyFailed = false);
 
 /// <param name="ClipboardCopyFailed">
 /// As on <see cref="OcrResult"/>: the combined text was recognised but could not be put on the
@@ -88,17 +96,17 @@ public class OcrManager
     }
 
     /// <summary>
-    /// Returns true when an image reached the clipboard; false when the user cancelled
-    /// the region overlay or no region was selected. Callers must not announce success
-    /// unconditionally — for a blind user, "Screenshot copied to the clipboard" after a
-    /// cancelled capture is worse than silence.
+    /// Captures a region and puts it on the clipboard, saying which of the three things
+    /// happened. Callers must not announce success unconditionally — for a blind user,
+    /// "Screenshot copied to the clipboard" after a cancelled capture is worse than silence,
+    /// and so is it after a capture the clipboard would not take.
     /// </summary>
-    public async Task<bool> TakeScreenshotToClipboardAsync()
+    public async Task<ScreenshotToClipboardOutcome> TakeScreenshotToClipboardAsync()
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
             try { _activeOverlay?.BringToFront(); } catch { }
-            return false;
+            return ScreenshotToClipboardOutcome.Cancelled;
         }
         try
         {
@@ -106,15 +114,17 @@ public class OcrManager
             // imaging memory, and waiting for a finalizer pass lets repeated hotkey
             // presses grow the working set until an encode fails outright (issue #229).
             using var bitmap = await CaptureScreenshotAsync();
-            if (bitmap != null)
+            if (bitmap == null)
             {
-                await _clipboard.SetImageAsync(bitmap);
-                await PlayBeepSafeAsync(BeepType.Success);
-                return true;
+                await PlayBeepSafeAsync(BeepType.Failure);
+                return ScreenshotToClipboardOutcome.Cancelled;
             }
 
-            await PlayBeepSafeAsync(BeepType.Failure);
-            return false;
+            bool copied = await _clipboard.TrySetImageAsync(bitmap);
+            await PlayBeepSafeAsync(copied ? BeepType.Success : BeepType.Failure);
+            return copied
+                ? ScreenshotToClipboardOutcome.Copied
+                : ScreenshotToClipboardOutcome.ClipboardUnavailable;
         }
         finally
         {
@@ -156,10 +166,14 @@ public class OcrManager
                 return new(false, "Screenshot cancelled.");
             }
 
-            await _clipboard.SetImageAsync(bitmap);
+            // The reading goes ahead whatever the clipboard says, because it works from the
+            // bitmap in hand and never needed the clipboard copy. This used to throw out of
+            // here when the clipboard was busy, losing a capture the user cannot repeat —
+            // whatever was on screen has moved on (issue #360).
+            bool imageCopied = await _clipboard.TrySetImageAsync(bitmap);
             var result = await ExtractTextViaOcrAsync(order, bitmap);
             await PlayBeepSafeAsync(result.Success ? BeepType.Success : BeepType.Failure);
-            return result;
+            return imageCopied ? result : result with { ScreenshotCopyFailed = true };
         }
         finally
         {
@@ -760,7 +774,18 @@ public class OcrManager
         private const int SM_CXVIRTUALSCREEN = 78;
         private const int SM_CYVIRTUALSCREEN = 79;
 
-        private async Task<SoftwareBitmap?> CaptureScreenshotAsync()
+        /// <summary>
+        /// Puts a region-selection overlay on screen and returns what the user selected, or
+        /// null when they dismissed it.
+        /// <para>
+        /// Virtual so a test can stand in for it. Everything below this line reads the real
+        /// desktop and shows a real window, so without a seam here nothing about the two
+        /// screenshot methods could be tested at all — including what they now do when the
+        /// clipboard will not take the picture (issue #360). Issue #304 wants the same seam
+        /// for the same reason.
+        /// </para>
+        /// </summary>
+        protected virtual async Task<SoftwareBitmap?> CaptureScreenshotAsync()
         {
             // Use GetSystemMetrics to retrieve the physical pixel bounds of the virtual screen.
             // This avoids the scaling issues associated with System.Windows.Forms.SystemInformation.VirtualScreen on high-DPI displays.
