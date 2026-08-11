@@ -3531,7 +3531,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	}
 
 	/// <summary>
-	/// Says which of the three things a plain screenshot capture did. Shared by the shortcut and
+	/// Says which of the five things a plain screenshot capture did. Shared by the shortcut and
 	/// the button, so both tell the user the same thing.
 	/// <para>
 	/// A busy clipboard is a status line, not an error dialog. It used to be a dialog, because
@@ -3599,9 +3599,18 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 
 		if (result.Success)
+		{
 			ShowStatus(statusTitle, successMessage ?? string.Empty, InfoBarSeverity.Success);
-		else
-			ShowStatus(statusTitle, result.Message, failureSeverity);
+			return;
+		}
+
+		// Which severity, and why, is decided by ClipboardCopyMessages — a refused run is not a
+		// failure and must not be announced as one (issue #367). Kept out here so it is pinned
+		// by a test rather than by whoever next reads this line.
+		ShowStatus(
+			statusTitle,
+			result.Message,
+			ClipboardCopyMessages.ForOcrRunSeverity(result.Outcome, failureSeverity));
 	}
 
 	/// <summary>

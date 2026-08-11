@@ -23,11 +23,24 @@ you were.
 
 Press **Esc** at any point to cancel. Nothing is copied, and Mutation tells you so.
 
-If you press the shortcut again while the overlay is still up — easy to do if you did
-not hear the first press land — nothing new starts. Mutation brings the overlay you
-already have back to the front and says "A screenshot is already in progress. Select a
-region, or press Escape to cancel it." So carry on and pick your rectangle, or press
-**Esc** if you would rather start over.
+If you press the shortcut again while a capture is already running — easy to do if you
+did not hear the first press land — nothing new starts, and what Mutation tells you
+depends on how far the first one had got.
+
+If the overlay is still up, Mutation brings it back to the front and says "A screenshot
+is already in progress. Select a region, or press Escape to cancel it." So carry on and
+pick your rectangle, or press **Esc** if you would rather start over.
+
+If you had already picked your rectangle, the overlay has gone and Mutation is busy
+copying the picture — or, if the capture running was a **Screenshot & OCR**, reading it,
+which takes a few seconds. There is nothing for you to do, so it says "A screenshot is
+already in progress. Wait for it to finish, then try again." Give it a moment and press
+the shortcut again.
+
+Those two sentences are what the **Screenshot to clipboard** shortcut says. Press a
+**Screenshot & OCR** shortcut while a capture is running and you get a shorter answer,
+"Screenshot already in progress", in the **OCR result** box rather than in the status
+area.
 
 ### Picking the rectangle with the mouse
 

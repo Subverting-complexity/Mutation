@@ -182,22 +182,31 @@ culprit; closing it or turning off its monitoring settles it.
 
 ### Mutation says a screenshot is already in progress
 
-**What's happening.** You pressed a capture shortcut while a capture overlay was already
-on screen. Only one capture can run at a time, so the second press starts nothing.
-Mutation brings the overlay you already have back to the front and tells you so.
+**What's happening.** You pressed a capture shortcut while a capture was already
+running. Only one can run at a time, so the second press starts nothing. This is not a
+cancellation, and nothing has been copied or lost.
 
-With **Screenshot to clipboard** you get the message "A screenshot is already in
-progress. Select a region, or press Escape to cancel it." With **Screenshot & OCR** the
-words "Screenshot already in progress" appear in the **OCR result** box instead, and
-nothing else happens — in particular, any shortcut you set to run after an OCR is held
-back, so it cannot land in the capture overlay.
+A capture lasts longer than the overlay does. The overlay disappears the moment you pick
+your rectangle, but Mutation is still busy after that — copying the picture to your
+clipboard, and with **Screenshot & OCR** sending it away to be read, which can take a few
+seconds. A press that lands in that later stretch is refused too, and there is nothing on
+screen at the time.
 
-Either way, the overlay has not gone anywhere. It is still there, still waiting for you
-to pick a rectangle. This is not a cancellation, and nothing has been copied or lost.
+With **Screenshot to clipboard**, Mutation says which of the two you are in. "A
+screenshot is already in progress. Select a region, or press Escape to cancel it." means
+the overlay is still up and waiting for you. "A screenshot is already in progress. Wait
+for it to finish, then try again." means it has gone and the capture is finishing off.
 
-**What to do.** Carry on with the capture: pick your rectangle with the mouse or the
-keyboard as usual. If you would rather start again, press **Esc** to close the overlay
-first, then press the shortcut once more.
+With **Screenshot & OCR**, the words "Screenshot already in progress" appear in the
+**OCR result** box. Any shortcut you set to run after an OCR is held back, so it cannot
+land in the capture overlay. If you started the run from the **Screenshot & OCR** button
+rather than the shortcut, the same words also appear in the status area at the top of
+the window.
+
+**What to do.** If the overlay is still up, carry on with the capture: pick your
+rectangle with the mouse or the keyboard as usual. If you would rather start again, press
+**Esc** to close the overlay first, then press the shortcut once more. If you were told
+to wait, give it a moment and press the shortcut again.
 
 ### OCR read the text but could not copy it to the clipboard
 

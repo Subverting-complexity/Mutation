@@ -13,10 +13,16 @@ public enum OcrRunOutcome
 	Answered,
 
 	/// <summary>
-	/// The run never started, because a capture was already on screen. Nothing changed, there
-	/// is no new answer in the OCR box, and the full-screen capture overlay still has the
-	/// keyboard — so a shortcut sent now would land in the overlay rather than anywhere it was
-	/// aimed (issue #342).
+	/// The run never started, because a capture was already under way. Nothing changed and
+	/// there is no new answer in the OCR box, so the shortcut has nothing to act on — and when
+	/// the capture is still at its overlay, that overlay has the keyboard, so a shortcut sent
+	/// now would land in it rather than anywhere it was aimed (issue #342).
+	/// <para>
+	/// Withheld either way. A capture past its overlay has no keyboard to steal, but it also has
+	/// no new answer to read, so sending the shortcut would aim a screen-reader command at the
+	/// previous run's text. One value covers both because the answer is the same; the plain
+	/// screenshot path splits its refusal in two because there the advice differs (issue #367).
+	/// </para>
 	/// </summary>
 	Refused,
 }

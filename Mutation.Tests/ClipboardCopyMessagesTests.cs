@@ -54,21 +54,40 @@ public class ClipboardCopyMessagesTests
 	[Fact]
 	public void ARefusedPressSaysACaptureIsAlreadyWaitingRatherThanCancelled()
 	{
-		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedOverlayWaiting);
 
-		Assert.Equal(ClipboardCopyMessages.ScreenshotAlreadyInProgress, message);
+		Assert.Equal(ClipboardCopyMessages.ScreenshotOverlayWaiting, message);
 		Assert.NotEqual(ClipboardCopyMessages.ScreenshotCancelled, message);
 	}
 
 	/// <summary>
-	/// And it interrupts. The user pressed a key and saw nothing change; a polite announcement
-	/// queues behind whatever the overlay is saying and lands after the moment it was wanted.
-	/// <c>StatusAnnouncement.GetProcessing</c> promotes Warning alongside Error.
+	/// A press refused while a capture is running with no overlay gets a different sentence, and
+	/// the difference is the point. The one written for the overlay case says to select a region
+	/// and offers Escape; said here it asks for something the user cannot do, and the Escape
+	/// goes to whichever application actually has the keyboard (issue #367).
 	/// </summary>
 	[Fact]
-	public void ARefusedPressInterruptsTheScreenReader()
+	public void ARefusalWithNoOverlayNeverAsksForARegionOrOffersEscape()
 	{
-		var (_, severity) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedCaptureRunning);
+
+		Assert.Equal(ClipboardCopyMessages.ScreenshotCaptureRunning, message);
+		Assert.NotEqual(ClipboardCopyMessages.ScreenshotOverlayWaiting, message);
+		Assert.DoesNotContain("Escape", message);
+		Assert.DoesNotContain("Select a region", message);
+	}
+
+	/// <summary>
+	/// And both interrupt. The user pressed a key and saw nothing change; a polite announcement
+	/// queues behind whatever else is being said and lands after the moment it was wanted.
+	/// <c>StatusAnnouncement.GetProcessing</c> promotes Warning alongside Error.
+	/// </summary>
+	[Theory]
+	[InlineData(ScreenshotToClipboardOutcome.RefusedOverlayWaiting)]
+	[InlineData(ScreenshotToClipboardOutcome.RefusedCaptureRunning)]
+	public void ARefusedPressInterruptsTheScreenReader(ScreenshotToClipboardOutcome outcome)
+	{
+		var (_, severity) = ClipboardCopyMessages.ForScreenshot(outcome);
 
 		Assert.Equal(InfoBarSeverity.Warning, severity);
 		Assert.Equal(
@@ -77,15 +96,15 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// The refusal has to tell the user the overlay is still there and how to get out of it.
-	/// A sentence that only said "already in progress" would leave someone who cannot see the
-	/// screen with no idea what is now in front of them.
+	/// The overlay refusal has to tell the user the overlay is still there and how to get out of
+	/// it. A sentence that only said "already in progress" would leave someone who cannot see
+	/// the screen with no idea what is now in front of them.
 	/// </summary>
 	[Fact]
 	public void TheRefusalSaysWhatIsOnScreenAndHowToLeaveIt()
 	{
-		Assert.Contains("already in progress", ClipboardCopyMessages.ScreenshotAlreadyInProgress);
-		Assert.Contains("Escape", ClipboardCopyMessages.ScreenshotAlreadyInProgress);
+		Assert.Contains("already in progress", ClipboardCopyMessages.ScreenshotOverlayWaiting);
+		Assert.Contains("Escape", ClipboardCopyMessages.ScreenshotOverlayWaiting);
 	}
 
 	/// <summary>
@@ -101,7 +120,7 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// An unknown outcome is announced as a cancellation — the only one of the four that is safe
+	/// An unknown outcome is announced as a cancellation — the only one of the five that is safe
 	/// to say by accident, because it claims nothing.
 	/// </summary>
 	[Fact]
@@ -110,6 +129,48 @@ public class ClipboardCopyMessagesTests
 		var (message, _) = ClipboardCopyMessages.ForScreenshot((ScreenshotToClipboardOutcome)99);
 
 		Assert.Equal(ClipboardCopyMessages.ScreenshotCancelled, message);
+	}
+
+	/// <summary>
+	/// A refused OCR press is not announced as a failure. It used to carry the caller's failure
+	/// severity, which a screen reader turns into an aborted-action notification — said of a
+	/// press where nothing was attempted and nothing broke (issue #367).
+	/// </summary>
+	[Fact]
+	public void ARefusedOcrRunIsAnnouncedAsAWarningRatherThanAnError()
+	{
+		Assert.Equal(
+			InfoBarSeverity.Warning,
+			ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Refused, InfoBarSeverity.Error));
+	}
+
+	/// <summary>
+	/// It still interrupts, though. The user pressed a key and got no visible change, so a
+	/// polite announcement would arrive after the moment it was wanted.
+	/// </summary>
+	[Fact]
+	public void ARefusedOcrRunStillInterruptsTheScreenReader()
+	{
+		var severity = ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Refused, InfoBarSeverity.Error);
+
+		Assert.Equal(
+			AutomationNotificationProcessing.ImportantMostRecent,
+			StatusAnnouncement.GetProcessing(severity));
+	}
+
+	/// <summary>
+	/// A run that reached an answer keeps the severity its caller chose, whatever that is. Only
+	/// the refusal is quietened; quietening a real failure with the same rule would hide it.
+	/// </summary>
+	[Theory]
+	[InlineData(InfoBarSeverity.Error)]
+	[InlineData(InfoBarSeverity.Warning)]
+	[InlineData(InfoBarSeverity.Informational)]
+	public void AnOcrRunThatReachedAnAnswerKeepsTheCallersSeverity(InfoBarSeverity whenFailed)
+	{
+		Assert.Equal(
+			whenFailed,
+			ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Answered, whenFailed));
 	}
 
 	/// <summary>
