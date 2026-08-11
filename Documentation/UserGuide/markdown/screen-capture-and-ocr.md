@@ -47,6 +47,12 @@ area.
 Hold the left mouse button down at one corner of the area you want, drag to the
 opposite corner, and let go. That is it. A right-click cancels instead.
 
+The mouse pointer stays put throughout. Whatever you were pointing at when you pressed
+the shortcut is still under the pointer when the overlay comes up, so you can start
+dragging straight away. When you let go, the pointer stays exactly where you released
+it as the overlay disappears. Some magnifiers and screen readers move the pointer
+whenever a new window takes over, and Mutation puts it back.
+
 ### Picking the rectangle with the keyboard
 
 You never need to see the screen to do this. The overlay talks you through it. When it

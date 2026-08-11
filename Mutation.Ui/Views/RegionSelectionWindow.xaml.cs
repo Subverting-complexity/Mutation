@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Mutation.Ui.Core;
+using Mutation.Ui.Services;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -39,6 +40,17 @@ public sealed partial class RegionSelectionWindow : Window
 	// Keyboard path for the overlay, so the four screenshot/OCR hotkeys are completable
 	// without sight of the crosshair (issue #215).
 	private readonly KeyboardRegionSelector _keyboard = new();
+
+	/// <summary>The one way this window reads or writes the mouse pointer position.</summary>
+	private readonly ICursorPosition _cursor = new Win32CursorPosition();
+
+	/// <summary>
+	/// Holds the mouse pointer still across the focus changes a capture causes. Opening this
+	/// overlay and closing it again both move the foreground, and a magnifier or reader that
+	/// follows focus answers that by moving the pointer — so the pointer is read before each
+	/// change and put back after it (issue #371).
+	/// </summary>
+	private readonly CursorAnchor _cursorAnchor;
 	private const string AnnouncementActivityId = "RegionSelection";
 	private const string CancelledAnnouncement = "Region selection cancelled.";
 
@@ -66,10 +78,6 @@ public sealed partial class RegionSelectionWindow : Window
 	private static readonly IntPtr CURSOR_CROSS = LoadCursor(IntPtr.Zero, IDC_CROSS);
 	private static readonly IntPtr CURSOR_ARROW = LoadCursor(IntPtr.Zero, IDC_ARROW);
 
-	[StructLayout(LayoutKind.Sequential)]
-	private struct POINT { public int X; public int Y; }
-	[DllImport("user32.dll", SetLastError = false)]
-	private static extern bool GetCursorPos(out POINT lpPoint);
 	[DllImport("user32.dll", SetLastError = false)]
 	private static extern uint GetDpiForWindow(IntPtr hWnd);
 
@@ -149,6 +157,7 @@ public sealed partial class RegionSelectionWindow : Window
 	public RegionSelectionWindow()
 	{
 		this.InitializeComponent();
+		_cursorAnchor = new CursorAnchor(_cursor);
 		_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 		_dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 		EnsureElementRefs();
@@ -158,6 +167,12 @@ public sealed partial class RegionSelectionWindow : Window
 	{
 		try
 		{
+			// A second hotkey press on a capture that is already waiting drags the overlay back
+			// to the front, which is one more focus change and one more chance for the pointer
+			// to be moved out from under the user. Skipped entirely mid-drag: the pointer is
+			// then the user's drawing hand, and the position to defend is wherever they have
+			// got to, not wherever they started.
+			bool anchored = !_dragging && _cursorAnchor.Capture();
 			this.Activate();
 			SetForegroundWindow(_hwnd);
 			int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -166,6 +181,8 @@ public sealed partial class RegionSelectionWindow : Window
 			int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 			SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOMOVE | SWP_NOSIZE);
 			TryFocusOverlay();
+			if (anchored)
+				RestoreCursorNowAndAfterFocusSettles();
 		}
 		catch { }
 	}
@@ -241,6 +258,10 @@ public sealed partial class RegionSelectionWindow : Window
 		_tcs = new TaskCompletionSource<Rect?>();
 		_dragging = false;
 		_lastPointerPos = null;
+		// Read the pointer before anything below can move it. Showing the overlay, taking the
+		// foreground and moving focus onto the canvas are three focus changes in a row, and a
+		// tool that follows focus answers each of them by moving the pointer (issue #371).
+		_cursorAnchor.Capture();
 		ResetSelection();
 		RememberForegroundWindow();
 		InstallKeyboardHook();
@@ -254,6 +275,9 @@ public sealed partial class RegionSelectionWindow : Window
 		int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
 		int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 		SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOMOVE | SWP_NOSIZE);
+		// Before ResetKeyboardSelection, which seeds the keyboard caret from wherever the
+		// pointer is: put the pointer back first and the caret is seeded from the truth.
+		RestoreCursorNowAndAfterFocusSettles();
 		ResetKeyboardSelection();
 		// The overlay is full-screen and topmost, so it has to say what it wants (issue
 		// #215) — but the Canvas's AutomationProperties.HelpText already says it, and a
@@ -418,12 +442,21 @@ public sealed partial class RegionSelectionWindow : Window
 	private void CompleteSelection(Rect? result, string announcement, AutomationNotificationKind kind)
 	{
 		_dragging = false;
+		// Where the pointer is at the instant the selection ends — for a mouse drag, exactly
+		// where the button came up. Read here, while the overlay is still up, because hiding it
+		// and handing the foreground back are the next two focus changes that can move the
+		// pointer (issue #371).
+		_cursorAnchor.Capture();
 		Announce(announcement, kind);
 		ResetSelection();
 
 		void Finish()
 		{
 			HideAndRestore();
+			// The overlay is gone; put the pointer back on the screen the user is looking at
+			// again. HideAndRestore has already installed the handback this waits on.
+			_cursorAnchor.Restore();
+			RestoreCursorAfterForegroundHandback();
 			_tcs?.TrySetResult(result);
 		}
 
@@ -447,7 +480,7 @@ public sealed partial class RegionSelectionWindow : Window
 		_crosshairH.Width = overlayW;
 		// Map current cursor (screen px) to overlay DIPs
 		double cx, cy;
-		if (GetCursorPos(out POINT p))
+		if (_cursor.TryGet(out var p))
 		{
 			cx = (p.X - bounds.Left) / scale;
 			cy = (p.Y - bounds.Top) / scale;
@@ -582,7 +615,7 @@ public sealed partial class RegionSelectionWindow : Window
 			if (dpi > 0)
 				scale = dpi / 96.0;
 
-			if (!GetCursorPos(out POINT p))
+			if (!_cursor.TryGet(out var p))
 				return fallback;
 
 			int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -593,6 +626,82 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			return fallback;
 		}
+	}
+
+	/// <summary>
+	/// Puts the pointer back where the anchor says it was, twice: once now, and once on the next
+	/// low-priority dispatcher turn.
+	/// <para>
+	/// The second attempt is the one that usually matters. Activating a window and moving focus
+	/// return long before anyone else has reacted to them, and a magnifier or reader that follows
+	/// focus moves the pointer from its own message loop a moment later. Restoring only inline
+	/// would put the pointer back before the thing that moves it had even run.
+	/// </para>
+	/// <para>
+	/// Two attempts and no more, on purpose. A settle window that kept re-checking for a while
+	/// would also drag back a pointer the user had moved deliberately, and there is no way to
+	/// tell those two movements apart from here — the overlay sees an identical pointer event
+	/// either way. Losing the odd very late jump is the better failure.
+	/// </para>
+	/// </summary>
+	private void RestoreCursorNowAndAfterFocusSettles()
+	{
+		_cursorAnchor.Restore();
+
+		if (_dispatcherQueue is null)
+			return;
+
+		_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+		{
+			// The user got in first. A drag in flight owns the pointer, and moving it now would
+			// redraw someone's rectangle from under them.
+			if (_dragging)
+				return;
+
+			if (!_cursorAnchor.Restore())
+				return;
+
+			// The pointer really had been moved, so the crosshair and the keyboard caret were
+			// seeded from a position it is no longer at. Seed them again, from the live pointer
+			// rather than from _lastPointerPos, which may itself be the jumped position that
+			// arrived as a pointer-move event.
+			_lastPointerPos = null;
+			ResetKeyboardSelection();
+			RenderKeyboardSelection();
+		});
+	}
+
+	/// <summary>
+	/// Puts the pointer back once more after the window that was in front before the overlay
+	/// opened has the keyboard again, then stops defending the position.
+	/// <para>
+	/// Handing the foreground back is itself a focus change, and the restore ladder that does it
+	/// can run tens of milliseconds after the overlay hides — well after the inline restore in
+	/// <see cref="CompleteSelection"/>. The continuation runs on the thread pool, which is fine:
+	/// setting the pointer position is not tied to a thread.
+	/// </para>
+	/// </summary>
+	private void RestoreCursorAfterForegroundHandback()
+	{
+		var handback = ForegroundHandedBack;
+		if (handback.IsCompleted)
+		{
+			// The foreground went back synchronously, so the restore just done in
+			// CompleteSelection already covered it.
+			_cursorAnchor.Clear();
+			return;
+		}
+
+		_ = handback.ContinueWith(
+			_ =>
+			{
+				_cursorAnchor.Restore();
+				// The capture is over and the pointer belongs to the user again.
+				_cursorAnchor.Clear();
+			},
+			System.Threading.CancellationToken.None,
+			TaskContinuationOptions.None,
+			TaskScheduler.Default);
 	}
 
 	private void Announce(string message, AutomationNotificationKind kind)
