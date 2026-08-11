@@ -42,6 +42,11 @@ Those two sentences are what the **Screenshot to clipboard** shortcut says. Pres
 "Screenshot already in progress", in the **OCR result** box rather than in the status
 area.
 
+Your mouse pointer stays put through all of this. Whatever it was resting on when you
+pressed the shortcut, it is still there when the overlay opens and still there when the
+overlay goes away. So you can pick the rectangle with the mouse or the keyboard, either
+way, without the pointer wandering off first.
+
 ### Picking the rectangle with the mouse
 
 Hold the left mouse button down at one corner of the area you want, drag to the
