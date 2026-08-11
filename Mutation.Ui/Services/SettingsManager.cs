@@ -196,6 +196,36 @@ internal class SettingsManager : ISettingsManager
                         somethingWasMissing = true;
                 }
 
+		// Pointer-nudge timings. A file written before the nudge existed keeps the property
+		// initializers, because the deserialiser constructs the object and then overwrites only
+		// the keys the file actually has — so this is a no-op there. It is for a hand-edited
+		// file, which can carry a zero, a negative, or a number far outside what the dialog
+		// offers. Clamping to the same range the dialog offers is what stops one of those
+		// producing a nudge nobody can stop.
+		int nudgeInterval = azureComputerVisionSettings.PointerNudgeIntervalMilliseconds <= 0
+			? AzureComputerVisionSettings.DefaultPointerNudgeIntervalMilliseconds
+			: Math.Clamp(
+				azureComputerVisionSettings.PointerNudgeIntervalMilliseconds,
+				AzureComputerVisionSettings.MinPointerNudgeIntervalMilliseconds,
+				AzureComputerVisionSettings.MaxPointerNudgeIntervalMilliseconds);
+		if (nudgeInterval != azureComputerVisionSettings.PointerNudgeIntervalMilliseconds)
+		{
+			azureComputerVisionSettings.PointerNudgeIntervalMilliseconds = nudgeInterval;
+			somethingWasMissing = true;
+		}
+
+		int nudgeDuration = azureComputerVisionSettings.PointerNudgeDurationMilliseconds <= 0
+			? AzureComputerVisionSettings.DefaultPointerNudgeDurationMilliseconds
+			: Math.Clamp(
+				azureComputerVisionSettings.PointerNudgeDurationMilliseconds,
+				AzureComputerVisionSettings.MinPointerNudgeDurationMilliseconds,
+				AzureComputerVisionSettings.MaxPointerNudgeDurationMilliseconds);
+		if (nudgeDuration != azureComputerVisionSettings.PointerNudgeDurationMilliseconds)
+		{
+			azureComputerVisionSettings.PointerNudgeDurationMilliseconds = nudgeDuration;
+			somethingWasMissing = true;
+		}
+
 
 		if (settings.AudioSettings is null)
 		{

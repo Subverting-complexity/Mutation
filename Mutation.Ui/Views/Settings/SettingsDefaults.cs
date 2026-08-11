@@ -35,6 +35,16 @@ internal static class SettingsDefaults
 		public const long MaxDocumentBytes = 10L * 1024 * 1024;
 		public const int MaxDocumentSizeMbUiMax = 500;
 		public const bool PasteOcrTextIntoActiveApplication = true;
+
+		// Pointer nudge after a capture. Defaults and UI bounds mirror the domain so the
+		// dialog, the load-time clamp and the nudge itself all agree on one source of truth.
+		public const bool NudgePointerAfterCapture = false;
+		public const int PointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.DefaultPointerNudgeIntervalMilliseconds;
+		public const int MinPointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.MinPointerNudgeIntervalMilliseconds;
+		public const int MaxPointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.MaxPointerNudgeIntervalMilliseconds;
+		public const int PointerNudgeDurationMilliseconds = AzureComputerVisionSettings.DefaultPointerNudgeDurationMilliseconds;
+		public const int MinPointerNudgeDurationMilliseconds = AzureComputerVisionSettings.MinPointerNudgeDurationMilliseconds;
+		public const int MaxPointerNudgeDurationMilliseconds = AzureComputerVisionSettings.MaxPointerNudgeDurationMilliseconds;
 	}
 
 	public static class Speech

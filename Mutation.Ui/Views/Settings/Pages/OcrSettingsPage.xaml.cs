@@ -48,6 +48,13 @@ public sealed partial class OcrSettingsPage : UserControl
 			ToggleUseFreeTier.IsOn = ocr.UseFreeTier;
 			ToggleInvert.IsOn = ocr.InvertScreenshot;
 			TogglePasteOcrText.IsOn = ocr.PasteOcrTextIntoActiveApplication;
+			ToggleNudgePointer.IsOn = ocr.NudgePointerAfterCapture;
+			NbNudgeInterval.Value = ocr.PointerNudgeIntervalMilliseconds > 0
+				? ocr.PointerNudgeIntervalMilliseconds
+				: SettingsDefaults.Ocr.PointerNudgeIntervalMilliseconds;
+			NbNudgeDuration.Value = ocr.PointerNudgeDurationMilliseconds > 0
+				? ocr.PointerNudgeDurationMilliseconds
+				: SettingsDefaults.Ocr.PointerNudgeDurationMilliseconds;
 			HkSendAfterOcr.Hotkey = ocr.SendHotkeyAfterOcrOperation ?? string.Empty;
 		}
 		finally { _suppressEvents = false; }
@@ -98,6 +105,18 @@ public sealed partial class OcrSettingsPage : UserControl
 		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PasteOcrTextIntoActiveApplication = TogglePasteOcrText.IsOn;
 	}
 
+	private void ToggleNudgePointer_Toggled(object sender, RoutedEventArgs e)
+	{
+		if (_suppressEvents) return;
+		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).NudgePointerAfterCapture = ToggleNudgePointer.IsOn;
+	}
+
+	private void NbNudgeInterval_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
+		WriteInt(args.NewValue, v => (_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PointerNudgeIntervalMilliseconds = v);
+
+	private void NbNudgeDuration_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
+		WriteInt(args.NewValue, v => (_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PointerNudgeDurationMilliseconds = v);
+
 	private void WriteInt(double value, System.Action<int> apply)
 	{
 		if (_suppressEvents) return;
@@ -115,4 +134,8 @@ public sealed partial class OcrSettingsPage : UserControl
 		NbMaxParallelRequests.Value = SettingsDefaults.Ocr.MaxParallelRequests;
 	private void BtnResetMaxDocSize_Click(object sender, RoutedEventArgs e) =>
 		NbMaxDocumentSizeMb.Value = SettingsDefaults.Ocr.MaxDocumentBytes / BytesPerMb;
+	private void BtnResetNudgeInterval_Click(object sender, RoutedEventArgs e) =>
+		NbNudgeInterval.Value = SettingsDefaults.Ocr.PointerNudgeIntervalMilliseconds;
+	private void BtnResetNudgeDuration_Click(object sender, RoutedEventArgs e) =>
+		NbNudgeDuration.Value = SettingsDefaults.Ocr.PointerNudgeDurationMilliseconds;
 }
