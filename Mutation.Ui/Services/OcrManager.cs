@@ -138,30 +138,18 @@ public class OcrManager
         }
     }
 
-    /// <summary>
-    /// The answer to an OCR capture press that arrives while one is already on screen.
-    /// <para>
-    /// Refused, not failed. Nothing happened, the OCR box still holds the last run's answer,
-    /// and the thing in front of the user is the capture overlay — so the shortcut configured
-    /// to run after an OCR must not be sent, or it is typed into that overlay (issue #342).
-    /// The outcome carries that; the message used to be the only way to tell, which meant
-    /// rewording it would have quietly broken the decision.
-    /// </para>
-    /// <para>
-    /// Its own method so the outcome can be pinned by a test. Reaching this branch through
-    /// <see cref="TakeScreenshotAndExtractTextAsync"/> would need a real capture already on a
-    /// real screen (issue #304 is the same missing seam).
-    /// </para>
-    /// </summary>
-    internal static OcrResult CaptureAlreadyInProgress() =>
-        new(false, "Screenshot already in progress", OcrRunOutcome.Refused);
-
     public async Task<OcrResult> TakeScreenshotAndExtractTextAsync(OcrReadingOrder order)
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
+            // Refused, not failed. Nothing happened, the OCR box still holds the last run's
+            // answer, and the thing in front of the user is the capture overlay — so the
+            // shortcut configured to run after an OCR must not be sent, or it is typed into
+            // that overlay (issue #342). The outcome carries that; the message used to be the
+            // only way to tell, which meant rewording it would have quietly broken the
+            // decision.
             try { _activeOverlay?.BringToFront(); } catch { }
-            return CaptureAlreadyInProgress();
+            return new(false, "Screenshot already in progress", OcrRunOutcome.Refused);
         }
         try
         {

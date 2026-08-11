@@ -177,15 +177,53 @@ public class OcrManagerTests
 	/// failed. The distinction is the whole fix: the caller reads it to decide whether to send
 	/// the configured shortcut, and used to have nothing to read but the message text
 	/// (issue #342).
+	/// <para>
+	/// Driven through the real method. It used to assert on a helper that returned the refusal,
+	/// which proved the helper's contents and nothing about the guard that is supposed to use
+	/// it — the branch could have been changed with the test still green (issue #365). Holding
+	/// the first press inside the capture is what having an overlay on screen amounts to here,
+	/// so the second press meets a genuinely busy manager.
+	/// </para>
 	/// </summary>
-	[Fact]
-	public void A_second_capture_while_one_is_open_is_refused_rather_than_failed()
+	// The timeout is the safety net for the regression this test exists to catch. Weakening the
+	// guard fails the assertion below, but removing it altogether sends the second press into
+	// the held capture, where it waits on a release that only the end of this test performs —
+	// so without a bound the suite hangs instead of going red, which is far worse in a build
+	// that nobody is watching.
+	[Fact(Timeout = 20000)]
+	public async Task A_second_capture_while_one_is_open_is_refused_rather_than_failed()
 	{
-		var result = OcrManager.CaptureAlreadyInProgress();
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var ocrService = new StubOcrService("recognised text");
+		var clipboard = new TestClipboard();
+		var manager = new TestableOcrManager(CreateValidSettings(), ocrService, clipboard)
+		{
+			Screenshot = image,
+			HoldCapture = true,
+		};
+
+		var firstPress = manager.TakeScreenshotAndExtractTextAsync(DefaultOrder);
+		await manager.CaptureStarted.Task;
+
+		var result = await manager.TakeScreenshotAndExtractTextAsync(DefaultOrder);
 
 		Assert.False(result.Success);
 		Assert.Equal(OcrRunOutcome.Refused, result.Outcome);
 		Assert.False(PostOperationHotkey.ShouldSendAfterOcr(result.Outcome));
+
+		// Refused means nothing ran, not that something ran and failed: no reading was asked
+		// for, nothing was written to the clipboard, and no beep claimed an outcome. The
+		// sentence in the OCR box is all the user gets, which is why it says what it says.
+		Assert.Equal("Screenshot already in progress", result.Message);
+		Assert.Equal(0, ocrService.CallCount);
+		Assert.Empty(clipboard.WriteThreadIds);
+		Assert.Equal(0, manager.BeepCount);
+
+		// And the run the user already had is unharmed by the press that was refused.
+		manager.ReleaseCapture.SetResult();
+		var firstResult = await firstPress;
+		Assert.True(firstResult.Success);
+		Assert.Equal(1, ocrService.CallCount);
 	}
 
 	/// <summary>
@@ -1061,7 +1099,9 @@ public class OcrManagerTests
 	/// the only thing telling the user anything.
 	/// </para>
 	/// </summary>
-	[Fact]
+	// Bounded for the same reason as the OCR-side refusal test above: remove the guard and this
+	// one waits forever on a release it can no longer reach.
+	[Fact(Timeout = 20000)]
 	public async Task TakeScreenshotToClipboardAsync_ReportsRefused_WhenACaptureIsAlreadyOnScreen()
 	{
 		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
