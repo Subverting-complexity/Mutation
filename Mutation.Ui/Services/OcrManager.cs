@@ -578,28 +578,18 @@ public class OcrManager
     /// good read was reported as a failed one and the shortcut that ran afterwards acted on the
     /// screenshot still sitting there (issue #341).
     /// </para>
+    /// <para>
+    /// The retry and the UI-thread hop it used to own both live in <see cref="ClipboardManager"/>
+    /// now. Every clipboard caller in the app had the same problem, not just this one, and two
+    /// copies of the rule was one too many (issue #352). What stays here is the difference that
+    /// is genuinely this path's own: blank text is a success, because there was nothing worth
+    /// copying and nothing failed.
+    /// </para>
     /// </summary>
-    private Task<bool> TrySetClipboardTextAsync(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return Task.FromResult(true);
-
-        // The retry wraps the dispatcher hop rather than the other way round, so every attempt
-        // is made from the UI thread. ClipboardRetry waits with ConfigureAwait(false), so a
-        // ladder started on the UI thread resumes its second attempt on the thread pool — where
-        // the clipboard refuses the call for a second reason that no number of further attempts
-        // ever gets past.
-        return ClipboardRetry.TryAsync(() =>
-        {
-            if (HasDispatcherThreadAccess())
-            {
-                _clipboard.SetText(text);
-                return Task.CompletedTask;
-            }
-
-            return RunOnDispatcherAsync(() => _clipboard.SetText(text));
-        });
-    }
+    private Task<bool> TrySetClipboardTextAsync(string text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? Task.FromResult(true)
+            : _clipboard.TrySetTextAsync(text);
 
     private static IReadOnlyList<FileOcrBatch> ExpandFileBatches(IReadOnlyList<string> paths)
     {
@@ -747,41 +737,6 @@ public class OcrManager
 
             return await _streamFactory();
         }
-    }
-
-    protected virtual bool HasDispatcherThreadAccess()
-    {
-        var dispatcher = _window?.DispatcherQueue;
-        return dispatcher?.HasThreadAccess ?? true;
-    }
-
-    protected virtual Task RunOnDispatcherAsync(Action action)
-    {
-        var dispatcher = _window?.DispatcherQueue;
-        if (dispatcher is null || dispatcher.HasThreadAccess)
-        {
-            action();
-            return Task.CompletedTask;
-        }
-
-        var tcs = new TaskCompletionSource<object?>();
-        if (!dispatcher.TryEnqueue(() =>
-        {
-            try
-            {
-                action();
-                tcs.SetResult(null);
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-        }))
-        {
-            tcs.SetException(new InvalidOperationException("Failed to enqueue work on the dispatcher."));
-        }
-
-        return tcs.Task;
     }
 
     protected virtual void PlayBeep(BeepType type)

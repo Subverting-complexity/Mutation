@@ -190,7 +190,21 @@ public partial class App : Application
 
 			builder.Services.AddSingleton<ISettingsManager>(settingsManager);
 			builder.Services.AddSingleton(settings);
-			builder.Services.AddSingleton<ClipboardManager>();
+			// The clipboard only answers calls made from this thread, and it needs one for every
+			// attempt its retry makes rather than only the first (issue #352). Captured here,
+			// where OnLaunched puts us on the UI thread, rather than inside a factory lambda
+			// that would run wherever the first resolve happens to be.
+			var uiDispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+			if (uiDispatcherQueue is null)
+				// Cannot happen while this line runs before the first await in OnLaunched, and
+				// nothing enforces that it stays that way. Without a queue the clipboard falls
+				// back to calling from wherever the caller stands, which is the behaviour this
+				// whole change exists to remove, so it must not go unrecorded.
+				ErrorLogger.LogInfo("Startup",
+					"No UI dispatcher queue was available; clipboard calls will not be marshalled to the UI thread.");
+
+			builder.Services.AddSingleton(new ClipboardManager(
+				uiDispatcherQueue is null ? null : new DispatcherQueueUiThread(uiDispatcherQueue)));
 			builder.Services.AddSingleton<UiStateManager>();
 			builder.Services.AddSingleton<MMDeviceEnumerator>(_ => new MMDeviceEnumerator(Guid.NewGuid()));
 			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureDeviceChangeNotifier, Mutation.Ui.Core.MMDeviceCaptureDeviceChangeNotifier>();
