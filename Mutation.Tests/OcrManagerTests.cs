@@ -215,7 +215,7 @@ public class OcrManagerTests
 		// Refused means nothing ran, not that something ran and failed: no reading was asked
 		// for, nothing was written to the clipboard, and no beep claimed an outcome. The
 		// sentence in the OCR box is all the user gets, which is why it says what it says.
-		Assert.Equal("Screenshot already in progress", result.Message);
+		Assert.Equal(ClipboardCopyMessages.OcrCaptureAlreadyInProgress, result.Message);
 		Assert.Equal(0, ocrService.CallCount);
 		Assert.Empty(clipboard.WriteThreadIds);
 		Assert.Equal(0, manager.BeepCount);

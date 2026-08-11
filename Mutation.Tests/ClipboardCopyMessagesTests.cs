@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
@@ -67,14 +69,12 @@ public class ClipboardCopyMessagesTests
 	/// goes to whichever application actually has the keyboard (issue #367).
 	/// </summary>
 	[Fact]
-	public void ARefusalWithNoOverlayNeverAsksForARegionOrOffersEscape()
+	public void ARefusalWithNoOverlayGetsItsOwnSentence()
 	{
 		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedCaptureRunning);
 
 		Assert.Equal(ClipboardCopyMessages.ScreenshotCaptureRunning, message);
 		Assert.NotEqual(ClipboardCopyMessages.ScreenshotOverlayWaiting, message);
-		Assert.DoesNotContain("Escape", message);
-		Assert.DoesNotContain("Select a region", message);
 	}
 
 	/// <summary>
@@ -96,15 +96,45 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// The overlay refusal has to tell the user the overlay is still there and how to get out of
-	/// it. A sentence that only said "already in progress" would leave someone who cannot see
-	/// the screen with no idea what is now in front of them.
+	/// The two refusals differ in exactly the way that matters: one offers the user a control
+	/// and the other must not, because in that state there is no control to offer. Asserted as
+	/// a contrast rather than one sentence at a time, since either half on its own can be
+	/// satisfied by wording that would still mislead somebody.
 	/// </summary>
 	[Fact]
-	public void TheRefusalSaysWhatIsOnScreenAndHowToLeaveIt()
+	public void OnlyTheOverlayRefusalOffersTheUserAControl()
 	{
-		Assert.Contains("already in progress", ClipboardCopyMessages.ScreenshotOverlayWaiting);
-		Assert.Contains("Escape", ClipboardCopyMessages.ScreenshotOverlayWaiting);
+		var (waiting, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedOverlayWaiting);
+		var (running, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedCaptureRunning);
+
+		Assert.Contains("Escape", waiting);
+		Assert.Contains("Select a region", waiting);
+		Assert.DoesNotContain("Escape", running);
+		Assert.DoesNotContain("Select a region", running);
+	}
+
+	/// <summary>
+	/// Every member of the enum has a mapping, and that is enforced by the build rather than
+	/// from here. `ForScreenshot` takes the out-of-range case by hand and then switches with no
+	/// discard arm, so an unhandled member is CS8509 and `TreatWarningsAsErrors` turns it into a
+	/// failure naming the member. A test could not do this job as well: it runs later, it can be
+	/// deleted by someone who thinks it is noise, and a walk-the-enum version has to guess what
+	/// "unhandled" looks like from the outside — which is guessing wrong the moment two members
+	/// legitimately share a sentence (issue #368).
+	/// <para>
+	/// What is left for a test is the part the compiler cannot see: that the by-hand branch is
+	/// still there, and still says the one thing safe to say by accident. Deleting it makes the
+	/// switch throw on a value from outside the enum; changing what it answers is a mutant that
+	/// nothing else in the suite catches, because the severity had been going unasserted.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public void AValueFromOutsideTheEnumIsAnsweredRatherThanThrown()
+	{
+		var (message, severity) = ClipboardCopyMessages.ForScreenshot((ScreenshotToClipboardOutcome)99);
+
+		Assert.Equal(ClipboardCopyMessages.ScreenshotCancelled, message);
+		Assert.Equal(InfoBarSeverity.Informational, severity);
 	}
 
 	/// <summary>
@@ -117,18 +147,6 @@ public class ClipboardCopyMessagesTests
 	{
 		Assert.DoesNotContain("shortcut", ClipboardCopyMessages.ScreenshotClipboardBusy);
 		Assert.DoesNotContain("button", ClipboardCopyMessages.ScreenshotClipboardBusy);
-	}
-
-	/// <summary>
-	/// An unknown outcome is announced as a cancellation — the only one of the five that is safe
-	/// to say by accident, because it claims nothing.
-	/// </summary>
-	[Fact]
-	public void AnUnknownOutcomeNeverClaimsACopy()
-	{
-		var (message, _) = ClipboardCopyMessages.ForScreenshot((ScreenshotToClipboardOutcome)99);
-
-		Assert.Equal(ClipboardCopyMessages.ScreenshotCancelled, message);
 	}
 
 	/// <summary>

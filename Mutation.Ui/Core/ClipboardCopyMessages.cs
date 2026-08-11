@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Mutation.Ui.Core;
@@ -58,6 +59,22 @@ public static class ClipboardCopyMessages
 		"A screenshot is already in progress. Wait for it to finish, then try again.";
 
 	/// <summary>
+	/// Put in the OCR result box when a reading press arrives while a capture is already under
+	/// way. Shorter than either screenshot refusal and deliberately so: it names no control,
+	/// because it is said in both states and the advice differs between them. The plain
+	/// screenshot path can afford two sentences because it knows which state it is in; this one
+	/// would have to guess (issue #367).
+	/// <para>
+	/// A constant rather than a literal in the guard, because it is read aloud from the OCR box
+	/// and quoted in the user guide, so three copies had to be kept in step by hand (issue
+	/// #368). Nothing in production reads it back to make a decision — that is what
+	/// <c>OcrRunOutcome</c> is for, and comparing this text instead is the mistake issue #342
+	/// was filed about.
+	/// </para>
+	/// </summary>
+	public const string OcrCaptureAlreadyInProgress = "Screenshot already in progress";
+
+	/// <summary>
 	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
 	/// user has to know the copy did not happen, and — because the shortcut that runs next is
 	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
@@ -78,9 +95,25 @@ public static class ClipboardCopyMessages
 	/// <para>
 	/// A busy clipboard is an error and a cancellation is not, which is the distinction the
 	/// severity carries to a screen reader: an error interrupts what it is saying, and an
-	/// informational message waits its turn. Every case is named rather than left to a default,
-	/// so a sixth outcome added later is a compiler-visible gap instead of a silent
-	/// "you cancelled it".
+	/// informational message waits its turn.
+	/// </para>
+	/// <para>
+	/// Two things are wanted here, and the shape below is what gets both. Add a member and the
+	/// build must fail rather than announce it as a cancellation, because a silent fall-through
+	/// to "you cancelled it" is the exact bug this class was split out to prevent. But a value
+	/// from outside the enum must still produce a sentence: throwing here reaches the two
+	/// <c>catch</c> blocks around <c>AnnounceScreenshotOutcome</c> and turns a keypress into a
+	/// modal dialog carrying exception text, which is a poor answer to a press that only needed
+	/// a status line.
+	/// </para>
+	/// <para>
+	/// A discard arm gives the second and destroys the first — it silences the exhaustiveness
+	/// warning outright, which is why this comment could claim compiler enforcement through two
+	/// edits while there was none (issue #368). So the out-of-range case is taken first, by
+	/// hand, and the switch names every member with no arm left over. What is suppressed below
+	/// is only CS8524, the complaint about values outside the enum, which the check above has
+	/// already dealt with. CS8509, the one that fires on an unhandled member, stays live — and
+	/// <c>TreatWarningsAsErrors</c> makes it a build failure naming the member you forgot.
 	/// </para>
 	/// <para>
 	/// Both refusals are warnings, which interrupt as an error does. Nothing failed, so neither
@@ -94,16 +127,27 @@ public static class ClipboardCopyMessages
 	/// One sentence fitted to both told a user with no overlay to select a region (issue #367).
 	/// </para>
 	/// </summary>
-	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome) =>
-		outcome switch
+	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome)
+	{
+		// The net for a value that is not a member at all. A cancellation is the only thing safe
+		// to say by accident, because it claims nothing.
+		if (!Enum.IsDefined(outcome))
+			return (ScreenshotCancelled, InfoBarSeverity.Informational);
+
+		// CS8524 only — the unnamed-value case, handled above. CS8509 stays live so an unhandled
+		// member fails the build. Do not answer a future CS8524 here with a discard arm: that
+		// silences CS8509 too, which is the whole of issue #368.
+#pragma warning disable CS8524
+		return outcome switch
 		{
 			ScreenshotToClipboardOutcome.Copied => (ScreenshotCopied, InfoBarSeverity.Success),
 			ScreenshotToClipboardOutcome.ClipboardUnavailable => (ScreenshotClipboardBusy, InfoBarSeverity.Error),
 			ScreenshotToClipboardOutcome.RefusedOverlayWaiting => (ScreenshotOverlayWaiting, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.RefusedCaptureRunning => (ScreenshotCaptureRunning, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
-			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};
+#pragma warning restore CS8524
+	}
 
 	/// <summary>
 	/// How loudly to say what an unsuccessful OCR run came back with.

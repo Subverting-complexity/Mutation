@@ -193,7 +193,7 @@ public class OcrManager
             // only way to tell, which meant rewording it would have quietly broken the
             // decision.
             try { _activeOverlay?.BringToFront(); } catch { }
-            return new(false, "Screenshot already in progress", OcrRunOutcome.Refused);
+            return new(false, ClipboardCopyMessages.OcrCaptureAlreadyInProgress, OcrRunOutcome.Refused);
         }
         try
         {
