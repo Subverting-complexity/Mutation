@@ -71,7 +71,7 @@ internal sealed class PromptLibraryController
 
 	public LlmSettings.LlmPrompt? GetAutoRunPrompt()
 	{
-		return _settings.LlmSettings?.Prompts.FirstOrDefault(p => p.AutoRun);
+		return PromptLibraryMutations.AutoRunPrompt(_settings.LlmSettings?.Prompts);
 	}
 
 	public void OpenAddDialog()
@@ -87,15 +87,13 @@ internal sealed class PromptLibraryController
 		{
 			if (dialog.IsSaved && dialog.Prompt != null && !string.IsNullOrWhiteSpace(dialog.Prompt.Name))
 			{
-				if (dialog.Prompt.AutoRun)
-					foreach (var p in _settings.LlmSettings.Prompts) p.AutoRun = false;
-
-				_settings.LlmSettings.Prompts.Add(dialog.Prompt);
-
-				// One rule for handing out prompt Ids, shared with settings loading.
-				// Highest-plus-one would overflow to int.MinValue against a hand-written
-				// Id of int.MaxValue, and then hand every later prompt that same value.
-				PromptIdBackfill.Apply(_settings.LlmSettings.Prompts);
+				// Appending, taking AutoRun off whichever prompt held it, and handing out
+				// the new prompt's Id are all one unit now, shared with the edit path below
+				// and exercisable without opening a window (issue #304). The Id rule is the
+				// same one settings loading uses: lowest free number, because
+				// highest-plus-one would overflow to int.MinValue against a hand-written Id
+				// of int.MaxValue and then hand every later prompt that same value.
+				PromptLibraryMutations.Add(_settings.LlmSettings.Prompts, dialog.Prompt);
 
 				SaveAndRefresh();
 			}
@@ -118,13 +116,10 @@ internal sealed class PromptLibraryController
 			if (!dialog.IsSaved)
 				return;
 
-			if (prompt.AutoRun)
-			{
-				foreach (var p in _settings.LlmSettings.Prompts)
-				{
-					if (p != prompt) p.AutoRun = false;
-				}
-			}
+			// The editor writes straight into the prompt object, so there is nothing to copy
+			// back — the only thing left to settle is whether it has just taken AutoRun off
+			// another prompt.
+			PromptLibraryMutations.CommitEdit(_settings.LlmSettings.Prompts, prompt);
 
 			SaveAndRefresh();
 		};
@@ -138,10 +133,10 @@ internal sealed class PromptLibraryController
 	/// </summary>
 	public bool DeletePrompt(LlmSettings.LlmPrompt prompt)
 	{
-		if (prompt == null || _settings.LlmSettings == null)
+		if (_settings.LlmSettings == null)
 			return false;
 
-		if (!_settings.LlmSettings.Prompts.Remove(prompt))
+		if (!PromptLibraryMutations.Delete(_settings.LlmSettings.Prompts, prompt))
 			return false;
 
 		SaveAndRefresh();

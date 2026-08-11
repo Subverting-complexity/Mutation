@@ -23,6 +23,7 @@ public sealed partial class SettingsDialog : ContentDialog
 	private readonly ISettingsManager? _settingsManager;
 	private readonly string? _settingsFilePath;
 	private readonly Action? _onLiveApply;
+	private readonly Func<IReadOnlyList<RegisteredRouterRoute>?>? _liveRouterRoutes;
 	private readonly List<SettingsCategoryItem> _allCategories = new();
 
 	private SettingsCategoryItem? _selectedCategory;
@@ -35,18 +36,26 @@ public sealed partial class SettingsDialog : ContentDialog
 	{
 	}
 
+	/// <param name="liveRouterRoutes">
+	/// The hotkey-router routes the running app currently holds, so the Hotkeys page can tell a
+	/// live mapping from one the user has typed but not saved. Asked freshly whenever the rows
+	/// refresh, and read-only — this dialog edits a copy of the settings, and registering out of
+	/// that copy would claim chords the user could still cancel (issue #343).
+	/// </param>
 	public SettingsDialog(
 		Settings settings,
 		ISettingsManager? settingsManager,
 		string? settingsFilePath,
 		Action? onLiveApply,
-		string? initialCategoryKey = null)
+		string? initialCategoryKey = null,
+		Func<IReadOnlyList<RegisteredRouterRoute>?>? liveRouterRoutes = null)
 	{
 		_live = settings ?? throw new ArgumentNullException(nameof(settings));
 		_workingCopy = SettingsWorkingCopy.Clone(_live);
 		_settingsManager = settingsManager;
 		_settingsFilePath = settingsFilePath;
 		_onLiveApply = onLiveApply;
+		_liveRouterRoutes = liveRouterRoutes;
 
 		PopulateCategories();
 		InitializeComponent();
@@ -165,7 +174,7 @@ public sealed partial class SettingsDialog : ContentDialog
 			"tts" => new TtsSettingsPage(_workingCopy),
 			"transcript" => new TranscriptFormattingSettingsPage(_workingCopy),
 			"ui" => new InterfaceSettingsPage(_workingCopy),
-			"hotkeys" => new HotkeysSettingsPage(_workingCopy),
+			"hotkeys" => new HotkeysSettingsPage(_workingCopy, _liveRouterRoutes),
 			_ => null,
 		};
 

@@ -233,8 +233,23 @@ are in, and the call mutes.
 To set one up, go to **Settings** (**Ctrl+Comma**), pick **Hotkeys**, and scroll
 down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. If something is wrong with a row, a marker
-appears beside the "From" box and the reason is written underneath, where a screen
-reader reads it out as soon as it turns up.
+appears beside the "From" box and the reason is written underneath. Once you have
+changed anything on the page, a screen reader reads that reason out as soon as it
+turns up. Problems the page had already spotted when you opened it are written but
+not read out at you — see
+[Screen reader and accessibility notes](accessibility.md) for why.
+
+Each row also says whether it is actually working. A mapping Mutation is listening
+for reads "CTRL+ALT+1 is live." A mapping you have changed and not yet saved reads
+"CTRL+ALT+1 is not active yet — press Save to apply." — because mappings only start
+working when you save. The line names the shortcut, so you can tell which row it
+belongs to when you hear it. It is written in the row, not tucked into a tooltip, so
+your screen reader reads it along with the rest of the row and you do not have to
+press the shortcut to find out whether it took.
+
+While you are still typing in a box, the line goes away — Mutation cannot say
+anything useful about half a shortcut. It comes back when you leave the box.
+
 A mapping whose "From" combination is already taken gets a "Duplicate 'From'
 hotkey" message — again comparing the keys rather than the spelling. That covers
 another mapping, any shortcut higher up the Hotkeys page, and any of your prompt

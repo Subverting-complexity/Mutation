@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using CognitiveSupport;
 using Mutation.Ui;
+using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 
 namespace Mutation.Tests;
@@ -66,6 +68,24 @@ public class HotkeyRouterControllerTests
 		=> typeof(HotkeyRouterController)
 			.GetMethod("RecalculateDuplicates", BindingFlags.NonPublic | BindingFlags.Instance)!
 			.Invoke(controller, null);
+
+	private static void CallAttachEntry(HotkeyRouterController controller, HotkeyRouterEntry entry)
+		=> typeof(HotkeyRouterController)
+			.GetMethod("AttachEntry", BindingFlags.NonPublic | BindingFlags.Instance)!
+			.Invoke(controller, new object[] { entry });
+
+	// The gate has to be wired the way the constructor wires it, or an unmute never reaches the
+	// rows. Injected by hand here because the constructor needs a ListView and a DispatcherQueue.
+	private static FirstTouchGate InjectAnnouncementGate(HotkeyRouterController controller)
+	{
+		var gate = new FirstTouchGate();
+		SetField(controller, "_announcementGate", gate);
+		var unmute = (EventHandler)typeof(HotkeyRouterController)
+			.GetMethod("UnmuteAnnouncements", BindingFlags.NonPublic | BindingFlags.Instance)!
+			.CreateDelegate(typeof(EventHandler), controller);
+		gate.Touched += unmute;
+		return gate;
+	}
 
 	// ----- SyncSettings -----
 
@@ -370,6 +390,193 @@ public class HotkeyRouterControllerTests
 		CallRefreshRegistrations(controller);
 
 		Assert.Equal(1, settingsManager.SaveCount);
+	}
+
+	// ----- What each row says about being live (issue #343) -----
+
+	[Fact]
+	public void RefreshRegistrations_WithARouteTheAppHolds_TellsThatRowItIsLive()
+	{
+		// The page used to report every row as "not currently bound", working ones included,
+		// because nothing ever handed the controller a way to find out.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var live = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		var pending = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+2", "Ctrl+Shift+N"));
+		entries.Add(live);
+		entries.Add(pending);
+		SetField(controller, "_liveRoutes", (Func<IReadOnlyList<RegisteredRouterRoute>?>)(() =>
+			new[] { new RegisteredRouterRoute("CTRL+ALT+1", "CTRL+SHIFT+M", true, null) }));
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(HotkeyBindingState.Bound, live.BindingState);
+		Assert.Equal(HotkeyBindingState.NotYetApplied, pending.BindingState);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_WithNoWayToAsk_LeavesEveryRowSayingNothing()
+	{
+		// The shape every other caller has. Nothing is known, so no row claims anything.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		entries.Add(entry);
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
+		Assert.Null(entry.RouteStatusText);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_AHalfTypedRow_IsNotAskedAboutAtAll()
+	{
+		// It cannot be a route, and its own "Enter a hotkey." already says what is wrong.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+", string.Empty));
+		entries.Add(entry);
+		SetField(controller, "_liveRoutes", (Func<IReadOnlyList<RegisteredRouterRoute>?>)(() =>
+			Array.Empty<RegisteredRouterRoute>()));
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
+	}
+
+	[Fact]
+	public void RefreshRegistrations_ARouteThatFailedToRegister_CarriesTheReasonOntoTheRow()
+	{
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		entries.Add(entry);
+		SetField(controller, "_liveRoutes", (Func<IReadOnlyList<RegisteredRouterRoute>?>)(() =>
+			new[] { new RegisteredRouterRoute("CTRL+ALT+1", "CTRL+SHIFT+M", false, "The shortcut is already registered by another application.") }));
+
+		CallRefreshRegistrations(controller);
+
+		Assert.Equal(HotkeyBindingState.Failed, entry.BindingState);
+		Assert.Equal("The shortcut is already registered by another application.", entry.BindingErrorMessage);
+	}
+
+	// ----- Showing an error without reading it out (issue #350) -----
+
+	[Fact]
+	public void ARowBuiltWhileThePageIsUntouched_IsMutedBeforeItReachesTheScreen()
+	{
+		// The row already carries "Enter a hotkey." from its own constructor, so the mute has to
+		// be on before the binding runs or the page announces on the way in.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		InjectAnnouncementGate(controller);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap(string.Empty, string.Empty));
+
+		CallAttachEntry(controller, entry);
+		entries.Add(entry);
+
+		Assert.True(entry.AnnouncementsMuted);
+		// And the written half is untouched, which is the whole point of gating only the sound.
+		Assert.Equal("Enter a hotkey.", entry.BindingErrorMessage);
+	}
+
+	[Fact]
+	public void OnceThePageHasBeenUsed_EveryRowIsFreeToSpeakIncludingUntouchedOnes()
+	{
+		// A duplicate can appear on a row because the user edited a different row, or a core
+		// hotkey higher up the page. That row was never touched and it is exactly the news worth
+		// interrupting for, which is why the gate is one answer for the page.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var gate = InjectAnnouncementGate(controller);
+		var edited = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		var untouched = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+2", "Ctrl+Shift+N"));
+		foreach (var entry in new[] { edited, untouched })
+		{
+			CallAttachEntry(controller, entry);
+			entries.Add(entry);
+		}
+		Assert.True(untouched.AnnouncementsMuted);
+
+		edited.FromHotkey = "Ctrl+Alt+3";
+
+		Assert.True(gate.HasBeenTouched);
+		Assert.False(edited.AnnouncementsMuted);
+		Assert.False(untouched.AnnouncementsMuted);
+	}
+
+	[Fact]
+	public void ABookkeepingCommit_DoesNotCountAsTheUserUsingThePage()
+	{
+		// The refresh re-commits every row. If that opened the gate, loading a settings file
+		// that needed tidying would announce the page's errors without anyone touching it.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var gate = InjectAnnouncementGate(controller);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		CallAttachEntry(controller, entry);
+		entries.Add(entry);
+
+		CallRefreshRegistrations(controller);
+
+		Assert.False(gate.HasBeenTouched);
+		Assert.True(entry.AnnouncementsMuted);
+	}
+
+	[Fact]
+	public void CeasingToBeADuplicate_GetsTheRowItsStatusBack()
+	{
+		// ApplyDuplicates is reached without a refresh when a *core* hotkey commits: the Hotkeys
+		// page recomputes across all its lists and stops there. A live route flagged because a
+		// core hotkey took its chord goes to Unknown, and nothing about unflagging it restored
+		// what it was — so it stayed silent about being live until a router box lost focus or the
+		// page was rebuilt (issue #343).
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		entries.Add(entry);
+		SetField(controller, "_liveRoutes", (Func<IReadOnlyList<RegisteredRouterRoute>?>)(() =>
+			new[] { new RegisteredRouterRoute("CTRL+ALT+1", "CTRL+SHIFT+M", true, null) }));
+		CallRefreshRegistrations(controller);
+		Assert.Equal(HotkeyBindingState.Bound, entry.BindingState);
+
+		controller.ApplyDuplicates(new HashSet<int> { 0 });
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
+
+		controller.ApplyDuplicates(new HashSet<int>());
+
+		Assert.Equal(HotkeyBindingState.Bound, entry.BindingState);
+	}
+
+	[Fact]
+	public void ARowsTextChangingIsOnlyTheUserWhenItIsNotBookkeeping()
+	{
+		// A row's text does not change only when the user types: a commit that rewrites a chord
+		// into the app's canonical spelling raises the same notification, and SyncSettings commits
+		// every row on every refresh. Today those passes happen to find nothing to rewrite, but
+		// relying on that would mean a reordering could open the gate at page load with nothing
+		// failing. This pins the guard rather than the accident (issue #350).
+		var (controller, _, _, _, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var gate = InjectAnnouncementGate(controller);
+
+		SetField(controller, "_inBookkeepingCommit", true);
+		CallEntryPropertyChanged(controller, nameof(HotkeyRouterEntry.FromHotkey));
+		Assert.False(gate.HasBeenTouched);
+
+		SetField(controller, "_inBookkeepingCommit", false);
+		CallEntryPropertyChanged(controller, nameof(HotkeyRouterEntry.ToHotkey));
+		Assert.True(gate.HasBeenTouched);
+	}
+
+	private static void CallEntryPropertyChanged(HotkeyRouterController controller, string propertyName)
+		=> typeof(HotkeyRouterController)
+			.GetMethod("Entry_PropertyChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
+			.Invoke(controller, new object?[] { null, new PropertyChangedEventArgs(propertyName) });
+
+	[Fact]
+	public void WithNoGateAtAll_NoRowIsEverMuted()
+	{
+		// Every other user of this controller behaves exactly as it did before.
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap(string.Empty, string.Empty));
+
+		CallAttachEntry(controller, entry);
+		entries.Add(entry);
+
+		Assert.False(entry.AnnouncementsMuted);
 	}
 
 	private sealed class FakeSettingsManager : ISettingsManager

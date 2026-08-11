@@ -20,7 +20,17 @@ namespace Mutation.Ui.Views;
 public static class LiveText
 {
 	public static readonly DependencyProperty MessageProperty = DependencyProperty.RegisterAttached(
-		"Message", typeof(string), typeof(LiveText), new PropertyMetadata(null, OnMessageChanged));
+		"Message", typeof(string), typeof(LiveText), new PropertyMetadata(null, OnLiveValueChanged));
+
+	/// <summary>
+	/// Bind this true to put the message on screen without reading it out. The Hotkeys page
+	/// uses it for rows built straight from settings, which can already be carrying an error
+	/// before the user has seen the page at all — one assertive interruption per stored bad row
+	/// on the way in (issue #350). The written half is unaffected either way, because a sighted
+	/// reader was never the problem.
+	/// </summary>
+	public static readonly DependencyProperty MutedProperty = DependencyProperty.RegisterAttached(
+		"Muted", typeof(bool), typeof(LiveText), new PropertyMetadata(false, OnLiveValueChanged));
 
 	public static string? GetMessage(DependencyObject element) =>
 		(string?)element.GetValue(MessageProperty);
@@ -28,9 +38,21 @@ public static class LiveText
 	public static void SetMessage(DependencyObject element, string? value) =>
 		element.SetValue(MessageProperty, value);
 
-	private static void OnMessageChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+	public static bool GetMuted(DependencyObject element) =>
+		(bool)element.GetValue(MutedProperty);
+
+	public static void SetMuted(DependencyObject element, bool value) =>
+		element.SetValue(MutedProperty, value);
+
+	/// <summary>
+	/// One handler for both properties, so the order the row's bindings happen to apply in does
+	/// not decide whether the message is heard. Whichever of the two lands second re-runs this
+	/// with both settled values, and <see cref="LiveMessage"/> asks about muting later still —
+	/// at the moment it would raise, once the whole binding pass is behind it.
+	/// </summary>
+	private static void OnLiveValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
 	{
 		if (d is TextBlock block)
-			LiveMessage.Show(block, e.NewValue as string);
+			LiveMessage.Show(block, GetMessage(block), () => !GetMuted(block));
 	}
 }

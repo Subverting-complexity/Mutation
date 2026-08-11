@@ -287,11 +287,18 @@ don't want stray text landing in another window.</p>
 <p>One thing worth knowing: if the Mutation window itself is the one in front, nothing
 is inserted anywhere. Mutation won't paste into itself.</p>
 <p>Whichever choice you make, Mutation waits for the typing or pasting to finish before
-it tells you the result, and checks that Windows accepted the keystrokes. If Windows
-turned them down, you get the failure beep and a message saying the text could not be
-sent, instead of a success beep for text that never landed. The transcript stays in
-the Mutation window either way, so nothing is lost.</p>
-<p>Windows does not always admit that it refused, so this catch is not a guarantee. If a
+it tells you the result. It checks twice that the text can land: once before sending,
+by comparing how much privilege the app in front is running with against its own, and
+once after, that Windows accepted the keystrokes. Either check failing gets you the
+failure beep and a message saying the text could not be sent, instead of a success beep
+for text that never landed. The transcript stays in the Mutation window either way, so
+nothing is lost.</p>
+<p>The check before sending is the one that catches an app running as administrator.
+Windows throws keystrokes aimed at those away without telling the sender, so asking
+first is the only way to know — see
+<a href="troubleshooting.html">Troubleshooting</a> for what to do about it.</p>
+<p>Neither check is a cast-iron guarantee. If Windows will not tell Mutation anything
+about the app in front, Mutation sends the text rather than refusing to. So if a
 success beep is ever followed by an empty window in the other app, the text is still
 in Mutation — paste it yourself with <strong>Ctrl+V</strong>.</p>
 <h3 id="sending-a-shortcut-afterwards">Sending a shortcut afterwards</h3>

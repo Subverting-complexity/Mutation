@@ -9,22 +9,16 @@ using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 using Microsoft.UI;
 
-namespace Mutation.Ui;
+// HotkeyBindingState moved to Mutation.Ui.Core so the rule that decides it —
+// RouterBindingStatus — can live next to the app's other pure units instead of depending on a
+// file that pulls in WinUI (issue #343).
 
-public enum HotkeyBindingState
-{
-        Inactive,
-        Bound,
-        Failed
-}
+namespace Mutation.Ui;
 
 public sealed class HotkeyRouterEntry : INotifyPropertyChanged
 {
         private static readonly Brush TransparentBrush = new SolidColorBrush(Colors.Transparent);
         private static readonly Brush InvalidBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x33, 0xB2, 0x1E, 0x1E));
-        private static readonly Brush NeutralStatusBrush = ResolveThemeBrush("SystemFillColorNeutralBrush") ?? new SolidColorBrush(Color.FromArgb(0xFF, 0x6B, 0x6B, 0x6B));
-        private static readonly Brush SuccessStatusBrush = ResolveThemeBrush("SystemFillColorSuccessBrush") ?? new SolidColorBrush(Color.FromArgb(0xFF, 0x0B, 0x8A, 0x00));
-        private static readonly Brush FailureStatusBrush = ResolveThemeBrush("SystemFillColorCriticalBrush") ?? new SolidColorBrush(Color.FromArgb(0xFF, 0xD1, 0x42, 0x42));
 
         private string _fromHotkeyText = string.Empty;
         private string _toHotkeyText = string.Empty;
@@ -35,11 +29,12 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         private bool _isDuplicate;
         private string? _fromValidationMessage;
         private string? _toValidationMessage;
-        private HotkeyBindingState _bindingState = HotkeyBindingState.Inactive;
+        private HotkeyBindingState _bindingState = HotkeyBindingState.Unknown;
         private string? _bindingError;
         private string? _combinedError;
         private string? _fromCommitAnnouncement;
         private string? _toCommitAnnouncement;
+        private bool _announcementsMuted;
 
         /// <summary>
         /// What the two boxes are called to a screen reader, matching the
@@ -94,7 +89,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                         if (SetField(ref _fromHotkeyText, value ?? string.Empty, nameof(FromHotkey)))
                         {
                                 EvaluateFrom(commit: false, announce: false);
-                                SetBindingResult(HotkeyBindingState.Inactive, null);
+                                SetBindingResult(HotkeyBindingState.Unknown, null);
                         }
                 }
         }
@@ -107,7 +102,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                         if (SetField(ref _toHotkeyText, value ?? string.Empty, nameof(ToHotkey)))
                         {
                                 EvaluateTo(commit: false, announce: false);
-                                SetBindingResult(HotkeyBindingState.Inactive, null);
+                                SetBindingResult(HotkeyBindingState.Unknown, null);
                         }
                 }
         }
@@ -132,32 +127,70 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
 
         public HotkeyBindingState BindingState => _bindingState;
 
-        public string BindingStatusGlyph => _bindingState switch
-        {
-                HotkeyBindingState.Bound => "\uE73E", // CheckMark
-                HotkeyBindingState.Failed => "\uEA39", // StatusErrorFull
-                _ => "\uF142" // Record
-        };
-
-        public Brush BindingStatusBrush => _bindingState switch
-        {
-                HotkeyBindingState.Bound => SuccessStatusBrush,
-                HotkeyBindingState.Failed => FailureStatusBrush,
-                _ => NeutralStatusBrush
-        };
-
-        public string BindingStatusTooltip
+        /// <summary>
+        /// Whether the running app is listening for this route, in words, or null when there is
+        /// nothing worth saying \u2014 the row is half filled in, it has an error of its own that says
+        /// more than this would, or nobody has told us what the app holds.
+        /// <para>
+        /// A written line rather than a tick beside the box. The tick was the whole of the old
+        /// design and none of it worked: a glyph carries no text, and the tooltip that explained
+        /// it announced nothing until you knew it was there and went looking. This sits in the
+        /// row's reading order, so going down the page reads it out, and it is a live region as
+        /// well so acting on the row is answered rather than leaving the user to press the
+        /// shortcut and find out (issue #343).
+        /// </para>
+        /// <para>
+        /// It names the shortcut, for the same reason the rewrite notices name their box: it can
+        /// be announced out of a row the user is not in. Pressing <b>Delete</b> re-evaluates every
+        /// remaining row, so deleting one of two rows that were flagged as duplicates of each
+        /// other leaves the survivor announcing its new state while focus sits on a button in a
+        /// row that no longer exists. "Not active yet" on its own would give the user no way to
+        /// tell which mapping was meant, and a chord that three rows shared would say it three
+        /// times.
+        /// </para>
+        /// </summary>
+        public string? RouteStatusText
         {
                 get
                 {
-                        if (_bindingState == HotkeyBindingState.Bound)
-                                return "Hotkey is bound.";
-                        if (HasBindingError && !string.IsNullOrEmpty(_combinedError))
-                                return _combinedError!;
-                        if (_bindingState == HotkeyBindingState.Failed)
-                                return "Hotkey binding failed.";
-                        return "Hotkey is not currently bound.";
+                        // The chord is always present in these two states: the controller only asks
+                        // about a row that is valid, and a valid row has a normalized "From".
+                        string chord = NormalizedFromHotkey ?? string.Empty;
+
+                        return _bindingState switch
+                        {
+                                HotkeyBindingState.Bound => $"{chord} is live.",
+                                HotkeyBindingState.NotYetApplied =>
+                                        $"{chord} is not active yet \u2014 press Save to apply.",
+                                // Failed says why in the error region below, which is assertive and
+                                // reaches the user without being hunted for. Two lines saying the
+                                // same thing is one too many.
+                                _ => null,
+                        };
                 }
+        }
+
+        /// <summary>
+        /// While true, this row's error and status still appear on screen but are not read out.
+        /// The page sets it for rows built straight from settings, which can arrive already
+        /// carrying "Enter a hotkey." \u2014 one assertive interruption per stored bad row, about
+        /// settings the user has not touched (issue #350).
+        /// </summary>
+        public bool AnnouncementsMuted => _announcementsMuted;
+
+        /// <summary>
+        /// Lets this row speak, or stops it. Called for every row at once, because the page is
+        /// what has or has not been used \u2014 a row-by-row rule would silence a duplicate that
+        /// appears in this list because the user edited a core hotkey higher up the page, which
+        /// is exactly the news worth interrupting for.
+        /// </summary>
+        public void SetAnnouncementsMuted(bool muted)
+        {
+                if (_announcementsMuted == muted)
+                        return;
+
+                _announcementsMuted = muted;
+                OnPropertyChanged(nameof(AnnouncementsMuted));
         }
 
         public bool HasBindingError => !string.IsNullOrEmpty(_combinedError);
@@ -235,8 +268,10 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 OnPropertyChanged(nameof(IsFromInputValid));
                 OnPropertyChanged(nameof(IsValid));
                 OnPropertyChanged(nameof(FromBackgroundBrush));
+                // A row whose chord is already taken is not a route and cannot be one, so it has
+                // nothing to say about being live. The duplicate message says what is wrong.
                 if (isDuplicate)
-                        SetBindingResult(HotkeyBindingState.Inactive, null);
+                        SetBindingResult(HotkeyBindingState.Unknown, null);
                 else
                         UpdateCombinedError();
         }
@@ -252,9 +287,7 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 _bindingState = state;
                 _bindingError = message;
                 OnPropertyChanged(nameof(BindingState));
-                OnPropertyChanged(nameof(BindingStatusGlyph));
-                OnPropertyChanged(nameof(BindingStatusBrush));
-                OnPropertyChanged(nameof(BindingStatusTooltip));
+                OnPropertyChanged(nameof(RouteStatusText));
                 UpdateCombinedError();
         }
 
@@ -428,7 +461,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                         OnPropertyChanged(nameof(BindingErrorMessage));
                         OnPropertyChanged(nameof(HasBindingError));
                         OnPropertyChanged(nameof(BindingErrorVisibility));
-                        OnPropertyChanged(nameof(BindingStatusTooltip));
                 }
         }
 
@@ -440,13 +472,6 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
                 storage = value;
                 OnPropertyChanged(propertyName);
                 return true;
-        }
-
-        private static Brush? ResolveThemeBrush(string key)
-        {
-                if (Application.Current?.Resources.TryGetValue(key, out object? value) == true && value is Brush brush)
-                        return brush;
-                return null;
         }
 
         private void OnPropertyChanged(string propertyName) =>
