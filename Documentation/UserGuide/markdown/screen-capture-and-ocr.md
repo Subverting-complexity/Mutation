@@ -109,13 +109,18 @@ screenshot that went there a second earlier. Mutation waits a moment and tries a
 few times, for the picture and for the text alike. That is usually enough and you never
 notice it.
 
-When it is not enough, nothing is thrown away. A plain **Screenshot to clipboard** tells
-you the clipboard was busy and asks you to press the shortcut again. A **Screenshot &
-OCR** still reads the text, because the reading works from the picture Mutation is
-holding and never needed the clipboard for it — you get the text on your clipboard and
-in the **OCR result** box, and a message telling you that only the picture did not make
-it. And if the text is the part that could not be copied, it is still in the **OCR
-result** box for you to copy out yourself.
+When it is not enough, what happens depends on which one you used.
+
+A plain **Screenshot to clipboard** tells you the clipboard was busy and asks you to try
+again. That picture is gone, so you do need to pick the region a second time. Your
+clipboard still holds whatever it held before.
+
+A **Screenshot & OCR** still reads the text. The reading works from the picture Mutation
+is holding, and never needed the clipboard for it, so you get your text on the clipboard
+and in the **OCR result** box as usual, with a message telling you that only the picture
+did not make it. You still hear the success beep, because the reading itself worked. And
+if the text is the part that could not be copied, it is still in the **OCR result** box
+for you to copy out yourself.
 
 ## Reading a batch of files at once
 

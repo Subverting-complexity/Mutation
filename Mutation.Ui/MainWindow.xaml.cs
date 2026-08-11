@@ -3531,30 +3531,6 @@ public sealed partial class MainWindow : Window, IDisposable
 	}
 
 	/// <summary>
-	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
-	/// user has to know the copy did not happen, and — because the shortcut that runs next is
-	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
-	/// </summary>
-	private const string OcrClipboardCopyFailedMessage =
-		"The text was recognised, but it could not be copied to the clipboard. It is in the OCR results box.";
-
-	/// <summary>
-	/// Said when a plain screenshot was captured but the clipboard would not take it. It names
-	/// the cause, because the cause is the whole of the advice: something else has the clipboard
-	/// for a moment, and pressing the shortcut again almost always gets in.
-	/// </summary>
-	private const string ScreenshotClipboardBusyMessage =
-		"Another program is using the clipboard, so the screenshot was not copied. Press the shortcut again.";
-
-	/// <summary>
-	/// Said when a screenshot was read successfully but the picture itself did not reach the
-	/// clipboard. Leads with the good news, because the text is what the user asked for and it
-	/// is safely on the clipboard — only the picture is missing.
-	/// </summary>
-	private const string ScreenshotImageCopyFailedMessage =
-		"The text was recognised and copied, but the screenshot picture could not be put on the clipboard.";
-
-	/// <summary>
 	/// Says which of the three things a plain screenshot capture did. Shared by the shortcut and
 	/// the button, so both tell the user the same thing.
 	/// <para>
@@ -3565,18 +3541,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// </summary>
 	private void AnnounceScreenshotOutcome(ScreenshotToClipboardOutcome outcome)
 	{
-		switch (outcome)
-		{
-			case ScreenshotToClipboardOutcome.Copied:
-				ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
-				break;
-			case ScreenshotToClipboardOutcome.ClipboardUnavailable:
-				ShowStatus("Screenshot", ScreenshotClipboardBusyMessage, InfoBarSeverity.Error);
-				break;
-			default:
-				ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
-				break;
-		}
+		var (message, severity) = ClipboardCopyMessages.ForScreenshot(outcome);
+		ShowStatus("Screenshot", message, severity);
 	}
 
 	/// <summary>
@@ -3616,22 +3582,16 @@ public sealed partial class MainWindow : Window, IDisposable
 				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
 				PostOperationHotkey.OcrDelay(result.Success));
 
-		// The clipboard warning outranks the success line, and says so here rather than being
+		// A clipboard warning outranks the success line, and says so here rather than being
 		// followed by it. The four button paths used to announce their own success afterwards,
-		// which would leave the user believing a copy that did not happen.
-		if (result.Success && result.ClipboardCopyFailed)
-		{
-			ShowStatus(statusTitle ?? "OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
-			return;
-		}
+		// which would leave the user believing a copy that did not happen. Which warning, and
+		// whether there is one at all, is decided by ClipboardCopyMessages.
+		string? clipboardWarning = ClipboardCopyMessages.ForOcrRun(
+			result.Success, result.ClipboardCopyFailed, result.ScreenshotCopyFailed);
 
-		// The picture not reaching the clipboard is worth a word, but only when the reading
-		// itself worked. A run that recognised nothing has an error to show instead, and that
-		// error is the news — a second sentence about the clipboard behind it would bury the
-		// reason there is no text, and the clipboard is then simply unchanged.
-		if (result.Success && result.ScreenshotCopyFailed)
+		if (clipboardWarning is not null)
 		{
-			ShowStatus(statusTitle ?? "OCR", ScreenshotImageCopyFailedMessage, InfoBarSeverity.Warning);
+			ShowStatus(statusTitle ?? "OCR", clipboardWarning, InfoBarSeverity.Warning);
 			return;
 		}
 

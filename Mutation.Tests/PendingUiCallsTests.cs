@@ -11,11 +11,19 @@ namespace Mutation.Tests;
 /// anybody — so whatever was awaiting it never resumes (issue #361). These pin the bookkeeping
 /// that turns that silence into a failure the caller can act on.
 /// <para>
-/// This is the testable half. <c>DispatcherQueueUiThread</c> itself needs a real WinUI dispatcher
-/// queue on a real UI thread, shut down while a call is still in it, and this test assembly can
-/// create none of those. What is checked there is the wiring — register before enqueuing, release
-/// on the way out, sweep on <c>ShutdownCompleted</c> — and it is checked by reading it, not by
-/// running it.
+/// This is the testable half, and it is worth saying exactly how much of the story it is. These
+/// pin the rules of the bookkeeping itself: one answer per call, nothing held onto on the normal
+/// path, and no <em>tracked</em> call left waiting after a shutdown, whichever order the two
+/// arrive in. They say nothing about the dispatcher as a whole. A call that runs in place because
+/// the caller was already on the UI thread is never tracked, and can still be lost if a
+/// continuation of its own is dropped at shutdown — a path that predates this and that nothing
+/// here reaches.
+/// </para>
+/// <para>
+/// <c>DispatcherQueueUiThread</c> itself needs a real WinUI dispatcher queue on a real UI thread,
+/// shut down while a call is still in it, and this test assembly can create none of those. What
+/// is checked there is the wiring — register before enqueuing, release on the way out, sweep on
+/// <c>ShutdownCompleted</c> — and it is checked by reading it, not by running it.
 /// </para>
 /// </summary>
 public class PendingUiCallsTests

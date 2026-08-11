@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
+using CognitiveSupport;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
@@ -225,20 +227,57 @@ public class ClipboardManager
 	/// operations wearing a retry ladder (issue #352).
 	/// </para>
 	/// </summary>
-	private async Task<bool> RetryOnUiThreadAsync(Func<Task> operation)
+	private async Task<bool> RetryOnUiThreadAsync(Func<Task> operation, [CallerMemberName] string operationName = "")
 	{
 		var (success, _) = await RetryOnUiThreadAsync<object?>(async () =>
 		{
 			await operation();
 			return null;
-		});
+		}, operationName);
 
 		return success;
 	}
 
-	/// <inheritdoc cref="RetryOnUiThreadAsync(Func{Task})"/>
-	private Task<(bool Success, T? Value)> RetryOnUiThreadAsync<T>(Func<Task<T>> operation) =>
-		ClipboardRetry.TryAsync(() => OnUiThreadAsync(operation));
+	/// <inheritdoc cref="RetryOnUiThreadAsync(Func{Task}, string)"/>
+	private async Task<(bool Success, T? Value)> RetryOnUiThreadAsync<T>(
+		Func<Task<T>> operation, [CallerMemberName] string operationName = "")
+	{
+		// The last thing that went wrong is kept so a ladder that runs out has something to
+		// report. ClipboardRetry swallows the exceptions, which is right for retrying and would
+		// otherwise mean a permanent failure — a full disk, an encode that ran out of memory —
+		// reaches the user as the same "the clipboard is busy" as a passing one, with nothing
+		// written down anywhere.
+		Exception? lastFailure = null;
+
+		var result = await ClipboardRetry.TryAsync(async () =>
+		{
+			try
+			{
+				return await OnUiThreadAsync(operation);
+			}
+			catch (Exception ex)
+			{
+				lastFailure = ex;
+				throw;
+			}
+		});
+
+		if (!result.Success)
+			OnClipboardGaveUp(operationName, lastFailure);
+
+		return result;
+	}
+
+	/// <summary>
+	/// Called once when a clipboard operation has used up its attempts, with whatever went wrong
+	/// on the last of them. Writes it to the error log.
+	/// <para>
+	/// Virtual so the tests that deliberately exhaust a ladder can watch this instead of writing
+	/// to the real log file, which other tests in this assembly are reading.
+	/// </para>
+	/// </summary>
+	protected virtual void OnClipboardGaveUp(string operationName, Exception? lastFailure) =>
+		ErrorLogger.LogError($"ClipboardManager.{operationName}", lastFailure);
 
 	/// <summary>
 	/// Runs one clipboard call on the UI thread. Runs it where it stands when there is no

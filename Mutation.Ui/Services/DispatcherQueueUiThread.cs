@@ -36,6 +36,15 @@ internal sealed class DispatcherQueueUiThread : IUiThreadDispatcher
 		if (operation is null)
 			throw new ArgumentNullException(nameof(operation));
 
+		// A caller already on the UI thread is left there rather than queued behind itself. This
+		// path is deliberately not tracked: it enqueues nothing, so there is no accepted-but-
+		// dropped callback for a shutdown sweep to find.
+		//
+		// It is not immune to a shutdown, though, and it is worth being straight about that. An
+		// operation running here can await something whose continuation is posted back through
+		// this thread's synchronization context, and that post can be dropped at shutdown just
+		// as an enqueued callback can. Nothing below reaches it. That path predates the tracking
+		// and is not made wider by it (issue #361).
 		if (_queue.HasThreadAccess)
 			return operation();
 

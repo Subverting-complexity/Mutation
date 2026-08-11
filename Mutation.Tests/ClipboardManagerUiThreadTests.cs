@@ -155,6 +155,60 @@ public class ClipboardManagerUiThreadTests
 		Assert.All(clipboard.WriteThreadIds, id => Assert.Equal(uiThread.ThreadId, id));
 	}
 
+	/// <summary>
+	/// A ladder that runs out says so somewhere the user cannot, and hands over what actually went
+	/// wrong on the last attempt.
+	/// <para>
+	/// This is what stops a busy clipboard and a permanent failure looking the same. The retry
+	/// swallows exceptions, which is right for retrying, and the caller now turns the resulting
+	/// false into a fixed "another program is using the clipboard". If an encode ran out of memory
+	/// instead — the failure issue #229 was filed about — that sentence is wrong, the advice to
+	/// try again makes it worse, and without this there would be no record of the real cause.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public async Task AnExhaustedLadderReportsWhatWentWrong()
+	{
+		var clipboard = new TestClipboard(uiThread: null) { FailWrites = int.MaxValue };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		await clipboard.TrySetImageAsync(image);
+
+		var (operationName, lastFailure) = Assert.Single(clipboard.GaveUp);
+		Assert.Equal(nameof(ClipboardManager.TrySetImageAsync), operationName);
+		Assert.IsType<InvalidOperationException>(lastFailure);
+	}
+
+	/// <summary>
+	/// A ladder that succeeds reports nothing. The log is only worth reading if it is quiet when
+	/// all is well, and a clipboard briefly held is the ordinary case here, not a fault.
+	/// </summary>
+	[Fact]
+	public async Task ALadderThatGetsInReportsNothing()
+	{
+		var clipboard = new TestClipboard(uiThread: null) { FailWrites = 2 };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		Assert.True(await clipboard.TrySetImageAsync(image));
+		Assert.Empty(clipboard.GaveUp);
+	}
+
+	/// <summary>
+	/// No bitmap is not a failure, it is nothing to do. It answers false without touching the
+	/// clipboard, the way blank text does — the old method would have thrown.
+	/// </summary>
+	[Fact]
+	public async Task TrySetImageAsync_DoesNotTouchTheClipboard_ForNoImage()
+	{
+		var clipboard = new TestClipboard(uiThread: null);
+
+		bool copied = await clipboard.TrySetImageAsync(null!);
+
+		Assert.False(copied);
+		Assert.Empty(clipboard.WriteThreadIds);
+		Assert.Empty(clipboard.GaveUp);
+	}
+
 	[Fact]
 	public async Task TrySetTextAsync_DoesNotTouchTheClipboard_ForBlankText()
 	{

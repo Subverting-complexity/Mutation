@@ -12,14 +12,20 @@ namespace Mutation.Ui.Core;
 /// </summary>
 public enum ScreenshotToClipboardOutcome
 {
-	/// <summary>The picture reached the clipboard.</summary>
-	Copied,
-
 	/// <summary>
 	/// The user dismissed the region overlay without selecting anything, or a capture was
 	/// already on screen. Nothing was captured and nothing on the clipboard changed.
+	/// <para>
+	/// First, so that it is what <c>default</c> gives. Nothing happened is the only one of the
+	/// three that is safe to say by accident: a zero value meaning <see cref="Copied"/> would
+	/// let a value nobody set announce a screenshot that was never taken, which is the exact
+	/// thing this enum exists to prevent.
+	/// </para>
 	/// </summary>
 	Cancelled,
+
+	/// <summary>The picture reached the clipboard.</summary>
+	Copied,
 
 	/// <summary>
 	/// A region was captured, but another program held the clipboard open through every retry,

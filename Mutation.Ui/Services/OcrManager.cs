@@ -172,6 +172,13 @@ public class OcrManager
             // whatever was on screen has moved on (issue #360).
             bool imageCopied = await _clipboard.TrySetImageAsync(bitmap);
             var result = await ExtractTextViaOcrAsync(order, bitmap);
+
+            // The beep follows the reading, not the picture — deliberately, and unlike the plain
+            // screenshot above, which has nothing but the picture to report. Here the text is
+            // what the user asked for. Beeping failure over a picture that did not copy would
+            // tell them the reading failed, and send them off to take the whole capture again
+            // when the text they wanted is already on their clipboard. The picture gets a spoken
+            // warning instead, which is the right weight for it.
             await PlayBeepSafeAsync(result.Success ? BeepType.Success : BeepType.Failure);
             return imageCopied ? result : result with { ScreenshotCopyFailed = true };
         }
