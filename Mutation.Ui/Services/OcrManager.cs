@@ -96,17 +96,23 @@ public class OcrManager
     }
 
     /// <summary>
-    /// Captures a region and puts it on the clipboard, saying which of the three things
+    /// Captures a region and puts it on the clipboard, saying which of the four things
     /// happened. Callers must not announce success unconditionally — for a blind user,
     /// "Screenshot copied to the clipboard" after a cancelled capture is worse than silence,
-    /// and so is it after a capture the clipboard would not take.
+    /// and so is it after a capture the clipboard would not take. Nor may they treat a press
+    /// refused because an overlay is already up as a cancellation: that one tells the user the
+    /// overlay has gone when it is still in front of them (issue #363).
     /// </summary>
     public async Task<ScreenshotToClipboardOutcome> TakeScreenshotToClipboardAsync()
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
+            // Refused, not cancelled. The two used to be the same value, so the user was told
+            // "Screenshot cancelled. Nothing was copied to the clipboard." about an overlay
+            // that was still on screen waiting for them (issue #363) — the opposite of the
+            // truth for someone who cannot see it.
             try { _activeOverlay?.BringToFront(); } catch { }
-            return ScreenshotToClipboardOutcome.Cancelled;
+            return ScreenshotToClipboardOutcome.Refused;
         }
         try
         {
@@ -133,7 +139,7 @@ public class OcrManager
     }
 
     /// <summary>
-    /// The answer to a capture press that arrives while one is already on screen.
+    /// The answer to an OCR capture press that arrives while one is already on screen.
     /// <para>
     /// Refused, not failed. Nothing happened, the OCR box still holds the last run's answer,
     /// and the thing in front of the user is the capture overlay — so the shortcut configured

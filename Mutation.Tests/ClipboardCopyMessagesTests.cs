@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
 using Xunit;
@@ -45,6 +46,49 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
+	/// A press refused because an overlay is already on screen must not be announced as a
+	/// cancellation. The two are opposite news for someone who cannot see the screen: cancelled
+	/// says the overlay has gone, refused says it is still there waiting for a region (issue
+	/// #363). Both sentences used to be the same one.
+	/// </summary>
+	[Fact]
+	public void ARefusedPressSaysACaptureIsAlreadyWaitingRatherThanCancelled()
+	{
+		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+
+		Assert.Equal(ClipboardCopyMessages.ScreenshotAlreadyInProgress, message);
+		Assert.NotEqual(ClipboardCopyMessages.ScreenshotCancelled, message);
+	}
+
+	/// <summary>
+	/// And it interrupts. The user pressed a key and saw nothing change; a polite announcement
+	/// queues behind whatever the overlay is saying and lands after the moment it was wanted.
+	/// <c>StatusAnnouncement.GetProcessing</c> promotes Warning alongside Error.
+	/// </summary>
+	[Fact]
+	public void ARefusedPressInterruptsTheScreenReader()
+	{
+		var (_, severity) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+
+		Assert.Equal(InfoBarSeverity.Warning, severity);
+		Assert.Equal(
+			AutomationNotificationProcessing.ImportantMostRecent,
+			StatusAnnouncement.GetProcessing(severity));
+	}
+
+	/// <summary>
+	/// The refusal has to tell the user the overlay is still there and how to get out of it.
+	/// A sentence that only said "already in progress" would leave someone who cannot see the
+	/// screen with no idea what is now in front of them.
+	/// </summary>
+	[Fact]
+	public void TheRefusalSaysWhatIsOnScreenAndHowToLeaveIt()
+	{
+		Assert.Contains("already in progress", ClipboardCopyMessages.ScreenshotAlreadyInProgress);
+		Assert.Contains("Escape", ClipboardCopyMessages.ScreenshotAlreadyInProgress);
+	}
+
+	/// <summary>
 	/// The same sentence is said to someone who pressed the shortcut and someone who clicked the
 	/// button, so it must not name either. Telling a screen-reader user to press a shortcut they
 	/// did not use points them at the wrong control.
@@ -57,7 +101,7 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// An unknown outcome is announced as a cancellation — the only one of the three that is safe
+	/// An unknown outcome is announced as a cancellation — the only one of the four that is safe
 	/// to say by accident, because it claims nothing.
 	/// </summary>
 	[Fact]

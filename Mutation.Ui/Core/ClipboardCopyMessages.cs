@@ -30,6 +30,19 @@ public static class ClipboardCopyMessages
 		"Another program is using the clipboard, so the screenshot was not copied. Try again in a moment.";
 
 	/// <summary>
+	/// Said when a screenshot press arrives while a capture overlay is already on screen. It
+	/// describes where the user is rather than what the press did, because the press did nothing
+	/// and the overlay is what they now have to deal with.
+	/// <para>
+	/// "Select a region", not "press Escape", even though escaping is the way out. The common
+	/// case is a second press that landed because the first was not heard, and that user wants to
+	/// go on with the capture they started, not throw it away.
+	/// </para>
+	/// </summary>
+	public const string ScreenshotAlreadyInProgress =
+		"A screenshot is already in progress. Select a region, or press Escape to cancel it.";
+
+	/// <summary>
 	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
 	/// user has to know the copy did not happen, and — because the shortcut that runs next is
 	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
@@ -51,8 +64,15 @@ public static class ClipboardCopyMessages
 	/// A busy clipboard is an error and a cancellation is not, which is the distinction the
 	/// severity carries to a screen reader: an error interrupts what it is saying, and an
 	/// informational message waits its turn. Every case is named rather than left to a default,
-	/// so a fourth outcome added later is a compiler-visible gap instead of a silent
+	/// so a fifth outcome added later is a compiler-visible gap instead of a silent
 	/// "you cancelled it".
+	/// </para>
+	/// <para>
+	/// A refused press is a warning, which interrupts as an error does. Nothing failed, so it is
+	/// not an error — but the user pressed a key and got no visible change, and the sentence
+	/// telling them why is the only thing that explains the overlay still sitting in front of
+	/// them. Left polite it would queue behind whatever the overlay is saying, and arrive after
+	/// the moment it was needed.
 	/// </para>
 	/// </summary>
 	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome) =>
@@ -60,6 +80,7 @@ public static class ClipboardCopyMessages
 		{
 			ScreenshotToClipboardOutcome.Copied => (ScreenshotCopied, InfoBarSeverity.Success),
 			ScreenshotToClipboardOutcome.ClipboardUnavailable => (ScreenshotClipboardBusy, InfoBarSeverity.Error),
+			ScreenshotToClipboardOutcome.Refused => (ScreenshotAlreadyInProgress, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
 			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};

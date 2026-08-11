@@ -23,6 +23,12 @@ you were.
 
 Press **Esc** at any point to cancel. Nothing is copied, and Mutation tells you so.
 
+If you press the shortcut again while the overlay is still up — easy to do if you did
+not hear the first press land — nothing new starts. Mutation brings the overlay you
+already have back to the front and says "A screenshot is already in progress. Select a
+region, or press Escape to cancel it." So carry on and pick your rectangle, or press
+**Esc** if you would rather start over.
+
 ### Picking the rectangle with the mouse
 
 Hold the left mouse button down at one corner of the area you want, drag to the

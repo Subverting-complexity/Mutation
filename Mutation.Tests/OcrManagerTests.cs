@@ -189,6 +189,17 @@ public class OcrManagerTests
 	}
 
 	/// <summary>
+	/// Nothing was allowed in front of <c>Cancelled</c> when the refused value was added.
+	/// A value nobody set has to mean "nothing happened"; if the zero value ever became
+	/// <c>Copied</c>, an unassigned outcome would announce a screenshot that was never taken.
+	/// </summary>
+	[Fact]
+	public void The_default_screenshot_outcome_still_claims_nothing()
+	{
+		Assert.Equal(ScreenshotToClipboardOutcome.Cancelled, default(ScreenshotToClipboardOutcome));
+	}
+
+	/// <summary>
 	/// Every other unsuccessful run still sends it. An error in the OCR box wants reading as
 	/// much as a result does, and narrowing that to "only successes" would be a worse bug than
 	/// the one being fixed.
@@ -1037,6 +1048,58 @@ public class OcrManagerTests
 		Assert.Equal(new[] { BeepType.Failure }, manager.Beeps.ToArray());
 	}
 
+	/// <summary>
+	/// A press that arrives while an overlay is already on screen is refused, not cancelled.
+	/// The two used to be the same value, so the user was told "Screenshot cancelled. Nothing
+	/// was copied to the clipboard." about an overlay that was still there waiting for a region
+	/// (issue #363) — the opposite of the truth for someone who cannot see it.
+	/// <para>
+	/// Driven through the real method rather than a seam: the first press is held inside the
+	/// capture, which is what having an overlay on screen amounts to here, so the second press
+	/// meets a genuinely busy manager. That also pins what the refused press does *not* do —
+	/// it writes nothing to the clipboard and plays no beep, which is why the announcement is
+	/// the only thing telling the user anything.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public async Task TakeScreenshotToClipboardAsync_ReportsRefused_WhenACaptureIsAlreadyOnScreen()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard();
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), clipboard)
+		{
+			Screenshot = image,
+			HoldCapture = true,
+		};
+
+		var firstPress = manager.TakeScreenshotToClipboardAsync();
+		await manager.CaptureStarted.Task;
+
+		var secondPress = await manager.TakeScreenshotToClipboardAsync();
+
+		Assert.Equal(ScreenshotToClipboardOutcome.Refused, secondPress);
+		Assert.NotEqual(ScreenshotToClipboardOutcome.Cancelled, secondPress);
+		Assert.Empty(clipboard.WriteThreadIds);
+		Assert.Equal(0, manager.BeepCount);
+
+		// And the capture the user already had is unharmed by the press that was refused.
+		manager.ReleaseCapture.SetResult();
+		Assert.Equal(ScreenshotToClipboardOutcome.Copied, await firstPress);
+	}
+
+	/// <summary>
+	/// What the refused press is announced as. The outcome only matters because of the sentence
+	/// it produces, and that sentence must not be the cancellation one.
+	/// </summary>
+	[Fact]
+	public void ARefusedScreenshotIsAnnouncedAsACaptureAlreadyWaiting()
+	{
+		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+
+		Assert.Equal(ClipboardCopyMessages.ScreenshotAlreadyInProgress, message);
+		Assert.NotEqual(ClipboardCopyMessages.ScreenshotCancelled, message);
+	}
+
 	[Fact]
 	public async Task TakeScreenshotToClipboardAsync_ReportsCancelled_WhenNothingWasCaptured()
 	{
@@ -1198,6 +1261,18 @@ public class OcrManagerTests
 		/// </summary>
 		public SoftwareBitmap? Screenshot { get; set; }
 
+		/// <summary>
+		/// Set to make the capture sit and wait, which is what an overlay on screen amounts to
+		/// here: <c>CaptureStarted</c> completes once the capture is in flight, and the capture
+		/// returns only when <c>ReleaseCapture</c> is set. Without it a capture finishes before
+		/// a second press could ever meet it, so the refused branch would be unreachable.
+		/// </summary>
+		public bool HoldCapture { get; set; }
+
+		public TaskCompletionSource CaptureStarted { get; } = new();
+
+		public TaskCompletionSource ReleaseCapture { get; } = new();
+
 		protected override void PlayBeep(BeepType type)
 		{
 			_beeps.Enqueue(type);
@@ -1205,7 +1280,15 @@ public class OcrManagerTests
 
 		// The real one shows a full-screen overlay and reads the desktop, so nothing about the
 		// two screenshot methods could be tested without standing in for it.
-		protected override Task<SoftwareBitmap?> CaptureScreenshotAsync() => Task.FromResult(Screenshot);
+		protected override async Task<SoftwareBitmap?> CaptureScreenshotAsync()
+		{
+			if (!HoldCapture)
+				return Screenshot;
+
+			CaptureStarted.TrySetResult();
+			await ReleaseCapture.Task;
+			return Screenshot;
+		}
 	}
 
 	private sealed class TestClipboard : RecordingClipboardManager
