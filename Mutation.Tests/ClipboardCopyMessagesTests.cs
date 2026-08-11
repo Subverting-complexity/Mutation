@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
@@ -96,15 +98,50 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// The overlay refusal has to tell the user the overlay is still there and how to get out of
-	/// it. A sentence that only said "already in progress" would leave someone who cannot see
-	/// the screen with no idea what is now in front of them.
+	/// The two refusals differ in exactly the way that matters: one offers the user a control
+	/// and the other must not, because in that state there is no control to offer. Asserted as
+	/// a contrast rather than one sentence at a time, since either half on its own can be
+	/// satisfied by wording that would still mislead somebody.
 	/// </summary>
 	[Fact]
-	public void TheRefusalSaysWhatIsOnScreenAndHowToLeaveIt()
+	public void OnlyTheOverlayRefusalOffersTheUserAControl()
 	{
-		Assert.Contains("already in progress", ClipboardCopyMessages.ScreenshotOverlayWaiting);
-		Assert.Contains("Escape", ClipboardCopyMessages.ScreenshotOverlayWaiting);
+		var (waiting, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedOverlayWaiting);
+		var (running, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedCaptureRunning);
+
+		Assert.Contains("Escape", waiting);
+		Assert.Contains("Select a region", waiting);
+		Assert.DoesNotContain("Escape", running);
+		Assert.DoesNotContain("Select a region", running);
+	}
+
+	/// <summary>
+	/// Every outcome gets an answer of its own, rather than falling through to the safety net at
+	/// the end of the switch.
+	/// <para>
+	/// This is the exhaustiveness guard, and it is a test because it cannot be the compiler. The
+	/// net has to be there so a value from outside the enum produces a sentence instead of
+	/// throwing inside a hotkey handler — and a discard arm silences the exhaustiveness warning,
+	/// so a new member would compile clean and be announced as "Screenshot cancelled". That is
+	/// the bug this class exists to prevent, so something has to catch it; the comment on
+	/// <c>ForScreenshot</c> claimed the compiler did, and was twice edited without anyone
+	/// checking (issue #368).
+	/// </para>
+	/// <para>
+	/// Walking the enum rather than listing the members, so the guard cannot itself go stale.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public void EveryOutcomeHasItsOwnAnswer()
+	{
+		var net = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Cancelled);
+
+		var fellThrough = Enum.GetValues<ScreenshotToClipboardOutcome>()
+			.Where(outcome => outcome != ScreenshotToClipboardOutcome.Cancelled)
+			.Where(outcome => ClipboardCopyMessages.ForScreenshot(outcome) == net)
+			.ToArray();
+
+		Assert.Empty(fellThrough);
 	}
 
 	/// <summary>

@@ -58,6 +58,22 @@ public static class ClipboardCopyMessages
 		"A screenshot is already in progress. Wait for it to finish, then try again.";
 
 	/// <summary>
+	/// Put in the OCR result box when a reading press arrives while a capture is already under
+	/// way. Shorter than either screenshot refusal and deliberately so: it names no control,
+	/// because it is said in both states and the advice differs between them. The plain
+	/// screenshot path can afford two sentences because it knows which state it is in; this one
+	/// would have to guess (issue #367).
+	/// <para>
+	/// A constant rather than a literal in the guard, because it is read aloud from the OCR box
+	/// and quoted in the user guide, so three copies had to be kept in step by hand (issue
+	/// #368). Nothing in production reads it back to make a decision — that is what
+	/// <c>OcrRunOutcome</c> is for, and comparing this text instead is the mistake issue #342
+	/// was filed about.
+	/// </para>
+	/// </summary>
+	public const string OcrCaptureAlreadyInProgress = "Screenshot already in progress";
+
+	/// <summary>
 	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
 	/// user has to know the copy did not happen, and — because the shortcut that runs next is
 	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
@@ -78,9 +94,23 @@ public static class ClipboardCopyMessages
 	/// <para>
 	/// A busy clipboard is an error and a cancellation is not, which is the distinction the
 	/// severity carries to a screen reader: an error interrupts what it is saying, and an
-	/// informational message waits its turn. Every case is named rather than left to a default,
-	/// so a sixth outcome added later is a compiler-visible gap instead of a silent
-	/// "you cancelled it".
+	/// informational message waits its turn.
+	/// </para>
+	/// <para>
+	/// Every case is named, and the final arm is a safety net rather than a case. Two things are
+	/// wanted here and only one of them can come from the compiler. A value outside the enum has
+	/// to produce a sentence rather than a <c>SwitchExpressionException</c>, because throwing
+	/// here would take down a hotkey handler in front of a user who cannot see the dialog; that
+	/// needs the discard arm. But a discard arm also silences the exhaustiveness warning, so a
+	/// sixth member added later would compile clean and be announced as "Screenshot cancelled" —
+	/// which is the exact bug this class was split out to prevent, waiting for the next value.
+	/// </para>
+	/// <para>
+	/// So the enforcement is a test, not the compiler:
+	/// <c>ClipboardCopyMessagesTests.EveryOutcomeHasItsOwnAnswer</c> walks the enum and fails on
+	/// any member that falls through to the net. This comment used to claim the compiler did it,
+	/// which was never true and was twice edited without being checked (issue #368). If you add
+	/// a member, that test is what tells you.
 	/// </para>
 	/// <para>
 	/// Both refusals are warnings, which interrupt as an error does. Nothing failed, so neither
@@ -102,6 +132,9 @@ public static class ClipboardCopyMessages
 			ScreenshotToClipboardOutcome.RefusedOverlayWaiting => (ScreenshotOverlayWaiting, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.RefusedCaptureRunning => (ScreenshotCaptureRunning, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
+			// The net, not a case. See the note above: a value from outside the enum must get a
+			// sentence rather than an exception, and a cancellation is the only thing safe to say
+			// by accident because it claims nothing.
 			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};
 
