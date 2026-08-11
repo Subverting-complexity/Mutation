@@ -7,83 +7,174 @@ namespace Mutation.Tests;
 // that feeds it lives in ForegroundIntegrityProbe and cannot be covered here.
 public class ForegroundInjectionGuardTests
 {
-	[Fact]
-	public void AnOutrightRefusal_MeansTheInputWillBeDiscarded()
-	{
-		// The whole point. Windows would not even let us identify the process, which it only
-		// does when the process is above us — and above us means UIPI drops our keystrokes.
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: true,
-			processId: 4321,
-			opened: false,
-			errorCode: ForegroundInjectionGuard.ErrorAccessDenied);
+	private const ForegroundInjectionGuard.ProbeStep Ok = ForegroundInjectionGuard.ProbeStep.Succeeded;
+	private const ForegroundInjectionGuard.ProbeStep Refused = ForegroundInjectionGuard.ProbeStep.Refused;
+	private const ForegroundInjectionGuard.ProbeStep Failed = ForegroundInjectionGuard.ProbeStep.Failed;
 
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Refused, probe);
-		Assert.True(ForegroundInjectionGuard.InputWillBeDiscarded(probe));
+	private static bool WillDiscard(
+		ForegroundInjectionGuard.ForegroundProbe probe, uint theirs = 0, uint ours = 0) =>
+		ForegroundInjectionGuard.InputWillBeDiscarded(probe, theirs, ours);
+
+	// ----- Reading one call's outcome -----
+
+	[Fact]
+	public void StepFrom_TellsARefusalApartFromAnyOtherFailure()
+	{
+		// The distinction the whole rule turns on, so it is worth its own test.
+		Assert.Equal(Ok, ForegroundInjectionGuard.StepFrom(true, 0));
+		Assert.Equal(Refused, ForegroundInjectionGuard.StepFrom(false, ForegroundInjectionGuard.ErrorAccessDenied));
+		// ERROR_INVALID_PARAMETER — the process exited between two calls.
+		Assert.Equal(Failed, ForegroundInjectionGuard.StepFrom(false, 87));
+		Assert.Equal(Failed, ForegroundInjectionGuard.StepFrom(false, 0));
 	}
 
 	[Fact]
-	public void AProcessWeCanOpen_IsFineToTypeInto()
+	public void StepFrom_ASuccessIgnoresWhateverErrorCodeWasLyingAround()
 	{
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: true, processId: 4321, opened: true, errorCode: 0);
-
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Opened, probe);
-		Assert.False(ForegroundInjectionGuard.InputWillBeDiscarded(probe));
+		// GetLastError is not cleared by a successful call, so a stale code can arrive alongside
+		// a handle. The handle wins.
+		Assert.Equal(Ok, ForegroundInjectionGuard.StepFrom(true, ForegroundInjectionGuard.ErrorAccessDenied));
 	}
+
+	// ----- The signature of an integrity boundary -----
+
+	[Fact]
+	public void NamedButNotReadable_IsTheOneThingThatMeansAboveUs()
+	{
+		// PROCESS_QUERY_LIMITED_INFORMATION is granted across an integrity boundary on purpose —
+		// it is what lets an unelevated Task Manager list elevated processes by name — while
+		// PROCESS_QUERY_INFORMATION is not. Granted the first and refused the second is the pair
+		// nothing else produces.
+		var probe = ForegroundInjectionGuard.Classify(
+			hasForegroundWindow: true, processId: 4321, limitedOpen: Ok, fullOpen: Refused, tokenRead: Failed);
+
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.AboveUs, probe);
+		Assert.True(WillDiscard(probe));
+	}
+
+	[Fact]
+	public void ADaclRefusingEvenTheLimitedRight_TellsUsNothingWeCanActOn()
+	{
+		// Another user's process in the same session refuses this while running at our own
+		// integrity level, where UIPI would have let the input straight through. Reading it as
+		// "above us" would refuse to type into an ordinary window and report a failure that would
+		// not have happened — the one outcome worse than the silent drop this exists to catch.
+		var probe = ForegroundInjectionGuard.Classify(
+			hasForegroundWindow: true, processId: 4321, limitedOpen: Refused, fullOpen: Failed, tokenRead: Failed);
+
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.Unknown, probe);
+		Assert.False(WillDiscard(probe));
+	}
+
+	// ----- Comparing the two integrity levels -----
+
+	[Fact]
+	public void AHigherIntegrityForegroundProcess_WillDiscardOurInput()
+	{
+		var probe = ForegroundInjectionGuard.Classify(true, 4321, Ok, Ok, Ok);
+
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.IntegrityKnown, probe);
+		Assert.True(WillDiscard(
+			probe,
+			theirs: ForegroundInjectionGuard.HighIntegrity,
+			ours: ForegroundInjectionGuard.MediumIntegrity));
+	}
+
+	[Fact]
+	public void EqualIntegrity_IsFine()
+	{
+		// UIPI blocks sending up, not sending across. The ordinary case: two medium-integrity
+		// apps, which is nearly every window the user dictates into.
+		Assert.False(WillDiscard(
+			ForegroundInjectionGuard.ForegroundProbe.IntegrityKnown,
+			theirs: ForegroundInjectionGuard.MediumIntegrity,
+			ours: ForegroundInjectionGuard.MediumIntegrity));
+	}
+
+	[Fact]
+	public void ALowerIntegrityForegroundProcess_IsFine()
+	{
+		// A sandboxed browser tab process, say. Sending down is allowed.
+		Assert.False(WillDiscard(
+			ForegroundInjectionGuard.ForegroundProbe.IntegrityKnown,
+			theirs: ForegroundInjectionGuard.LowIntegrity,
+			ours: ForegroundInjectionGuard.MediumIntegrity));
+	}
+
+	[Fact]
+	public void AnElevatedMutationTypingIntoAnElevatedApp_IsFine()
+	{
+		// Both above medium, and equal, so nothing is blocked.
+		Assert.False(WillDiscard(
+			ForegroundInjectionGuard.ForegroundProbe.IntegrityKnown,
+			theirs: ForegroundInjectionGuard.HighIntegrity,
+			ours: ForegroundInjectionGuard.HighIntegrity));
+	}
+
+	[Fact]
+	public void ASystemIntegrityWindow_WillDiscardOurInput()
+	{
+		Assert.True(WillDiscard(
+			ForegroundInjectionGuard.ForegroundProbe.IntegrityKnown,
+			theirs: ForegroundInjectionGuard.SystemIntegrity,
+			ours: ForegroundInjectionGuard.HighIntegrity));
+	}
+
+	// ----- Everything that is not an answer -----
 
 	[Fact]
 	public void NoWindowInFront_IsNotAnAnswerEitherWay()
 	{
 		// A locked screen or a moment between two apps. Nothing to decide, and refusing to
 		// deliver on the strength of it would invent a failure.
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: false, processId: 0, opened: false, errorCode: 0);
+		var probe = ForegroundInjectionGuard.Classify(false, 0, Failed, Failed, Failed);
 
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Unknown, probe);
-		Assert.False(ForegroundInjectionGuard.InputWillBeDiscarded(probe));
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.Unknown, probe);
+		Assert.False(WillDiscard(probe));
 	}
 
 	[Fact]
 	public void AWindowWhoseProcessCannotBeResolved_IsNotAnAnswerEither()
 	{
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: true, processId: 0, opened: false, errorCode: 0);
-
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Unknown, probe);
-	}
-
-	[Theory]
-	// ERROR_INVALID_PARAMETER — the process exited between the two calls.
-	[InlineData(87)]
-	// ERROR_NOT_ENOUGH_MEMORY.
-	[InlineData(8)]
-	// No error reported at all, which should not happen after a failed OpenProcess.
-	[InlineData(0)]
-	public void AFailureThatIsNotARefusal_LetsDeliveryProceed(int errorCode)
-	{
-		// Deliberately one-sided. A false positive here would refuse to type into an ordinary
-		// window and tell the user their dictation failed when it would have worked — worse
-		// than the silent drop this check exists to catch.
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: true, processId: 4321, opened: false, errorCode: errorCode);
-
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Unknown, probe);
-		Assert.False(ForegroundInjectionGuard.InputWillBeDiscarded(probe));
+		Assert.Equal(
+			ForegroundInjectionGuard.ForegroundProbe.Unknown,
+			ForegroundInjectionGuard.Classify(true, 0, Ok, Ok, Ok));
 	}
 
 	[Fact]
-	public void ASuccessfulOpenIgnoresWhateverErrorCodeWasLyingAround()
+	public void TheFullOpenFailingForSomeOtherReason_LetsDeliveryProceed()
 	{
-		// GetLastError is not cleared by a successful call, so a stale code can arrive
-		// alongside a handle. The handle wins.
-		var probe = ForegroundInjectionGuard.Classify(
-			hasForegroundWindow: true,
-			processId: 4321,
-			opened: true,
-			errorCode: ForegroundInjectionGuard.ErrorAccessDenied);
+		// The process exited between the two calls, say. Says nothing about privilege.
+		var probe = ForegroundInjectionGuard.Classify(true, 4321, Ok, Failed, Failed);
 
-		Assert.Equal(ForegroundInjectionGuard.ProbeResult.Opened, probe);
-		Assert.False(ForegroundInjectionGuard.InputWillBeDiscarded(probe));
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.Unknown, probe);
+		Assert.False(WillDiscard(probe));
+	}
+
+	[Fact]
+	public void TheTokenFailingForSomeOtherReason_LetsDeliveryProceed()
+	{
+		var probe = ForegroundInjectionGuard.Classify(true, 4321, Ok, Ok, Failed);
+
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.Unknown, probe);
+		Assert.False(WillDiscard(probe));
+	}
+
+	[Fact]
+	public void ARefusedTokenAfterAGrantedFullOpen_IsStillAboveUs()
+	{
+		// Not expected — the full right is what OpenProcessToken needs — but if Windows refuses
+		// the token anyway, a refusal is a refusal.
+		var probe = ForegroundInjectionGuard.Classify(true, 4321, Ok, Ok, Refused);
+
+		Assert.Equal(ForegroundInjectionGuard.ForegroundProbe.Unknown, probe);
+	}
+
+	[Fact]
+	public void AboveUs_NeedsNoIntegrityLevelsToActOn()
+	{
+		// The refusal is conclusive by itself, so the zeros the probe hands over in that case
+		// must not be read as "equal integrity, carry on".
+		Assert.True(WillDiscard(ForegroundInjectionGuard.ForegroundProbe.AboveUs, theirs: 0, ours: 0));
 	}
 }

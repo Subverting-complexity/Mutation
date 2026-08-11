@@ -92,12 +92,54 @@ public class RouterBindingStatusTests
 	[Fact]
 	public void SpellingIsForgivenSoAHandEditedFileStillMatches()
 	{
-		// Both sides are written canonically by the app, so this only matters for a settings
-		// file someone typed by hand.
 		var (state, _) = RouterBindingStatus.For(
 			"CTRL+ALT+1", "CTRL+SHIFT+M", [Route(" ctrl+alt+1 ", "ctrl+shift+m")]);
 
 		Assert.Equal(HotkeyBindingState.Bound, state);
+	}
+
+	[Fact]
+	public void TheShippedDefaultMappingIsRecognisedAsLive()
+	{
+		// The bug this test exists for. SettingsManager seeds a brand-new settings file with a
+		// router mapping written CONTROL+SHIFT+ALT+8, and the row's side of the comparison has
+		// been through Canonicalize, which spells it CTRL+SHIFT+ALT+8. Comparing the two as text
+		// meant that on a fresh install the only router row on the page reported a working
+		// mapping as "not active yet" — the same class of false statement issue #343 was filed
+		// about.
+		var (state, _) = RouterBindingStatus.For(
+			"CTRL+SHIFT+ALT+8",
+			"CTRL+SHIFT+ALT+9",
+			[Route("CONTROL+SHIFT+ALT+8", "CONTROL+SHIFT+ALT+9")]);
+
+		Assert.Equal(HotkeyBindingState.Bound, state);
+	}
+
+	[Theory]
+	// The order the modifiers were typed in, which files written before the canonicalisation
+	// work still carry.
+	[InlineData("SHIFT+CTRL+A")]
+	// The long spelling of the same modifier.
+	[InlineData("CONTROL+SHIFT+A")]
+	[InlineData("control+shift+a")]
+	public void AChordSpelledAnotherWayIsStillTheSameChord(string onDisk)
+	{
+		// A shortcut has one identity and many spellings. HotkeyConflictFinder learned this for
+		// duplicate detection in issue #306; comparing spellings gets it wrong here too.
+		var (state, _) = RouterBindingStatus.For(
+			"CTRL+SHIFT+A", "CTRL+V", [Route(onDisk, "CTRL+V")]);
+
+		Assert.Equal(HotkeyBindingState.Bound, state);
+	}
+
+	[Fact]
+	public void ADifferentChordIsStillADifferentChord()
+	{
+		// Forgiving the spelling must not go so far as forgiving the shortcut.
+		var (state, _) = RouterBindingStatus.For(
+			"CTRL+SHIFT+A", "CTRL+V", [Route("CTRL+SHIFT+B", "CTRL+V")]);
+
+		Assert.Equal(HotkeyBindingState.NotYetApplied, state);
 	}
 
 	[Fact]

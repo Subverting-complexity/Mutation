@@ -487,15 +487,21 @@ are in, and the call mutes.</p>
 <p>To set one up, go to <strong>Settings</strong> (<strong>Ctrl+Comma</strong>), pick <strong>Hotkeys</strong>, and scroll
 down to the <strong>Hotkey Router</strong> section. Press <strong>Add mapping</strong>, fill in the &quot;From&quot;
 and &quot;To&quot; boxes, and press <strong>Save</strong>. If something is wrong with a row, a marker
-appears beside the &quot;From&quot; box and the reason is written underneath, where a screen
-reader reads it out as soon as it turns up.</p>
+appears beside the &quot;From&quot; box and the reason is written underneath. Once you have
+changed anything on the page, a screen reader reads that reason out as soon as it
+turns up. Problems the page had already spotted when you opened it are written but
+not read out at you — see
+<a href="accessibility.html">Screen reader and accessibility notes</a> for why.</p>
 <p>Each row also says whether it is actually working. A mapping Mutation is listening
-for reads &quot;This mapping is live.&quot; A mapping you have just typed or changed reads
-&quot;Not active yet — press Save to apply.&quot; — because mappings only start working when
-you save. It is written in the row, not tucked into a tooltip, so your screen reader
-reads it along with the rest of the row and you do not have to press the shortcut to
-find out whether it took.
-A mapping whose &quot;From&quot; combination is already taken gets a &quot;Duplicate 'From'
+for reads &quot;CTRL+ALT+1 is live.&quot; A mapping you have changed and not yet saved reads
+&quot;CTRL+ALT+1 is not active yet — press Save to apply.&quot; — because mappings only start
+working when you save. The line names the shortcut, so you can tell which row it
+belongs to when you hear it. It is written in the row, not tucked into a tooltip, so
+your screen reader reads it along with the rest of the row and you do not have to
+press the shortcut to find out whether it took.</p>
+<p>While you are still typing in a box, the line goes away — Mutation cannot say
+anything useful about half a shortcut. It comes back when you leave the box.</p>
+<p>A mapping whose &quot;From&quot; combination is already taken gets a &quot;Duplicate 'From'
 hotkey&quot; message — again comparing the keys rather than the spelling. That covers
 another mapping, any shortcut higher up the Hotkeys page, and any of your prompt
 shortcuts. <strong>Delete</strong> removes a mapping.</p>

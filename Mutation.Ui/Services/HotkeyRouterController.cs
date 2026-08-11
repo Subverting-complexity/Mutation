@@ -29,6 +29,9 @@ internal sealed class HotkeyRouterController
 
 	private bool _initialized;
 
+	// Set only while SyncSettings is re-committing every row. See Entry_PropertyChanged.
+	private bool _inBookkeepingCommit;
+
 	/// <param name="announcementGate">
 	/// Whether the page holding these rows has been used yet. Until it has, a row's error is on
 	/// screen but not read out, because rows built from settings can arrive already carrying one
@@ -198,8 +201,19 @@ internal sealed class HotkeyRouterController
 		// just edited — which has already committed and announced. An announcing pass here
 		// finds nothing left to change and would take that notice straight back down again
 		// (issue #332).
-		foreach (var entry in _entries)
-			entry.CommitSilently();
+		//
+		// Flagged as bookkeeping while it runs, so a row this pass rewrites is not mistaken for a
+		// row the user typed in and does not open the announcement gate (issue #350).
+		_inBookkeepingCommit = true;
+		try
+		{
+			foreach (var entry in _entries)
+				entry.CommitSilently();
+		}
+		finally
+		{
+			_inBookkeepingCommit = false;
+		}
 
 		var validEntries = _entries
 			.Where(e => e.IsValid && e.NormalizedFromHotkey is not null && e.NormalizedToHotkey is not null)
@@ -361,6 +375,16 @@ internal sealed class HotkeyRouterController
 	/// <summary>
 	/// Flags the rows at <paramref name="duplicateRows"/> and clears the rest. The positions
 	/// are those of <see cref="ConfiguredFromHotkeys"/>, whoever worked them out.
+	/// <para>
+	/// Settling the binding states afterwards is not tidiness. A row that becomes a duplicate is
+	/// put back to <see cref="HotkeyBindingState.Unknown"/>, because a chord that is already
+	/// taken is not a route; nothing about ceasing to be a duplicate restores what it was. On the
+	/// paths that come through <see cref="RefreshRegistrations"/> that is covered, because the
+	/// binding states are settled last there. This is also called straight from the Hotkeys page
+	/// when a <em>core</em> hotkey commits, and that path stops here — so a live route that was
+	/// flagged because a core hotkey took its chord, and then unflagged when the user moved that
+	/// core hotkey elsewhere, stayed permanently silent about being live (issue #343).
+	/// </para>
 	/// </summary>
 	public void ApplyDuplicates(IReadOnlySet<int> duplicateRows)
 	{
@@ -368,6 +392,8 @@ internal sealed class HotkeyRouterController
 
 		for (int i = 0; i < _entries.Count; i++)
 			_entries[i].SetDuplicate(duplicateRows.Contains(i));
+
+		ApplyBindingStates();
 	}
 
 	/// <summary>
@@ -405,11 +431,17 @@ internal sealed class HotkeyRouterController
 
 	private void Entry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		// Typing in either box. The text of a row only changes through the two-way binding —
-		// loading and the bookkeeping commits write the backing fields directly — so this is the
-		// user, and it is what opens the page's mouth (issue #350).
-		if (e.PropertyName == nameof(HotkeyRouterEntry.FromHotkey) ||
-			e.PropertyName == nameof(HotkeyRouterEntry.ToHotkey))
+		// Typing in either box, which is what opens the page's mouth (issue #350).
+		//
+		// A row's text does not only change through the two-way binding: a commit that rewrites a
+		// chord into the app's canonical spelling raises this too, and the bookkeeping pass in
+		// SyncSettings commits every row. Today those passes find nothing to rewrite, because the
+		// entry's constructor already canonicalised before this handler was subscribed — but that
+		// is an accident of ordering, not a rule, and relying on it means a future change could
+		// open the gate at page load with no test failing. Hence the explicit guard.
+		if (!_inBookkeepingCommit &&
+			(e.PropertyName == nameof(HotkeyRouterEntry.FromHotkey) ||
+			e.PropertyName == nameof(HotkeyRouterEntry.ToHotkey)))
 		{
 			_announcementGate?.Touch();
 		}

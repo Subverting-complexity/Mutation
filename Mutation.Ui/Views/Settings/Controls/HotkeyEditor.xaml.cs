@@ -273,6 +273,12 @@ public sealed partial class HotkeyEditor : UserControl
 		bool rewritten = !string.Equals(committed, typed, StringComparison.Ordinal);
 		if (rewritten)
 		{
+			// A rewrite changes what this row holds, which can make it collide with another row,
+			// and it happens without the user typing a character — tabbing out of a box holding a
+			// hand-edited spelling is enough. Without this the resulting "Duplicate hotkey" badge
+			// was written and never spoken (issue #350).
+			AnnouncementGate?.Touch();
+
 			_suppressTextChanged = true;
 			try { HotkeyTextBox.Text = committed; }
 			finally { _suppressTextChanged = false; }
@@ -286,8 +292,12 @@ public sealed partial class HotkeyEditor : UserControl
 		// Only a rewrite can have left that message stale, and only a rewrite refreshes it.
 		// Doing it on every commit would newly complain at a required row that is empty and
 		// untouched — of which there are plenty — every single time the user tabbed past it.
+		// Through the gate like every other validation message, so one page has one set of
+		// manners. In practice the gate is already open by now — a rewrite opened it above — but
+		// leaving this path ungated meant a whitespace-only box, tabbed into and straight out of,
+		// announced "Enter a hotkey." on a page nobody had touched.
 		if (rewritten)
-			LiveMessage.Show(ValidationText, validation);
+			LiveMessage.Show(ValidationText, validation, AnnouncementAllowed);
 
 		if (!string.Equals(Hotkey, committed, StringComparison.Ordinal))
 			Hotkey = committed;

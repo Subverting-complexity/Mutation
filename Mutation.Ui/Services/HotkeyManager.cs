@@ -148,7 +148,14 @@ public class HotkeyManager : IDisposable
         public IReadOnlyList<HotkeyRegistrationResult> RegisterRouterHotkeys()
         {
                 if (_settings.HotKeyRouterSettings is null)
+                {
+                        // Nothing to register means nothing is live. Both callers happen to clear
+                        // first, so leaving the old list standing would not show up today — but the
+                        // Settings page reads that list to decide whether a row is live, and a
+                        // third caller inheriting stale routes would make it lie silently.
+                        _routerRoutes = Array.Empty<RegisteredRouterRoute>();
                         return Array.Empty<HotkeyRegistrationResult>();
+                }
 
                 return RegisterRouterHotkeys(_settings.HotKeyRouterSettings.Mappings);
         }

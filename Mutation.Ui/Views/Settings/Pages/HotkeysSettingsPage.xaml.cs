@@ -38,11 +38,6 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 	public ObservableCollection<Mutation.Ui.HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 
-	public HotkeysSettingsPage(Settings settings)
-		: this(settings, null)
-	{
-	}
-
 	/// <param name="liveRouterRoutes">
 	/// The router routes the running app currently holds, so each row can say whether it is live
 	/// or still waiting for a save. Read-only — see <see cref="HotkeyRouterController"/>. Null

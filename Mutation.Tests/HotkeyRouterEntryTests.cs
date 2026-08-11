@@ -416,7 +416,7 @@ public class HotkeyRouterEntryTests
 
 		entry.SetBindingResult(HotkeyBindingState.Bound, null);
 
-		Assert.Equal("This mapping is live.", entry.RouteStatusText);
+		Assert.Equal("CTRL+C is live.", entry.RouteStatusText);
 	}
 
 	[Fact]
@@ -426,7 +426,7 @@ public class HotkeyRouterEntryTests
 
 		entry.SetBindingResult(HotkeyBindingState.NotYetApplied, null);
 
-		Assert.Equal("Not active yet — press Save to apply.", entry.RouteStatusText);
+		Assert.Equal("CTRL+C is not active yet — press Save to apply.", entry.RouteStatusText);
 	}
 
 	[Fact]
@@ -480,7 +480,7 @@ public class HotkeyRouterEntryTests
 		entry.SetBindingResult(HotkeyBindingState.Bound, null);
 		entry.SetBindingResult(HotkeyBindingState.NotYetApplied, null);
 
-		Assert.Equal(["This mapping is live.", "Not active yet — press Save to apply."], raised);
+		Assert.Equal(["CTRL+C is live.", "CTRL+C is not active yet — press Save to apply."], raised);
 	}
 
 	// ----- Showing an error without reading it out (issue #350) -----

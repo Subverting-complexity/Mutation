@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using CognitiveSupport;
@@ -515,6 +516,55 @@ public class HotkeyRouterControllerTests
 		Assert.False(gate.HasBeenTouched);
 		Assert.True(entry.AnnouncementsMuted);
 	}
+
+	[Fact]
+	public void CeasingToBeADuplicate_GetsTheRowItsStatusBack()
+	{
+		// ApplyDuplicates is reached without a refresh when a *core* hotkey commits: the Hotkeys
+		// page recomputes across all its lists and stops there. A live route flagged because a
+		// core hotkey took its chord goes to Unknown, and nothing about unflagging it restored
+		// what it was — so it stayed silent about being live until a router box lost focus or the
+		// page was rebuilt (issue #343).
+		var (controller, _, _, entries, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var entry = new HotkeyRouterEntry(new HotKeyRouterSettings.HotKeyRouterMap("Ctrl+Alt+1", "Ctrl+Shift+M"));
+		entries.Add(entry);
+		SetField(controller, "_liveRoutes", (Func<IReadOnlyList<RegisteredRouterRoute>?>)(() =>
+			new[] { new RegisteredRouterRoute("CTRL+ALT+1", "CTRL+SHIFT+M", true, null) }));
+		CallRefreshRegistrations(controller);
+		Assert.Equal(HotkeyBindingState.Bound, entry.BindingState);
+
+		controller.ApplyDuplicates(new HashSet<int> { 0 });
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
+
+		controller.ApplyDuplicates(new HashSet<int>());
+
+		Assert.Equal(HotkeyBindingState.Bound, entry.BindingState);
+	}
+
+	[Fact]
+	public void ARowsTextChangingIsOnlyTheUserWhenItIsNotBookkeeping()
+	{
+		// A row's text does not change only when the user types: a commit that rewrites a chord
+		// into the app's canonical spelling raises the same notification, and SyncSettings commits
+		// every row on every refresh. Today those passes happen to find nothing to rewrite, but
+		// relying on that would mean a reordering could open the gate at page load with nothing
+		// failing. This pins the guard rather than the accident (issue #350).
+		var (controller, _, _, _, _) = BuildController(autoPersist: false, injectSettingsManager: false);
+		var gate = InjectAnnouncementGate(controller);
+
+		SetField(controller, "_inBookkeepingCommit", true);
+		CallEntryPropertyChanged(controller, nameof(HotkeyRouterEntry.FromHotkey));
+		Assert.False(gate.HasBeenTouched);
+
+		SetField(controller, "_inBookkeepingCommit", false);
+		CallEntryPropertyChanged(controller, nameof(HotkeyRouterEntry.ToHotkey));
+		Assert.True(gate.HasBeenTouched);
+	}
+
+	private static void CallEntryPropertyChanged(HotkeyRouterController controller, string propertyName)
+		=> typeof(HotkeyRouterController)
+			.GetMethod("Entry_PropertyChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
+			.Invoke(controller, new object?[] { null, new PropertyChangedEventArgs(propertyName) });
 
 	[Fact]
 	public void WithNoGateAtAll_NoRowIsEverMuted()

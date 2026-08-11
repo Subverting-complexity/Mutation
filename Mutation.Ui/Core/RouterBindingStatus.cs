@@ -1,3 +1,4 @@
+using Mutation.Ui.Services;
 using System;
 using System.Collections.Generic;
 
@@ -58,11 +59,28 @@ internal static class RouterBindingStatus
 	}
 
 	/// <summary>
-	/// Both sides are written in the app's one canonical spelling already — the rows canonicalise
-	/// on commit, and what is on disk was written by a commit — so this is a comparison of two
-	/// spellings that should agree, with the case and stray spaces forgiven in case one of them
-	/// came from a hand-edited settings file.
+	/// Whether two spellings name the same chord. Both sides go through
+	/// <see cref="Hotkey.Canonicalize"/> first, which is the app's single authority on how a
+	/// chord is spelled, so <c>CONTROL+SHIFT+ALT+8</c> and <c>CTRL+SHIFT+ALT+8</c> are one
+	/// shortcut and <c>SHIFT+CTRL+A</c> and <c>CTRL+SHIFT+A</c> are one shortcut.
+	/// <para>
+	/// Comparing the raw text instead was a real bug, not a theoretical one. The row's side has
+	/// been through <c>Canonicalize</c>; the live route's side is whatever is in the settings
+	/// file. A brand-new settings file is seeded with a router mapping written
+	/// <c>CONTROL+SHIFT+ALT+8</c>, so on a fresh install the one router row on the page reported
+	/// a working mapping as "not active yet" — the same class of false statement issue #343 was
+	/// filed about. Any file written before the canonicalisation work, or edited by hand, does
+	/// the same.
+	/// </para>
+	/// <para>
+	/// This is the lesson <see cref="HotkeyConflictFinder"/> already learned for duplicate
+	/// detection (issue #306): a shortcut has one identity and many spellings, and comparing
+	/// spellings gets it wrong.
+	/// </para>
 	/// </summary>
 	private static bool SameChord(string? left, string? right) =>
-		string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+		string.Equals(
+			Hotkey.Canonicalize(left)?.Trim(),
+			Hotkey.Canonicalize(right)?.Trim(),
+			StringComparison.OrdinalIgnoreCase);
 }

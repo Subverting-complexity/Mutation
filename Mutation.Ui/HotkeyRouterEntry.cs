@@ -139,15 +139,36 @@ public sealed class HotkeyRouterEntry : INotifyPropertyChanged
         /// well so acting on the row is answered rather than leaving the user to press the
         /// shortcut and find out (issue #343).
         /// </para>
+        /// <para>
+        /// It names the shortcut, for the same reason the rewrite notices name their box: it can
+        /// be announced out of a row the user is not in. Pressing <b>Delete</b> re-evaluates every
+        /// remaining row, so deleting one of two rows that were flagged as duplicates of each
+        /// other leaves the survivor announcing its new state while focus sits on a button in a
+        /// row that no longer exists. "Not active yet" on its own would give the user no way to
+        /// tell which mapping was meant, and a chord that three rows shared would say it three
+        /// times.
+        /// </para>
         /// </summary>
-        public string? RouteStatusText => _bindingState switch
+        public string? RouteStatusText
         {
-                HotkeyBindingState.Bound => "This mapping is live.",
-                HotkeyBindingState.NotYetApplied => "Not active yet \u2014 press Save to apply.",
-                // Failed says why in the error region below, which is assertive and reaches the
-                // user without being hunted for. Two lines saying the same thing is one too many.
-                _ => null,
-        };
+                get
+                {
+                        // The chord is always present in these two states: the controller only asks
+                        // about a row that is valid, and a valid row has a normalized "From".
+                        string chord = NormalizedFromHotkey ?? string.Empty;
+
+                        return _bindingState switch
+                        {
+                                HotkeyBindingState.Bound => $"{chord} is live.",
+                                HotkeyBindingState.NotYetApplied =>
+                                        $"{chord} is not active yet \u2014 press Save to apply.",
+                                // Failed says why in the error region below, which is assertive and
+                                // reaches the user without being hunted for. Two lines saying the
+                                // same thing is one too many.
+                                _ => null,
+                        };
+                }
+        }
 
         /// <summary>
         /// While true, this row's error and status still appear on screen but are not read out.

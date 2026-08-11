@@ -289,10 +289,15 @@ window." You get a failure beep with it, not the success beep.
 
 Windows will not let an ordinary program type into a window that is running with
 administrator privileges. It simply throws the keystrokes away, and it does not tell
-the program that sent them. So Mutation asks first: before typing or pasting, it checks
-whether the app in front is one it is allowed to send keys to, and stops with this
-message when it is not. That is why you hear about it instead of getting a success beep
-for text that never arrived.
+the program that sent them. So Mutation asks first: before typing or pasting, it
+compares how much privilege the app in front is running with against its own, and stops
+with this message when the other app is higher. That is why you hear about it instead of
+getting a success beep for text that never arrived.
+
+It is not a cast-iron guarantee. When Windows will not tell Mutation anything about the
+app in front, Mutation sends the text rather than refusing to — so a success beep
+followed by an empty window in the other app is still possible. Your text is in the
+Mutation window either way.
 
 **What to do.**
 

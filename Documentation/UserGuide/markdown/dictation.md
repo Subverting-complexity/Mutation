@@ -158,16 +158,21 @@ is inserted anywhere. Mutation won't paste into itself.
 
 Whichever choice you make, Mutation waits for the typing or pasting to finish before
 it tells you the result. It checks twice that the text can land: once before sending,
-by asking Windows whether the app in front is one it is allowed to type into, and once
-after, that Windows accepted the keystrokes. Either check failing gets you the failure
-beep and a message saying the text could not be sent, instead of a success beep for
-text that never landed. The transcript stays in the Mutation window either way, so
+by comparing how much privilege the app in front is running with against its own, and
+once after, that Windows accepted the keystrokes. Either check failing gets you the
+failure beep and a message saying the text could not be sent, instead of a success beep
+for text that never landed. The transcript stays in the Mutation window either way, so
 nothing is lost.
 
 The check before sending is the one that catches an app running as administrator.
 Windows throws keystrokes aimed at those away without telling the sender, so asking
 first is the only way to know — see
 [Troubleshooting](troubleshooting.md) for what to do about it.
+
+Neither check is a cast-iron guarantee. If Windows will not tell Mutation anything
+about the app in front, Mutation sends the text rather than refusing to. So if a
+success beep is ever followed by an empty window in the other app, the text is still
+in Mutation — paste it yourself with **Ctrl+V**.
 
 ### Sending a shortcut afterwards
 

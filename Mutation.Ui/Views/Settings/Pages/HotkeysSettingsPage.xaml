@@ -37,6 +37,15 @@
 						<TextBlock Grid.Column="2" Text="Actions" FontWeight="SemiBold" />
 					</Grid>
 
+					<!-- Do not give this list a Height or MaxHeight without reading on. It sits
+					     inside a StackPanel inside the dialog's ScrollViewer, so it is measured
+					     with unbounded height and realises every row up front — no container is
+					     ever recycled. Two live regions in the row template rely on that. Bound
+					     the height and recycling resumes, at which point a row scrolling into
+					     view rebinds a reused TextBlock, LiveMessage sees the text change, and
+					     the row announces its error and its status again just for being looked
+					     at. If a long mapping list ever needs a scrolling list of its own, the
+					     live regions have to learn to stay quiet through container reuse first. -->
 					<ListView
 						x:Name="HotkeyRouterList"
 						AutomationProperties.Name="Hotkey router mappings"
