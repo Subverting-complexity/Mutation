@@ -51,6 +51,13 @@ public sealed partial class RegionSelectionWindow : Window
 	/// change and put back after it (issue #371).
 	/// </summary>
 	private readonly CursorAnchor _cursorAnchor;
+
+	/// <summary>
+	/// Whether to nudge the pointer when this capture ends, and how. Set by the caller before
+	/// each capture rather than read from settings here, so the overlay stays free of settings
+	/// and a change made in the dialog takes effect on the next capture.
+	/// </summary>
+	public PointerNudgeOptions PointerNudge { get; set; } = PointerNudgeOptions.Off;
 	private const string AnnouncementActivityId = "RegionSelection";
 	private const string CancelledAnnouncement = "Region selection cancelled.";
 
@@ -690,33 +697,69 @@ public sealed partial class RegionSelectionWindow : Window
 	/// argues — but it is a real cost, not a free win.
 	/// </para>
 	/// <para>
-	/// The continuation runs on the thread pool, which is fine: setting the pointer position is
-	/// not tied to a thread. It is stamped with the anchor it was registered against, so a
-	/// handback that somehow outlives its own capture cannot touch the next one's pointer.
+	/// The work runs off the UI thread, which is fine: setting the pointer position is not tied
+	/// to a thread. It is stamped with the anchor it was registered against, so a handback that
+	/// somehow outlives its own capture cannot touch the next one's pointer.
+	/// </para>
+	/// <para>
+	/// Nothing waits for this. Deliberately: a cancelled capture waits for
+	/// <see cref="ForegroundHandedBack"/> before it says anything, and the nudge that may follow
+	/// runs for up to five seconds. Adding that to the wait would leave the user in silence for
+	/// the whole of it.
 	/// </para>
 	/// </summary>
 	private void RestoreCursorAfterForegroundHandback()
 	{
-		int generation = _cursorAnchor.Generation;
-		var handback = ForegroundHandedBack;
-		if (handback.IsCompleted)
-		{
-			// The foreground went back synchronously, so the restore just done in
-			// CompleteSelection already covered it.
-			_cursorAnchor.ClearIfCurrent(generation);
-			return;
-		}
+		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge);
+	}
 
-		_ = handback.ContinueWith(
-			_ =>
-			{
-				_cursorAnchor.RestoreIfCurrent(generation);
-				// The capture is over and the pointer belongs to the user again.
-				_cursorAnchor.ClearIfCurrent(generation);
-			},
-			System.Threading.CancellationToken.None,
-			TaskContinuationOptions.None,
-			TaskScheduler.Default);
+	private async Task HandPointerBackAsync(int generation, PointerNudgeOptions nudge)
+	{
+		try
+		{
+			await ForegroundHandedBack.ConfigureAwait(false);
+			_cursorAnchor.RestoreIfCurrent(generation);
+			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+		}
+		catch
+		{
+			// The pointer is a nicety. Nothing here may break a capture that has already
+			// produced its picture.
+		}
+		finally
+		{
+			// The capture is over and the pointer belongs to the user again.
+			_cursorAnchor.ClearIfCurrent(generation);
+		}
+	}
+
+	/// <summary>
+	/// Moves the pointer one pixel back and forth for a while, so a magnifier that has followed
+	/// the keyboard caret somewhere else brings its view back to the mouse (issue #373).
+	/// <para>
+	/// Runs after the restore, not instead of it, and finishes on the very pixel the restore put
+	/// the pointer on. The order matters: nudging around a position that had drifted would
+	/// advertise the wrong place.
+	/// </para>
+	/// </summary>
+	private Task NudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	{
+		if (!nudge.Enabled || _cursorAnchor.Generation != generation || !_cursorAnchor.HasAnchor)
+			return Task.CompletedTask;
+
+		var anchor = _cursorAnchor.Anchor;
+		int rightmostX = GetSystemMetrics(SM_XVIRTUALSCREEN) + GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1;
+		var plan = PointerNudgePlanner.Plan(anchor, rightmostX, nudge);
+
+		return PointerNudgeRunner.RunAsync(
+			_cursor,
+			Task.Delay,
+			anchor,
+			plan,
+			TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
+			// Drops the nudge the moment a new capture claims the anchor, so two captures in
+			// quick succession never have one nudging against the other's pointer.
+			() => _cursorAnchor.Generation == generation);
 	}
 
 	private void Announce(string message, AutomationNotificationKind kind)

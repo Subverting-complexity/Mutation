@@ -196,6 +196,34 @@ internal class SettingsManager : ISettingsManager
                         somethingWasMissing = true;
                 }
 
+		// Pointer-nudge timings. A settings file written before the nudge existed has neither
+		// key, so both land on 0 rather than on the property initializer, and 0 would mean a
+		// nudge that is switched on but never moves. Clamping into the same range the dialog
+		// offers is what keeps a hand-edited file from producing a nudge nobody can stop.
+		int nudgeInterval = azureComputerVisionSettings.PointerNudgeIntervalMilliseconds <= 0
+			? AzureComputerVisionSettings.DefaultPointerNudgeIntervalMilliseconds
+			: Math.Clamp(
+				azureComputerVisionSettings.PointerNudgeIntervalMilliseconds,
+				AzureComputerVisionSettings.MinPointerNudgeIntervalMilliseconds,
+				AzureComputerVisionSettings.MaxPointerNudgeIntervalMilliseconds);
+		if (nudgeInterval != azureComputerVisionSettings.PointerNudgeIntervalMilliseconds)
+		{
+			azureComputerVisionSettings.PointerNudgeIntervalMilliseconds = nudgeInterval;
+			somethingWasMissing = true;
+		}
+
+		int nudgeDuration = azureComputerVisionSettings.PointerNudgeDurationMilliseconds <= 0
+			? AzureComputerVisionSettings.DefaultPointerNudgeDurationMilliseconds
+			: Math.Clamp(
+				azureComputerVisionSettings.PointerNudgeDurationMilliseconds,
+				AzureComputerVisionSettings.MinPointerNudgeDurationMilliseconds,
+				AzureComputerVisionSettings.MaxPointerNudgeDurationMilliseconds);
+		if (nudgeDuration != azureComputerVisionSettings.PointerNudgeDurationMilliseconds)
+		{
+			azureComputerVisionSettings.PointerNudgeDurationMilliseconds = nudgeDuration;
+			somethingWasMissing = true;
+		}
+
 
 		if (settings.AudioSettings is null)
 		{

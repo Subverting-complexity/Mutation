@@ -65,6 +65,9 @@ Reading text out of pictures. OCR just means "pulling the words out of an image"
 | Max document size (MB) | Biggest file or page Mutation will send. Anything larger is skipped before upload, so you never accidentally send something huge. Set it to 0 for no limit. |
 | Paste OCR text into the active app | On by default. Puts the recognised text straight into whatever you were working in. Turn it off and the text still reaches your clipboard and the **OCR result** box. |
 | Send hotkey after OCR | Optional keystrokes sent to the app you are in once the text has been delivered — a screen reader command that reads it back, for example. It comes after the paste above. |
+| Wiggle the mouse pointer after a capture | Off by default. Shakes the pointer one pixel back and forth when a capture finishes, then leaves it exactly where it started. Only useful if your magnifier keeps losing the pointer after a capture — see below. |
+| Wiggle every (milliseconds) | How long between one shake and the next. 50 by default, and anything from 10 to 500. |
+| Keep wiggling for (milliseconds) | How long the shaking goes on for. 500 by default, and anything from 50 to 5000. |
 
 The timeout and the "how many at a time" numbers have sensible defaults and hover
 help. Leave them alone unless something is timing out on you.

@@ -98,6 +98,39 @@
 			<controls:InfoHint Text="{StaticResource Help.Ocr.PasteIntoActiveApp}" VerticalAlignment="Center" />
 		</StackPanel>
 
+		<StackPanel Spacing="8">
+			<StackPanel Orientation="Horizontal" Spacing="6">
+				<ToggleSwitch x:Name="ToggleNudgePointer" Header="Wiggle the mouse pointer after a capture" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgePointer}" Toggled="ToggleNudgePointer_Toggled" />
+				<controls:InfoHint Text="{StaticResource Help.Ocr.NudgePointer}" VerticalAlignment="Center" />
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" Spacing="16">
+				<StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<TextBlock Text="Wiggle every (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+						<controls:InfoHint Text="{StaticResource Help.Ocr.NudgeInterval}" VerticalAlignment="Center" />
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<NumberBox x:Name="NbNudgeInterval" AutomationProperties.Name="Wiggle every (milliseconds)" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgeInterval}" Minimum="10" Maximum="500" SmallChange="10" LargeChange="50" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbNudgeInterval_ValueChanged" />
+						<Button Click="BtnResetNudgeInterval_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset wiggle interval">
+							<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+						</Button>
+					</StackPanel>
+				</StackPanel>
+				<StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<TextBlock Text="Keep wiggling for (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+						<controls:InfoHint Text="{StaticResource Help.Ocr.NudgeDuration}" VerticalAlignment="Center" />
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<NumberBox x:Name="NbNudgeDuration" AutomationProperties.Name="Keep wiggling for (milliseconds)" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgeDuration}" Minimum="50" Maximum="5000" SmallChange="50" LargeChange="250" Width="200" SpinButtonPlacementMode="Inline" ValueChanged="NbNudgeDuration_ValueChanged" />
+						<Button Click="BtnResetNudgeDuration_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset wiggle duration">
+							<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+						</Button>
+					</StackPanel>
+				</StackPanel>
+			</StackPanel>
+		</StackPanel>
+
 		<controls:HotkeyEditor x:Name="HkSendAfterOcr" Header="Send hotkey after OCR (optional)" HelpText="{StaticResource Help.Ocr.SendHotkeyAfter}" AllowEmpty="True" AllowSendKeysSyntax="True" />
 
 		<TextBlock Text="OCR action hotkeys appear in the Hotkeys tab."

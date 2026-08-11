@@ -133,6 +133,27 @@ public class AzureComputerVisionSettings
 	// no such key, and keeping the initializer is what turns it on for those files too.
 	public bool PasteOcrTextIntoActiveApplication { get; set; } = true;
 
+	// Moves the mouse pointer one pixel back and forth once the capture is over and the previous
+	// application has the keyboard again. ZoomText follows the keyboard caret as well as the
+	// mouse, so a flashing caret in the application underneath pulls the magnified view away
+	// from the pointer the moment focus returns; the view comes back to the mouse as soon as the
+	// mouse moves. Off unless asked for — it is a workaround for one magnifier's behaviour, and
+	// it moves the pointer on purpose.
+	public bool NudgePointerAfterCapture { get; set; } = false;
+
+	// How long between one one-pixel move and the next, and how long to keep going for. Both are
+	// clamped on load; see PointerNudgeIntervalRange and PointerNudgeDurationRange.
+	public int PointerNudgeIntervalMilliseconds { get; set; } = DefaultPointerNudgeIntervalMilliseconds;
+	public int PointerNudgeDurationMilliseconds { get; set; } = DefaultPointerNudgeDurationMilliseconds;
+
+	public const int DefaultPointerNudgeIntervalMilliseconds = 50;
+	public const int MinPointerNudgeIntervalMilliseconds = 10;
+	public const int MaxPointerNudgeIntervalMilliseconds = 500;
+
+	public const int DefaultPointerNudgeDurationMilliseconds = 500;
+	public const int MinPointerNudgeDurationMilliseconds = 50;
+	public const int MaxPointerNudgeDurationMilliseconds = 5000;
+
 	public string? ApiKey { get; set; }
 	public string? Endpoint { get; set; }
 	public int TimeoutSeconds { get; set; } = 10;
