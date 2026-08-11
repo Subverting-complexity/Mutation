@@ -288,9 +288,11 @@ be running with higher privileges than Mutation. It is available in the Mutation
 window." You get a failure beep with it, not the success beep.
 
 Windows will not let an ordinary program type into a window that is running with
-administrator privileges. It simply throws the keystrokes away. Mutation checks
-whether Windows accepted them and tells you when it did not, rather than announcing
-success for text that never arrived.
+administrator privileges. It simply throws the keystrokes away, and it does not tell
+the program that sent them. So Mutation asks first: before typing or pasting, it checks
+whether the app in front is one it is allowed to send keys to, and stops with this
+message when it is not. That is why you hear about it instead of getting a success beep
+for text that never arrived.
 
 **What to do.**
 

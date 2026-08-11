@@ -3445,15 +3445,19 @@ public sealed partial class MainWindow : Window, IDisposable
 	// Reports how far the text actually got. Every path that needs no insert — an empty
 	// transcript, Mutation itself in front, the "do not insert" option — is Delivered.
 	//
-	// The injection is awaited rather than fired and forgotten (#232). Windows drops
-	// injected input silently when the foreground application runs with higher
-	// privileges, so the only moment the failure can be seen is when SendInput returns
-	// a short count; a caller that had already announced success by then would have
-	// told a blind user their dictation landed in a window that never received it. The
-	// await keeps the work off the UI thread — it runs on the thread pool and the UI
-	// thread returns to its message pump — and it is bounded: SendInput is synchronous,
-	// and the hotkey path waits at most ModifierReleaseTimeoutMs for the user to let go
-	// of the chord they triggered this with.
+	// The injection is awaited rather than fired and forgotten (#232), so a short count
+	// from SendInput is seen before anything announces success; a caller that had already
+	// announced by then would have told a blind user their dictation landed in a window
+	// that never received it. The await keeps the work off the UI thread — it runs on the
+	// thread pool and the UI thread returns to its message pump — and it is bounded:
+	// SendInput is synchronous, and the hotkey path waits at most
+	// ModifierReleaseTimeoutMs for the user to let go of the chord they triggered this
+	// with.
+	//
+	// The short count is not the whole story, which is why each branch below asks a
+	// question first. When the window in front runs at a higher integrity level, Windows
+	// takes the events and discards them with no failure reported anywhere, so the
+	// elevated-app case has to be detected before sending rather than after (issue #294).
 	private async Task<TranscriptDeliveryOutcome> TryInsertIntoActiveApplicationAsync(string text, bool clipboardAvailable = true)
 	{
 		if (string.IsNullOrWhiteSpace(text))
@@ -3465,6 +3469,14 @@ public sealed partial class MainWindow : Window, IDisposable
 		switch (_insertOption)
 		{
 			case DictationInsertOption.SendKeys:
+				// Asked before sending, because afterwards there is nothing to see. Windows
+				// discards input aimed at a window above us without saying so — SendInput
+				// accepts the events, returns the full count, and they are dropped further
+				// down. The count check inside SendText catches input genuinely refused, but
+				// not this, which is the elevated-app case the failure was filed about
+				// (issue #294).
+				if (ForegroundIntegrityProbe.ForegroundWindowWillDiscardInput())
+					return TranscriptDeliveryOutcome.InjectionFailed;
 				BeepPlayer.Play(BeepType.Start);
 				bool typed = await Task.Run(() => HotkeyManager.SendText(text));
 				return typed ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
@@ -3473,6 +3485,11 @@ public sealed partial class MainWindow : Window, IDisposable
 				// clipboard; retry the write here if the earlier copy failed.
 				if (!clipboardAvailable && !await _clipboard.TrySetTextAsync(text))
 					return TranscriptDeliveryOutcome.ClipboardBlocked;
+				// After the clipboard write, not before it. The failure message tells the
+				// user to paste the transcript themselves, so the text has to be somewhere
+				// they can paste it from even when we already know Ctrl+V will not land.
+				if (ForegroundIntegrityProbe.ForegroundWindowWillDiscardInput())
+					return TranscriptDeliveryOutcome.InjectionFailed;
 				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
 				// literal would throw and drop to the SendKeys.SendWait fallback.
 				bool pasted = await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));

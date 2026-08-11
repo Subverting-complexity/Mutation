@@ -77,6 +77,15 @@ its turn, so it never talks over a warning about the same box. A box that was al
 written Mutation's way stays quiet. See
 [Keyboard shortcuts](keyboard-shortcuts.md) for what the tidying up does.
 
+The **Hotkeys** page stays quiet when you first open it. Any problems it has already
+spotted — an empty box, two shortcuts wanting the same keys — are written on the page
+straight away, so your screen reader reads them as you move down it. They are not read
+out at you on arrival, because a page with several of them would greet you with a run
+of interruptions about settings you have not touched. As soon as you change anything
+on the page, problems are announced the moment they appear again, wherever on the page
+they turn up. Pressing **Add mapping** counts as changing something, so the new empty
+row does tell you it wants a shortcut.
+
 ## The screenshot overlay talks you through it
 
 Grabbing part of a screen you cannot see sounds impossible. It is not.

@@ -40,6 +40,19 @@ public sealed partial class HotkeyEditor : UserControl
 		UpdateHelpVisibility();
 	}
 
+	/// <summary>
+	/// Whether the page holding this editor has been used yet. Until it has, this row's
+	/// validation message is written on screen but not read out — a settings page full of
+	/// required-but-empty rows would otherwise greet the user with one "Enter a hotkey."
+	/// interruption per row, about settings nobody had touched (issue #350).
+	/// <para>
+	/// Left null by any page that does not care, and then the message announces as it always
+	/// did. Editors on pages whose rows practically always have values were quiet in practice
+	/// anyway; the Hotkeys page is the one where it showed.
+	/// </para>
+	/// </summary>
+	internal FirstTouchGate? AnnouncementGate { get; set; }
+
 	public string Hotkey
 	{
 		get => (string)GetValue(HotkeyProperty);
@@ -121,6 +134,11 @@ public sealed partial class HotkeyEditor : UserControl
 	private void HotkeyTextBox_TextChanged(object sender, TextChangedEventArgs e)
 	{
 		if (_suppressTextChanged) return;
+
+		// Every programmatic write to this box suppresses this handler, so reaching here means
+		// the user typed. That is what opens the page's mouth — merely tabbing through a row
+		// does not (issue #350).
+		AnnouncementGate?.Touch();
 		Validate(HotkeyTextBox.Text);
 	}
 
@@ -175,6 +193,8 @@ public sealed partial class HotkeyEditor : UserControl
 
 	private void RecordButton_Click(object sender, RoutedEventArgs e)
 	{
+		AnnouncementGate?.Touch();
+
 		if (_isRecording)
 			StopRecording();
 		else
@@ -183,6 +203,8 @@ public sealed partial class HotkeyEditor : UserControl
 
 	private void ClearButton_Click(object sender, RoutedEventArgs e)
 	{
+		AnnouncementGate?.Touch();
+
 		_suppressTextChanged = true;
 		try { HotkeyTextBox.Text = string.Empty; }
 		finally { _suppressTextChanged = false; }
@@ -214,7 +236,19 @@ public sealed partial class HotkeyEditor : UserControl
 	/// #243).
 	/// </para>
 	/// </summary>
-	private void Validate(string text) => LiveMessage.Show(ValidationText, ValidationMessageFor(text));
+	/// <remarks>
+	/// Shown either way, announced only once the page has been used. Setting a row's
+	/// <c>Hotkey</c> while the page is being built runs straight through here, so without the
+	/// gate a page of required-but-empty rows reads them all out on the way in (issue #350).
+	/// </remarks>
+	private void Validate(string text) =>
+		LiveMessage.Show(ValidationText, ValidationMessageFor(text), AnnouncementAllowed);
+
+	/// <summary>
+	/// Asked at the moment the message would be raised rather than when it is set, so a page
+	/// used during the same dispatcher pass is heard rather than swallowed.
+	/// </summary>
+	private bool AnnouncementAllowed() => AnnouncementGate is null || AnnouncementGate.HasBeenTouched;
 
 	/// <summary>What is wrong with <paramref name="text"/>, or null when nothing is.</summary>
 	private string? ValidationMessageFor(string? text)

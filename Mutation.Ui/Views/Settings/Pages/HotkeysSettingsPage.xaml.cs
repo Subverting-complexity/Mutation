@@ -22,9 +22,35 @@ public sealed partial class HotkeysSettingsPage : UserControl
 	private readonly List<HotkeyRow> _rows = new();
 	private readonly HotkeyRouterController _routerController;
 
+	/// <summary>
+	/// Whether the user has used this page yet. Every error on it is written the moment it
+	/// exists and read out only after this has been touched, so opening the page on a settings
+	/// file full of empty required rows is quiet instead of a queue of interruptions about rows
+	/// nobody has been near (issue #350).
+	/// <para>
+	/// One gate for the page rather than one per row, and shared with the router list below, so
+	/// the two halves of this screen have the same manners. It also means a clash that appears
+	/// in one list because the user edited the other is still announced — the row it lands on
+	/// was never touched, and it is precisely the news worth interrupting for.
+	/// </para>
+	/// </summary>
+	private readonly FirstTouchGate _announcementGate = new();
+
 	public ObservableCollection<Mutation.Ui.HotkeyRouterEntry> HotkeyRouterEntries { get; } = new();
 
 	public HotkeysSettingsPage(Settings settings)
+		: this(settings, null)
+	{
+	}
+
+	/// <param name="liveRouterRoutes">
+	/// The router routes the running app currently holds, so each row can say whether it is live
+	/// or still waiting for a save. Read-only — see <see cref="HotkeyRouterController"/>. Null
+	/// when there is nothing to ask, and then the rows say nothing about it (issue #343).
+	/// </param>
+	public HotkeysSettingsPage(
+		Settings settings,
+		Func<IReadOnlyList<RegisteredRouterRoute>?>? liveRouterRoutes)
 	{
 		_settings = settings;
 		InitializeComponent();
@@ -39,7 +65,9 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			autoPersist: false,
 			// This page holds both lists, so it is the only place that can see a core hotkey
 			// and a route claiming the same chord (issue #321).
-			crossListDuplicateCheck: RecomputeDuplicates);
+			crossListDuplicateCheck: RecomputeDuplicates,
+			liveRoutes: liveRouterRoutes,
+			announcementGate: _announcementGate);
 
 		// Also runs the first duplicate check, once the router rows exist to take part in it.
 		_routerController.Initialize();
@@ -66,6 +94,10 @@ public sealed partial class HotkeysSettingsPage : UserControl
 				Header = spec.Label,
 				AllowEmpty = spec.AllowEmpty,
 				AllowSendKeysSyntax = spec.AllowsSendKeysSyntax,
+				// Before Hotkey is assigned, because assigning it validates straight away and a
+				// required row that is empty would announce "Enter a hotkey." as the page is
+				// still being built (issue #350).
+				AnnouncementGate = _announcementGate,
 				Hotkey = spec.Getter(_settings) ?? string.Empty,
 			};
 			var dupBadge = new TextBlock
@@ -91,6 +123,7 @@ public sealed partial class HotkeysSettingsPage : UserControl
 			{
 				var resetBtn = SettingsResetButton.Create($"Reset to default ({spec.Default})", () =>
 				{
+					_announcementGate.Touch();
 					editor.Hotkey = spec.Default!;
 					spec.Setter(_settings, spec.Default);
 					RecomputeDuplicates();
@@ -150,11 +183,16 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 		for (int i = 0; i < _rows.Count; i++)
 		{
+			// Shown always, announced once the page has been used. The first check of all runs
+			// while the page is still being built, and a settings file with two rows already
+			// sharing a chord would otherwise read the badge out before the user saw the page
+			// (issue #350).
 			LiveMessage.Show(
 				_rows[i].DuplicateBadge,
 				onThisPage[0].Contains(i) ? DuplicateBadgeText
 					: everywhere[0].Contains(i) ? PromptClashBadge(_rows[i], prompts)
-					: null);
+					: null,
+				AnnouncementAllowed);
 		}
 
 		// A route says "Duplicate 'From' hotkey." either way. The wording is true of a prompt
@@ -216,6 +254,13 @@ public sealed partial class HotkeysSettingsPage : UserControl
 
 		return configured;
 	}
+
+	/// <summary>
+	/// Whether this page may read its errors out yet. Asked at the moment a message would be
+	/// raised rather than when it is set, so a check that runs while the page is being built is
+	/// silent while the very next one, after the user has typed, is not.
+	/// </summary>
+	private bool AnnouncementAllowed() => _announcementGate.HasBeenTouched;
 
 	private void BtnAddHotkeyRoute_Click(object sender, RoutedEventArgs e) =>
 		_routerController.AddNewMapping();

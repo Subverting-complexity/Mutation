@@ -235,6 +235,13 @@ down to the **Hotkey Router** section. Press **Add mapping**, fill in the "From"
 and "To" boxes, and press **Save**. If something is wrong with a row, a marker
 appears beside the "From" box and the reason is written underneath, where a screen
 reader reads it out as soon as it turns up.
+
+Each row also says whether it is actually working. A mapping Mutation is listening
+for reads "This mapping is live." A mapping you have just typed or changed reads
+"Not active yet — press Save to apply." — because mappings only start working when
+you save. It is written in the row, not tucked into a tooltip, so your screen reader
+reads it along with the rest of the row and you do not have to press the shortcut to
+find out whether it took.
 A mapping whose "From" combination is already taken gets a "Duplicate 'From'
 hotkey" message — again comparing the keys rather than the spelling. That covers
 another mapping, any shortcut higher up the Hotkeys page, and any of your prompt

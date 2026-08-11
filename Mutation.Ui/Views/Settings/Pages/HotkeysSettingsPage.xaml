@@ -58,6 +58,7 @@
 										<RowDefinition Height="Auto" />
 										<RowDefinition Height="Auto" />
 										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
 									</Grid.RowDefinitions>
 
 									<Grid Grid.Row="0" Grid.Column="0">
@@ -117,15 +118,53 @@
 									     left queued behind a message about spelling. The two never both have
 									     something to say about one box — the notice stands down while the
 									     box has an error — so this is which of them interrupts, not a race
-									     between them. -->
+									     between them.
+
+									     Muted until the user has used the page. A row built from settings
+									     can already be carrying "Enter a hotkey." before it reaches the
+									     screen, so without the mute, opening this page on a settings file
+									     with several bad mappings queued one assertive interruption per row
+									     about settings nobody had touched. The written half is never muted
+									     — a sighted reader was not the problem (issue #350). -->
 									<TextBlock
 										Grid.Row="1"
 										Grid.Column="0"
 										Grid.ColumnSpan="3"
+										views:LiveText.Muted="{x:Bind AnnouncementsMuted, Mode=OneWay}"
 										views:LiveText.Message="{x:Bind BindingErrorMessage, Mode=OneWay}"
 										Foreground="{ThemeResource SystemFillColorCriticalBrush}"
 										Visibility="Collapsed"
 										AutomationProperties.LiveSetting="Assertive"
+										Style="{StaticResource CaptionTextBlockStyle}"
+										TextWrapping="Wrap" />
+
+									<!-- Whether the running app is actually listening for this mapping:
+									     "This mapping is live." once it is, or "Not active yet — press Save
+									     to apply." while it is only on screen. Settings pages edit a copy
+									     and hand it over on save, so a row and a live route are two
+									     different things, and this is the only confirmation a user gets
+									     that a mapping they just added took effect.
+
+									     Written text in the row's reading order, not a tick beside the box.
+									     The tick was the old design and none of it reached this app's
+									     reader: three properties computed a glyph, a colour and a tooltip,
+									     nothing bound any of them, and a glyph announces nothing even when
+									     bound (issue #343).
+
+									     Polite, so it waits its turn behind the error above rather than
+									     cutting across it, and muted on the way in for the same reason as
+									     the error: a page of stored routes would otherwise read "This
+									     mapping is live." out once per row. Failures say nothing here — the
+									     assertive error above carries the reason. -->
+									<TextBlock
+										Grid.Row="2"
+										Grid.Column="0"
+										Grid.ColumnSpan="3"
+										views:LiveText.Muted="{x:Bind AnnouncementsMuted, Mode=OneWay}"
+										views:LiveText.Message="{x:Bind RouteStatusText, Mode=OneWay}"
+										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+										Visibility="Collapsed"
+										AutomationProperties.LiveSetting="Polite"
 										Style="{StaticResource CaptionTextBlockStyle}"
 										TextWrapping="Wrap" />
 
@@ -140,7 +179,7 @@
 									     caption would normally take: this app's reader is low-vision, and a
 									     message worth showing at all is worth being able to read. -->
 									<TextBlock
-										Grid.Row="2"
+										Grid.Row="3"
 										Grid.Column="0"
 										views:LiveText.Message="{x:Bind FromCommitAnnouncement, Mode=OneWay}"
 										Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -150,7 +189,7 @@
 										TextWrapping="Wrap" />
 
 									<TextBlock
-										Grid.Row="2"
+										Grid.Row="3"
 										Grid.Column="1"
 										views:LiveText.Message="{x:Bind ToCommitAnnouncement, Mode=OneWay}"
 										Foreground="{ThemeResource TextFillColorPrimaryBrush}"

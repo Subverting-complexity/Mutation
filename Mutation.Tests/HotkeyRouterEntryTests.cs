@@ -1,5 +1,6 @@
 using CognitiveSupport;
 using Mutation.Ui;
+using Mutation.Ui.Core;
 
 namespace Mutation.Tests;
 
@@ -59,7 +60,7 @@ public class HotkeyRouterEntryTests
 		Assert.True(entry.IsDuplicate);
 		Assert.False(entry.IsFromInputValid);
 		Assert.False(entry.IsValid);
-		Assert.Equal(HotkeyBindingState.Inactive, entry.BindingState);
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
 	}
 
 	[Fact]
@@ -402,5 +403,127 @@ public class HotkeyRouterEntryTests
 		entry.ClearFromCommitAnnouncement();
 
 		Assert.Equal(["Shortcut to listen for now reads CTRL+SHIFT+A.", null], raised);
+	}
+
+	// ----- What the row says about being live (issue #343) -----
+
+	[Fact]
+	public void ARouteTheAppHolds_SaysSoInWords()
+	{
+		// The old design computed a tick, a colour and a tooltip for this and bound none of
+		// them, so a working route looked and read exactly like one that was never registered.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.SetBindingResult(HotkeyBindingState.Bound, null);
+
+		Assert.Equal("This mapping is live.", entry.RouteStatusText);
+	}
+
+	[Fact]
+	public void ARouteTheAppHasNotBeenGivenYet_SaysWhatToDoAboutIt()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.SetBindingResult(HotkeyBindingState.NotYetApplied, null);
+
+		Assert.Equal("Not active yet — press Save to apply.", entry.RouteStatusText);
+	}
+
+	[Fact]
+	public void ARouteNothingIsKnownAbout_SaysNothingRatherThanGuessing()
+	{
+		// The state every row used to sit in, reported as "Hotkey is not currently bound." even
+		// for routes that worked. Saying nothing is the honest version.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		Assert.Equal(HotkeyBindingState.Unknown, entry.BindingState);
+		Assert.Null(entry.RouteStatusText);
+	}
+
+	[Fact]
+	public void AFailedRoute_LeavesTheTellingToTheErrorRegion()
+	{
+		// The error is assertive and carries the reason. A second line saying the mapping is
+		// not live would be the same news, politely, straight afterwards.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		entry.SetBindingResult(HotkeyBindingState.Failed, "The shortcut is already registered by another application.");
+
+		Assert.Null(entry.RouteStatusText);
+		Assert.Equal("The shortcut is already registered by another application.", entry.BindingErrorMessage);
+	}
+
+	[Fact]
+	public void TypingInABox_TakesTheStatusDownUntilItIsWorkedOutAgain()
+	{
+		// Half-edited text is not the route that is registered, so the row must stop claiming to
+		// be live the moment the user changes it.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		entry.SetBindingResult(HotkeyBindingState.Bound, null);
+
+		entry.ToHotkey = "Ctrl+B";
+
+		Assert.Null(entry.RouteStatusText);
+	}
+
+	[Fact]
+	public void TheStatusIsPublishedSoTheRowCanBind()
+	{
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+		var raised = new List<string?>();
+		entry.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(HotkeyRouterEntry.RouteStatusText))
+				raised.Add(entry.RouteStatusText);
+		};
+
+		entry.SetBindingResult(HotkeyBindingState.Bound, null);
+		entry.SetBindingResult(HotkeyBindingState.NotYetApplied, null);
+
+		Assert.Equal(["This mapping is live.", "Not active yet — press Save to apply."], raised);
+	}
+
+	// ----- Showing an error without reading it out (issue #350) -----
+
+	[Fact]
+	public void ANewRow_StartsFreeToSpeak()
+	{
+		// Nothing is muted unless a page says so, which keeps every other user of this row
+		// behaving as it did.
+		var entry = new HotkeyRouterEntry(Map("Ctrl+C", "Ctrl+V"));
+
+		Assert.False(entry.AnnouncementsMuted);
+	}
+
+	[Fact]
+	public void MutingIsPublishedSoTheRowCanBindIt()
+	{
+		var entry = new HotkeyRouterEntry(Map(string.Empty, string.Empty));
+		int raised = 0;
+		entry.PropertyChanged += (_, e) =>
+		{
+			if (e.PropertyName == nameof(HotkeyRouterEntry.AnnouncementsMuted))
+				raised++;
+		};
+
+		entry.SetAnnouncementsMuted(true);
+		entry.SetAnnouncementsMuted(true);
+		entry.SetAnnouncementsMuted(false);
+
+		Assert.Equal(2, raised);
+		Assert.False(entry.AnnouncementsMuted);
+	}
+
+	[Fact]
+	public void MutingLeavesTheWrittenErrorExactlyWhereItWas()
+	{
+		// Only the announcement is gated. Taking the text off screen at load would be a plain
+		// regression for a sighted reader, who was never the problem.
+		var entry = new HotkeyRouterEntry(Map(string.Empty, string.Empty));
+
+		entry.SetAnnouncementsMuted(true);
+
+		Assert.True(entry.HasBindingError);
+		Assert.Equal("Enter a hotkey.", entry.BindingErrorMessage);
 	}
 }

@@ -56,7 +56,12 @@ public sealed partial class MainWindow
 			_settingsManager,
 			_settingsManager.SettingsFilePath,
 			ApplyLiveSettings,
-			initialCategoryKey)
+			initialCategoryKey,
+			// So a Hotkey Router row on the Hotkeys page can say whether the app is actually
+			// listening for it. Null while there is no hotkey manager yet — before startup has
+			// finished wiring one up — and the rows then say nothing rather than guess
+			// (issue #343).
+			liveRouterRoutes: () => _hotkeyManager?.LiveRouterRoutes())
 		{
 			XamlRoot = rootElement.XamlRoot,
 			RequestedTheme = rootElement.ActualTheme

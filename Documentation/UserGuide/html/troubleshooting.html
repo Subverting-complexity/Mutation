@@ -382,9 +382,11 @@ has its own message: &quot;The transcript could not be sent to the other applica
 be running with higher privileges than Mutation. It is available in the Mutation
 window.&quot; You get a failure beep with it, not the success beep.</p>
 <p>Windows will not let an ordinary program type into a window that is running with
-administrator privileges. It simply throws the keystrokes away. Mutation checks
-whether Windows accepted them and tells you when it did not, rather than announcing
-success for text that never arrived.</p>
+administrator privileges. It simply throws the keystrokes away, and it does not tell
+the program that sent them. So Mutation asks first: before typing or pasting, it checks
+whether the app in front is one it is allowed to send keys to, and stops with this
+message when it is not. That is why you hear about it instead of getting a success beep
+for text that never arrived.</p>
 <p><strong>What to do.</strong></p>
 <ol>
 <li>Your text is not lost. It is in the main window and, unless the clipboard also

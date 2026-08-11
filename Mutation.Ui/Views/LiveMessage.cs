@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -24,7 +25,24 @@ internal static class LiveMessage
 	/// same warning, and only when there is something to say — an emptied live region has
 	/// nothing to read out.
 	/// </summary>
-	public static void Show(TextBlock target, string? message)
+	/// <param name="shouldAnnounce">
+	/// Asked at the moment of raising rather than now, and null means always. It is how a page
+	/// shows a message without reading it out: the Hotkeys page builds rows from settings that
+	/// already carry "Enter a hotkey.", and announcing each of them would greet the user with
+	/// one interruption per stored row about settings nobody had touched (issue #350).
+	/// <para>
+	/// Asked late for a reason. The bindings in a list row all apply in one pass, and whichever
+	/// order they happen to run in, the raise is enqueued behind the whole pass — so a question
+	/// asked then gets the row's settled answer rather than a half-applied one.
+	/// </para>
+	/// <para>
+	/// Note what a silent show still does: it writes the text. So the same message becoming
+	/// allowed to speak later says nothing, because by then it is no longer a change. That is
+	/// the wanted behaviour — a stored error the user has since started editing around should
+	/// not suddenly be shouted at them — and it means nothing has to remember what it swallowed.
+	/// </para>
+	/// </summary>
+	public static void Show(TextBlock target, string? message, Func<bool>? shouldAnnounce = null)
 	{
 		string text = message ?? string.Empty;
 		if (target.Text == text)
@@ -41,12 +59,16 @@ internal static class LiveMessage
 		// the moment they have something to say, and a collapsed element is not in the
 		// automation tree yet — raising against it before layout has run would announce into
 		// nothing.
-		target.DispatcherQueue?.TryEnqueue(DispatcherQueuePriority.Low, () => Announce(target));
+		target.DispatcherQueue?.TryEnqueue(
+			DispatcherQueuePriority.Low, () => Announce(target, shouldAnnounce));
 	}
 
-	private static void Announce(TextBlock target)
+	private static void Announce(TextBlock target, Func<bool>? shouldAnnounce)
 	{
 		if (target.Visibility != Visibility.Visible || target.Text.Length == 0)
+			return;
+
+		if (shouldAnnounce is not null && !shouldAnnounce())
 			return;
 
 		AutomationPeer? peer = FrameworkElementAutomationPeer.FromElement(target)

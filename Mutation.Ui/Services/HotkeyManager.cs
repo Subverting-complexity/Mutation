@@ -22,6 +22,14 @@ public class HotkeyManager : IDisposable
 	private readonly HotkeyRegistrationTable _registrations;
 
 	private readonly Settings _settings;
+
+	// What the last router registration pass made of each mapping, kept so the Settings page
+	// can tell a route that is live from one the user has typed but not saved. It is the only
+	// thing that knows: registration happens here, on save, and the page that shows the rows
+	// is editing a copy of the settings that has not been handed over yet (issue #343).
+	private IReadOnlyList<RegisteredRouterRoute> _routerRoutes =
+		Array.Empty<RegisteredRouterRoute>();
+
 	private static SynchronizationContext? s_uiCtx;
 	private IntPtr _prevWndProc;
 	private WndProcDelegate? _newWndProc;
@@ -179,7 +187,25 @@ public class HotkeyManager : IDisposable
                         }
                 }
 
+                _routerRoutes = ToRegisteredRoutes(results);
                 return results;
+        }
+
+        /// <summary>
+        /// Every router route the app currently holds, and how registering it went. The Settings
+        /// page reads this so a row can say whether it is live; it registers nothing and changes
+        /// nothing (issue #343).
+        /// </summary>
+        public IReadOnlyList<RegisteredRouterRoute> LiveRouterRoutes() => _routerRoutes;
+
+        private static IReadOnlyList<RegisteredRouterRoute> ToRegisteredRoutes(
+                IReadOnlyList<HotkeyRegistrationResult> results)
+        {
+                var routes = new List<RegisteredRouterRoute>(results.Count);
+                foreach (var result in results)
+                        routes.Add(new(result.Map.FromHotKey, result.Map.ToHotKey, result.Success, result.ErrorMessage));
+
+                return routes;
         }
 
         public IReadOnlyList<HotkeyRegistrationResult> RefreshRouterHotkeys()
@@ -202,6 +228,10 @@ public class HotkeyManager : IDisposable
         private void ClearRouterHotkeys()
         {
                 _registrations.ClearGroup(HotkeyRegistrationTable.HotkeyGroup.Router);
+
+                // Released, so nothing is live any more. Leaving the old list standing would have
+                // the Settings page calling a route live that this had just let go of.
+                _routerRoutes = Array.Empty<RegisteredRouterRoute>();
         }
 
         // Registers each prompt's optional hotkey and returns the ones that could not be bound,
@@ -247,6 +277,7 @@ public class HotkeyManager : IDisposable
         public void UnregisterAll()
         {
                 _registrations.ClearAll();
+                _routerRoutes = Array.Empty<RegisteredRouterRoute>();
         }
 
         // Clears ALL registrations (core + router + prompt) so the caller can

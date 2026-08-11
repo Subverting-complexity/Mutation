@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Mutation.Ui.Core;
 
 namespace Mutation.Ui.Views.SettingsUi;
 
@@ -12,12 +13,15 @@ namespace Mutation.Ui.Views.SettingsUi;
 // sections from the tab order and the screen-reader tree, so search results are
 // perceivable without sight. Empty query restores all sections.
 // Returns the number of sections that match (all sections for an empty query).
+//
+// Only the two halves that need a live tree are here: gathering a section's text out
+// of it, and reporting the answer by collapsing the section. Deciding matched or not
+// is SettingsSectionMatcher, which can be exercised without a Panel (issue #304).
 internal static class SettingsSearchHelper
 {
 	public static int ApplyFilter(Panel root, string query)
 	{
-		string q = (query ?? string.Empty).Trim().ToLowerInvariant();
-		bool noQuery = q.Length == 0;
+		bool noQuery = SettingsSectionMatcher.IsEmptyQuery(query);
 		int matches = 0;
 
 		foreach (UIElement child in root.Children)
@@ -32,7 +36,7 @@ internal static class SettingsSearchHelper
 				continue;
 			}
 
-			bool isMatch = CollectText(fe).ToLowerInvariant().Contains(q);
+			bool isMatch = SettingsSectionMatcher.Matches(CollectText(fe), query);
 			fe.Visibility = isMatch ? Visibility.Visible : Visibility.Collapsed;
 			if (isMatch)
 				matches++;
