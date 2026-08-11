@@ -6,8 +6,9 @@ namespace Mutation.Ui.Core;
 /// What to tell the user about where a capture ended up — the picture, the text, or neither.
 /// <para>
 /// Pure, and out here rather than in the window, because the decisions are worth pinning: which
-/// of three outcomes a plain screenshot gets, and which of two clipboard failures is worth saying
-/// when both happened. The window can only be checked by running it.
+/// of five outcomes a plain screenshot gets, how loudly each is said, and which of two clipboard
+/// failures is worth saying when both happened. The window can only be checked by running it, so
+/// a decision left in it is a decision nothing holds in place.
 /// </para>
 /// </summary>
 public static class ClipboardCopyMessages
@@ -103,6 +104,27 @@ public static class ClipboardCopyMessages
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
 			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};
+
+	/// <summary>
+	/// How loudly to say what an unsuccessful OCR run came back with.
+	/// <para>
+	/// A refused run is not a failure, so it does not get the failure severity. It was shown as
+	/// an error, which a screen reader announces as an aborted action — for a press where
+	/// nothing was attempted and nothing went wrong. Warning still interrupts, which this needs,
+	/// without claiming the run broke, and it matches what the plain screenshot path says about
+	/// the same press (issue #367).
+	/// </para>
+	/// <para>
+	/// Out here rather than inline in the window for the reason this whole class exists: the
+	/// window cannot be checked without running it, so a decision made there is a decision that
+	/// can be undone without anything going red. That is how the wrong sentence this fix
+	/// replaced survived a green suite in the first place.
+	/// </para>
+	/// </summary>
+	/// <param name="outcome">What the run came back as.</param>
+	/// <param name="whenFailed">The severity for a run that genuinely failed.</param>
+	public static InfoBarSeverity ForOcrRunSeverity(OcrRunOutcome outcome, InfoBarSeverity whenFailed) =>
+		outcome == OcrRunOutcome.Refused ? InfoBarSeverity.Warning : whenFailed;
 
 	/// <summary>
 	/// What to say about an OCR run's clipboard writes, or null when there is nothing to say.

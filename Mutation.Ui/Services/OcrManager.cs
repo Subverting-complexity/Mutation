@@ -98,18 +98,22 @@ public class OcrManager
     /// <summary>
     /// Whether a region-selection overlay is on screen right now.
     /// <para>
-    /// A snapshot, and deliberately so. The field is set and cleared by the capture running on
-    /// the UI thread, so a refused press can only ever read where that capture had got to a
-    /// moment ago. That is as good as this can be: the honest question is what the user is
-    /// looking at when they are told, and the answer moves whatever we do. What matters is that
-    /// the window in which it can be wrong is now microseconds rather than the whole clipboard
-    /// write and reading (issue #367).
+    /// Exact rather than approximate, though only because of where it is read from. The field is
+    /// written by the capture running on the UI thread, and both callers of the guard that reads
+    /// it are UI-thread hotkey and click handlers, so reader and writer never run at once and
+    /// the answer cannot be stale. Nothing enforces that beyond the callers themselves — take
+    /// this guard off the UI thread and the read becomes a genuine race.
     /// </para>
     /// <para>
     /// Virtual because <see cref="CaptureScreenshotAsync"/> is the only thing that sets the
     /// field, and a test stands in for that wholesale — so without this seam the overlay-waiting
     /// case could not be reached in a test at all, which is how the wrong sentence went out
     /// covered by a green suite.
+    /// </para>
+    /// <para>
+    /// The cost of the seam is that this line is the one thing here no test covers: every test
+    /// overrides it, so inverting the condition breaks nothing. What the tests hold is that the
+    /// guard asks this question and says the right thing about each answer.
     /// </para>
     /// </summary>
     protected virtual bool IsCaptureOverlayOnScreen => _activeOverlay is not null;
@@ -138,6 +142,16 @@ public class OcrManager
             // someone with nothing on screen to select a region is an instruction they cannot
             // follow, and the Escape it offers would go to whatever application actually has
             // the keyboard (issue #367).
+            //
+            // The guard also runs ahead of the overlay, between taking the flag and putting the
+            // overlay up, and that stretch must stay unreachable — a press answered there would
+            // say "wait" moments before an overlay appeared asking for a rectangle, which is
+            // this same bug inverted and lands on the commonest mistiming of all, the quick
+            // double press. It is unreachable today only because that stretch never yields:
+            // CaptureScreenshotAsync grabs the screen and prepares the window synchronously,
+            // and RegionSelectionWindow.InitializeAsync returns an already-completed task, so
+            // the message pump cannot deliver a second press until the overlay is up. Give that
+            // method a real await and this opens with nothing going red.
             bool overlayWaiting = IsCaptureOverlayOnScreen;
             try { _activeOverlay?.BringToFront(); } catch { }
             return overlayWaiting

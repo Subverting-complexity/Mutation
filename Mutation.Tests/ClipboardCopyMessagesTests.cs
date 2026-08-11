@@ -132,6 +132,48 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
+	/// A refused OCR press is not announced as a failure. It used to carry the caller's failure
+	/// severity, which a screen reader turns into an aborted-action notification — said of a
+	/// press where nothing was attempted and nothing broke (issue #367).
+	/// </summary>
+	[Fact]
+	public void ARefusedOcrRunIsAnnouncedAsAWarningRatherThanAnError()
+	{
+		Assert.Equal(
+			InfoBarSeverity.Warning,
+			ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Refused, InfoBarSeverity.Error));
+	}
+
+	/// <summary>
+	/// It still interrupts, though. The user pressed a key and got no visible change, so a
+	/// polite announcement would arrive after the moment it was wanted.
+	/// </summary>
+	[Fact]
+	public void ARefusedOcrRunStillInterruptsTheScreenReader()
+	{
+		var severity = ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Refused, InfoBarSeverity.Error);
+
+		Assert.Equal(
+			AutomationNotificationProcessing.ImportantMostRecent,
+			StatusAnnouncement.GetProcessing(severity));
+	}
+
+	/// <summary>
+	/// A run that reached an answer keeps the severity its caller chose, whatever that is. Only
+	/// the refusal is quietened; quietening a real failure with the same rule would hide it.
+	/// </summary>
+	[Theory]
+	[InlineData(InfoBarSeverity.Error)]
+	[InlineData(InfoBarSeverity.Warning)]
+	[InlineData(InfoBarSeverity.Informational)]
+	public void AnOcrRunThatReachedAnAnswerKeepsTheCallersSeverity(InfoBarSeverity whenFailed)
+	{
+		Assert.Equal(
+			whenFailed,
+			ClipboardCopyMessages.ForOcrRunSeverity(OcrRunOutcome.Answered, whenFailed));
+	}
+
+	/// <summary>
 	/// Nothing is said when everything worked. The success line the caller shows afterwards is
 	/// the whole of the story then.
 	/// </summary>

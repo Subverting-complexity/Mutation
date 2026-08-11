@@ -24,7 +24,7 @@ public enum ScreenshotToClipboardOutcome
 	/// and nothing on the clipboard changed.
 	/// <para>
 	/// First, so that it is what <c>default</c> gives. Nothing happened is the only one of the
-	/// four that is safe to say by accident: a zero value meaning <see cref="Copied"/> would
+	/// five that is safe to say by accident: a zero value meaning <see cref="Copied"/> would
 	/// let a value nobody set announce a screenshot that was never taken, which is the exact
 	/// thing this enum exists to prevent. Nothing may be inserted in front of it.
 	/// </para>

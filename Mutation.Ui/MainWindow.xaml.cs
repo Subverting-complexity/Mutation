@@ -3604,15 +3604,13 @@ public sealed partial class MainWindow : Window, IDisposable
 			return;
 		}
 
-		// A refused run is not a failure, so it does not get the failure severity. It was shown
-		// as an error, which a screen reader announces as an aborted action — for something
-		// where nothing was attempted and nothing went wrong. Warning still interrupts, which
-		// this needs, without claiming the run broke. It also matches what the plain screenshot
-		// path says about the same press (issue #367).
+		// Which severity, and why, is decided by ClipboardCopyMessages — a refused run is not a
+		// failure and must not be announced as one (issue #367). Kept out here so it is pinned
+		// by a test rather than by whoever next reads this line.
 		ShowStatus(
 			statusTitle,
 			result.Message,
-			result.Outcome == OcrRunOutcome.Refused ? InfoBarSeverity.Warning : failureSeverity);
+			ClipboardCopyMessages.ForOcrRunSeverity(result.Outcome, failureSeverity));
 	}
 
 	/// <summary>
