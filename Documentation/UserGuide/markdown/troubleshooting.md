@@ -183,12 +183,17 @@ culprit; closing it or turning off its monitoring settles it.
 ### Mutation says a screenshot is already in progress
 
 **What's happening.** You pressed a capture shortcut while a capture overlay was already
-on screen. Only one can run at a time, so the second press starts nothing. Mutation
-brings the overlay you already have back to the front and says "A screenshot is already
-in progress. Select a region, or press Escape to cancel it."
+on screen. Only one capture can run at a time, so the second press starts nothing.
+Mutation brings the overlay you already have back to the front and tells you so.
 
-The overlay has not gone anywhere. It is still there, still waiting for you to pick a
-rectangle. This message is not a cancellation, and nothing has been copied or lost.
+With **Screenshot to clipboard** you get the message "A screenshot is already in
+progress. Select a region, or press Escape to cancel it." With **Screenshot & OCR** the
+words "Screenshot already in progress" appear in the **OCR result** box instead, and
+nothing else happens — in particular, any shortcut you set to run after an OCR is held
+back, so it cannot land in the capture overlay.
+
+Either way, the overlay has not gone anywhere. It is still there, still waiting for you
+to pick a rectangle. This is not a cancellation, and nothing has been copied or lost.
 
 **What to do.** Carry on with the capture: pick your rectangle with the mouse or the
 keyboard as usual. If you would rather start again, press **Esc** to close the overlay

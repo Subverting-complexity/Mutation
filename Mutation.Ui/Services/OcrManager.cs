@@ -96,17 +96,23 @@ public class OcrManager
     }
 
     /// <summary>
-    /// Captures a region and puts it on the clipboard, saying which of the three things
+    /// Captures a region and puts it on the clipboard, saying which of the four things
     /// happened. Callers must not announce success unconditionally — for a blind user,
     /// "Screenshot copied to the clipboard" after a cancelled capture is worse than silence,
-    /// and so is it after a capture the clipboard would not take.
+    /// and so is it after a capture the clipboard would not take. Nor may they treat a press
+    /// refused because an overlay is already up as a cancellation: that one tells the user the
+    /// overlay has gone when it is still in front of them (issue #363).
     /// </summary>
     public async Task<ScreenshotToClipboardOutcome> TakeScreenshotToClipboardAsync()
     {
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
+            // Refused, not cancelled. The two used to be the same value, so the user was told
+            // "Screenshot cancelled. Nothing was copied to the clipboard." about an overlay
+            // that was still on screen waiting for them (issue #363) — the opposite of the
+            // truth for someone who cannot see it.
             try { _activeOverlay?.BringToFront(); } catch { }
-            return ScreenshotCaptureAlreadyInProgress();
+            return ScreenshotToClipboardOutcome.Refused;
         }
         try
         {
@@ -131,23 +137,6 @@ public class OcrManager
             Interlocked.Exchange(ref _captureInFlight, 0);
         }
     }
-
-    /// <summary>
-    /// The answer to a plain screenshot press that arrives while a capture is already on screen.
-    /// <para>
-    /// Refused, not cancelled. The two used to be the same value, so the user was told
-    /// "Screenshot cancelled. Nothing was copied to the clipboard." about an overlay that was
-    /// still on screen waiting for them (issue #363). Someone who cannot see it then has the one
-    /// sentence they are given telling them the opposite of what is in front of them.
-    /// </para>
-    /// <para>
-    /// Its own method so the outcome can be pinned by a test, exactly as
-    /// <see cref="CaptureAlreadyInProgress"/> is for the OCR path: reaching this branch through
-    /// <see cref="TakeScreenshotToClipboardAsync"/> would need a real overlay on a real screen.
-    /// </para>
-    /// </summary>
-    internal static ScreenshotToClipboardOutcome ScreenshotCaptureAlreadyInProgress() =>
-        ScreenshotToClipboardOutcome.Refused;
 
     /// <summary>
     /// The answer to an OCR capture press that arrives while one is already on screen.
