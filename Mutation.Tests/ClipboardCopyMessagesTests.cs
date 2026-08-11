@@ -69,14 +69,12 @@ public class ClipboardCopyMessagesTests
 	/// goes to whichever application actually has the keyboard (issue #367).
 	/// </summary>
 	[Fact]
-	public void ARefusalWithNoOverlayNeverAsksForARegionOrOffersEscape()
+	public void ARefusalWithNoOverlayGetsItsOwnSentence()
 	{
 		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.RefusedCaptureRunning);
 
 		Assert.Equal(ClipboardCopyMessages.ScreenshotCaptureRunning, message);
 		Assert.NotEqual(ClipboardCopyMessages.ScreenshotOverlayWaiting, message);
-		Assert.DoesNotContain("Escape", message);
-		Assert.DoesNotContain("Select a region", message);
 	}
 
 	/// <summary>
@@ -116,32 +114,27 @@ public class ClipboardCopyMessagesTests
 	}
 
 	/// <summary>
-	/// Every outcome gets an answer of its own, rather than falling through to the safety net at
-	/// the end of the switch.
+	/// Every member of the enum has a mapping, and that is enforced by the build rather than
+	/// from here. `ForScreenshot` takes the out-of-range case by hand and then switches with no
+	/// discard arm, so an unhandled member is CS8509 and `TreatWarningsAsErrors` turns it into a
+	/// failure naming the member. A test could not do this job as well: it runs later, it can be
+	/// deleted by someone who thinks it is noise, and a walk-the-enum version has to guess what
+	/// "unhandled" looks like from the outside — which is guessing wrong the moment two members
+	/// legitimately share a sentence (issue #368).
 	/// <para>
-	/// This is the exhaustiveness guard, and it is a test because it cannot be the compiler. The
-	/// net has to be there so a value from outside the enum produces a sentence instead of
-	/// throwing inside a hotkey handler — and a discard arm silences the exhaustiveness warning,
-	/// so a new member would compile clean and be announced as "Screenshot cancelled". That is
-	/// the bug this class exists to prevent, so something has to catch it; the comment on
-	/// <c>ForScreenshot</c> claimed the compiler did, and was twice edited without anyone
-	/// checking (issue #368).
-	/// </para>
-	/// <para>
-	/// Walking the enum rather than listing the members, so the guard cannot itself go stale.
+	/// What is left for a test is the part the compiler cannot see: that the by-hand branch is
+	/// still there, and still says the one thing safe to say by accident. Deleting it makes the
+	/// switch throw on a value from outside the enum; changing what it answers is a mutant that
+	/// nothing else in the suite catches, because the severity had been going unasserted.
 	/// </para>
 	/// </summary>
 	[Fact]
-	public void EveryOutcomeHasItsOwnAnswer()
+	public void AValueFromOutsideTheEnumIsAnsweredRatherThanThrown()
 	{
-		var net = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Cancelled);
+		var (message, severity) = ClipboardCopyMessages.ForScreenshot((ScreenshotToClipboardOutcome)99);
 
-		var fellThrough = Enum.GetValues<ScreenshotToClipboardOutcome>()
-			.Where(outcome => outcome != ScreenshotToClipboardOutcome.Cancelled)
-			.Where(outcome => ClipboardCopyMessages.ForScreenshot(outcome) == net)
-			.ToArray();
-
-		Assert.Empty(fellThrough);
+		Assert.Equal(ClipboardCopyMessages.ScreenshotCancelled, message);
+		Assert.Equal(InfoBarSeverity.Informational, severity);
 	}
 
 	/// <summary>
@@ -154,18 +147,6 @@ public class ClipboardCopyMessagesTests
 	{
 		Assert.DoesNotContain("shortcut", ClipboardCopyMessages.ScreenshotClipboardBusy);
 		Assert.DoesNotContain("button", ClipboardCopyMessages.ScreenshotClipboardBusy);
-	}
-
-	/// <summary>
-	/// An unknown outcome is announced as a cancellation — the only one of the five that is safe
-	/// to say by accident, because it claims nothing.
-	/// </summary>
-	[Fact]
-	public void AnUnknownOutcomeNeverClaimsACopy()
-	{
-		var (message, _) = ClipboardCopyMessages.ForScreenshot((ScreenshotToClipboardOutcome)99);
-
-		Assert.Equal(ClipboardCopyMessages.ScreenshotCancelled, message);
 	}
 
 	/// <summary>

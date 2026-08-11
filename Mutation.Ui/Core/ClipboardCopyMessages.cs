@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Mutation.Ui.Core;
@@ -97,20 +98,22 @@ public static class ClipboardCopyMessages
 	/// informational message waits its turn.
 	/// </para>
 	/// <para>
-	/// Every case is named, and the final arm is a safety net rather than a case. Two things are
-	/// wanted here and only one of them can come from the compiler. A value outside the enum has
-	/// to produce a sentence rather than a <c>SwitchExpressionException</c>, because throwing
-	/// here would take down a hotkey handler in front of a user who cannot see the dialog; that
-	/// needs the discard arm. But a discard arm also silences the exhaustiveness warning, so a
-	/// sixth member added later would compile clean and be announced as "Screenshot cancelled" —
-	/// which is the exact bug this class was split out to prevent, waiting for the next value.
+	/// Two things are wanted here, and the shape below is what gets both. Add a member and the
+	/// build must fail rather than announce it as a cancellation, because a silent fall-through
+	/// to "you cancelled it" is the exact bug this class was split out to prevent. But a value
+	/// from outside the enum must still produce a sentence: throwing here reaches the two
+	/// <c>catch</c> blocks around <c>AnnounceScreenshotOutcome</c> and turns a keypress into a
+	/// modal dialog carrying exception text, which is a poor answer to a press that only needed
+	/// a status line.
 	/// </para>
 	/// <para>
-	/// So the enforcement is a test, not the compiler:
-	/// <c>ClipboardCopyMessagesTests.EveryOutcomeHasItsOwnAnswer</c> walks the enum and fails on
-	/// any member that falls through to the net. This comment used to claim the compiler did it,
-	/// which was never true and was twice edited without being checked (issue #368). If you add
-	/// a member, that test is what tells you.
+	/// A discard arm gives the second and destroys the first — it silences the exhaustiveness
+	/// warning outright, which is why this comment could claim compiler enforcement through two
+	/// edits while there was none (issue #368). So the out-of-range case is taken first, by
+	/// hand, and the switch names every member with no arm left over. What is suppressed below
+	/// is only CS8524, the complaint about values outside the enum, which the check above has
+	/// already dealt with. CS8509, the one that fires on an unhandled member, stays live — and
+	/// <c>TreatWarningsAsErrors</c> makes it a build failure naming the member you forgot.
 	/// </para>
 	/// <para>
 	/// Both refusals are warnings, which interrupt as an error does. Nothing failed, so neither
@@ -124,19 +127,27 @@ public static class ClipboardCopyMessages
 	/// One sentence fitted to both told a user with no overlay to select a region (issue #367).
 	/// </para>
 	/// </summary>
-	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome) =>
-		outcome switch
+	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome)
+	{
+		// The net for a value that is not a member at all. A cancellation is the only thing safe
+		// to say by accident, because it claims nothing.
+		if (!Enum.IsDefined(outcome))
+			return (ScreenshotCancelled, InfoBarSeverity.Informational);
+
+		// CS8524 only — the unnamed-value case, handled above. CS8509 stays live so an unhandled
+		// member fails the build. Do not answer a future CS8524 here with a discard arm: that
+		// silences CS8509 too, which is the whole of issue #368.
+#pragma warning disable CS8524
+		return outcome switch
 		{
 			ScreenshotToClipboardOutcome.Copied => (ScreenshotCopied, InfoBarSeverity.Success),
 			ScreenshotToClipboardOutcome.ClipboardUnavailable => (ScreenshotClipboardBusy, InfoBarSeverity.Error),
 			ScreenshotToClipboardOutcome.RefusedOverlayWaiting => (ScreenshotOverlayWaiting, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.RefusedCaptureRunning => (ScreenshotCaptureRunning, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
-			// The net, not a case. See the note above: a value from outside the enum must get a
-			// sentence rather than an exception, and a cancellation is the only thing safe to say
-			// by accident because it claims nothing.
-			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};
+#pragma warning restore CS8524
+	}
 
 	/// <summary>
 	/// How loudly to say what an unsuccessful OCR run came back with.
