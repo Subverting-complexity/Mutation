@@ -7,6 +7,14 @@ namespace Mutation.Ui.Services;
 /// Retry policy for clipboard operations. Another process can hold the
 /// clipboard open at any moment, making reads and writes fail transiently,
 /// so callers wrap them in a short retry loop instead of failing outright.
+/// <para>
+/// It waits with <c>ConfigureAwait(false)</c>, which means the second and every later attempt
+/// is made from the thread pool no matter where the first one was made. The clipboard only
+/// works from the UI thread, so an operation handed to this must put <em>itself</em> on the
+/// UI thread every time it is called rather than trusting where the last wait left it.
+/// <see cref="ClipboardManager"/> does that for its own callers, and it is why the retry
+/// there wraps the thread hop instead of the hop wrapping the retry (issue #352).
+/// </para>
 /// </summary>
 public static class ClipboardRetry
 {

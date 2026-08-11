@@ -190,7 +190,13 @@ public partial class App : Application
 
 			builder.Services.AddSingleton<ISettingsManager>(settingsManager);
 			builder.Services.AddSingleton(settings);
-			builder.Services.AddSingleton<ClipboardManager>();
+			// The clipboard only answers calls made from this thread, and it needs one for every
+			// attempt its retry makes rather than only the first (issue #352). Captured here,
+			// where OnLaunched puts us on the UI thread, rather than inside a factory lambda
+			// that would run wherever the first resolve happens to be.
+			var uiDispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+			builder.Services.AddSingleton(new ClipboardManager(
+				uiDispatcherQueue is null ? null : new DispatcherQueueUiThread(uiDispatcherQueue)));
 			builder.Services.AddSingleton<UiStateManager>();
 			builder.Services.AddSingleton<MMDeviceEnumerator>(_ => new MMDeviceEnumerator(Guid.NewGuid()));
 			builder.Services.AddSingleton<Mutation.Ui.Core.ICaptureDeviceChangeNotifier, Mutation.Ui.Core.MMDeviceCaptureDeviceChangeNotifier>();

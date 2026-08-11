@@ -76,11 +76,7 @@ public class OcrManagerTests
 		var clipboard = new TestClipboard();
 		var service = new StubOcrService("recognized text");
 		using var file = new TempFile(".png");
-		var manager = new TestableOcrManager(settings, service, clipboard, () => true, action =>
-		{
-			action();
-			return Task.CompletedTask;
-		});
+		var manager = new TestableOcrManager(settings, service, clipboard);
 
 		var result = await manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None);
 
@@ -91,7 +87,6 @@ public class OcrManagerTests
 		Assert.Equal(expectedText, result.Text);
 		Assert.Equal(expectedText, clipboard.LastText);
 		Assert.Equal(1, clipboard.SetTextCalls);
-		Assert.Equal(0, manager.RunOnDispatcherCalls);
 		WaitForBeep(manager, 1);
 		Assert.Contains(BeepType.Success, manager.Beeps);
 	}
@@ -211,29 +206,31 @@ public class OcrManagerTests
 		Assert.True(PostOperationHotkey.ShouldSendAfterOcr(result.Outcome));
 	}
 
+	/// <summary>
+	/// Batch OCR reads its files on the thread pool and finishes there, so the copy at the end
+	/// of the run is made from the wrong thread unless something moves it. That something is now
+	/// the clipboard itself rather than a second copy of the rule kept here, so what this checks
+	/// is that the OCR path goes through it and the text still lands on the UI thread (issue
+	/// #352).
+	/// </summary>
 	[Fact]
-	public async Task ExtractTextFromFilesAsync_DispatchesClipboardUpdate_WhenOffUiThread()
+	public async Task ExtractTextFromFilesAsync_PutsTheTextOnTheClipboardFromTheUiThread()
 	{
 		var settings = CreateValidSettings();
-		var clipboard = new TestClipboard();
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread);
 		var service = new StubOcrService("batched result");
 		using var file = new TempFile(".png");
-		var dispatched = false;
-		var manager = new TestableOcrManager(settings, service, clipboard, () => false, action =>
-		{
-			dispatched = true;
-			action();
-			return Task.CompletedTask;
-		});
+		var manager = new TestableOcrManager(settings, service, clipboard);
 
-		var result = await manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None);
+		var result = await Task.Run(() =>
+			manager.ExtractTextFromFilesAsync(new[] { file.Path }, DefaultOrder, CancellationToken.None));
 
 		string expectedText = $"[{Path.GetFileName(file.Path)}]{Environment.NewLine}batched result{Environment.NewLine}";
 		Assert.True(result.Success);
-		Assert.True(dispatched);
-		Assert.Equal(1, manager.RunOnDispatcherCalls);
 		Assert.Equal(expectedText, clipboard.LastText);
 		Assert.Equal(1, clipboard.SetTextCalls);
+		Assert.Equal(new[] { uiThread.ThreadId }, clipboard.WriteThreadIds);
 		WaitForBeep(manager, 1);
 		Assert.Contains(BeepType.Success, manager.Beeps);
 	}
@@ -1065,34 +1062,17 @@ public class OcrManagerTests
 
 	private sealed class TestableOcrManager : OcrManager
 	{
-		private readonly Func<bool> _hasThreadAccess;
-		private readonly Func<Action, Task> _dispatcher;
 		private readonly ConcurrentQueue<BeepType> _beeps = new();
 
-		public TestableOcrManager(Settings settings, IOcrService ocrService, TestClipboard clipboard, Func<bool>? hasThreadAccess = null, Func<Action, Task>? dispatcher = null)
+		public TestableOcrManager(Settings settings, IOcrService ocrService, TestClipboard clipboard)
 			: base(settings, ocrService, clipboard)
 		{
 			Clipboard = clipboard;
-			_hasThreadAccess = hasThreadAccess ?? (() => true);
-			_dispatcher = dispatcher ?? (action =>
-			{
-				action();
-				return Task.CompletedTask;
-			});
 		}
 
 		public TestClipboard Clipboard { get; }
-		public int RunOnDispatcherCalls { get; private set; }
 		public int BeepCount => _beeps.Count;
 		public IReadOnlyCollection<BeepType> Beeps => _beeps.ToArray();
-
-		protected override bool HasDispatcherThreadAccess() => _hasThreadAccess();
-
-		protected override Task RunOnDispatcherAsync(Action action)
-		{
-			RunOnDispatcherCalls++;
-			return _dispatcher(action);
-		}
 
 		protected override void PlayBeep(BeepType type)
 		{
@@ -1102,8 +1082,22 @@ public class OcrManagerTests
 
 	private sealed class TestClipboard : ClipboardManager
 	{
+		private readonly List<int> _writeThreadIds = new();
+
+		/// <param name="uiThread">
+		/// Null for the tests that only care what reached the clipboard, so the write happens
+		/// where the test stands. Supply one to check which thread the write was made on.
+		/// </param>
+		public TestClipboard(IUiThreadDispatcher? uiThread = null)
+			: base(uiThread)
+		{
+		}
+
 		public string? LastText { get; private set; }
 		public int SetTextCalls { get; private set; }
+
+		/// <summary>The thread each write was made on, in order.</summary>
+		public IReadOnlyList<int> WriteThreadIds => _writeThreadIds;
 
 		/// <summary>
 		/// How many of the next writes throw the way a clipboard held open by another process
@@ -1118,6 +1112,7 @@ public class OcrManagerTests
 		public override void SetText(string text)
 		{
 			SetTextCalls++;
+			_writeThreadIds.Add(Environment.CurrentManagedThreadId);
 			if (FailWrites > 0)
 			{
 				if (FailWrites != int.MaxValue)
