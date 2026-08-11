@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
+using CognitiveSupport;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
@@ -24,9 +26,10 @@ public class ClipboardManager
 	/// Where the retrying calls on this class are made. Null means "make them wherever the
 	/// caller is", which is what the tests that do not care about threading get.
 	/// <para>
-	/// It covers the methods that retry, not every method here. <see cref="SetText"/> is
-	/// synchronous and cannot hop, and <see cref="SetImageAsync"/> has neither a retry nor a
-	/// hop — see issue #360. Both predate this and both are called from the UI thread today.
+	/// It covers the methods that retry, not every method here. <see cref="SetText"/> and
+	/// <see cref="SetImageAsync"/> are the single attempts the retrying methods are built from,
+	/// so they are made wherever their caller already is — which, going through
+	/// <see cref="TrySetTextAsync"/> or <see cref="TrySetImageAsync"/>, is the UI thread.
 	/// </para>
 	/// </param>
 	public ClipboardManager(IUiThreadDispatcher? uiThread = null)
@@ -224,20 +227,57 @@ public class ClipboardManager
 	/// operations wearing a retry ladder (issue #352).
 	/// </para>
 	/// </summary>
-	private async Task<bool> RetryOnUiThreadAsync(Func<Task> operation)
+	private async Task<bool> RetryOnUiThreadAsync(Func<Task> operation, [CallerMemberName] string operationName = "")
 	{
 		var (success, _) = await RetryOnUiThreadAsync<object?>(async () =>
 		{
 			await operation();
 			return null;
-		});
+		}, operationName);
 
 		return success;
 	}
 
-	/// <inheritdoc cref="RetryOnUiThreadAsync(Func{Task})"/>
-	private Task<(bool Success, T? Value)> RetryOnUiThreadAsync<T>(Func<Task<T>> operation) =>
-		ClipboardRetry.TryAsync(() => OnUiThreadAsync(operation));
+	/// <inheritdoc cref="RetryOnUiThreadAsync(Func{Task}, string)"/>
+	private async Task<(bool Success, T? Value)> RetryOnUiThreadAsync<T>(
+		Func<Task<T>> operation, [CallerMemberName] string operationName = "")
+	{
+		// The last thing that went wrong is kept so a ladder that runs out has something to
+		// report. ClipboardRetry swallows the exceptions, which is right for retrying and would
+		// otherwise mean a permanent failure — a full disk, an encode that ran out of memory —
+		// reaches the user as the same "the clipboard is busy" as a passing one, with nothing
+		// written down anywhere.
+		Exception? lastFailure = null;
+
+		var result = await ClipboardRetry.TryAsync(async () =>
+		{
+			try
+			{
+				return await OnUiThreadAsync(operation);
+			}
+			catch (Exception ex)
+			{
+				lastFailure = ex;
+				throw;
+			}
+		});
+
+		if (!result.Success)
+			OnClipboardGaveUp(operationName, lastFailure);
+
+		return result;
+	}
+
+	/// <summary>
+	/// Called once when a clipboard operation has used up its attempts, with whatever went wrong
+	/// on the last of them. Writes it to the error log.
+	/// <para>
+	/// Virtual so the tests that deliberately exhaust a ladder can watch this instead of writing
+	/// to the real log file, which other tests in this assembly are reading.
+	/// </para>
+	/// </summary>
+	protected virtual void OnClipboardGaveUp(string operationName, Exception? lastFailure) =>
+		ErrorLogger.LogError($"ClipboardManager.{operationName}", lastFailure);
 
 	/// <summary>
 	/// Runs one clipboard call on the UI thread. Runs it where it stands when there is no
@@ -259,7 +299,32 @@ public class ClipboardManager
 		return bytes;
 	}
 
-	public async Task SetImageAsync(SoftwareBitmap bitmap)
+	/// <summary>
+	/// Puts <paramref name="bitmap"/> on the clipboard, retrying while another process holds the
+	/// clipboard open. Returns false when it stayed unavailable after retries.
+	/// <para>
+	/// This is the screenshot write, and it opens the widest race in the app: it is the moment a
+	/// clipboard manager or a screen reader notices something arrived and opens the clipboard to
+	/// look at it. It used to be the one asynchronous write here with neither a retry nor a
+	/// thread hop, and it reported failure by throwing, which reached the hotkey handler as an
+	/// error dialog (issue #360). It now answers with a bool like every sibling, leaving the
+	/// caller to decide what a busy clipboard is worth saying.
+	/// </para>
+	/// </summary>
+	public virtual Task<bool> TrySetImageAsync(SoftwareBitmap bitmap)
+	{
+		if (bitmap is null)
+			return Task.FromResult(false);
+
+		return RetryOnUiThreadAsync(() => SetImageAsync(bitmap));
+	}
+
+	/// <summary>
+	/// One attempt at putting an image on the clipboard. Split out and virtual for the same
+	/// reason <see cref="SetText"/> is: nothing in a test can reach the real Windows clipboard,
+	/// so without a seam here no test could check that a busy clipboard is retried.
+	/// </summary>
+	protected virtual async Task SetImageAsync(SoftwareBitmap bitmap)
 	{
 		var data = new DataPackage();
 		var stream = new InMemoryRandomAccessStream();

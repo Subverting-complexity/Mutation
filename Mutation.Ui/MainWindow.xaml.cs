@@ -490,10 +490,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				// distinguish a captured region from a cancelled one.
 				try
 				{
-					if (await _ocrManager.TakeScreenshotToClipboardAsync())
-						ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
-					else
-						ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+					AnnounceScreenshotOutcome(await _ocrManager.TakeScreenshotToClipboardAsync());
 				}
 				catch (Exception ex) { await ShowErrorDialog("Screenshot Error", ex); }
 			});
@@ -998,10 +995,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		try
 		{
 			// Cancelling the region overlay used to be announced as a success.
-			if (await _ocrManager.TakeScreenshotToClipboardAsync())
-				ShowStatus("Screenshot", "Screenshot copied to the clipboard.", InfoBarSeverity.Success);
-			else
-				ShowStatus("Screenshot", "Screenshot cancelled. Nothing was copied to the clipboard.", InfoBarSeverity.Informational);
+			AnnounceScreenshotOutcome(await _ocrManager.TakeScreenshotToClipboardAsync());
 		}
 		catch (Exception ex)
 		{
@@ -3537,12 +3531,19 @@ public sealed partial class MainWindow : Window, IDisposable
 	}
 
 	/// <summary>
-	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
-	/// user has to know the copy did not happen, and — because the shortcut that runs next is
-	/// usually a screen-reader command aimed at the result — that the text itself is not lost.
+	/// Says which of the three things a plain screenshot capture did. Shared by the shortcut and
+	/// the button, so both tell the user the same thing.
+	/// <para>
+	/// A busy clipboard is a status line, not an error dialog. It used to be a dialog, because
+	/// the failure arrived here as a thrown exception (issue #360) — and a modal box the user has
+	/// to dismiss is the wrong weight for something that clears on its own in under a second.
+	/// </para>
 	/// </summary>
-	private const string OcrClipboardCopyFailedMessage =
-		"The text was recognised, but it could not be copied to the clipboard. It is in the OCR results box.";
+	private void AnnounceScreenshotOutcome(ScreenshotToClipboardOutcome outcome)
+	{
+		var (message, severity) = ClipboardCopyMessages.ForScreenshot(outcome);
+		ShowStatus("Screenshot", message, severity);
+	}
 
 	/// <summary>
 	/// Puts an OCR run's answer in front of the user: the text, or the error, in the OCR box;
@@ -3581,12 +3582,16 @@ public sealed partial class MainWindow : Window, IDisposable
 				PostOperationHotkey.AfterOcr(paste, _settings.AzureComputerVisionSettings?.SendHotkeyAfterOcrOperation),
 				PostOperationHotkey.OcrDelay(result.Success));
 
-		// The clipboard warning outranks the success line, and says so here rather than being
+		// A clipboard warning outranks the success line, and says so here rather than being
 		// followed by it. The four button paths used to announce their own success afterwards,
-		// which would leave the user believing a copy that did not happen.
-		if (result.Success && result.ClipboardCopyFailed)
+		// which would leave the user believing a copy that did not happen. Which warning, and
+		// whether there is one at all, is decided by ClipboardCopyMessages.
+		string? clipboardWarning = ClipboardCopyMessages.ForOcrRun(
+			result.Success, result.ClipboardCopyFailed, result.ScreenshotCopyFailed);
+
+		if (clipboardWarning is not null)
 		{
-			ShowStatus(statusTitle ?? "OCR", OcrClipboardCopyFailedMessage, InfoBarSeverity.Warning);
+			ShowStatus(statusTitle ?? "OCR", clipboardWarning, InfoBarSeverity.Warning);
 			return;
 		}
 

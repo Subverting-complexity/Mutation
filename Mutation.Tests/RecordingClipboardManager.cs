@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Mutation.Ui.Services;
+using Windows.Graphics.Imaging;
 
 namespace Mutation.Tests;
 
@@ -33,6 +34,9 @@ internal class RecordingClipboardManager : ClipboardManager
 	/// <summary>The last snapshot restored, or null when none was.</summary>
 	public ClipboardSnapshot? LastRestoredSnapshot { get; private set; }
 
+	/// <summary>The last image written, or null when none was.</summary>
+	public SoftwareBitmap? LastImage { get; private set; }
+
 	public int SetTextCalls { get; private set; }
 
 	/// <summary>
@@ -47,6 +51,20 @@ internal class RecordingClipboardManager : ClipboardManager
 	/// lets go.
 	/// </summary>
 	public int FailWrites { get; set; }
+
+	/// <summary>
+	/// The operation name and last failure of every ladder that ran out of attempts, in order.
+	/// Watched here rather than written to the real error log, which other tests in this
+	/// assembly read and rotate.
+	/// </summary>
+	public IReadOnlyList<(string OperationName, Exception? LastFailure)> GaveUp => _gaveUp;
+
+	private readonly List<(string OperationName, Exception? LastFailure)> _gaveUp = new();
+
+	protected override void OnClipboardGaveUp(string operationName, Exception? lastFailure)
+	{
+		_gaveUp.Add((operationName, lastFailure));
+	}
 
 	public override void SetText(string text)
 	{
@@ -63,6 +81,20 @@ internal class RecordingClipboardManager : ClipboardManager
 			return Task.CompletedTask;
 
 		LastRestoredSnapshot = snapshot;
+		return Task.CompletedTask;
+	}
+
+	/// <summary>
+	/// The screenshot write. Recorded rather than made for the same reason as the two above: the
+	/// real one encodes a PNG and hands it to the Windows clipboard, neither of which a test can
+	/// check the retrying of.
+	/// </summary>
+	protected override Task SetImageAsync(SoftwareBitmap bitmap)
+	{
+		if (RecordWriteAndDecideToFail())
+			return Task.CompletedTask;
+
+		LastImage = bitmap;
 		return Task.CompletedTask;
 	}
 

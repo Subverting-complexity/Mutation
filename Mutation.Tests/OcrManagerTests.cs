@@ -984,6 +984,124 @@ public class OcrManagerTests
 	}
 
 	// ---------------------------------------------------------------------
+	// The screenshot write to the clipboard (issue #360)
+	//
+	// This is the widest clipboard race in the app: the picture arriving is the very thing
+	// that makes a clipboard manager or a screen reader open the clipboard to look. The write
+	// used to get one attempt and report failure by throwing, which reached the hotkey handler
+	// as an error dialog. It now retries like every other clipboard write here, and says which
+	// of the three things happened.
+	// ---------------------------------------------------------------------
+
+	[Fact]
+	public async Task TakeScreenshotToClipboardAsync_CopiesTheImage_WhenTheClipboardIsBrieflyBusy()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { FailWrites = 2 };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), clipboard)
+		{
+			Screenshot = image,
+		};
+
+		var outcome = await manager.TakeScreenshotToClipboardAsync();
+
+		Assert.Equal(ScreenshotToClipboardOutcome.Copied, outcome);
+		Assert.Same(image, clipboard.LastImage);
+		Assert.Equal(3, clipboard.WriteThreadIds.Count);
+		WaitForBeep(manager, 1);
+		Assert.Equal(new[] { BeepType.Success }, manager.Beeps.ToArray());
+	}
+
+	/// <summary>
+	/// The clipboard never letting go is now an answer rather than an exception, and the answer
+	/// says which of the three it was. Reporting it as a cancellation would tell the user they
+	/// cancelled a capture they did not, and throwing is what put an error dialog in front of
+	/// them.
+	/// </summary>
+	[Fact]
+	public async Task TakeScreenshotToClipboardAsync_ReportsClipboardUnavailable_WhenTheClipboardNeverLetsGo()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { FailWrites = int.MaxValue };
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), clipboard)
+		{
+			Screenshot = image,
+		};
+
+		var outcome = await manager.TakeScreenshotToClipboardAsync();
+
+		Assert.Equal(ScreenshotToClipboardOutcome.ClipboardUnavailable, outcome);
+		Assert.Null(clipboard.LastImage);
+		Assert.Equal(ClipboardRetry.DefaultAttempts, clipboard.WriteThreadIds.Count);
+		WaitForBeep(manager, 1);
+		Assert.Equal(new[] { BeepType.Failure }, manager.Beeps.ToArray());
+	}
+
+	[Fact]
+	public async Task TakeScreenshotToClipboardAsync_ReportsCancelled_WhenNothingWasCaptured()
+	{
+		var clipboard = new TestClipboard();
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), clipboard);
+
+		var outcome = await manager.TakeScreenshotToClipboardAsync();
+
+		Assert.Equal(ScreenshotToClipboardOutcome.Cancelled, outcome);
+		Assert.Empty(clipboard.WriteThreadIds);
+		WaitForBeep(manager, 1);
+		Assert.Equal(new[] { BeepType.Failure }, manager.Beeps.ToArray());
+	}
+
+	/// <summary>
+	/// The reading goes ahead when the picture cannot be copied. It works from the bitmap in
+	/// hand and never needed the clipboard, so throwing here used to lose a capture the user
+	/// cannot take again — whatever was on screen has moved on by then.
+	/// <para>
+	/// The double fails exactly as many writes as one ladder has rungs, so the picture's write
+	/// fails outright and the text's write, which comes after it, succeeds. That is what
+	/// separates the two flags: the text reached the clipboard and the picture did not.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public async Task TakeScreenshotAndExtractTextAsync_StillReadsTheText_WhenTheClipboardWillNotTakeThePicture()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { FailWrites = ClipboardRetry.DefaultAttempts };
+		var manager = new TestableOcrManager(
+			CreateValidSettings(), new StubOcrService("recognised text"), clipboard)
+		{
+			Screenshot = image,
+		};
+
+		var result = await manager.TakeScreenshotAndExtractTextAsync(DefaultOrder);
+
+		Assert.True(result.Success);
+		Assert.Equal("recognised text", result.Message);
+		Assert.True(result.ScreenshotCopyFailed);
+		Assert.False(result.ClipboardCopyFailed);
+		Assert.Equal("recognised text", clipboard.LastText);
+		Assert.Null(clipboard.LastImage);
+	}
+
+	[Fact]
+	public async Task TakeScreenshotAndExtractTextAsync_ReportsNoScreenshotFailure_WhenTheClipboardTakesThePicture()
+	{
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var clipboard = new TestClipboard { FailWrites = 2 };
+		var manager = new TestableOcrManager(
+			CreateValidSettings(), new StubOcrService("recognised text"), clipboard)
+		{
+			Screenshot = image,
+		};
+
+		var result = await manager.TakeScreenshotAndExtractTextAsync(DefaultOrder);
+
+		Assert.True(result.Success);
+		Assert.False(result.ScreenshotCopyFailed);
+		Assert.False(result.ClipboardCopyFailed);
+		Assert.Same(image, clipboard.LastImage);
+	}
+
+	// ---------------------------------------------------------------------
 	// Bitmap lifetime (issue #229)
 	//
 	// A clipboard or screenshot bitmap is unmanaged imaging memory — roughly 30 MB on a
@@ -1074,10 +1192,20 @@ public class OcrManagerTests
 		public int BeepCount => _beeps.Count;
 		public IReadOnlyCollection<BeepType> Beeps => _beeps.ToArray();
 
+		/// <summary>
+		/// What the region overlay will hand back. Null means the user dismissed it without
+		/// selecting anything, which is the cancelled path.
+		/// </summary>
+		public SoftwareBitmap? Screenshot { get; set; }
+
 		protected override void PlayBeep(BeepType type)
 		{
 			_beeps.Enqueue(type);
 		}
+
+		// The real one shows a full-screen overlay and reads the desktop, so nothing about the
+		// two screenshot methods could be tested without standing in for it.
+		protected override Task<SoftwareBitmap?> CaptureScreenshotAsync() => Task.FromResult(Screenshot);
 	}
 
 	private sealed class TestClipboard : RecordingClipboardManager

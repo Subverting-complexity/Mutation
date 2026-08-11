@@ -158,6 +158,28 @@ different pages.
    to right, top to bottom, which is better for a plain block of text that Natural has
    scrambled. Each has its own shortcut, so you can just try the other one.
 
+### The screenshot could not be copied to the clipboard
+
+**What's happening.** Only one program can have the clipboard open at a time, and the
+moment a picture lands there is exactly when a clipboard manager or your screen reader
+opens it to see what arrived. Mutation waits and tries again a few times, which almost
+always gets in.
+
+With a plain **Screenshot to clipboard**, when it does not get in you hear the failure
+beep and see the message "Another program is using the clipboard, so the screenshot was
+not copied. Try again in a moment." That picture is gone and you will need to pick the
+region again. Your clipboard still holds whatever it held before — Mutation does not wipe
+it on the way to failing.
+
+With **Screenshot & OCR** it is gentler, because the reading does not need the clipboard.
+Mutation reads from the picture it is holding, so you get your text as usual, you hear
+the ordinary success beep, and the message tells you only that the picture itself did not
+make it.
+
+**What to do.** Take the screenshot again — the second attempt almost always gets in. If
+it happens every time, a clipboard manager or clipboard-history tool is the usual
+culprit; closing it or turning off its monitoring settles it.
+
 ### OCR read the text but could not copy it to the clipboard
 
 **What's happening.** Only one program can have the clipboard open at a time. Just
@@ -190,9 +212,12 @@ was. There are four reasons it would not.
 - You started the reading with a button in the Mutation window instead of a shortcut.
   The app you were working in is then Mutation, so there is nowhere else to paste. Use
   the shortcut — **Shift+Alt+J** and friends — from the app you want the text in.
-- The reading found no text, or its text never reached the clipboard. Either way the
-  clipboard still holds the picture, and pasting would drop that picture into your
-  document. See the two entries just above this one.
+- The reading found no text, or its text never reached the clipboard. Either way there
+  is no new text to paste, and pasting would put whatever the clipboard does hold — most
+  likely the screenshot — into your document. See
+  [OCR returns nothing useful](#ocr-returns-nothing-useful-or-the-wrong-reading-order)
+  and
+  [OCR read the text but could not copy it](#ocr-read-the-text-but-could-not-copy-it-to-the-clipboard).
 - It was a batch of documents. Those are always started from the Mutation window, so
   the point above applies.
 

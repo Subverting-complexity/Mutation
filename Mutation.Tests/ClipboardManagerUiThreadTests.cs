@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Mutation.Ui.Services;
+using Windows.Graphics.Imaging;
 using Xunit;
 
 namespace Mutation.Tests;
@@ -93,6 +94,119 @@ public class ClipboardManagerUiThreadTests
 		Assert.False(restored);
 		Assert.Null(clipboard.LastRestoredSnapshot);
 		Assert.Equal(ClipboardRetry.DefaultAttempts, clipboard.WriteThreadIds.Count);
+	}
+
+	/// <summary>
+	/// The screenshot write retries too, and does it on the UI thread. This is the write that
+	/// opens the race the two above were fixed for: it is the moment a clipboard manager or a
+	/// screen reader notices something arrived and opens the clipboard to look. It was the one
+	/// asynchronous write here with no retry and no hop, so a clipboard held open for a moment
+	/// reached the user as an error dialog instead of a screenshot (issue #360).
+	/// </summary>
+	[Fact]
+	public async Task TrySetImageAsync_RetriesOnTheUiThread_WhenTheClipboardIsBrieflyBusy()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		bool copied = await clipboard.TrySetImageAsync(image);
+
+		Assert.True(copied);
+		Assert.Same(image, clipboard.LastImage);
+		Assert.Equal(3, clipboard.WriteThreadIds.Count);
+		Assert.All(clipboard.WriteThreadIds, id => Assert.Equal(uiThread.ThreadId, id));
+	}
+
+	/// <summary>
+	/// Each attempt asks for the UI thread again rather than trusting where the last wait left
+	/// it. Counting the hops is what separates this from a ladder that merely started in the
+	/// right place, which is what issue #352 turned out to be for the other writes.
+	/// </summary>
+	[Fact]
+	public async Task TrySetImageAsync_AsksForTheUiThreadOncePerAttempt()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		await clipboard.TrySetImageAsync(image);
+
+		Assert.Equal(3, uiThread.DispatchCount);
+	}
+
+	/// <summary>
+	/// A clipboard that never lets go is reported, not thrown. The throw is what reached the
+	/// hotkey handler as an error dialog; a bool is what every sibling on the class answers with,
+	/// and it leaves the caller to decide what to say.
+	/// </summary>
+	[Fact]
+	public async Task TrySetImageAsync_ReportsFailure_WhenTheClipboardNeverLetsGo()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = int.MaxValue };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		bool copied = await clipboard.TrySetImageAsync(image);
+
+		Assert.False(copied);
+		Assert.Null(clipboard.LastImage);
+		Assert.Equal(ClipboardRetry.DefaultAttempts, clipboard.WriteThreadIds.Count);
+		Assert.All(clipboard.WriteThreadIds, id => Assert.Equal(uiThread.ThreadId, id));
+	}
+
+	/// <summary>
+	/// A ladder that runs out says so somewhere the user cannot, and hands over what actually went
+	/// wrong on the last attempt.
+	/// <para>
+	/// This is what stops a busy clipboard and a permanent failure looking the same. The retry
+	/// swallows exceptions, which is right for retrying, and the caller now turns the resulting
+	/// false into a fixed "another program is using the clipboard". If an encode ran out of memory
+	/// instead — the failure issue #229 was filed about — that sentence is wrong, the advice to
+	/// try again makes it worse, and without this there would be no record of the real cause.
+	/// </para>
+	/// </summary>
+	[Fact]
+	public async Task AnExhaustedLadderReportsWhatWentWrong()
+	{
+		var clipboard = new TestClipboard(uiThread: null) { FailWrites = int.MaxValue };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		await clipboard.TrySetImageAsync(image);
+
+		var (operationName, lastFailure) = Assert.Single(clipboard.GaveUp);
+		Assert.Equal(nameof(ClipboardManager.TrySetImageAsync), operationName);
+		Assert.IsType<InvalidOperationException>(lastFailure);
+	}
+
+	/// <summary>
+	/// A ladder that succeeds reports nothing. The log is only worth reading if it is quiet when
+	/// all is well, and a clipboard briefly held is the ordinary case here, not a fault.
+	/// </summary>
+	[Fact]
+	public async Task ALadderThatGetsInReportsNothing()
+	{
+		var clipboard = new TestClipboard(uiThread: null) { FailWrites = 2 };
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+
+		Assert.True(await clipboard.TrySetImageAsync(image));
+		Assert.Empty(clipboard.GaveUp);
+	}
+
+	/// <summary>
+	/// No bitmap is not a failure, it is nothing to do. It answers false without touching the
+	/// clipboard, the way blank text does — the old method would have thrown.
+	/// </summary>
+	[Fact]
+	public async Task TrySetImageAsync_DoesNotTouchTheClipboard_ForNoImage()
+	{
+		var clipboard = new TestClipboard(uiThread: null);
+
+		bool copied = await clipboard.TrySetImageAsync(null!);
+
+		Assert.False(copied);
+		Assert.Empty(clipboard.WriteThreadIds);
+		Assert.Empty(clipboard.GaveUp);
 	}
 
 	[Fact]
