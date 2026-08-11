@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Mutation.Ui.Services;
 using Xunit;
@@ -19,7 +18,7 @@ public class ClipboardManagerUiThreadTests
 	public async Task TrySetTextAsync_MakesEveryRetryAttemptOnTheSameThreadAsTheFirst()
 	{
 		using var uiThread = new SingleThreadUiDispatcher();
-		var clipboard = new RecordingClipboard(uiThread) { FailWrites = 2 };
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
 
 		bool copied = await clipboard.TrySetTextAsync("transcript");
 
@@ -36,7 +35,7 @@ public class ClipboardManagerUiThreadTests
 	public async Task TrySetTextAsync_WalksTheWholeLadderOnTheUiThread_WhenTheClipboardNeverLetsGo()
 	{
 		using var uiThread = new SingleThreadUiDispatcher();
-		var clipboard = new RecordingClipboard(uiThread) { FailWrites = int.MaxValue };
+		var clipboard = new TestClipboard(uiThread) { FailWrites = int.MaxValue };
 
 		bool copied = await clipboard.TrySetTextAsync("transcript");
 
@@ -48,29 +47,88 @@ public class ClipboardManagerUiThreadTests
 	/// <summary>
 	/// Each attempt asks for the UI thread again rather than assuming the last wait left it
 	/// there. Counting the hops is what separates this from a ladder that merely started in the
-	/// right place.
+	/// right place — one hop and four attempts would satisfy the thread-id checks above.
 	/// </summary>
 	[Fact]
 	public async Task TrySetTextAsync_AsksForTheUiThreadOncePerAttempt()
 	{
 		using var uiThread = new SingleThreadUiDispatcher();
-		var clipboard = new RecordingClipboard(uiThread) { FailWrites = 2 };
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
 
 		await clipboard.TrySetTextAsync("transcript");
 
 		Assert.Equal(3, uiThread.DispatchCount);
 	}
 
+	/// <summary>
+	/// The snapshot taken and put back either side of a paste retries too. This is the half of
+	/// the story's acceptance list that is not about dictation: a clipboard manager that holds
+	/// on through the first attempt used to mean the user's own clipboard contents were not put
+	/// back.
+	/// </summary>
+	[Fact]
+	public async Task TryRestoreSnapshotAsync_RetriesOnTheUiThread_WhenTheClipboardIsBrieflyBusy()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
+		var snapshot = new ClipboardSnapshot { Text = "what the user had before" };
+
+		bool restored = await clipboard.TryRestoreSnapshotAsync(snapshot);
+
+		Assert.True(restored);
+		Assert.Same(snapshot, clipboard.LastRestoredSnapshot);
+		Assert.Equal(3, clipboard.WriteThreadIds.Count);
+		Assert.All(clipboard.WriteThreadIds, id => Assert.Equal(uiThread.ThreadId, id));
+	}
+
+	[Fact]
+	public async Task TryRestoreSnapshotAsync_ReportsFailure_WhenTheClipboardNeverLetsGo()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = int.MaxValue };
+
+		bool restored = await clipboard.TryRestoreSnapshotAsync(
+			new ClipboardSnapshot { Text = "what the user had before" });
+
+		Assert.False(restored);
+		Assert.Null(clipboard.LastRestoredSnapshot);
+		Assert.Equal(ClipboardRetry.DefaultAttempts, clipboard.WriteThreadIds.Count);
+	}
+
 	[Fact]
 	public async Task TrySetTextAsync_DoesNotTouchTheClipboard_ForBlankText()
 	{
 		using var uiThread = new SingleThreadUiDispatcher();
-		var clipboard = new RecordingClipboard(uiThread);
+		var clipboard = new TestClipboard(uiThread);
 
 		bool copied = await clipboard.TrySetTextAsync("   ");
 
 		Assert.False(copied);
 		Assert.Empty(clipboard.WriteThreadIds);
+	}
+
+	/// <summary>
+	/// A caller already on the UI thread is left there rather than queued behind itself. The
+	/// hop count is what says so; the thread ids alone cannot tell the two apart.
+	/// </summary>
+	[Fact]
+	public async Task TrySetTextAsync_RunsInPlace_WhenTheCallerIsAlreadyOnTheUiThread()
+	{
+		using var uiThread = new SingleThreadUiDispatcher();
+		var clipboard = new TestClipboard(uiThread) { FailWrites = 2 };
+
+		// Start the whole ladder on the dispatcher's own thread, which is what a real clipboard
+		// call from a UI event handler looks like.
+		bool copied = await uiThread.RunAsync(() => clipboard.TrySetTextAsync("transcript"));
+
+		Assert.True(copied);
+		Assert.Equal(3, clipboard.WriteThreadIds.Count);
+		Assert.All(clipboard.WriteThreadIds, id => Assert.Equal(uiThread.ThreadId, id));
+
+		// One hop to get the ladder started, and none for the attempts themselves: the first
+		// runs in place, and the two after it are queued back because ClipboardRetry's wait
+		// leaves them on the thread pool.
+		Assert.Equal(3, uiThread.DispatchCount);
 	}
 
 	/// <summary>
@@ -80,20 +138,27 @@ public class ClipboardManagerUiThreadTests
 	[Fact]
 	public async Task TrySetTextAsync_RunsInPlace_WhenThereIsNoDispatcher()
 	{
-		var clipboard = new RecordingClipboard(uiThread: null);
+		var clipboard = new TestClipboard(uiThread: null);
+		int callerThreadId = Environment.CurrentManagedThreadId;
 
 		bool copied = await clipboard.TrySetTextAsync("transcript");
 
 		Assert.True(copied);
-		Assert.Equal(new[] { Environment.CurrentManagedThreadId }, clipboard.WriteThreadIds);
+		Assert.Equal(new[] { callerThreadId }, clipboard.WriteThreadIds);
 	}
 
 	/// <summary>
 	/// A failure on the UI thread has to come back to the caller, or the retry above it has
 	/// nothing to react to and a busy clipboard would read as a successful write.
+	/// <para>
+	/// This pins the contract every <see cref="IUiThreadDispatcher"/> owes its caller, using the
+	/// test double. It is not a test of <c>DispatcherQueueUiThread</c>, the one that ships:
+	/// that needs a real WinUI dispatcher queue and a real UI thread, neither of which exists in
+	/// this test assembly.
+	/// </para>
 	/// </summary>
 	[Fact]
-	public async Task RunAsync_FaultsTheCaller_WhenTheOperationThrowsOnTheUiThread()
+	public async Task ADispatcher_FaultsTheCaller_WhenTheOperationThrowsOnTheUiThread()
 	{
 		using var uiThread = new SingleThreadUiDispatcher();
 
@@ -101,41 +166,11 @@ public class ClipboardManagerUiThreadTests
 			() => uiThread.RunAsync<object?>(() => throw new InvalidOperationException("clipboard busy")));
 	}
 
-	/// <summary>
-	/// A <see cref="ClipboardManager"/> whose one clipboard call records the thread it was made
-	/// on, and which can be told to fail the way a clipboard held open by another process does.
-	/// </summary>
-	private sealed class RecordingClipboard : ClipboardManager
+	private sealed class TestClipboard : RecordingClipboardManager
 	{
-		private readonly List<int> _writeThreadIds = new();
-
-		public RecordingClipboard(IUiThreadDispatcher? uiThread)
+		public TestClipboard(IUiThreadDispatcher? uiThread)
 			: base(uiThread)
 		{
-		}
-
-		public IReadOnlyList<int> WriteThreadIds => _writeThreadIds;
-
-		/// <summary>
-		/// How many of the next writes throw. <see cref="int.MaxValue"/> for a clipboard that
-		/// never lets go.
-		/// </summary>
-		public int FailWrites { get; set; }
-
-		public override void SetText(string text)
-		{
-			_writeThreadIds.Add(Environment.CurrentManagedThreadId);
-
-			if (FailWrites <= 0)
-				return;
-
-			if (FailWrites != int.MaxValue)
-				FailWrites--;
-
-			// The real one is a COMException carrying CLIPBRD_E_CANT_OPEN when something else
-			// has the clipboard, or RPC_E_WRONG_THREAD when the call was made from the wrong
-			// place. All the retry above looks at is that the write threw.
-			throw new InvalidOperationException("OpenClipboard Failed (0x800401D0)");
 		}
 	}
 }

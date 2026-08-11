@@ -7,7 +7,7 @@ namespace Mutation.Ui.Services;
 /// <summary>
 /// Runs work on the UI thread through the WinUI dispatcher queue.
 /// </summary>
-public sealed class DispatcherQueueUiThread : IUiThreadDispatcher
+internal sealed class DispatcherQueueUiThread : IUiThreadDispatcher
 {
 	private readonly DispatcherQueue _queue;
 
@@ -25,14 +25,17 @@ public sealed class DispatcherQueueUiThread : IUiThreadDispatcher
 			return operation();
 
 		// RunContinuationsAsynchronously keeps whatever awaits this task off the UI thread.
-		// Without it the awaiter's continuation runs inline on the UI thread, inside the
-		// dispatched callback, which is how a retry ladder ends up re-entering the dispatcher
-		// from within itself.
+		// Without it the awaiter's continuation runs inline on the UI thread inside the
+		// dispatched callback, which would put the retry loop's own bookkeeping — its counter,
+		// its catch, its delay — on the UI thread between attempts. Only the clipboard call
+		// itself needs to be there.
 		var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-		// Deliberately an async void callback: DispatcherQueueHandler returns void, and this is
-		// the one shape where that is safe, because every exception the operation can raise is
-		// caught here and handed to the caller through the task instead of escaping.
+		// Deliberately an async void callback: DispatcherQueueHandler returns void. It is safe
+		// because every exception the operation can raise is caught here and handed to the
+		// caller through the task instead of escaping. The completion calls themselves are not
+		// inside that guarantee, but they cannot throw: this source is completed either by the
+		// callback or by the not-queued branch below, never by both.
 		bool queued = _queue.TryEnqueue(async () =>
 		{
 			try

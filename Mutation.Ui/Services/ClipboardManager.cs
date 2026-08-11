@@ -21,8 +21,13 @@ public class ClipboardManager
 	private readonly IUiThreadDispatcher? _uiThread;
 
 	/// <param name="uiThread">
-	/// Where every clipboard call is made. Null means "make them wherever the caller is",
-	/// which is what the tests that do not care about threading get.
+	/// Where the retrying calls on this class are made. Null means "make them wherever the
+	/// caller is", which is what the tests that do not care about threading get.
+	/// <para>
+	/// It covers the methods that retry, not every method here. <see cref="SetText"/> is
+	/// synchronous and cannot hop, and <see cref="SetImageAsync"/> has neither a retry nor a
+	/// hop — see issue #360. Both predate this and both are called from the UI thread today.
+	/// </para>
 	/// </param>
 	public ClipboardManager(IUiThreadDispatcher? uiThread = null)
 	{
@@ -181,23 +186,30 @@ public class ClipboardManager
 		if (snapshot is null || !snapshot.HasContent)
 			return Task.FromResult(false);
 
-		return RetryOnUiThreadAsync(async () =>
+		return RetryOnUiThreadAsync(() => RestoreSnapshotAsync(snapshot));
+	}
+
+	/// <summary>
+	/// One attempt at putting a snapshot back. Split out and virtual for the same reason
+	/// <see cref="SetText"/> is: this is the write either side of a paste, and a test cannot
+	/// reach the real clipboard to check that a busy one is retried rather than reported.
+	/// </summary>
+	protected virtual async Task RestoreSnapshotAsync(ClipboardSnapshot snapshot)
+	{
+		var data = new DataPackage();
+
+		if (!string.IsNullOrEmpty(snapshot.Text))
+			data.SetText(snapshot.Text);
+
+		if (snapshot.PngImageBytes is { Length: > 0 })
 		{
-			var data = new DataPackage();
+			var stream = new InMemoryRandomAccessStream();
+			await stream.WriteAsync(snapshot.PngImageBytes.AsBuffer());
+			stream.Seek(0);
+			data.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
+		}
 
-			if (!string.IsNullOrEmpty(snapshot.Text))
-				data.SetText(snapshot.Text);
-
-			if (snapshot.PngImageBytes is { Length: > 0 })
-			{
-				var stream = new InMemoryRandomAccessStream();
-				await stream.WriteAsync(snapshot.PngImageBytes.AsBuffer());
-				stream.Seek(0);
-				data.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
-			}
-
-			Clipboard.SetContent(data);
-		});
+		Clipboard.SetContent(data);
 	}
 
 	/// <summary>

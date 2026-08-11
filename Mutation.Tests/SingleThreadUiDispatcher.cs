@@ -80,5 +80,15 @@ internal sealed class SingleThreadUiDispatcher : IUiThreadDispatcher, IDisposabl
 		return completion.Task;
 	}
 
-	public void Dispose() => _work.CompleteAdding();
+	/// <summary>
+	/// Stops the worker thread and waits for it, so a test that asserts on what ran has nothing
+	/// still running behind it. Work handed over after this throws out of <c>RunAsync</c> rather
+	/// than faulting a task nobody is waiting on any more.
+	/// </summary>
+	public void Dispose()
+	{
+		_work.CompleteAdding();
+		_thread.Join(TimeSpan.FromSeconds(5));
+		_work.Dispose();
+	}
 }

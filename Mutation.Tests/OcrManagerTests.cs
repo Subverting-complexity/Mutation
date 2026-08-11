@@ -1080,10 +1080,8 @@ public class OcrManagerTests
 		}
 	}
 
-	private sealed class TestClipboard : ClipboardManager
+	private sealed class TestClipboard : RecordingClipboardManager
 	{
-		private readonly List<int> _writeThreadIds = new();
-
 		/// <param name="uiThread">
 		/// Null for the tests that only care what reached the clipboard, so the write happens
 		/// where the test stands. Supply one to check which thread the write was made on.
@@ -1093,38 +1091,9 @@ public class OcrManagerTests
 		{
 		}
 
-		public string? LastText { get; private set; }
-		public int SetTextCalls { get; private set; }
-
-		/// <summary>The thread each write was made on, in order.</summary>
-		public IReadOnlyList<int> WriteThreadIds => _writeThreadIds;
-
-		/// <summary>
-		/// How many of the next writes throw the way a clipboard held open by another process
-		/// does. <see cref="int.MaxValue"/> for one that never lets go.
-		/// </summary>
-		public int FailWrites { get; set; }
-
 		// The image ExtractTextFromClipboardImageAsync will find. Null means "no image
 		// on the clipboard", which is the path that beeps failure.
 		public SoftwareBitmap? Image { get; set; }
-
-		public override void SetText(string text)
-		{
-			SetTextCalls++;
-			_writeThreadIds.Add(Environment.CurrentManagedThreadId);
-			if (FailWrites > 0)
-			{
-				if (FailWrites != int.MaxValue)
-					FailWrites--;
-
-				// The real one is a COMException carrying CLIPBRD_E_CANT_OPEN. What matters
-				// here is only that the write throws, which is all the retry looks at.
-				throw new InvalidOperationException("OpenClipboard Failed (0x800401D0)");
-			}
-
-			LastText = text;
-		}
 
 		public override Task<SoftwareBitmap?> TryGetImageAsync(int attempts = 5, int delayMs = 150)
 			=> Task.FromResult(Image);
