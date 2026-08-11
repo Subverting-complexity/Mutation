@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CognitiveSupport;
+using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using PdfSharp.Pdf;
@@ -1087,22 +1088,31 @@ public class OcrManagerTests
 	}
 
 	/// <summary>
-	/// A press that arrives while an overlay is already on screen is refused, not cancelled.
-	/// The two used to be the same value, so the user was told "Screenshot cancelled. Nothing
-	/// was copied to the clipboard." about an overlay that was still there waiting for a region
-	/// (issue #363) — the opposite of the truth for someone who cannot see it.
+	/// A press that arrives while a capture is already running is refused, not cancelled. The
+	/// two used to be the same value, so the user was told "Screenshot cancelled. Nothing was
+	/// copied to the clipboard." about a capture that was still going (issue #363) — the
+	/// opposite of the truth for someone who cannot see it.
+	/// <para>
+	/// Which refusal depends on whether an overlay is on screen, and both are exercised here
+	/// because getting that wrong is what issue #367 was: the one sentence fitted to both told
+	/// a user with no overlay to select a region that did not exist. The guard is held for far
+	/// longer than the overlay lives, so the no-overlay case is the common one, not the corner.
+	/// </para>
 	/// <para>
 	/// Driven through the real method rather than a seam: the first press is held inside the
-	/// capture, which is what having an overlay on screen amounts to here, so the second press
-	/// meets a genuinely busy manager. That also pins what the refused press does *not* do —
-	/// it writes nothing to the clipboard and plays no beep, which is why the announcement is
-	/// the only thing telling the user anything.
+	/// capture, so the second meets a genuinely busy manager. That also pins what the refused
+	/// press does *not* do — it writes nothing to the clipboard and plays no beep, which is why
+	/// the announcement is the only thing telling the user anything.
 	/// </para>
 	/// </summary>
 	// Bounded for the same reason as the OCR-side refusal test above: remove the guard and this
 	// one waits forever on a release it can no longer reach.
-	[Fact(Timeout = 20000)]
-	public async Task TakeScreenshotToClipboardAsync_ReportsRefused_WhenACaptureIsAlreadyOnScreen()
+	[Theory(Timeout = 20000)]
+	[InlineData(true, ScreenshotToClipboardOutcome.RefusedOverlayWaiting)]
+	[InlineData(false, ScreenshotToClipboardOutcome.RefusedCaptureRunning)]
+	public async Task TakeScreenshotToClipboardAsync_ReportsRefused_WhenACaptureIsAlreadyRunning(
+		bool overlayOnScreen,
+		ScreenshotToClipboardOutcome expected)
 	{
 		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
 		var clipboard = new TestClipboard();
@@ -1110,6 +1120,7 @@ public class OcrManagerTests
 		{
 			Screenshot = image,
 			HoldCapture = true,
+			OverlayOnScreen = overlayOnScreen,
 		};
 
 		var firstPress = manager.TakeScreenshotToClipboardAsync();
@@ -1117,7 +1128,7 @@ public class OcrManagerTests
 
 		var secondPress = await manager.TakeScreenshotToClipboardAsync();
 
-		Assert.Equal(ScreenshotToClipboardOutcome.Refused, secondPress);
+		Assert.Equal(expected, secondPress);
 		Assert.NotEqual(ScreenshotToClipboardOutcome.Cancelled, secondPress);
 		Assert.Empty(clipboard.WriteThreadIds);
 		Assert.Equal(0, manager.BeepCount);
@@ -1128,16 +1139,34 @@ public class OcrManagerTests
 	}
 
 	/// <summary>
-	/// What the refused press is announced as. The outcome only matters because of the sentence
-	/// it produces, and that sentence must not be the cancellation one.
+	/// The refusal a user meets while a capture is running past its overlay must not offer them
+	/// a control that is not there. This is the whole of issue #367: the sentence written for
+	/// the overlay case asks for a region that does not exist, and the Escape it offers goes to
+	/// whichever application actually holds the keyboard.
 	/// </summary>
-	[Fact]
-	public void ARefusedScreenshotIsAnnouncedAsACaptureAlreadyWaiting()
+	[Fact(Timeout = 20000)]
+	public async Task ARefusalWithNoOverlayIsAnnouncedWithoutAskingForARegion()
 	{
-		var (message, _) = ClipboardCopyMessages.ForScreenshot(ScreenshotToClipboardOutcome.Refused);
+		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
+		var manager = new TestableOcrManager(CreateValidSettings(), new StubOcrService(), new TestClipboard())
+		{
+			Screenshot = image,
+			HoldCapture = true,
+			OverlayOnScreen = false,
+		};
 
-		Assert.Equal(ClipboardCopyMessages.ScreenshotAlreadyInProgress, message);
-		Assert.NotEqual(ClipboardCopyMessages.ScreenshotCancelled, message);
+		var firstPress = manager.TakeScreenshotToClipboardAsync();
+		await manager.CaptureStarted.Task;
+
+		var (message, severity) = ClipboardCopyMessages.ForScreenshot(await manager.TakeScreenshotToClipboardAsync());
+
+		Assert.Equal(ClipboardCopyMessages.ScreenshotCaptureRunning, message);
+		Assert.DoesNotContain("Escape", message);
+		Assert.DoesNotContain("Select a region", message);
+		Assert.Equal(InfoBarSeverity.Warning, severity);
+
+		manager.ReleaseCapture.SetResult();
+		await firstPress;
 	}
 
 	[Fact]
@@ -1312,6 +1341,16 @@ public class OcrManagerTests
 		public TaskCompletionSource CaptureStarted { get; } = new();
 
 		public TaskCompletionSource ReleaseCapture { get; } = new();
+
+		/// <summary>
+		/// What the held capture claims is on screen. The real overlay is created and cleared
+		/// inside <c>CaptureScreenshotAsync</c>, which this class replaces wholesale, so without
+		/// standing in for the answer too a held capture always looks like one past the overlay
+		/// — and the overlay-waiting refusal could not be reached in a test at all.
+		/// </summary>
+		public bool OverlayOnScreen { get; set; }
+
+		protected override bool IsCaptureOverlayOnScreen => OverlayOnScreen;
 
 		protected override void PlayBeep(BeepType type)
 		{

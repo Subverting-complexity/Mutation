@@ -4,11 +4,17 @@ namespace Mutation.Ui.Core;
 /// What became of a plain screenshot capture — the one whose only product is a picture on the
 /// clipboard.
 /// <para>
-/// Four answers, not two, because neither a busy clipboard nor a refused press is a
+/// Five answers, not two, because neither a busy clipboard nor a refused press is a
 /// cancellation. A busy clipboard used to reach the caller as a thrown exception and an error
 /// dialog, which is the wrong weight for something that clears on its own within a second
 /// (issue #360), and reporting either of them as a cancellation tells the user they cancelled
 /// something they did not.
+/// </para>
+/// <para>
+/// A refused press splits in two because the user's situation splits in two. A capture holds
+/// the guard from the moment it starts until the picture is on the clipboard, but the overlay
+/// is on screen for only the first part of that. Telling someone with no overlay in front of
+/// them to select a region is an instruction they cannot follow (issue #367).
 /// </para>
 /// </summary>
 public enum ScreenshotToClipboardOutcome
@@ -41,10 +47,22 @@ public enum ScreenshotToClipboardOutcome
 	/// <para>
 	/// Its own value rather than <see cref="Cancelled"/>, because the two are opposite news for
 	/// someone who cannot see the screen: cancelled says the overlay has gone, refused says it
-	/// is still in front of them and wants a selection. Named to match
-	/// <c>OcrRunOutcome.Refused</c>, which the screenshot-and-OCR path has told apart from a
-	/// real cancellation since issue #342.
+	/// is still in front of them and wants a selection.
 	/// </para>
 	/// </summary>
-	Refused,
+	RefusedOverlayWaiting,
+
+	/// <summary>
+	/// The press arrived while a capture was running but past the point of showing an overlay —
+	/// during the crop, the clipboard write and its retries, or the whole reading when the
+	/// capture that holds the guard is a screenshot-and-OCR run. It started nothing, and there
+	/// is nothing on screen for the user to do anything with.
+	/// <para>
+	/// Split from <see cref="RefusedOverlayWaiting"/> because the advice differs and the wrong
+	/// half is actively harmful. "Select a region, or press Escape to cancel it" cannot be
+	/// followed when no overlay exists, and the Escape it invites goes to whatever application
+	/// actually holds the keyboard (issue #367). All the user can usefully do is wait.
+	/// </para>
+	/// </summary>
+	RefusedCaptureRunning,
 }

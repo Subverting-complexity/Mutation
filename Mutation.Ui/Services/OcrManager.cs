@@ -96,12 +96,32 @@ public class OcrManager
     }
 
     /// <summary>
-    /// Captures a region and puts it on the clipboard, saying which of the four things
+    /// Whether a region-selection overlay is on screen right now.
+    /// <para>
+    /// A snapshot, and deliberately so. The field is set and cleared by the capture running on
+    /// the UI thread, so a refused press can only ever read where that capture had got to a
+    /// moment ago. That is as good as this can be: the honest question is what the user is
+    /// looking at when they are told, and the answer moves whatever we do. What matters is that
+    /// the window in which it can be wrong is now microseconds rather than the whole clipboard
+    /// write and reading (issue #367).
+    /// </para>
+    /// <para>
+    /// Virtual because <see cref="CaptureScreenshotAsync"/> is the only thing that sets the
+    /// field, and a test stands in for that wholesale — so without this seam the overlay-waiting
+    /// case could not be reached in a test at all, which is how the wrong sentence went out
+    /// covered by a green suite.
+    /// </para>
+    /// </summary>
+    protected virtual bool IsCaptureOverlayOnScreen => _activeOverlay is not null;
+
+    /// <summary>
+    /// Captures a region and puts it on the clipboard, saying which of the five things
     /// happened. Callers must not announce success unconditionally — for a blind user,
     /// "Screenshot copied to the clipboard" after a cancelled capture is worse than silence,
-    /// and so is it after a capture the clipboard would not take. Nor may they treat a press
-    /// refused because an overlay is already up as a cancellation: that one tells the user the
-    /// overlay has gone when it is still in front of them (issue #363).
+    /// and so is it after a capture the clipboard would not take. Nor may they treat a refused
+    /// press as a cancellation, which tells the user a capture has gone when it has not
+    /// (issue #363), or run the two refusals together, which offers a control that is only
+    /// there for one of them (issue #367).
     /// </summary>
     public async Task<ScreenshotToClipboardOutcome> TakeScreenshotToClipboardAsync()
     {
@@ -111,8 +131,18 @@ public class OcrManager
             // "Screenshot cancelled. Nothing was copied to the clipboard." about an overlay
             // that was still on screen waiting for them (issue #363) — the opposite of the
             // truth for someone who cannot see it.
+            //
+            // Which refusal depends on whether there is an overlay, because the guard outlives
+            // it: it is held through the crop, the clipboard write and its retries, and — when
+            // the capture holding it is a screenshot-and-OCR run — the entire reading. Telling
+            // someone with nothing on screen to select a region is an instruction they cannot
+            // follow, and the Escape it offers would go to whatever application actually has
+            // the keyboard (issue #367).
+            bool overlayWaiting = IsCaptureOverlayOnScreen;
             try { _activeOverlay?.BringToFront(); } catch { }
-            return ScreenshotToClipboardOutcome.Refused;
+            return overlayWaiting
+                ? ScreenshotToClipboardOutcome.RefusedOverlayWaiting
+                : ScreenshotToClipboardOutcome.RefusedCaptureRunning;
         }
         try
         {

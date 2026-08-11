@@ -39,8 +39,22 @@ public static class ClipboardCopyMessages
 	/// go on with the capture they started, not throw it away.
 	/// </para>
 	/// </summary>
-	public const string ScreenshotAlreadyInProgress =
+	public const string ScreenshotOverlayWaiting =
 		"A screenshot is already in progress. Select a region, or press Escape to cancel it.";
+
+	/// <summary>
+	/// Said when a screenshot press arrives while a capture is running with no overlay on screen
+	/// — during the clipboard write, or the whole reading when a screenshot-and-OCR run holds
+	/// the guard.
+	/// <para>
+	/// Both sentences used to be <see cref="ScreenshotOverlayWaiting"/>, which told the user to
+	/// select a region that did not exist and offered an Escape that would have gone to whatever
+	/// application actually had the keyboard (issue #367). It names no control at all now,
+	/// because there is none: waiting is genuinely the whole of the advice.
+	/// </para>
+	/// </summary>
+	public const string ScreenshotCaptureRunning =
+		"A screenshot is already in progress. Wait for it to finish, then try again.";
 
 	/// <summary>
 	/// Said when the text was read but the clipboard would not take it. Both halves matter: the
@@ -64,15 +78,19 @@ public static class ClipboardCopyMessages
 	/// A busy clipboard is an error and a cancellation is not, which is the distinction the
 	/// severity carries to a screen reader: an error interrupts what it is saying, and an
 	/// informational message waits its turn. Every case is named rather than left to a default,
-	/// so a fifth outcome added later is a compiler-visible gap instead of a silent
+	/// so a sixth outcome added later is a compiler-visible gap instead of a silent
 	/// "you cancelled it".
 	/// </para>
 	/// <para>
-	/// A refused press is a warning, which interrupts as an error does. Nothing failed, so it is
-	/// not an error — but the user pressed a key and got no visible change, and the sentence
-	/// telling them why is the only thing that explains the overlay still sitting in front of
-	/// them. Left polite it would queue behind whatever the overlay is saying, and arrive after
-	/// the moment it was needed.
+	/// Both refusals are warnings, which interrupt as an error does. Nothing failed, so neither
+	/// is an error — but the user pressed a key and got no visible change, and the sentence
+	/// telling them why is the only thing that explains what is or is not in front of them. Left
+	/// polite it would queue behind whatever the overlay is saying, and arrive after the moment
+	/// it was needed.
+	/// </para>
+	/// <para>
+	/// The two refusals differ only in their advice, and that is exactly why they are separate.
+	/// One sentence fitted to both told a user with no overlay to select a region (issue #367).
 	/// </para>
 	/// </summary>
 	public static (string Message, InfoBarSeverity Severity) ForScreenshot(ScreenshotToClipboardOutcome outcome) =>
@@ -80,7 +98,8 @@ public static class ClipboardCopyMessages
 		{
 			ScreenshotToClipboardOutcome.Copied => (ScreenshotCopied, InfoBarSeverity.Success),
 			ScreenshotToClipboardOutcome.ClipboardUnavailable => (ScreenshotClipboardBusy, InfoBarSeverity.Error),
-			ScreenshotToClipboardOutcome.Refused => (ScreenshotAlreadyInProgress, InfoBarSeverity.Warning),
+			ScreenshotToClipboardOutcome.RefusedOverlayWaiting => (ScreenshotOverlayWaiting, InfoBarSeverity.Warning),
+			ScreenshotToClipboardOutcome.RefusedCaptureRunning => (ScreenshotCaptureRunning, InfoBarSeverity.Warning),
 			ScreenshotToClipboardOutcome.Cancelled => (ScreenshotCancelled, InfoBarSeverity.Informational),
 			_ => (ScreenshotCancelled, InfoBarSeverity.Informational),
 		};
