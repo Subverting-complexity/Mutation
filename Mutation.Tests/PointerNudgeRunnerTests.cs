@@ -27,6 +27,17 @@ public class PointerNudgeRunnerTests
 		public CursorPoint Position = Anchor;
 		public bool CanRead = true;
 		public bool WriteSucceeds = true;
+		public int? FailWriteAtIndex;
+
+		/// <summary>
+		/// Columns the pointer is allowed to occupy. A write outside them is accepted and then
+		/// quietly ignored, which is what Windows does with a move into the empty space beside a
+		/// monitor: the pointer is confined to the union of the monitors, not to the rectangle
+		/// drawn around them.
+		/// </summary>
+		public int? ClampMinX;
+		public int? ClampMaxX;
+
 		public List<CursorPoint> Writes { get; } = new();
 
 		public bool TryGet(out CursorPoint position)
@@ -43,11 +54,16 @@ public class PointerNudgeRunnerTests
 
 		public bool TrySet(CursorPoint position)
 		{
+			int index = Writes.Count;
 			Writes.Add(position);
-			if (!WriteSucceeds)
+			if (!WriteSucceeds || FailWriteAtIndex == index)
 				return false;
 
-			Position = position;
+			bool clamped = (ClampMaxX is int max && position.X > max)
+				|| (ClampMinX is int min && position.X < min);
+			if (!clamped)
+				Position = position;
+
 			return true;
 		}
 	}
@@ -175,6 +191,86 @@ public class PointerNudgeRunnerTests
 
 		Assert.Equal(0, applied);
 		Assert.Single(cursor.Writes);
+	}
+
+	[Fact]
+	public async Task MoveClampedAtAMonitorEdge_TheWiggleGoesTheOtherWayInstead()
+	{
+		// The pointer is at the right edge of a monitor with empty space beside it. Windows
+		// accepts the move and clamps it away, so the magnifier sees nothing at all — the same
+		// silent failure the planner's old right-edge rule missed, one monitor edge inwards.
+		var cursor = new FakeCursor { ClampMaxX = Anchor.X };
+		var clock = new FakeClock();
+
+		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+
+		Assert.Equal(4, applied);
+		Assert.Equal(new CursorPoint(Anchor.X + 1, Anchor.Y), cursor.Writes[0]);
+		Assert.Equal(new CursorPoint(Anchor.X - 1, Anchor.Y), cursor.Writes[1]);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task PointerBoxedInOnBothSides_TheRunGivesUpAndLeavesItOnTheAnchor()
+	{
+		var cursor = new FakeCursor { ClampMinX = Anchor.X, ClampMaxX = Anchor.X };
+		var clock = new FakeClock();
+
+		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+
+		Assert.Equal(0, applied);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task StoppedOnAnOddStep_ThePointerIsPutBackOnTheAnchor()
+	{
+		// The next capture claims the pointer part-way through. Stopping where it stood would
+		// leave the pointer a pixel out, and the next capture would anchor on that drift and keep
+		// it — undoing the whole point of putting the pointer back at all.
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		int checks = 0;
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, stillWanted: () => ++checks <= 1);
+
+		Assert.Equal(1, applied);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task RefusedMoveOnAnOddStep_StillPutsThePointerBack()
+	{
+		var cursor = new FakeCursor { FailWriteAtIndex = 1 };
+		var clock = new FakeClock();
+
+		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
+
+		Assert.Equal(1, applied);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task UserTookTheMouse_ThePointerIsLeftExactlyWhereTheyPutIt()
+	{
+		// The one exit that must not tidy up after itself. The pointer is theirs now, drift and
+		// all, and hauling it to the anchor would be the jump this feature exists to avoid.
+		var elsewhere = new CursorPoint(900, 700);
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		int waits = 0;
+		clock.OnWait = () =>
+		{
+			// After one move, so the run believes the pointer is on the offset pixel.
+			if (++waits == 2)
+				cursor.Position = elsewhere;
+		};
+
+		await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
+
+		Assert.Equal(elsewhere, cursor.Position);
+		Assert.DoesNotContain(Anchor, cursor.Writes);
 	}
 
 	[Fact]

@@ -13,6 +13,12 @@ namespace Mutation.Ui.Core;
 /// a nicety. The capture goes to some length to put the pointer back where the user left it, and
 /// a nudge that finished one pixel off would quietly undo that every single time.
 /// </para>
+///
+/// <para>
+/// The plan always moves right first. Which way the pointer can actually go is not knowable from
+/// here — it depends on where the monitors are — so <see cref="PointerNudgeRunner"/> settles that
+/// by watching whether the first move took effect.
+/// </para>
 /// </summary>
 public static class PointerNudgePlanner
 {
@@ -25,11 +31,7 @@ public static class PointerNudgePlanner
 	/// </para>
 	/// </summary>
 	/// <param name="anchor">Where the pointer is, and where it must finish.</param>
-	/// <param name="rightmostX">The last usable pixel column on the virtual screen. A pointer
-	/// already there cannot move further right — Windows clamps to the virtual screen, so the
-	/// move would be accepted and do nothing, and the magnifier would never see any movement.
-	/// The nudge goes left instead.</param>
-	public static IReadOnlyList<CursorPoint> Plan(CursorPoint anchor, int rightmostX, PointerNudgeOptions options)
+	public static IReadOnlyList<CursorPoint> Plan(CursorPoint anchor, PointerNudgeOptions options)
 	{
 		if (!options.Enabled)
 			return Array.Empty<CursorPoint>();
@@ -40,11 +42,11 @@ public static class PointerNudgePlanner
 		// At least one move whenever the nudge is switched on. A duration shorter than a single
 		// interval would otherwise divide down to nothing, and a setting that is on but silently
 		// does nothing is the worst answer available — worst of all for someone who cannot see
-		// that nothing happened.
+		// that nothing happened. The cost is that such a pairing runs past its stated duration,
+		// which the help text says.
 		int moves = Math.Max(1, options.DurationMilliseconds / options.IntervalMilliseconds);
 
-		int step = anchor.X >= rightmostX ? -1 : 1;
-		var away = new CursorPoint(anchor.X + step, anchor.Y);
+		var away = new CursorPoint(anchor.X + 1, anchor.Y);
 
 		var plan = new List<CursorPoint>(moves + 1);
 		for (int i = 0; i < moves; i++)

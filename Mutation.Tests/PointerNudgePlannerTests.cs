@@ -11,7 +11,6 @@ namespace Mutation.Tests;
 public class PointerNudgePlannerTests
 {
 	private static readonly CursorPoint Anchor = new(400, 300);
-	private const int FarFromTheEdge = 1919;
 
 	private static PointerNudgeOptions On(int intervalMs = 50, int durationMs = 500) =>
 		new(true, intervalMs, durationMs);
@@ -19,7 +18,7 @@ public class PointerNudgePlannerTests
 	[Fact]
 	public void SwitchedOff_ThePointerIsNeverTouched()
 	{
-		Assert.Empty(PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, PointerNudgeOptions.Off));
+		Assert.Empty(PointerNudgePlanner.Plan(Anchor, PointerNudgeOptions.Off));
 	}
 
 	[Fact]
@@ -27,7 +26,7 @@ public class PointerNudgePlannerTests
 	{
 		// Half a second at one move every 50 ms is ten moves, and ten is even, so the last of
 		// them is already the way home — no eleventh move is needed.
-		var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On());
+		var plan = PointerNudgePlanner.Plan(Anchor, On());
 
 		Assert.Equal(10, plan.Count);
 		Assert.Equal(Anchor, plan[plan.Count - 1]);
@@ -40,7 +39,7 @@ public class PointerNudgePlannerTests
 		// finished a pixel out would quietly undo that on every capture.
 		for (int durationMs = 50; durationMs <= 1000; durationMs += 50)
 		{
-			var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On(durationMs: durationMs));
+			var plan = PointerNudgePlanner.Plan(Anchor, On(durationMs: durationMs));
 			Assert.NotEmpty(plan);
 			Assert.Equal(Anchor, plan[plan.Count - 1]);
 		}
@@ -50,7 +49,7 @@ public class PointerNudgePlannerTests
 	public void OddNumberOfMoves_GetsOneExtraMoveHome()
 	{
 		// Three intervals' worth would end on the offset pixel, so a fourth move is added.
-		var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On(intervalMs: 50, durationMs: 150));
+		var plan = PointerNudgePlanner.Plan(Anchor, On(intervalMs: 50, durationMs: 150));
 
 		Assert.Equal(4, plan.Count);
 		Assert.Equal(Anchor, plan[plan.Count - 1]);
@@ -59,7 +58,7 @@ public class PointerNudgePlannerTests
 	[Fact]
 	public void ThePointerActuallyAlternates()
 	{
-		var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On());
+		var plan = PointerNudgePlanner.Plan(Anchor, On());
 
 		for (int i = 0; i < plan.Count; i++)
 			Assert.Equal(i % 2 == 0 ? new CursorPoint(Anchor.X + 1, Anchor.Y) : Anchor, plan[i]);
@@ -68,23 +67,9 @@ public class PointerNudgePlannerTests
 	[Fact]
 	public void MovementIsHorizontalOnly()
 	{
-		var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On());
+		var plan = PointerNudgePlanner.Plan(Anchor, On());
 
 		Assert.All(plan, p => Assert.Equal(Anchor.Y, p.Y));
-	}
-
-	[Fact]
-	public void AtTheRightEdgeOfTheScreen_ItWigglesLeftInstead()
-	{
-		// Windows clamps the pointer to the virtual screen, so a move one pixel further right
-		// would be accepted and do nothing at all — and the magnifier would never see any
-		// movement. Exactly the case for someone who parks the pointer against the edge.
-		var atEdge = new CursorPoint(FarFromTheEdge, 300);
-
-		var plan = PointerNudgePlanner.Plan(atEdge, FarFromTheEdge, On());
-
-		Assert.Equal(new CursorPoint(FarFromTheEdge - 1, 300), plan[0]);
-		Assert.Equal(atEdge, plan[plan.Count - 1]);
 	}
 
 	[Fact]
@@ -92,7 +77,7 @@ public class PointerNudgePlannerTests
 	{
 		// A setting that is switched on but silently does nothing is the worst answer available,
 		// and worst of all for someone who cannot see that nothing happened.
-		var plan = PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On(intervalMs: 500, durationMs: 50));
+		var plan = PointerNudgePlanner.Plan(Anchor, On(intervalMs: 500, durationMs: 50));
 
 		Assert.Equal(2, plan.Count);
 		Assert.Equal(new CursorPoint(Anchor.X + 1, Anchor.Y), plan[0]);
@@ -106,6 +91,6 @@ public class PointerNudgePlannerTests
 	[InlineData(50, -500)]
 	public void UnusableTimings_LeaveThePointerAlone(int intervalMs, int durationMs)
 	{
-		Assert.Empty(PointerNudgePlanner.Plan(Anchor, FarFromTheEdge, On(intervalMs, durationMs)));
+		Assert.Empty(PointerNudgePlanner.Plan(Anchor, On(intervalMs, durationMs)));
 	}
 }

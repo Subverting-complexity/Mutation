@@ -30,13 +30,22 @@ namespace Mutation.Ui.Core;
 /// </para>
 ///
 /// <para>
-/// Not thread-safe, and not meant to be: each capture drives one anchor from its own window.
+/// Thread-safe, because it has to be. The capture's own steps run on the UI thread, but the last
+/// one — putting the pointer back after the foreground has been handed over, and the optional
+/// wiggle that may follow it for seconds afterwards — runs off it. Without the lock,
+/// <see cref="ClearIfCurrent"/> could read a matching generation, be overtaken by the next
+/// capture's <see cref="Capture"/> on the UI thread, and then wipe the anchor that capture had
+/// just taken, leaving it with no pointer defence at all. The lock is uncontended in practice:
+/// one capture at a time, a handful of calls each.
 /// </para>
 /// </summary>
 public sealed class CursorAnchor
 {
 	private readonly ICursorPosition _cursor;
+	private readonly object _gate = new();
 	private CursorPoint _anchor;
+	private bool _hasAnchor;
+	private int _generation;
 
 	public CursorAnchor(ICursorPosition cursor)
 	{
@@ -47,12 +56,18 @@ public sealed class CursorAnchor
 	/// Whether there is a remembered position to go back to. False before the first successful
 	/// <see cref="Capture"/>, and again after <see cref="Clear"/>.
 	/// </summary>
-	public bool HasAnchor { get; private set; }
+	public bool HasAnchor
+	{
+		get { lock (_gate) return _hasAnchor; }
+	}
 
 	/// <summary>
 	/// The remembered position. Meaningless while <see cref="HasAnchor"/> is false.
 	/// </summary>
-	public CursorPoint Anchor => _anchor;
+	public CursorPoint Anchor
+	{
+		get { lock (_gate) return _anchor; }
+	}
 
 	/// <summary>
 	/// Which anchor this is. Changes on every <see cref="Capture"/> and every
@@ -66,7 +81,10 @@ public sealed class CursorAnchor
 	/// anchor that belongs to a capture that finished.
 	/// </para>
 	/// </summary>
-	public int Generation { get; private set; }
+	public int Generation
+	{
+		get { lock (_gate) return _generation; }
+	}
 
 	/// <summary>
 	/// Remembers where the pointer is now, replacing any position remembered before. Returns
@@ -75,17 +93,14 @@ public sealed class CursorAnchor
 	/// </summary>
 	public bool Capture()
 	{
-		Generation++;
-		if (_cursor.TryGet(out var position))
+		bool read = _cursor.TryGet(out var position);
+		lock (_gate)
 		{
-			_anchor = position;
-			HasAnchor = true;
-			return true;
+			_generation++;
+			_anchor = read ? position : default;
+			_hasAnchor = read;
 		}
-
-		_anchor = default;
-		HasAnchor = false;
-		return false;
+		return read;
 	}
 
 	/// <summary>
@@ -103,26 +118,39 @@ public sealed class CursorAnchor
 	/// blindly. Not knowing where the pointer is, is not a good enough reason to move it.
 	/// </para>
 	/// </summary>
-	public bool Restore()
-	{
-		if (!HasAnchor)
-			return false;
-
-		if (!_cursor.TryGet(out var current))
-			return false;
-
-		if (current == _anchor)
-			return false;
-
-		return _cursor.TrySet(_anchor);
-	}
+	public bool Restore() => Restore(null);
 
 	/// <summary>
 	/// As <see cref="Restore"/>, but does nothing unless <paramref name="generation"/> is still
 	/// the current one. Deferred work uses this so a restore scheduled by a capture that has
 	/// since finished cannot move the pointer during the next one.
 	/// </summary>
-	public bool RestoreIfCurrent(int generation) => generation == Generation && Restore();
+	public bool RestoreIfCurrent(int generation) => Restore(generation);
+
+	// The generation is checked under the same lock that reads the anchor, so a caller can never
+	// act on a generation that agreed a moment ago and an anchor that has since been replaced.
+	private bool Restore(int? requiredGeneration)
+	{
+		CursorPoint target;
+		lock (_gate)
+		{
+			if (!_hasAnchor)
+				return false;
+
+			if (requiredGeneration is int required && required != _generation)
+				return false;
+
+			target = _anchor;
+		}
+
+		if (!_cursor.TryGet(out var current))
+			return false;
+
+		if (current == target)
+			return false;
+
+		return _cursor.TrySet(target);
+	}
 
 	/// <summary>
 	/// Forgets the remembered position, so nothing can be restored to it later. Called once a
@@ -130,9 +158,8 @@ public sealed class CursorAnchor
 	/// </summary>
 	public void Clear()
 	{
-		Generation++;
-		_anchor = default;
-		HasAnchor = false;
+		lock (_gate)
+			ClearLocked();
 	}
 
 	/// <summary>
@@ -142,7 +169,17 @@ public sealed class CursorAnchor
 	/// </summary>
 	public void ClearIfCurrent(int generation)
 	{
-		if (generation == Generation)
-			Clear();
+		lock (_gate)
+		{
+			if (generation == _generation)
+				ClearLocked();
+		}
+	}
+
+	private void ClearLocked()
+	{
+		_generation++;
+		_anchor = default;
+		_hasAnchor = false;
 	}
 }

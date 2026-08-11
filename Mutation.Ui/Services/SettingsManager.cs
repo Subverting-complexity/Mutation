@@ -196,10 +196,12 @@ internal class SettingsManager : ISettingsManager
                         somethingWasMissing = true;
                 }
 
-		// Pointer-nudge timings. A settings file written before the nudge existed has neither
-		// key, so both land on 0 rather than on the property initializer, and 0 would mean a
-		// nudge that is switched on but never moves. Clamping into the same range the dialog
-		// offers is what keeps a hand-edited file from producing a nudge nobody can stop.
+		// Pointer-nudge timings. A file written before the nudge existed keeps the property
+		// initializers, because the deserialiser constructs the object and then overwrites only
+		// the keys the file actually has — so this is a no-op there. It is for a hand-edited
+		// file, which can carry a zero, a negative, or a number far outside what the dialog
+		// offers. Clamping to the same range the dialog offers is what stops one of those
+		// producing a nudge nobody can stop.
 		int nudgeInterval = azureComputerVisionSettings.PointerNudgeIntervalMilliseconds <= 0
 			? AzureComputerVisionSettings.DefaultPointerNudgeIntervalMilliseconds
 			: Math.Clamp(

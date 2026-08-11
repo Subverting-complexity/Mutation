@@ -205,7 +205,10 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "FreeTierPageLimit": 2,
     "MaxParallelDocuments": 2,
     "MaxParallelRequests": 4,
-    "MaxDocumentBytes": 10485760
+    "MaxDocumentBytes": 10485760,
+    "NudgePointerAfterCapture": false,
+    "PointerNudgeIntervalMilliseconds": 50,
+    "PointerNudgeDurationMilliseconds": 500
   },
 
   "SpeechToTextSettings": {

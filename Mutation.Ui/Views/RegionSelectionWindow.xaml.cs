@@ -748,8 +748,7 @@ public sealed partial class RegionSelectionWindow : Window
 			return Task.CompletedTask;
 
 		var anchor = _cursorAnchor.Anchor;
-		int rightmostX = GetSystemMetrics(SM_XVIRTUALSCREEN) + GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1;
-		var plan = PointerNudgePlanner.Plan(anchor, rightmostX, nudge);
+		var plan = PointerNudgePlanner.Plan(anchor, nudge);
 
 		return PointerNudgeRunner.RunAsync(
 			_cursor,
