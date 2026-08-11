@@ -189,6 +189,35 @@ public class OcrManagerTests
 	}
 
 	/// <summary>
+	/// The plain screenshot path answers the same press the same way. It used to answer
+	/// <c>Cancelled</c>, so the user heard "Screenshot cancelled. Nothing was copied to the
+	/// clipboard." about an overlay that was still on screen and still waiting for a region
+	/// (issue #363).
+	/// </summary>
+	[Fact]
+	public void A_second_screenshot_while_one_is_open_is_refused_rather_than_cancelled()
+	{
+		var outcome = OcrManager.ScreenshotCaptureAlreadyInProgress();
+
+		Assert.Equal(ScreenshotToClipboardOutcome.Refused, outcome);
+		Assert.NotEqual(ScreenshotToClipboardOutcome.Cancelled, outcome);
+		Assert.Equal(
+			ClipboardCopyMessages.ScreenshotAlreadyInProgress,
+			ClipboardCopyMessages.ForScreenshot(outcome).Message);
+	}
+
+	/// <summary>
+	/// Nothing was allowed in front of <c>Cancelled</c> when the refused value was added.
+	/// A value nobody set has to mean "nothing happened"; if the zero value ever became
+	/// <c>Copied</c>, an unassigned outcome would announce a screenshot that was never taken.
+	/// </summary>
+	[Fact]
+	public void The_default_screenshot_outcome_still_claims_nothing()
+	{
+		Assert.Equal(ScreenshotToClipboardOutcome.Cancelled, default(ScreenshotToClipboardOutcome));
+	}
+
+	/// <summary>
 	/// Every other unsuccessful run still sends it. An error in the OCR box wants reading as
 	/// much as a result does, and narrowing that to "only successes" would be a worse bug than
 	/// the one being fixed.

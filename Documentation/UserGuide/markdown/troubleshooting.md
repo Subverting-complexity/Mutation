@@ -180,6 +180,20 @@ make it.
 it happens every time, a clipboard manager or clipboard-history tool is the usual
 culprit; closing it or turning off its monitoring settles it.
 
+### Mutation says a screenshot is already in progress
+
+**What's happening.** You pressed a capture shortcut while a capture overlay was already
+on screen. Only one can run at a time, so the second press starts nothing. Mutation
+brings the overlay you already have back to the front and says "A screenshot is already
+in progress. Select a region, or press Escape to cancel it."
+
+The overlay has not gone anywhere. It is still there, still waiting for you to pick a
+rectangle. This message is not a cancellation, and nothing has been copied or lost.
+
+**What to do.** Carry on with the capture: pick your rectangle with the mouse or the
+keyboard as usual. If you would rather start again, press **Esc** to close the overlay
+first, then press the shortcut once more.
+
 ### OCR read the text but could not copy it to the clipboard
 
 **What's happening.** Only one program can have the clipboard open at a time. Just

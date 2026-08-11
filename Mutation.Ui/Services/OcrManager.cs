@@ -106,7 +106,7 @@ public class OcrManager
         if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0)
         {
             try { _activeOverlay?.BringToFront(); } catch { }
-            return ScreenshotToClipboardOutcome.Cancelled;
+            return ScreenshotCaptureAlreadyInProgress();
         }
         try
         {
@@ -133,7 +133,24 @@ public class OcrManager
     }
 
     /// <summary>
-    /// The answer to a capture press that arrives while one is already on screen.
+    /// The answer to a plain screenshot press that arrives while a capture is already on screen.
+    /// <para>
+    /// Refused, not cancelled. The two used to be the same value, so the user was told
+    /// "Screenshot cancelled. Nothing was copied to the clipboard." about an overlay that was
+    /// still on screen waiting for them (issue #363). Someone who cannot see it then has the one
+    /// sentence they are given telling them the opposite of what is in front of them.
+    /// </para>
+    /// <para>
+    /// Its own method so the outcome can be pinned by a test, exactly as
+    /// <see cref="CaptureAlreadyInProgress"/> is for the OCR path: reaching this branch through
+    /// <see cref="TakeScreenshotToClipboardAsync"/> would need a real overlay on a real screen.
+    /// </para>
+    /// </summary>
+    internal static ScreenshotToClipboardOutcome ScreenshotCaptureAlreadyInProgress() =>
+        ScreenshotToClipboardOutcome.Refused;
+
+    /// <summary>
+    /// The answer to an OCR capture press that arrives while one is already on screen.
     /// <para>
     /// Refused, not failed. Nothing happened, the OCR box still holds the last run's answer,
     /// and the thing in front of the user is the capture overlay — so the shortcut configured
