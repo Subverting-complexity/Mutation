@@ -185,7 +185,12 @@ public class OcrManagerTests
 	/// so the second press meets a genuinely busy manager.
 	/// </para>
 	/// </summary>
-	[Fact]
+	// The timeout is the safety net for the regression this test exists to catch. Weakening the
+	// guard fails the assertion below, but removing it altogether sends the second press into
+	// the held capture, where it waits on a release that only the end of this test performs —
+	// so without a bound the suite hangs instead of going red, which is far worse in a build
+	// that nobody is watching.
+	[Fact(Timeout = 20000)]
 	public async Task A_second_capture_while_one_is_open_is_refused_rather_than_failed()
 	{
 		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
@@ -1094,7 +1099,9 @@ public class OcrManagerTests
 	/// the only thing telling the user anything.
 	/// </para>
 	/// </summary>
-	[Fact]
+	// Bounded for the same reason as the OCR-side refusal test above: remove the guard and this
+	// one waits forever on a release it can no longer reach.
+	[Fact(Timeout = 20000)]
 	public async Task TakeScreenshotToClipboardAsync_ReportsRefused_WhenACaptureIsAlreadyOnScreen()
 	{
 		using var image = new SoftwareBitmap(BitmapPixelFormat.Bgra8, 2, 2, BitmapAlphaMode.Premultiplied);
