@@ -150,9 +150,19 @@ public class AzureComputerVisionSettings
 	public int PointerNudgeIntervalMilliseconds { get; set; } = DefaultPointerNudgeIntervalMilliseconds;
 	public int PointerNudgeDurationMilliseconds { get; set; } = DefaultPointerNudgeDurationMilliseconds;
 
+	// How far each move goes, out and back. One pixel is enough for a magnifier that watches the
+	// mouse through the input stream at all, and the movement is meant to be barely visible; the
+	// setting is here for one that filters small movements as jitter, so that costs a change of
+	// number rather than a new build.
+	public int PointerNudgeDistancePixels { get; set; } = DefaultPointerNudgeDistancePixels;
+
 	public const int DefaultPointerNudgeIntervalMilliseconds = 50;
 	public const int MinPointerNudgeIntervalMilliseconds = 10;
 	public const int MaxPointerNudgeIntervalMilliseconds = 500;
+
+	public const int DefaultPointerNudgeDistancePixels = 1;
+	public const int MinPointerNudgeDistancePixels = 1;
+	public const int MaxPointerNudgeDistancePixels = 64;
 
 	// Short on purpose. It runs twice per capture now, once at each end, and a wiggle the user
 	// has to wait out is worse than one they barely notice.

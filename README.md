@@ -208,7 +208,8 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "MaxDocumentBytes": 10485760,
     "NudgePointerDuringCapture": false,
     "PointerNudgeIntervalMilliseconds": 50,
-    "PointerNudgeDurationMilliseconds": 200
+    "PointerNudgeDurationMilliseconds": 200,
+    "PointerNudgeDistancePixels": 1
   },
 
   "SpeechToTextSettings": {

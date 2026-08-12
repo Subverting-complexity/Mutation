@@ -68,6 +68,7 @@ Reading text out of pictures. OCR just means "pulling the words out of an image"
 | Wiggle the mouse pointer during a capture | Off by default. Shakes the pointer one pixel back and forth at both ends of a capture — when the overlay opens and again when it goes away — then leaves it exactly where it started. Only useful if your magnifier keeps losing the pointer — see [Screen capture and OCR](screen-capture-and-ocr.md) for what that looks like. |
 | Wiggle every (milliseconds) | How long between one shake and the next. 50 by default, and anything from 10 to 500. |
 | Keep wiggling for (milliseconds) | How long each shake lasts. 200 by default, and anything from 50 to 5000. It happens twice per capture, once at each end. You always get at least one shake, so setting this shorter than the interval above still gives you one. |
+| Wiggle distance (pixels) | How far the pointer moves each time, out and straight back. 1 by default, and anything up to 64. Raise it if your magnifier ignores the shake — some treat very small movements as an unsteady hand. The pointer always ends up exactly where it started. |
 
 The timeout and the "how many at a time" numbers have sensible defaults and hover
 help. Leave them alone unless something is timing out on you.
