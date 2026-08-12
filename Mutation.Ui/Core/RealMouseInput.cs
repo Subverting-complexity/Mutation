@@ -1,22 +1,61 @@
+using System;
+
 namespace Mutation.Ui.Core;
 
+/// <summary>What one low-level mouse event says about who is driving the mouse.</summary>
+public enum RealMouseEventKind
+{
+	/// <summary>Not mouse use at all — a message that is neither movement nor a button.</summary>
+	Nothing,
+
+	/// <summary>
+	/// A deliberate act: a button or the wheel. Ends any argument about who the pointer belongs
+	/// to, whatever the event is flagged as.
+	/// </summary>
+	HandAct,
+
+	/// <summary>
+	/// One small step of unflagged movement — the size a hand actually produces, whether it is
+	/// travelling somewhere or just resting on the mouse.
+	/// </summary>
+	HandStep,
+
+	/// <summary>
+	/// Unflagged movement too large for a hand to have made in one event. A driver moving the
+	/// pointer produces exactly this: ZoomText's pointer routing arrives as a single unflagged
+	/// event tens of pixels long, measured on the machine this matters on (issue #382).
+	/// </summary>
+	Teleport,
+
+	/// <summary>Movement flagged as injected — SendInput, including Mutation's own wiggle.</summary>
+	Synthetic
+}
+
 /// <summary>
-/// Decides whether a mouse event means a hand is on the mouse, as opposed to a program moving the
-/// pointer.
+/// Classifies a mouse event: a hand, a program, or nothing.
 ///
 /// <para>
-/// This is the rule the pointer hold rests on, so it lives here rather than inside the hook that
-/// feeds it. The hook itself is a few lines of interop that cannot be built without installing a
-/// real system-wide hook; the decision is arithmetic on two numbers and can be stated plainly and
-/// checked. Everything that could be got wrong is here — which flags mean injected, and which
-/// messages count whatever their flags.
+/// This is the rule the pointer hold and the wiggle rest on, so it lives here rather than inside
+/// the hook that feeds it. The hook itself is a few lines of interop that cannot be tested
+/// without installing a real system-wide hook; the decision is arithmetic and can be stated
+/// plainly and checked.
 /// </para>
 ///
 /// <para>
-/// Windows marks input it did not get from a device. A magnifier moving the pointer either
-/// injects the movement, which arrives marked, or places the cursor, which produces no mouse
-/// event at all. Mutation's own wiggle injects, so it is marked too and cannot be mistaken for
-/// its user.
+/// The injected flags alone turned out not to be enough (issue #382). They do catch SendInput,
+/// but a magnifier that moves the pointer through its driver produces events indistinguishable
+/// from hardware by their flags — and a hand resting on a high-polling-rate mouse produces a
+/// continuous stream of genuine hardware events while doing nothing at all. What separates the
+/// two is the size of a single step. A hand on a 1000 Hz mouse moves a pixel or three per event;
+/// no hand moves twenty pixels in one. So flags decide only what a hand cannot fake downward,
+/// and distance decides what a driver cannot fake small.
+/// </para>
+///
+/// <para>
+/// Any button or wheel counts as the user, whatever it is flagged as. Remote desktop and some
+/// KVM software deliver a real hand's input marked as injected, and mistaking a user for a
+/// program is the expensive way round: it means an application dragging the pointer back out
+/// from under someone. A button is a deliberate act however it arrived.
 /// </para>
 /// </summary>
 public static class RealMouseInput
@@ -43,27 +82,33 @@ public static class RealMouseInput
 	public const int HorizontalWheel = 0x020E;
 
 	/// <summary>
-	/// Whether this event means the user has taken the mouse.
-	/// <para>
-	/// Any button or wheel counts, whatever it is marked as. Remote desktop and some KVM software
-	/// deliver a real hand's movement marked as injected, and mistaking a user for a program is
-	/// the expensive way round: it means an application dragging the pointer back out from under
-	/// someone for a second and a half. A button is a deliberate act however it arrived.
-	/// </para>
-	/// <para>
-	/// Movement is judged on the marks, which is what tells a magnifier — or Mutation's own
-	/// wiggle — from a hand.
-	/// </para>
+	/// The longest single-event movement still credited to a hand, in pixels on either axis.
+	/// Measured hands on this machine's 1000 Hz mouse step one to three pixels per event even
+	/// mid-flick; ZoomText's driver was measured stepping twenty-seven. Twelve leaves margin on
+	/// both sides. A mouse polled at 125 Hz could exceed this in a genuinely fast flick, and the
+	/// cost of that misreading is one corrected step during a hold — the cheap direction, since
+	/// the next real step re-teaches the hold where the hand is.
 	/// </summary>
-	public static bool IsHandOnTheMouse(int message, uint flags)
+	public const int HandStepLimitPixels = 12;
+
+	/// <summary>
+	/// Says what <paramref name="message"/> was, given its hook flags and how far it moved the
+	/// pointer from the previous event, in pixels on the larger axis.
+	/// </summary>
+	public static RealMouseEventKind Classify(int message, uint flags, int stepPixels)
 	{
 		if (IsButtonOrWheel(message))
-			return true;
+			return RealMouseEventKind.HandAct;
 
 		if (message != MouseMove)
-			return false;
+			return RealMouseEventKind.Nothing;
 
-		return (flags & (InjectedFlag | LowerIntegrityInjectedFlag)) == 0;
+		if ((flags & (InjectedFlag | LowerIntegrityInjectedFlag)) != 0)
+			return RealMouseEventKind.Synthetic;
+
+		return Math.Abs(stepPixels) <= HandStepLimitPixels
+			? RealMouseEventKind.HandStep
+			: RealMouseEventKind.Teleport;
 	}
 
 	private static bool IsButtonOrWheel(int message) => message is

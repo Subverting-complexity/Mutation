@@ -49,8 +49,9 @@ way, without the pointer wandering off first.
 
 If your magnifier moves the pointer itself — some move it to the flashing text cursor of
 whatever app comes back to the front — Mutation puts it back, and keeps an eye on it for a
-second and a half afterwards. The moment you touch the mouse, it stops watching and the
-pointer is yours. You can change how long it watches, or switch it off, with **Keep the
+second and a half afterwards. Your own hand always wins: move the mouse and Mutation
+simply guards the new spot instead, and the moment you click or scroll it stops watching
+altogether. You can change how long it watches, or switch it off, with **Keep the
 pointer put for (milliseconds)** in **Settings**, under **Screen capture & OCR**.
 
 ### If your magnifier keeps losing the pointer
@@ -66,8 +67,10 @@ it a little shake for you, at both ends: a pixel back and forth for a fifth of a
 ending exactly where it started. Turn on **Wiggle the mouse pointer during a
 capture** in **Settings**, under **Screen capture & OCR**. It is off unless you switch it
 on, and you can change how fast it shakes, how long each shake lasts, and how far the
-pointer moves. Mutation stops shaking as soon as you take hold of the mouse or start
+pointer moves. Mutation stops shaking as soon as you move the mouse yourself or start
 drawing a rectangle, and shaking never moves the corner you have pinned with the keyboard.
+If something else — your magnifier, say — drags the pointer away mid-shake, Mutation
+brings it back and carries on, so the shake cannot be stolen out from under you.
 
 If you turn it on and your magnifier still does not follow, try raising **Wiggle distance
 (pixels)**. A single pixel is enough for most magnifiers, but some treat a movement that

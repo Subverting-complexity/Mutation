@@ -153,6 +153,24 @@ public sealed class CursorAnchor
 	}
 
 	/// <summary>
+	/// Moves the remembered position without starting a new generation, so work already scheduled
+	/// against this anchor keeps running and now defends the new place. The hold uses this when
+	/// the user's own hand moves the pointer during the defended window: the defense follows the
+	/// hand rather than fighting it (issue #382), and everything else aimed at the anchor — the
+	/// wiggle, the settle — aims at where the hand actually is.
+	/// </summary>
+	public void RebaseIfCurrent(int generation, CursorPoint position)
+	{
+		lock (_gate)
+		{
+			if (generation != _generation || !_hasAnchor)
+				return;
+
+			_anchor = position;
+		}
+	}
+
+	/// <summary>
 	/// Forgets the remembered position, so nothing can be restored to it later. Called once a
 	/// capture is over and the pointer belongs to the user again.
 	/// </summary>

@@ -293,6 +293,78 @@ public class PointerNudgeRunnerTests
 	}
 
 	[Fact]
+	public async Task AGrabWithNoHandBehindIt_IsReclaimedAndTheRunCarriesOn()
+	{
+		// A magnifier grabbed the pointer mid-wiggle. With a watch to say no hand moved, the run
+		// reclaims: the next planned move puts the pointer back a pixel from the anchor and the
+		// wiggle keeps advertising it. Before the watch existed this exact case killed the wiggle
+		// on its first tick, every time (issue #382).
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		int waits = 0;
+		clock.OnWait = () =>
+		{
+			if (++waits == 3)
+				cursor.Position = new CursorPoint(900, 700); // the grab; no hand steps follow
+		};
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => 0);
+
+		Assert.Equal(6, applied);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task AForeignMoveWithHandStepsBehindIt_StillEndsTheRun()
+	{
+		// The watch saw the hand move. The pointer is theirs; leave it exactly where it is.
+		var elsewhere = new CursorPoint(900, 700);
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		long steps = 0;
+		int waits = 0;
+		clock.OnWait = () =>
+		{
+			if (++waits == 3)
+			{
+				cursor.Position = elsewhere;
+				steps++;
+			}
+		};
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => steps);
+
+		Assert.Equal(2, applied);
+		// The two writes are the plan's own first two moves. Nothing was written after the stop:
+		// the pointer stays exactly where the hand put it, with no tidy-up haul to the anchor.
+		Assert.Equal(2, cursor.Writes.Count);
+		Assert.Equal(elsewhere, cursor.Position);
+	}
+
+	[Fact]
+	public async Task RestingHandJitterBeforeTheFirstMove_EndsTheRunWithoutAWrite()
+	{
+		// The hand is on the mouse, merely resting; the pointer drifted a pixel before the first
+		// look and the watch counted the step. The pointer is the hand's, not the wiggle's.
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		long steps = 0;
+		clock.OnWait = () =>
+		{
+			cursor.Position = new CursorPoint(Anchor.X, Anchor.Y + 1);
+			steps++;
+		};
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(4), Interval, handSteps: () => steps);
+
+		Assert.Equal(0, applied);
+		Assert.Empty(cursor.Writes);
+	}
+
+	[Fact]
 	public async Task NullArguments_AreRejected()
 	{
 		var cursor = new FakeCursor();

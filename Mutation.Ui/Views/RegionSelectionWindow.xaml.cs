@@ -96,6 +96,15 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </para>
 	/// </summary>
 	private volatile bool _nudgeOwnsPointer;
+
+	/// <summary>
+	/// Counts what the user's hand does with the mouse for the length of one capture, so the
+	/// wiggle and the hold can tell the hand from a program (issue #382). Started in
+	/// <see cref="SelectRegionAsync"/> when there is a wiggle or a hold to serve, and removed
+	/// when the capture's pointer work is over. Null, or not watching, means no signal — and
+	/// everything that would have leaned on the signal stands down instead of guessing.
+	/// </summary>
+	private RealMouseInputWatch? _mouseWatch;
 	private const string AnnouncementActivityId = "RegionSelection";
 	private const string CancelledAnnouncement = "Region selection cancelled.";
 
@@ -311,6 +320,16 @@ public sealed partial class RegionSelectionWindow : Window
 		// foreground and moving focus onto the canvas are three focus changes in a row, and a
 		// tool that follows focus answers each of them by moving the pointer (issue #371).
 		_cursorAnchor.Capture();
+		// One watch serves the whole capture — the opening wiggle, the closing wiggle, and the
+		// hold. Installed here, on the UI thread, because a low-level hook is delivered on the
+		// thread that installed it and that thread needs a message loop. It is a system-wide
+		// hook, so it is not installed when nothing would use it. Disposing the previous
+		// capture's watch is a no-op in the normal course; it matters only when a capture died
+		// without its own tidy-up.
+		_mouseWatch?.Dispose();
+		_mouseWatch = PointerNudge.Enabled || PointerHoldFor > TimeSpan.Zero
+			? RealMouseInputWatch.Start()
+			: null;
 		ResetSelection();
 		RememberForegroundWindow();
 		InstallKeyboardHook();
@@ -699,10 +718,10 @@ public sealed partial class RegionSelectionWindow : Window
 	/// would put the pointer back before the thing that moves it had even run.
 	/// </para>
 	/// <para>
-	/// Two attempts and no more, on purpose. A settle window that kept re-checking for a while
-	/// would also drag back a pointer the user had moved deliberately, and there is no way to
-	/// tell those two movements apart from here — the overlay sees an identical pointer event
-	/// either way. Losing the odd very late jump is the better failure.
+	/// Two direct restores and no more. Anything later than these is the wiggle's business: it
+	/// runs for seconds, and with the watch to tell a hand from a grab it reclaims the pointer
+	/// from a magnifier that takes it mid-run (issue #382) — so the late grab this pair of
+	/// restores cannot reach is covered without a third one.
 	/// </para>
 	/// <para>
 	/// The optional wiggle goes on the same dispatcher turn, and for the same reason the second
@@ -773,15 +792,13 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </summary>
 	private void RestoreCursorAfterForegroundHandback()
 	{
-		var hold = PointerHoldFor;
-		// Installed here, on the UI thread, because a low-level hook is delivered on the thread
-		// that installed it and that thread needs a message loop. The hold itself runs off the UI
-		// thread and only reads what the hook has seen.
-		//
-		// Only when there is a hold to serve. It is a system-wide hook, and installing one on
-		// every capture for a watch the user has switched off would be a cost paid for nothing.
-		var watch = hold > TimeSpan.Zero ? RealMouseInputWatch.Start() : null;
-		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge, hold, watch);
+		// The watch was installed when the capture opened; the same one serves to the end. Taken
+		// into a local here so the async work below keeps operating on — and finally disposes —
+		// this capture's watch even if a newer capture has replaced the field by the time it
+		// finishes.
+		var watch = _mouseWatch;
+		_mouseWatch = null;
+		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge, PointerHoldFor, watch);
 	}
 
 	private async Task HandPointerBackAsync(
@@ -794,7 +811,25 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			await ForegroundHandedBack.ConfigureAwait(false);
 			_cursorAnchor.RestoreIfCurrent(generation);
-			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+
+			// Snapshot taken before the wiggle so the reconciliation below can tell whether the
+			// hand moved while it ran.
+			long stepsBeforeNudge = watch?.HandSteps ?? 0;
+			await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
+
+			// If the hand moved during the wiggle, the run left the pointer exactly where the
+			// hand put it — and the anchor still points at the old place. The hold that starts
+			// next would read that difference as a grab and snap the pointer back out from under
+			// the resting hand, because its own counter snapshot is taken after the movement
+			// already happened. So the anchor is brought to the pointer first: the hold then
+			// defends where the hand actually is. When no hand moved, the anchor is left alone —
+			// any divergence is a genuine grab, and the hold's first tick undoes it.
+			if (watch is { IsWatching: true } && watch.HandSteps != stepsBeforeNudge
+				&& _cursor.TryGet(out var handLeftItAt))
+			{
+				_cursorAnchor.RebaseIfCurrent(generation, handLeftItAt);
+			}
+
 			await HoldPointerAsync(generation, nudge, hold, watch).ConfigureAwait(false);
 		}
 		catch
@@ -811,9 +846,8 @@ public sealed partial class RegionSelectionWindow : Window
 	}
 
 	/// <summary>
-	/// Keeps the pointer on the spot the capture left it for a short while, putting it back
-	/// whenever something else moves it, and standing down for good the moment a hand touches the
-	/// mouse (issue #379).
+	/// Keeps the pointer where the capture — or the user's own hand — last put it, for a short
+	/// while, undoing anything else that moves it (issues #379 and #382).
 	/// <para>
 	/// The two restores above both land before anything has reacted to the foreground changing. A
 	/// magnifier that follows the keyboard caret moves the pointer to it later than that, so
@@ -821,8 +855,9 @@ public sealed partial class RegionSelectionWindow : Window
 	/// text box they were never pointing at — every time, not occasionally.
 	/// </para>
 	/// <para>
-	/// What makes a watch this long safe is that the hook can tell a hand on the mouse from a
-	/// program moving the pointer. It is not guessing, so it never argues with the user.
+	/// The hand is never fought: its movement re-baselines the defended position instead of
+	/// ending the defense, buttons end it outright, and only movement with no hand behind it is
+	/// undone. The rules live in <see cref="PointerHold"/>; the watch supplies the counts.
 	/// </para>
 	/// </summary>
 	private Task HoldPointerAsync(
@@ -834,7 +869,7 @@ public sealed partial class RegionSelectionWindow : Window
 		if (hold <= TimeSpan.Zero)
 			return Task.CompletedTask;
 
-		// No hook, no hold. Without the signal, "the user has not touched the mouse" would be an
+		// No hook, no hold. Without the signal, "no hand moved the pointer" would be an
 		// assumption rather than an observation, and acting on it would mean dragging the pointer
 		// back from under a hand for the length of the hold — the very thing this is built to
 		// avoid. A capture then behaves as it did before the hold existed, which is a real
@@ -842,15 +877,23 @@ public sealed partial class RegionSelectionWindow : Window
 		if (watch is null || !watch.IsWatching)
 			return Task.CompletedTask;
 
+		if (!_cursorAnchor.HasAnchor || _cursorAnchor.Generation != generation)
+			return Task.CompletedTask;
+
 		var since = System.Diagnostics.Stopwatch.StartNew();
 
 		return PointerHold.RunAsync(
-			userHasTheMouse: () => watch.UserHasTheMouse,
+			cursor: _cursor,
+			baseline: _cursorAnchor.Anchor,
+			handActs: () => watch.HandActs,
+			handSteps: () => watch.HandSteps,
 			stillCurrent: () => _cursorAnchor.Generation == generation,
-			restoreIfDrifted: () => _cursorAnchor.RestoreIfCurrent(generation),
-			// Whatever moved the pointer probably moved the magnified view with it, so bring the
-			// view back to where the pointer has been put.
-			afterRestore: () => NudgePointerAsync(generation, nudge),
+			// Keep the anchor with the hand, so the wiggle below — and the settle, if anything
+			// interrupts it — aim at where the hand actually is, not where the capture ended.
+			followedTo: position => _cursorAnchor.RebaseIfCurrent(generation, position),
+			// Whatever grabbed the pointer probably took the magnified view with it, so bring
+			// the view back to where the pointer has been put.
+			afterRestore: () => NudgePointerAsync(generation, nudge, watch),
 			delay: Task.Delay,
 			elapsed: () => since.Elapsed,
 			pollInterval: PointerHoldPollInterval,
@@ -877,14 +920,14 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </summary>
 	private void StartPointerNudge(int generation, PointerNudgeOptions nudge)
 	{
-		_ = SafeNudgePointerAsync(generation, nudge);
+		_ = SafeNudgePointerAsync(generation, nudge, _mouseWatch);
 	}
 
-	private async Task SafeNudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	private async Task SafeNudgePointerAsync(int generation, PointerNudgeOptions nudge, RealMouseInputWatch? watch)
 	{
 		try
 		{
-			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+			await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
 		}
 		catch
 		{
@@ -910,7 +953,7 @@ public sealed partial class RegionSelectionWindow : Window
 	/// advertise the wrong place.
 	/// </para>
 	/// </summary>
-	private async Task NudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	private async Task NudgePointerAsync(int generation, PointerNudgeOptions nudge, RealMouseInputWatch? watch)
 	{
 		if (!nudge.Enabled || _cursorAnchor.Generation != generation || !_cursorAnchor.HasAnchor)
 			return;
@@ -927,7 +970,12 @@ public sealed partial class RegionSelectionWindow : Window
 				anchor,
 				plan,
 				TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
-				() => NudgeVerdict(generation)).ConfigureAwait(false);
+				() => NudgeVerdict(generation),
+				// The watch is what lets the run tell a grab from the hand and reclaim the
+				// pointer instead of dying on a one-pixel drift (issue #382). Without one — not
+				// asked for, or the hook refused to install — the run keeps the old rule and
+				// stops on any foreign move.
+				watch is { IsWatching: true } ? () => watch.HandSteps : null).ConfigureAwait(false);
 		}
 		finally
 		{

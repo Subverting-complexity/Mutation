@@ -1,45 +1,50 @@
 using Mutation.Ui.Core;
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Mutation.Ui.Services;
 
 /// <summary>
-/// Watches for a hand on the mouse, as opposed to a program moving the pointer.
+/// Watches the machine's mouse events and counts what a hand has done, so the pointer hold and
+/// the wiggle can tell a hand from a program without ever guessing.
 ///
 /// <para>
-/// Windows marks mouse input it did not get from a device as injected, and a low-level hook can
-/// read that mark. That is the whole point of this class. A magnifier that moves the pointer to
-/// the keyboard caret either injects the movement, which arrives flagged, or places the cursor
-/// directly, which produces no mouse input at all — and neither looks anything like the user
-/// picking up the mouse. Without that distinction, holding the pointer still after a capture
-/// would mean fighting whoever moved it, user or not.
+/// It counts rather than latches (issue #382). The first version set a "user has the mouse" flag
+/// on the first real event and kept it for ever — and measurement showed a hand merely resting on
+/// a high-polling-rate mouse streams genuine hardware events continuously, so the flag was up
+/// within milliseconds on every capture and the hold never corrected anything. Two monotonic
+/// counters carry the same information without the verdict: <see cref="HandActs"/> for buttons
+/// and wheel turns, <see cref="HandSteps"/> for hand-sized movement. A caller snapshots them,
+/// waits, and compares; what the change means — stand down, follow the hand, undo a grab — is the
+/// caller's rule, held in Core where it can be tested.
 /// </para>
 ///
 /// <para>
-/// Any button counts, whatever it is flagged as. Injected movement is common enough from remote
-/// desktops and some KVM software that a genuine user could be mistaken for a program; a button
-/// press is a deliberate act either way, and treating it as the user is the safer mistake.
+/// The classification itself is <see cref="RealMouseInput.Classify"/>. The one input it needs
+/// from here besides the raw event is the step size — how far this event moved the pointer from
+/// the previous one — because a driver moving the pointer produces events flagged exactly like
+/// hardware, and step size is what gives it away.
 /// </para>
 ///
 /// <para>
 /// A low-level hook is delivered on the thread that installed it, and that thread needs a message
 /// loop, so <see cref="Start"/> and <see cref="Dispose"/> both have to be called on the UI
-/// thread. The flag it sets is read from elsewhere, which is why it is volatile.
+/// thread. The counters are read from elsewhere, hence the interlocked increments.
 /// </para>
 ///
 /// <para>
 /// The hook sees every mouse event on the machine while it is installed, so it is installed only
-/// when there is a hold to serve, for no longer than that hold, and it does nothing but set a
-/// flag and pass the event on.
+/// while a capture has something to defend, and it does nothing but classify, count, and pass
+/// the event on.
 /// </para>
 ///
 /// <para>
 /// Whether it installed at all is the caller's business, not a detail to be swallowed. A watch
-/// that never installed would report, for ever, that nobody has touched the mouse — and a hold
+/// that never installed would report, for ever, that the hand has done nothing — and a hold
 /// acting on that would spend its whole length hauling the pointer back from under the user's
-/// hand, which is the exact behaviour the hold exists to avoid. So <see cref="IsWatching"/> is
-/// public and the hold does not run without it.
+/// hand, which is the exact behaviour it exists to avoid. So <see cref="IsWatching"/> is public,
+/// and neither the hold nor the wiggle's reclaim runs without it.
 /// </para>
 /// </summary>
 internal sealed class RealMouseInputWatch : IDisposable
@@ -82,7 +87,14 @@ internal sealed class RealMouseInputWatch : IDisposable
 	// Held so the delegate is not collected while Windows still holds a pointer to it.
 	private readonly LowLevelMouseProc _callback;
 
-	private volatile bool _userHasTheMouse;
+	private long _handActs;
+	private long _handSteps;
+
+	// Where the previous move event put the pointer, whoever made it. Touched only on the hook
+	// thread. The first move after installation has no previous event to measure a step against,
+	// so it only seeds this and is not counted — an unjudgeable event must not count as a hand.
+	private bool _hasLastPosition;
+	private POINT _lastPosition;
 
 	private RealMouseInputWatch()
 	{
@@ -90,10 +102,17 @@ internal sealed class RealMouseInputWatch : IDisposable
 	}
 
 	/// <summary>
-	/// Whether a hand has been on the mouse since the watch started. Once true it stays true: the
-	/// pointer is the user's for the rest of this capture, and nothing may take it back.
+	/// How many deliberate acts — buttons and wheel turns — have been seen. Monotonic; compare
+	/// across a wait to learn whether one happened during it.
 	/// </summary>
-	public bool UserHasTheMouse => _userHasTheMouse;
+	public long HandActs => Interlocked.Read(ref _handActs);
+
+	/// <summary>
+	/// How many hand-sized real movement events have been seen. Monotonic, compared the same
+	/// way. A resting hand advances this too — that is the point; what the caller does about
+	/// hand movement is the caller's rule.
+	/// </summary>
+	public long HandSteps => Interlocked.Read(ref _handSteps);
 
 	/// <summary>
 	/// Whether the hook is actually installed. False means there is no signal at all, and a
@@ -147,16 +166,33 @@ internal sealed class RealMouseInputWatch : IDisposable
 		{
 			try
 			{
+				var info = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
 				int message = (int)wParam;
-				// Only a move needs its marks read; anything else is decided by the message
-				// alone, and reading the structure for it would be work done in the system's
-				// input path for nothing.
-				uint flags = message == RealMouseInput.MouseMove
-					? Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam).flags
+
+				bool measurable = _hasLastPosition;
+				int step = measurable
+					? Math.Max(Math.Abs(info.pt.x - _lastPosition.x), Math.Abs(info.pt.y - _lastPosition.y))
 					: 0;
 
-				if (RealMouseInput.IsHandOnTheMouse(message, flags))
-					_userHasTheMouse = true;
+				if (message == RealMouseInput.MouseMove)
+				{
+					// Every move re-seeds, including synthetic ones: the step that matters is
+					// from wherever the pointer last was, not from where a hand last left it —
+					// otherwise a hand step right after a program's move would measure the
+					// program's distance and be misread as a teleport.
+					_lastPosition = info.pt;
+					_hasLastPosition = true;
+				}
+
+				switch (RealMouseInput.Classify(message, info.flags, step))
+				{
+					case RealMouseEventKind.HandAct:
+						Interlocked.Increment(ref _handActs);
+						break;
+					case RealMouseEventKind.HandStep when measurable:
+						Interlocked.Increment(ref _handSteps);
+						break;
+				}
 			}
 			catch
 			{
