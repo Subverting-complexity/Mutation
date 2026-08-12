@@ -219,8 +219,15 @@ Mutation watches the pointer for a second and a half after each capture and puts
 whenever something else moves it. If your magnifier is slower than that to react, raise **Keep
 the pointer put for (milliseconds)** in **Settings**, under **Screen capture & OCR**.
 
-**What to do.** Raise that number to 3000 and try again. If you would rather Mutation left the
-pointer alone entirely, set it to 0.
+Very occasionally Mutation cannot watch the pointer at all, because security software on the
+PC blocks the kind of watching it needs. When that happens Mutation does nothing rather than
+guess, so the pointer is put back twice as the capture ends and then left alone. You would see
+the jump come back exactly as it was before this feature existed, and raising the number would
+make no difference.
+
+**What to do.** Raise that number to 3000 and try again. If it changes nothing at all, the
+watch is probably being blocked, and there is nothing to adjust. If you would rather Mutation
+left the pointer alone entirely, set it to 0.
 
 ### My magnifier still loses the pointer during a capture
 

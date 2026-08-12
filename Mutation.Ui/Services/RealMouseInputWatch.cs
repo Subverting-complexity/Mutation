@@ -1,3 +1,4 @@
+using Mutation.Ui.Core;
 using System;
 using System.Runtime.InteropServices;
 
@@ -28,31 +29,22 @@ namespace Mutation.Ui.Services;
 /// </para>
 ///
 /// <para>
-/// The hook sees every mouse event on the machine while it is installed, so it is installed for
-/// no longer than the hold it serves — well under a second per capture — and it does nothing but
-/// set a flag and pass the event on.
+/// The hook sees every mouse event on the machine while it is installed, so it is installed only
+/// when there is a hold to serve, for no longer than that hold, and it does nothing but set a
+/// flag and pass the event on.
+/// </para>
+///
+/// <para>
+/// Whether it installed at all is the caller's business, not a detail to be swallowed. A watch
+/// that never installed would report, for ever, that nobody has touched the mouse — and a hold
+/// acting on that would spend its whole length hauling the pointer back from under the user's
+/// hand, which is the exact behaviour the hold exists to avoid. So <see cref="IsWatching"/> is
+/// public and the hold does not run without it.
 /// </para>
 /// </summary>
 internal sealed class RealMouseInputWatch : IDisposable
 {
 	private const int WH_MOUSE_LL = 14;
-
-	private const int WM_MOUSEMOVE = 0x0200;
-	private const int WM_LBUTTONDOWN = 0x0201;
-	private const int WM_RBUTTONDOWN = 0x0204;
-	private const int WM_MBUTTONDOWN = 0x0207;
-	private const int WM_XBUTTONDOWN = 0x020B;
-	private const int WM_MOUSEWHEEL = 0x020A;
-	private const int WM_MOUSEHWHEEL = 0x020E;
-
-	/// <summary>LLMHF_INJECTED — the event did not come from a mouse.</summary>
-	private const uint LLMHF_INJECTED = 0x00000001;
-
-	/// <summary>
-	/// LLMHF_LOWER_IL_INJECTED — injected by something running at a lower integrity level. Also
-	/// not a hand on a mouse.
-	/// </summary>
-	private const uint LLMHF_LOWER_IL_INJECTED = 0x00000002;
 
 	[StructLayout(LayoutKind.Sequential)]
 	private struct POINT
@@ -104,9 +96,16 @@ internal sealed class RealMouseInputWatch : IDisposable
 	public bool UserHasTheMouse => _userHasTheMouse;
 
 	/// <summary>
-	/// Installs the hook on the calling thread, which must be the UI thread. Never throws and
-	/// never returns null: a watch that could not install simply reports that the user has not
-	/// touched the mouse, which leaves the caller doing what it would have done anyway.
+	/// Whether the hook is actually installed. False means there is no signal at all, and a
+	/// caller that would have acted on the absence of one must do nothing instead.
+	/// </summary>
+	public bool IsWatching => _hook != IntPtr.Zero;
+
+	/// <summary>
+	/// Installs the hook on the calling thread, which must be the UI thread. Never throws; check
+	/// <see cref="IsWatching"/> to find out whether it worked. It can fail for reasons that have
+	/// nothing to do with this code — endpoint-protection software commonly refuses global hooks
+	/// — so the failure is reported rather than assumed away.
 	/// </summary>
 	public static RealMouseInputWatch Start()
 	{
@@ -116,9 +115,16 @@ internal sealed class RealMouseInputWatch : IDisposable
 			using var process = System.Diagnostics.Process.GetCurrentProcess();
 			using var module = process.MainModule;
 			watch._hook = SetWindowsHookEx(WH_MOUSE_LL, watch._callback, GetModuleHandle(module?.ModuleName), 0);
+			if (watch._hook == IntPtr.Zero)
+			{
+				System.Diagnostics.Debug.WriteLine(
+					$"RealMouseInputWatch: SetWindowsHookEx failed, GetLastError={Marshal.GetLastWin32Error()}. "
+					+ "The pointer hold will stand down rather than move the pointer blind.");
+			}
 		}
-		catch
+		catch (Exception ex)
 		{
+			System.Diagnostics.Debug.WriteLine($"RealMouseInputWatch: could not install the hook: {ex.Message}");
 			watch._hook = IntPtr.Zero;
 		}
 
@@ -142,18 +148,15 @@ internal sealed class RealMouseInputWatch : IDisposable
 			try
 			{
 				int message = (int)wParam;
-				if (IsButtonOrWheel(message))
-				{
-					// A deliberate act however it arrived.
+				// Only a move needs its marks read; anything else is decided by the message
+				// alone, and reading the structure for it would be work done in the system's
+				// input path for nothing.
+				uint flags = message == RealMouseInput.MouseMove
+					? Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam).flags
+					: 0;
+
+				if (RealMouseInput.IsHandOnTheMouse(message, flags))
 					_userHasTheMouse = true;
-				}
-				else if (message == WM_MOUSEMOVE)
-				{
-					var data = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-					bool injected = (data.flags & (LLMHF_INJECTED | LLMHF_LOWER_IL_INJECTED)) != 0;
-					if (!injected)
-						_userHasTheMouse = true;
-				}
 			}
 			catch
 			{
@@ -164,8 +167,4 @@ internal sealed class RealMouseInputWatch : IDisposable
 
 		return CallNextHookEx(_hook, nCode, wParam, lParam);
 	}
-
-	private static bool IsButtonOrWheel(int message) =>
-		message is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN
-			or WM_MOUSEWHEEL or WM_MOUSEHWHEEL;
 }

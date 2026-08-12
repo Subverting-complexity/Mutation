@@ -90,6 +90,15 @@ public static class PointerHold
 			if (!restoreIfDrifted())
 				continue;
 
+			// The bound is checked again here because what follows is not instant. The wiggle
+			// runs for as long as the user set it to, up to several seconds, and starting one on
+			// the last tick of the hold would keep the whole apparatus alive well past the time
+			// the user was promised — the anchor undefended by nothing, the hook still installed.
+			// The correction has already been made; the wiggle that would have advertised it can
+			// be given up.
+			if (elapsed() >= hold)
+				return PointerHoldOutcome.TimeUp;
+
 			await afterRestore().ConfigureAwait(false);
 
 			// The wiggle moves the pointer on purpose and takes a while doing it, so the user may

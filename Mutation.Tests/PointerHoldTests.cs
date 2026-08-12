@@ -189,6 +189,27 @@ public class PointerHoldTests
 	}
 
 	[Fact]
+	public async Task ACorrectionOnTheLastTick_DoesNotStartAWiggleThatOutlivesTheWatch()
+	{
+		// The wiggle runs for as long as the user set it to, up to several seconds. Starting one
+		// on the last tick would keep the anchor, the hook and the whole apparatus alive well
+		// past the length the watch promised. The correction has already been made by then; only
+		// the wiggle that would have advertised it is given up.
+		var clock = new FakeClock();
+		int wiggles = 0;
+
+		var outcome = await Run(
+			clock,
+			() => false,
+			() => true,
+			afterRestore: () => { wiggles++; return Task.CompletedTask; },
+			hold: Poll); // one tick, and it is over
+
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Equal(0, wiggles);
+	}
+
+	[Fact]
 	public async Task NullArgumentsAreRejected()
 	{
 		var clock = new FakeClock();

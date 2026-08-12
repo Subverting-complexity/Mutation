@@ -773,18 +773,22 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </summary>
 	private void RestoreCursorAfterForegroundHandback()
 	{
+		var hold = PointerHoldFor;
 		// Installed here, on the UI thread, because a low-level hook is delivered on the thread
 		// that installed it and that thread needs a message loop. The hold itself runs off the UI
 		// thread and only reads what the hook has seen.
-		var watch = RealMouseInputWatch.Start();
-		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge, PointerHoldFor, watch);
+		//
+		// Only when there is a hold to serve. It is a system-wide hook, and installing one on
+		// every capture for a watch the user has switched off would be a cost paid for nothing.
+		var watch = hold > TimeSpan.Zero ? RealMouseInputWatch.Start() : null;
+		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge, hold, watch);
 	}
 
 	private async Task HandPointerBackAsync(
 		int generation,
 		PointerNudgeOptions nudge,
 		TimeSpan hold,
-		RealMouseInputWatch watch)
+		RealMouseInputWatch? watch)
 	{
 		try
 		{
@@ -825,9 +829,17 @@ public sealed partial class RegionSelectionWindow : Window
 		int generation,
 		PointerNudgeOptions nudge,
 		TimeSpan hold,
-		RealMouseInputWatch watch)
+		RealMouseInputWatch? watch)
 	{
 		if (hold <= TimeSpan.Zero)
+			return Task.CompletedTask;
+
+		// No hook, no hold. Without the signal, "the user has not touched the mouse" would be an
+		// assumption rather than an observation, and acting on it would mean dragging the pointer
+		// back from under a hand for the length of the hold — the very thing this is built to
+		// avoid. A capture then behaves as it did before the hold existed, which is a real
+		// answer; guessing is not.
+		if (watch is null || !watch.IsWatching)
 			return Task.CompletedTask;
 
 		var since = System.Diagnostics.Stopwatch.StartNew();
@@ -850,8 +862,11 @@ public sealed partial class RegionSelectionWindow : Window
 	/// removing it here if there is no queue to get back onto — worse than nothing would be
 	/// leaving a system-wide hook installed for ever.
 	/// </summary>
-	private void DisposeOnUiThread(RealMouseInputWatch watch)
+	private void DisposeOnUiThread(RealMouseInputWatch? watch)
 	{
+		if (watch is null)
+			return;
+
 		if (_dispatcherQueue is null || !_dispatcherQueue.TryEnqueue(watch.Dispose))
 			watch.Dispose();
 	}
