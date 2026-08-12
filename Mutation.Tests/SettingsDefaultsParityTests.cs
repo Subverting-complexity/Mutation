@@ -56,6 +56,7 @@ public class SettingsDefaultsParityTests : IDisposable
 		Assert.Equal(SettingsDefaults.Ocr.NudgePointerDuringCapture, ocr.NudgePointerDuringCapture);
 		Assert.Equal(SettingsDefaults.Ocr.PointerNudgeIntervalMilliseconds, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(SettingsDefaults.Ocr.PointerNudgeDurationMilliseconds, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(SettingsDefaults.Ocr.PointerNudgeDistancePixels, ocr.PointerNudgeDistancePixels);
 	}
 
 	[Fact]

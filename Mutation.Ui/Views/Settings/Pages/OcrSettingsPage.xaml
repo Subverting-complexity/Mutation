@@ -128,6 +128,18 @@
 						</Button>
 					</StackPanel>
 				</StackPanel>
+				<StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<TextBlock Text="Wiggle distance (pixels)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+						<controls:InfoHint Text="{StaticResource Help.Ocr.NudgeDistance}" VerticalAlignment="Center" />
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<NumberBox x:Name="NbNudgeDistance" AutomationProperties.Name="Wiggle distance (pixels)" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgeDistance}" Minimum="1" Maximum="64" SmallChange="1" LargeChange="4" Width="180" SpinButtonPlacementMode="Inline" ValueChanged="NbNudgeDistance_ValueChanged" />
+						<Button Click="BtnResetNudgeDistance_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset wiggle distance">
+							<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+						</Button>
+					</StackPanel>
+				</StackPanel>
 			</StackPanel>
 		</StackPanel>
 

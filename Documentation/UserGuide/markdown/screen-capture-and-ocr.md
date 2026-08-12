@@ -56,12 +56,17 @@ it has a text box with a flashing cursor the view swings across to that. Your po
 not moved either time. What you are looking at has.
 
 Most magnifiers come back to the mouse as soon as the mouse moves. So Mutation can give
-it a little shake for you, at both ends: one pixel back and forth for a fifth of a
-second, ending exactly where it started. Turn on **Wiggle the mouse pointer during a
+it a little shake for you, at both ends: a pixel back and forth for a fifth of a second,
+ending exactly where it started. Turn on **Wiggle the mouse pointer during a
 capture** in **Settings**, under **Screen capture & OCR**. It is off unless you switch it
-on, and you can change how fast it shakes and how long each shake lasts. Mutation stops
-shaking as soon as you take hold of the mouse or start drawing a rectangle, and shaking
-never moves the corner you have pinned with the keyboard.
+on, and you can change how fast it shakes, how long each shake lasts, and how far the
+pointer moves. Mutation stops shaking as soon as you take hold of the mouse or start
+drawing a rectangle, and shaking never moves the corner you have pinned with the keyboard.
+
+If you turn it on and your magnifier still does not follow, try raising **Wiggle distance
+(pixels)**. A single pixel is enough for most magnifiers, but some treat a movement that
+small as an unsteady hand and ignore it. Four or eight is still far too small to be in
+your way, and the pointer comes back to the same place either way.
 
 ### Picking the rectangle with the mouse
 

@@ -226,6 +226,18 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		int nudgeDistance = azureComputerVisionSettings.PointerNudgeDistancePixels <= 0
+			? AzureComputerVisionSettings.DefaultPointerNudgeDistancePixels
+			: Math.Clamp(
+				azureComputerVisionSettings.PointerNudgeDistancePixels,
+				AzureComputerVisionSettings.MinPointerNudgeDistancePixels,
+				AzureComputerVisionSettings.MaxPointerNudgeDistancePixels);
+		if (nudgeDistance != azureComputerVisionSettings.PointerNudgeDistancePixels)
+		{
+			azureComputerVisionSettings.PointerNudgeDistancePixels = nudgeDistance;
+			somethingWasMissing = true;
+		}
+
 
 		if (settings.AudioSettings is null)
 		{

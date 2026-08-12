@@ -944,7 +944,8 @@ public class OcrManager
         return new PointerNudgeOptions(
             true,
             ocr.PointerNudgeIntervalMilliseconds,
-            ocr.PointerNudgeDurationMilliseconds);
+            ocr.PointerNudgeDurationMilliseconds,
+            ocr.PointerNudgeDistancePixels);
     }
 
     private static async Task<SoftwareBitmap> CropBitmapAsync(SoftwareBitmap src, Rect rect)

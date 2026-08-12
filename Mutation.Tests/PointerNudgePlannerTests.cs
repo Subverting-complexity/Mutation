@@ -12,8 +12,8 @@ public class PointerNudgePlannerTests
 {
 	private static readonly CursorPoint Anchor = new(400, 300);
 
-	private static PointerNudgeOptions On(int intervalMs = 50, int durationMs = 500) =>
-		new(true, intervalMs, durationMs);
+	private static PointerNudgeOptions On(int intervalMs = 50, int durationMs = 500, int distancePx = 1) =>
+		new(true, intervalMs, durationMs, distancePx);
 
 	[Fact]
 	public void SwitchedOff_ThePointerIsNeverTouched()
@@ -95,7 +95,29 @@ public class PointerNudgePlannerTests
 	[InlineData(900, 700, false)] // the user has moved the mouse; leave it alone
 	public void OnlyTheWigglesOwnDisplacementIsRecognised(int x, int y, bool expected)
 	{
-		Assert.Equal(expected, PointerNudgePlanner.IsWiggleDisplacement(Anchor, new CursorPoint(x, y)));
+		Assert.Equal(expected, PointerNudgePlanner.IsWiggleDisplacement(Anchor, new CursorPoint(x, y), 1));
+	}
+
+	[Theory]
+	[InlineData(408, 300, true)]
+	[InlineData(392, 300, true)]
+	[InlineData(401, 300, false)] // one pixel out is not where an eight-pixel wiggle parks
+	[InlineData(400, 300, false)]
+	public void AtALargerDistance_TheRecognisedDisplacementMovesWithIt(int x, int y, bool expected)
+	{
+		Assert.Equal(expected, PointerNudgePlanner.IsWiggleDisplacement(Anchor, new CursorPoint(x, y), 8));
+	}
+
+	[Fact]
+	public void ALargerDistance_MovesThePointerThatFarAndStillComesHome()
+	{
+		// The distance is settable because a magnifier that filters small movements as jitter
+		// would otherwise need a new build to satisfy.
+		var plan = PointerNudgePlanner.Plan(Anchor, On(distancePx: 8));
+
+		Assert.Equal(new CursorPoint(Anchor.X + 8, Anchor.Y), plan[0]);
+		Assert.Equal(Anchor, plan[1]);
+		Assert.Equal(Anchor, plan[plan.Count - 1]);
 	}
 
 	[Theory]

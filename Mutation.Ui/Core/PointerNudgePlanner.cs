@@ -19,6 +19,12 @@ namespace Mutation.Ui.Core;
 /// here — it depends on where the monitors are — so <see cref="PointerNudgeRunner"/> settles that
 /// by watching whether the first move took effect.
 /// </para>
+///
+/// <para>
+/// How far each move goes is the user's to set. One pixel is enough for a magnifier that watches
+/// the input stream at all, and the whole movement is meant to be barely visible; the setting is
+/// there for one that filters small movements as jitter.
+/// </para>
 /// </summary>
 public static class PointerNudgePlanner
 {
@@ -46,7 +52,8 @@ public static class PointerNudgePlanner
 		// which the help text says.
 		int moves = Math.Max(1, options.DurationMilliseconds / options.IntervalMilliseconds);
 
-		var away = new CursorPoint(anchor.X + 1, anchor.Y);
+		int distance = Math.Max(1, options.DistancePixels);
+		var away = new CursorPoint(anchor.X + distance, anchor.Y);
 
 		var plan = new List<CursorPoint>(moves + 1);
 		for (int i = 0; i < moves; i++)
@@ -63,7 +70,8 @@ public static class PointerNudgePlanner
 
 	/// <summary>
 	/// Whether <paramref name="current"/> is a pixel a wiggle around <paramref name="anchor"/>
-	/// could have parked the pointer on — one column either side, same row.
+	/// could have parked the pointer on — <paramref name="distancePixels"/> either side, same
+	/// row.
 	/// <para>
 	/// Asked when something wants the pointer back before a wiggle has finished with it. A wiggle
 	/// spends half its life a pixel off the anchor, so anything that re-reads the live pointer
@@ -73,6 +81,6 @@ public static class PointerNudgePlanner
 	/// be left exactly as it is.
 	/// </para>
 	/// </summary>
-	public static bool IsWiggleDisplacement(CursorPoint anchor, CursorPoint current) =>
-		current.Y == anchor.Y && Math.Abs(current.X - anchor.X) == 1;
+	public static bool IsWiggleDisplacement(CursorPoint anchor, CursorPoint current, int distancePixels) =>
+		current.Y == anchor.Y && Math.Abs(current.X - anchor.X) == Math.Max(1, distancePixels);
 }

@@ -55,6 +55,9 @@ public sealed partial class OcrSettingsPage : UserControl
 			NbNudgeDuration.Value = ocr.PointerNudgeDurationMilliseconds > 0
 				? ocr.PointerNudgeDurationMilliseconds
 				: SettingsDefaults.Ocr.PointerNudgeDurationMilliseconds;
+			NbNudgeDistance.Value = ocr.PointerNudgeDistancePixels > 0
+				? ocr.PointerNudgeDistancePixels
+				: SettingsDefaults.Ocr.PointerNudgeDistancePixels;
 			HkSendAfterOcr.Hotkey = ocr.SendHotkeyAfterOcrOperation ?? string.Empty;
 		}
 		finally { _suppressEvents = false; }
@@ -117,6 +120,9 @@ public sealed partial class OcrSettingsPage : UserControl
 	private void NbNudgeDuration_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
 		WriteInt(args.NewValue, v => (_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PointerNudgeDurationMilliseconds = v);
 
+	private void NbNudgeDistance_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>
+		WriteInt(args.NewValue, v => (_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).PointerNudgeDistancePixels = v);
+
 	private void WriteInt(double value, System.Action<int> apply)
 	{
 		if (_suppressEvents) return;
@@ -138,4 +144,6 @@ public sealed partial class OcrSettingsPage : UserControl
 		NbNudgeInterval.Value = SettingsDefaults.Ocr.PointerNudgeIntervalMilliseconds;
 	private void BtnResetNudgeDuration_Click(object sender, RoutedEventArgs e) =>
 		NbNudgeDuration.Value = SettingsDefaults.Ocr.PointerNudgeDurationMilliseconds;
+	private void BtnResetNudgeDistance_Click(object sender, RoutedEventArgs e) =>
+		NbNudgeDistance.Value = SettingsDefaults.Ocr.PointerNudgeDistancePixels;
 }

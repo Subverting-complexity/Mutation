@@ -13,14 +13,18 @@ namespace Mutation.Ui.Core;
 /// </para>
 /// </summary>
 /// <param name="Enabled">Whether to nudge at all.</param>
-/// <param name="IntervalMilliseconds">How long between one one-pixel move and the next.</param>
+/// <param name="IntervalMilliseconds">How long between one move and the next.</param>
 /// <param name="DurationMilliseconds">How long one nudge lasts. Spent twice per capture, once
 /// at each end.</param>
+/// <param name="DistancePixels">How far each move goes, out and back. One pixel is enough for a
+/// magnifier that watches the input stream at all; the setting exists because one that filters
+/// small movements as jitter would otherwise need a new build to satisfy.</param>
 public readonly record struct PointerNudgeOptions(
 	bool Enabled,
 	int IntervalMilliseconds,
-	int DurationMilliseconds)
+	int DurationMilliseconds,
+	int DistancePixels)
 {
 	/// <summary>What every capture gets unless the user has turned the nudge on.</summary>
-	public static PointerNudgeOptions Off => new(false, 0, 0);
+	public static PointerNudgeOptions Off => new(false, 0, 0, 0);
 }

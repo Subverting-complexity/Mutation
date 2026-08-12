@@ -45,6 +45,15 @@ public sealed partial class RegionSelectionWindow : Window
 	private readonly ICursorPosition _cursor = new Win32CursorPosition();
 
 	/// <summary>
+	/// How the wiggle moves the pointer, as opposed to how everything else does. It reports each
+	/// move as real mouse input as well as placing the pointer, because a magnifier watches the
+	/// mouse through the input stream and a placed cursor is invisible to it (issue #377). Only
+	/// the wiggle needs that: putting the pointer back where the user left it has to be exact,
+	/// and has no need to be noticed.
+	/// </summary>
+	private readonly ICursorPosition _nudgeCursor;
+
+	/// <summary>
 	/// Holds the mouse pointer still across the focus changes a capture causes. Opening this
 	/// overlay and closing it again both move the foreground, and a magnifier or reader that
 	/// follows focus answers that by moving the pointer — so the pointer is read before each
@@ -181,6 +190,7 @@ public sealed partial class RegionSelectionWindow : Window
 	{
 		this.InitializeComponent();
 		_cursorAnchor = new CursorAnchor(_cursor);
+		_nudgeCursor = new ReportedCursorPosition(_cursor);
 		_hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 		_dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 		EnsureElementRefs();
@@ -824,7 +834,7 @@ public sealed partial class RegionSelectionWindow : Window
 		try
 		{
 			await PointerNudgeRunner.RunAsync(
-				_cursor,
+				_nudgeCursor,
 				Task.Delay,
 				anchor,
 				plan,
@@ -896,7 +906,7 @@ public sealed partial class RegionSelectionWindow : Window
 		if (!_cursor.TryGet(out var current))
 			return;
 
-		if (current != anchor && PointerNudgePlanner.IsWiggleDisplacement(anchor, current))
+		if (current != anchor && PointerNudgePlanner.IsWiggleDisplacement(anchor, current, PointerNudge.DistancePixels))
 			_cursor.TrySet(anchor);
 	}
 

@@ -23,6 +23,7 @@ public class PointerNudgeSettingsTests
 		Assert.False(ocr.NudgePointerDuringCapture);
 		Assert.Equal(50, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(200, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(1, ocr.PointerNudgeDistancePixels);
 	}
 
 	[Fact]
@@ -35,6 +36,7 @@ public class PointerNudgeSettingsTests
 		Assert.False(ocr!.NudgePointerDuringCapture);
 		Assert.Equal(50, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(200, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(1, ocr.PointerNudgeDistancePixels);
 	}
 
 	[Theory]
@@ -63,14 +65,27 @@ public class PointerNudgeSettingsTests
 		Assert.Equal(expected, Load(durationMs: stored).PointerNudgeDurationMilliseconds);
 	}
 
+	[Theory]
+	[InlineData(0, 1)]      // never configured, or hand-edited to nothing
+	[InlineData(-4, 1)]
+	[InlineData(1, 1)]
+	[InlineData(8, 8)]
+	[InlineData(64, 64)]
+	[InlineData(4096, 64)]  // a wiggle that threw the pointer across the screen
+	public void DistanceIsClampedOnLoad(int stored, int expected)
+	{
+		Assert.Equal(expected, Load(distancePx: stored).PointerNudgeDistancePixels);
+	}
+
 	[Fact]
 	public void ValuesAlreadyInRange_AreLeftExactlyAsTheyAre()
 	{
 		// Whatever the user picked in the dialog has to survive a reload untouched.
-		var ocr = Load(intervalMs: 120, durationMs: 3000);
+		var ocr = Load(intervalMs: 120, durationMs: 3000, distancePx: 12);
 
 		Assert.Equal(120, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(3000, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(12, ocr.PointerNudgeDistancePixels);
 	}
 
 	[Fact]
@@ -119,7 +134,7 @@ public class PointerNudgeSettingsTests
 		return settings.AzureComputerVisionSettings!;
 	}
 
-	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 200)
+	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 200, int distancePx = 1)
 	{
 		using var settingsFile = new TempSettingsFile("nudge", "{}");
 
@@ -130,6 +145,7 @@ public class PointerNudgeSettingsTests
 			{
 				PointerNudgeIntervalMilliseconds = intervalMs,
 				PointerNudgeDurationMilliseconds = durationMs,
+				PointerNudgeDistancePixels = distancePx,
 			},
 		};
 		manager.EnsureSettings(settings, isNewFile: false);
