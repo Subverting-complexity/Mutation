@@ -206,9 +206,9 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "MaxParallelDocuments": 2,
     "MaxParallelRequests": 4,
     "MaxDocumentBytes": 10485760,
-    "NudgePointerAfterCapture": false,
+    "NudgePointerDuringCapture": false,
     "PointerNudgeIntervalMilliseconds": 50,
-    "PointerNudgeDurationMilliseconds": 500
+    "PointerNudgeDurationMilliseconds": 200
   },
 
   "SpeechToTextSettings": {

@@ -650,6 +650,12 @@ public sealed partial class RegionSelectionWindow : Window
 	/// tell those two movements apart from here — the overlay sees an identical pointer event
 	/// either way. Losing the odd very late jump is the better failure.
 	/// </para>
+	/// <para>
+	/// The optional wiggle goes on the same dispatcher turn, and for the same reason the second
+	/// restore is there: holding the pointer perfectly still through the overlay's focus change
+	/// keeps the pointer right, but gives a magnifier no reason to look at it, and ZoomText
+	/// answers the focus change by swinging its view to the top-left corner (issue #375).
+	/// </para>
 	/// </summary>
 	private void RestoreCursorNowAndAfterFocusSettles()
 	{
@@ -661,6 +667,7 @@ public sealed partial class RegionSelectionWindow : Window
 		// Read now, not inside the callback: this identifies the anchor being defended, so a
 		// turn that runs late cannot act on behalf of a capture that has already finished.
 		int generation = _cursorAnchor.Generation;
+		var nudge = PointerNudge;
 
 		_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
 		{
@@ -668,19 +675,21 @@ public sealed partial class RegionSelectionWindow : Window
 			if (allowed == DeferredCursorRestore.StandDown)
 				return;
 
-			if (!_cursorAnchor.RestoreIfCurrent(generation))
-				return;
+			if (_cursorAnchor.RestoreIfCurrent(generation) && allowed == DeferredCursorRestore.MoveAndReseed)
+			{
+				// The pointer really had been moved, so the crosshair and the keyboard caret
+				// were seeded from a position it is no longer at. Seed them again, from the live
+				// pointer rather than from _lastPointerPos, which may itself be the jumped
+				// position that arrived as a pointer-move event.
+				_lastPointerPos = null;
+				ResetKeyboardSelection();
+				RenderKeyboardSelection();
+			}
 
-			if (allowed != DeferredCursorRestore.MoveAndReseed)
-				return;
-
-			// The pointer really had been moved, so the crosshair and the keyboard caret were
-			// seeded from a position it is no longer at. Seed them again, from the live pointer
-			// rather than from _lastPointerPos, which may itself be the jumped position that
-			// arrived as a pointer-move event.
-			_lastPointerPos = null;
-			ResetKeyboardSelection();
-			RenderKeyboardSelection();
+			// Whether or not the pointer had drifted. The magnified view can be pulled away by
+			// the focus change on its own, with the pointer never moving at all — which is the
+			// case that has nothing else to fix it.
+			StartPointerNudge(generation, nudge);
 		});
 	}
 
@@ -734,11 +743,41 @@ public sealed partial class RegionSelectionWindow : Window
 	}
 
 	/// <summary>
-	/// Moves the pointer one pixel back and forth for a while, so a magnifier that has followed
-	/// the keyboard caret somewhere else brings its view back to the mouse (issue #373).
+	/// Starts a wiggle and does not wait for it. Used at the opening end, from a dispatcher
+	/// callback that must not be held up for the length of the wiggle.
+	/// </summary>
+	private void StartPointerNudge(int generation, PointerNudgeOptions nudge)
+	{
+		_ = SafeNudgePointerAsync(generation, nudge);
+	}
+
+	private async Task SafeNudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	{
+		try
+		{
+			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+		}
+		catch
+		{
+			// A wiggle that fails is a magnified view left where it was. It is not a reason to
+			// take a capture down with it.
+		}
+	}
+
+	/// <summary>
+	/// Moves the pointer one pixel back and forth for a while, so a magnifier that has swung its
+	/// view somewhere else brings it back to the mouse (issues #373 and #375).
+	/// <para>
+	/// Runs at both ends of a capture, for the same reason each time. The overlay opening and the
+	/// overlay closing are both focus changes, and ZoomText answers a focus change by following
+	/// whatever it thinks is interesting — the top-left corner as the overlay appears, a flashing
+	/// caret in the application underneath as it goes away. The pointer is held perfectly still
+	/// across both, which is right for the pointer and is exactly why the magnifier has no reason
+	/// to look at it.
+	/// </para>
 	/// <para>
 	/// Runs after the restore, not instead of it, and finishes on the very pixel the restore put
-	/// the pointer on. The order matters: nudging around a position that had drifted would
+	/// the pointer on. The order matters: wiggling around a position that had drifted would
 	/// advertise the wrong place.
 	/// </para>
 	/// </summary>
@@ -756,9 +795,13 @@ public sealed partial class RegionSelectionWindow : Window
 			anchor,
 			plan,
 			TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
-			// Drops the nudge the moment a new capture claims the anchor, so two captures in
-			// quick succession never have one nudging against the other's pointer.
-			() => _cursorAnchor.Generation == generation);
+			// Two ways to stand down. A drag in flight means the pointer is drawing the user's
+			// rectangle, and moving it a pixel would move the edge of their selection — the
+			// opening wiggle is the one that can meet a drag, since the closing one runs after
+			// the button is already up. A changed generation means a new capture has claimed the
+			// anchor, so two captures in quick succession never have one wiggling against the
+			// other's pointer.
+			() => !_dragging && _cursorAnchor.Generation == generation);
 	}
 
 	private void Announce(string message, AutomationNotificationKind kind)

@@ -938,7 +938,7 @@ public class OcrManager
     private PointerNudgeOptions ReadPointerNudgeOptions()
     {
         var ocr = _settings.AzureComputerVisionSettings;
-        if (ocr is null || !ocr.NudgePointerAfterCapture)
+        if (ocr is null || !ocr.NudgePointerDuringCapture)
             return PointerNudgeOptions.Off;
 
         return new PointerNudgeOptions(

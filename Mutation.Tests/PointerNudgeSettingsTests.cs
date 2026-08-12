@@ -4,21 +4,25 @@ using Newtonsoft.Json;
 
 namespace Mutation.Tests;
 
-// The pointer-nudge settings contract (issue #373): off by default with sensible timings,
-// backward compatible with a settings file written before the feature existed, and clamped on
-// load to the same range the Settings dialog offers — so a hand-edited file cannot produce a
-// nudge nobody can stop.
+// The pointer-nudge settings contract (issues #373 and #375): off by default with sensible
+// timings, backward compatible both with a settings file written before the feature existed and
+// with one written before the setting was renamed, and clamped on load to the same range the
+// Settings dialog offers — so a hand-edited file cannot produce a nudge nobody can stop.
+//
+// Loading a real settings file replaces ErrorLogger's process-wide secret snapshot, so this
+// class shares the collection that serialises those statics.
+[Collection(ErrorLoggerCollection.Name)]
 public class PointerNudgeSettingsTests
 {
 	[Fact]
-	public void OffByDefault_WithFiftyAndFiveHundred()
+	public void OffByDefault_WithFiftyAndTwoHundred()
 	{
 		// It moves the pointer on purpose. Nobody gets that uninvited.
 		var ocr = new AzureComputerVisionSettings();
 
-		Assert.False(ocr.NudgePointerAfterCapture);
+		Assert.False(ocr.NudgePointerDuringCapture);
 		Assert.Equal(50, ocr.PointerNudgeIntervalMilliseconds);
-		Assert.Equal(500, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(200, ocr.PointerNudgeDurationMilliseconds);
 	}
 
 	[Fact]
@@ -28,9 +32,9 @@ public class PointerNudgeSettingsTests
 		var ocr = JsonConvert.DeserializeObject<AzureComputerVisionSettings>("{\"TimeoutSeconds\":10}");
 
 		Assert.NotNull(ocr);
-		Assert.False(ocr!.NudgePointerAfterCapture);
+		Assert.False(ocr!.NudgePointerDuringCapture);
 		Assert.Equal(50, ocr.PointerNudgeIntervalMilliseconds);
-		Assert.Equal(500, ocr.PointerNudgeDurationMilliseconds);
+		Assert.Equal(200, ocr.PointerNudgeDurationMilliseconds);
 	}
 
 	[Theory]
@@ -47,8 +51,8 @@ public class PointerNudgeSettingsTests
 	}
 
 	[Theory]
-	[InlineData(0, 500)]
-	[InlineData(-10, 500)]
+	[InlineData(0, 200)]
+	[InlineData(-10, 200)]
 	[InlineData(10, 50)]
 	[InlineData(50, 50)]
 	[InlineData(500, 500)]
@@ -72,10 +76,50 @@ public class PointerNudgeSettingsTests
 	[Fact]
 	public void TheToggleIsNeverTurnedOnForAnybody()
 	{
-		Assert.False(Load().NudgePointerAfterCapture);
+		Assert.False(Load().NudgePointerDuringCapture);
 	}
 
-	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 500)
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void OldKeyFromBeforeTheRename_CarriesItsValueAcross(bool wasOn)
+	{
+		// The wiggle grew a second moment — the overlay opening, as well as the capture ending —
+		// so NudgePointerAfterCapture stopped being a true name. Anyone who had switched it on
+		// must not find it silently off after an update, which is exactly what would happen if
+		// the renamed property fell back to its initializer.
+		var ocr = LoadFile($$"""
+		{
+			"AzureComputerVisionSettings": { "NudgePointerAfterCapture": {{(wasOn ? "true" : "false")}} }
+		}
+		""");
+
+		Assert.Equal(wasOn, ocr.NudgePointerDuringCapture);
+	}
+
+	[Fact]
+	public void NewKeyWins_WhenAFileSomehowCarriesBoth()
+	{
+		var ocr = LoadFile("""
+		{
+			"AzureComputerVisionSettings": {
+				"NudgePointerAfterCapture": false,
+				"NudgePointerDuringCapture": true
+			}
+		}
+		""");
+
+		Assert.True(ocr.NudgePointerDuringCapture);
+	}
+
+	private static AzureComputerVisionSettings LoadFile(string json)
+	{
+		using var settingsFile = new TempSettingsFile("nudge-rename", json);
+		var settings = new SettingsManager(settingsFile.FilePath).LoadAndEnsureSettings();
+		return settings.AzureComputerVisionSettings!;
+	}
+
+	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 200)
 	{
 		using var settingsFile = new TempSettingsFile("nudge", "{}");
 

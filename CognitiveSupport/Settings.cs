@@ -133,16 +133,20 @@ public class AzureComputerVisionSettings
 	// no such key, and keeping the initializer is what turns it on for those files too.
 	public bool PasteOcrTextIntoActiveApplication { get; set; } = true;
 
-	// Moves the mouse pointer one pixel back and forth once the capture is over and the previous
-	// application has the keyboard again. ZoomText follows the keyboard caret as well as the
-	// mouse, so a flashing caret in the application underneath pulls the magnified view away
-	// from the pointer the moment focus returns; the view comes back to the mouse as soon as the
-	// mouse moves. Off unless asked for — it is a workaround for one magnifier's behaviour, and
-	// it moves the pointer on purpose.
-	public bool NudgePointerAfterCapture { get; set; } = false;
+	// Moves the mouse pointer one pixel back and forth at both ends of a capture: once the
+	// overlay has opened and taken focus, and again once the capture is over and the previous
+	// application has the keyboard back. ZoomText follows the keyboard caret as well as the
+	// mouse, so each of those focus changes can pull the magnified view away from the pointer —
+	// to the top-left corner as the overlay opens, and to a flashing caret in the application
+	// underneath as it closes. The view comes back to the mouse as soon as the mouse moves, and
+	// the pointer is otherwise held perfectly still, which gives a magnifier no reason to. Off
+	// unless asked for: it is a workaround for one magnifier's behaviour, and it moves the
+	// pointer on purpose. Renamed from NudgePointerAfterCapture when it grew the second moment;
+	// SettingsManager carries the old key across.
+	public bool NudgePointerDuringCapture { get; set; } = false;
 
-	// How long between one one-pixel move and the next, and how long to keep going for. Both are
-	// clamped on load; see PointerNudgeIntervalRange and PointerNudgeDurationRange.
+	// How long between one one-pixel move and the next, and how long each wiggle keeps going for.
+	// Both are clamped on load, to the ranges below.
 	public int PointerNudgeIntervalMilliseconds { get; set; } = DefaultPointerNudgeIntervalMilliseconds;
 	public int PointerNudgeDurationMilliseconds { get; set; } = DefaultPointerNudgeDurationMilliseconds;
 
@@ -150,7 +154,9 @@ public class AzureComputerVisionSettings
 	public const int MinPointerNudgeIntervalMilliseconds = 10;
 	public const int MaxPointerNudgeIntervalMilliseconds = 500;
 
-	public const int DefaultPointerNudgeDurationMilliseconds = 500;
+	// Short on purpose. It runs twice per capture now, once at each end, and a wiggle the user
+	// has to wait out is worse than one they barely notice.
+	public const int DefaultPointerNudgeDurationMilliseconds = 200;
 	public const int MinPointerNudgeDurationMilliseconds = 50;
 	public const int MaxPointerNudgeDurationMilliseconds = 5000;
 

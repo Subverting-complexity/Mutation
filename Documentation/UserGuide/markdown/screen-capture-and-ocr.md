@@ -47,19 +47,21 @@ pressed the shortcut, it is still there when the overlay opens and still there w
 overlay goes away. So you can pick the rectangle with the mouse or the keyboard, either
 way, without the pointer wandering off first.
 
-### If your magnifier loses the pointer afterwards
+### If your magnifier keeps losing the pointer
 
-Some magnifiers follow the flashing text cursor as well as the mouse. When the capture
-ends, the app you were in gets the keyboard back, and if it has a text box waiting the
-magnifier can swing across to that instead. Your pointer has not moved, but what you are
-looking at has.
+Some magnifiers follow whatever has just taken over the screen, rather than the mouse.
+That can happen at either end of a capture. As the overlay opens, the view swings off to
+a corner of the screen. As it closes, the app you were in gets the keyboard back, and if
+it has a text box with a flashing cursor the view swings across to that. Your pointer has
+not moved either time. What you are looking at has.
 
 Most magnifiers come back to the mouse as soon as the mouse moves. So Mutation can give
-it a little shake for you: one pixel back and forth for half a second, ending exactly
-where it started. Turn on **Wiggle the mouse pointer after a capture** in **Settings**,
-under **Screen capture & OCR**. It is off unless you switch it on, and you can change how
-fast it shakes and how long it goes on for. Mutation stops shaking the moment you take
-hold of the mouse yourself.
+it a little shake for you, at both ends: one pixel back and forth for a fifth of a
+second, ending exactly where it started. Turn on **Wiggle the mouse pointer during a
+capture** in **Settings**, under **Screen capture & OCR**. It is off unless you switch it
+on, and you can change how fast it shakes and how long each shake lasts. Mutation stops
+shaking the moment you take hold of the mouse, and it never shakes while you are drawing
+a rectangle.
 
 ### Picking the rectangle with the mouse
 
