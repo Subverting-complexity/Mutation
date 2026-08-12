@@ -216,7 +216,9 @@ pointer to the flashing text cursor whenever an app takes focus, and that happen
 after the capture ends.
 
 Mutation watches the pointer for a second and a half after each capture and puts it back
-whenever something else moves it. If your magnifier is slower than that to react, raise **Keep
+whenever something else moves it. Your own hand is never fought: if you move the mouse during
+that time, Mutation guards wherever your hand goes instead, and a click or a scroll ends the
+watch at once. If your magnifier is slower than a second and a half to react, raise **Keep
 the pointer put for (milliseconds)** in **Settings**, under **Screen capture & OCR**.
 
 Very occasionally Mutation cannot watch the pointer at all, because security software on the

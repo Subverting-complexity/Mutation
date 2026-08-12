@@ -291,4 +291,51 @@ public class CursorAnchorTests
 		// Negative coordinates are ordinary: a monitor left of the primary one has them.
 		Assert.Equal(new CursorPoint(-1920, 40), anchor.Anchor);
 	}
+
+	[Fact]
+	public void Rebase_MovesTheDefendedPositionWithoutStartingANewGeneration()
+	{
+		// The hold follows the user's hand by rebasing (issue #382). The generation must not
+		// change: work scheduled against this anchor — the wiggle, the settle — keeps running,
+		// and now defends the new place.
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+		anchor.Capture();
+		int generation = anchor.Generation;
+
+		anchor.RebaseIfCurrent(generation, new CursorPoint(240, 180));
+
+		Assert.Equal(generation, anchor.Generation);
+		Assert.Equal(new CursorPoint(240, 180), anchor.Anchor);
+
+		// A later drift is undone to the rebased position, not the captured one.
+		cursor.Position = new CursorPoint(960, 540);
+		Assert.True(anchor.RestoreIfCurrent(generation));
+		Assert.Equal(new CursorPoint(240, 180), cursor.Position);
+	}
+
+	[Fact]
+	public void RebaseAgainstAStaleGeneration_DoesNothing()
+	{
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+		anchor.Capture();
+		int stale = anchor.Generation;
+		anchor.Capture();
+
+		anchor.RebaseIfCurrent(stale, new CursorPoint(240, 180));
+
+		Assert.Equal(new CursorPoint(400, 300), anchor.Anchor);
+	}
+
+	[Fact]
+	public void RebaseWithNothingCaptured_DoesNotInventAnAnchor()
+	{
+		var cursor = new FakeCursor(400, 300);
+		var anchor = new CursorAnchor(cursor);
+
+		anchor.RebaseIfCurrent(0, new CursorPoint(240, 180));
+
+		Assert.False(anchor.HasAnchor);
+	}
 }

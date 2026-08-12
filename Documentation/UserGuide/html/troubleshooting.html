@@ -324,7 +324,9 @@ the mouse pointer jumps into a text box you were never pointing at. Some magnifi
 pointer to the flashing text cursor whenever an app takes focus, and that happens a moment
 after the capture ends.</p>
 <p>Mutation watches the pointer for a second and a half after each capture and puts it back
-whenever something else moves it. If your magnifier is slower than that to react, raise <strong>Keep
+whenever something else moves it. Your own hand is never fought: if you move the mouse during
+that time, Mutation guards wherever your hand goes instead, and a click or a scroll ends the
+watch at once. If your magnifier is slower than a second and a half to react, raise <strong>Keep
 the pointer put for (milliseconds)</strong> in <strong>Settings</strong>, under <strong>Screen capture &amp; OCR</strong>.</p>
 <p>Very occasionally Mutation cannot watch the pointer at all, because security software on the
 PC blocks the kind of watching it needs. When that happens Mutation does nothing rather than

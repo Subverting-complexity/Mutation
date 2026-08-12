@@ -7,14 +7,15 @@ using Xunit;
 namespace Mutation.Tests;
 
 /// <summary>
-/// The watch that keeps the pointer where a capture left it while a magnifier tries to move it
-/// somewhere else (issue #379).
+/// The watch that keeps the pointer where a capture — or the user's own hand — left it, undoing
+/// anything else that moves it (issues #379 and #382).
 ///
 /// <para>
-/// The rule that makes a watch this long safe is the one worth pinning hardest: it stands down
-/// for good the instant a hand touches the mouse, and never touches the pointer again after that.
-/// Without it this would be an application dragging the pointer back out from under its user for
-/// a second and a half.
+/// The rule worth pinning hardest is that the hand is never fought. Not by standing down on the
+/// first real event — a hand resting on a high-polling-rate mouse streams real events while
+/// doing nothing, and a hold that stood down on one never corrected anything — but by following:
+/// hand movement re-baselines the defended position, so a correction can never land where the
+/// hand is not.
 /// </para>
 /// </summary>
 public class PointerHoldTests
@@ -41,189 +42,292 @@ public class PointerHoldTests
 		public Func<TimeSpan> Elapsed => () => Now;
 	}
 
-	private static Task<PointerHoldOutcome> Run(
-		FakeClock clock,
-		Func<bool> userHasTheMouse,
-		Func<bool> restoreIfDrifted,
-		Func<bool>? stillCurrent = null,
-		Func<Task>? afterRestore = null,
-		TimeSpan? hold = null) =>
-		PointerHold.RunAsync(
-			userHasTheMouse,
-			stillCurrent ?? (() => true),
-			restoreIfDrifted,
-			afterRestore ?? (() => Task.CompletedTask),
-			clock.Delay,
-			clock.Elapsed,
-			Poll,
-			hold ?? Hold);
+	// A pointer the test moves at will and that records every write.
+	private sealed class FakeCursor : ICursorPosition
+	{
+		public CursorPoint Position;
+		public bool Readable = true;
+		public bool Writable = true;
+		public List<CursorPoint> Writes { get; } = new();
+
+		public bool TryGet(out CursorPoint position)
+		{
+			position = Position;
+			return Readable;
+		}
+
+		public bool TrySet(CursorPoint position)
+		{
+			if (!Writable)
+				return false;
+			Writes.Add(position);
+			Position = position;
+			return true;
+		}
+	}
+
+	private static readonly CursorPoint Baseline = new(100, 100);
+
+	private sealed class Harness
+	{
+		public FakeClock Clock { get; } = new();
+		public FakeCursor Cursor { get; } = new() { Position = Baseline };
+		public long Acts;
+		public long Steps;
+		public List<CursorPoint> Followed { get; } = new();
+		public int Wiggles;
+		public Func<Task>? OnWiggle;
+		public bool Current = true;
+
+		public Task<PointerHoldOutcome> Run(TimeSpan? hold = null) =>
+			PointerHold.RunAsync(
+				Cursor,
+				Baseline,
+				() => Acts,
+				() => Steps,
+				() => Current,
+				Followed.Add,
+				() => { Wiggles++; return OnWiggle?.Invoke() ?? Task.CompletedTask; },
+				Clock.Delay,
+				Clock.Elapsed,
+				Poll,
+				hold ?? Hold);
+	}
 
 	[Fact]
 	public async Task NothingMovesThePointer_TheWatchJustRunsOutOfTime()
 	{
-		var clock = new FakeClock();
-		int checks = 0;
+		var h = new Harness();
 
-		var outcome = await Run(clock, () => false, () => { checks++; return false; });
+		var outcome = await h.Run();
 
 		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
-		Assert.Equal(10, checks); // 400 ms at 40 ms a look
+		Assert.Equal(10, h.Clock.Waits.Count); // 400 ms at 40 ms a look
+		Assert.Empty(h.Cursor.Writes);
+		Assert.Empty(h.Followed);
 	}
 
 	[Fact]
-	public async Task SomethingMovesThePointer_ItIsPutBackEveryTime()
+	public async Task AGrab_IsUndoneAndTheViewIsWiggledBack()
 	{
-		// The magnifier can do this more than once — on the focus change, and again when the
-		// caret it is following moves. A watch that corrected once would be beaten by the second.
-		var clock = new FakeClock();
-		int corrections = 0;
+		// The pointer moved and no hand moved it — a magnifier routing to a caret.
+		var h = new Harness();
+		h.Clock.OnWait = () => h.Cursor.Position = new CursorPoint(500, 300);
 
-		var outcome = await Run(clock, () => false, () => { corrections++; return true; });
+		var outcome = await h.Run();
 
 		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
-		Assert.Equal(10, corrections);
+		Assert.All(h.Cursor.Writes, w => Assert.Equal(Baseline, w));
+		Assert.Equal(10, h.Cursor.Writes.Count); // grabbed on every tick, restored on every tick
+		Assert.Equal(9, h.Wiggles); // the last tick's wiggle is given up — see the bound test
 	}
 
 	[Fact]
-	public async Task AHandOnTheMouse_EndsTheWatchAndThePointerIsNeverTouchedAgain()
+	public async Task RestingHandJitter_IsFollowedNotFought()
 	{
-		// The whole reason this is allowed to run for as long as it does.
-		var clock = new FakeClock();
-		int corrections = 0;
-		bool userHasTheMouse = false;
-		clock.OnWait = () =>
+		// The measured failure of the first design (issue #382): a resting hand streams real
+		// micro-moves. Each one must walk the baseline along, never trigger a correction.
+		var h = new Harness();
+		int tick = 0;
+		h.Clock.OnWait = () =>
 		{
-			if (clock.Now >= TimeSpan.FromMilliseconds(120))
-				userHasTheMouse = true;
+			tick++;
+			h.Steps++; // the hand made this move
+			h.Cursor.Position = new CursorPoint(100 + (tick % 2), 100);
 		};
 
-		var outcome = await Run(clock, () => userHasTheMouse, () => { corrections++; return true; });
+		var outcome = await h.Run();
 
-		Assert.Equal(PointerHoldOutcome.UserTookTheMouse, outcome);
-		Assert.Equal(2, corrections);
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Empty(h.Cursor.Writes);
+		Assert.Equal(10, h.Followed.Count);
 	}
 
 	[Fact]
-	public async Task AHandOnTheMouseFromTheStart_MeansNoCorrectionAtAll()
+	public async Task AGrabAfterTheHandMoved_IsUndoneToWhereTheHandWas()
 	{
-		var clock = new FakeClock();
-		int corrections = 0;
+		// The hand travels somewhere and rests; then the magnifier grabs. The pointer must come
+		// back to where the hand left it, not to where the capture ended.
+		var h = new Harness();
+		var handRestedAt = new CursorPoint(240, 180);
+		int tick = 0;
+		h.Clock.OnWait = () =>
+		{
+			tick++;
+			if (tick == 1)
+			{
+				h.Steps++;
+				h.Cursor.Position = handRestedAt;
+			}
+			if (tick == 3)
+				h.Cursor.Position = new CursorPoint(700, 20); // the grab, no steps behind it
+		};
 
-		var outcome = await Run(clock, () => true, () => { corrections++; return true; });
+		var outcome = await h.Run();
 
-		Assert.Equal(PointerHoldOutcome.UserTookTheMouse, outcome);
-		Assert.Equal(0, corrections);
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Equal(new[] { handRestedAt }, h.Followed);
+		Assert.All(h.Cursor.Writes, w => Assert.Equal(handRestedAt, w));
+		Assert.Single(h.Cursor.Writes);
 	}
 
 	[Fact]
-	public async Task AHandOnTheMouseDuringTheWiggle_StopsBeforeTheNextCorrection()
+	public async Task AButton_EndsTheWatchAtOnce()
 	{
-		// The wiggle that follows a correction moves the pointer on purpose and takes a while, so
-		// the user can easily reach for the mouse while it runs. Asking again straight after it
-		// is what stops the watch correcting one more time first.
-		var clock = new FakeClock();
-		bool userHasTheMouse = false;
-		int corrections = 0;
+		var h = new Harness();
+		h.Clock.OnWait = () =>
+		{
+			if (h.Clock.Now >= TimeSpan.FromMilliseconds(120))
+				h.Acts++;
+		};
 
-		var outcome = await Run(
-			clock,
-			() => userHasTheMouse,
-			() => { corrections++; return true; },
-			afterRestore: () => { userHasTheMouse = true; return Task.CompletedTask; });
+		var outcome = await h.Run();
 
 		Assert.Equal(PointerHoldOutcome.UserTookTheMouse, outcome);
-		Assert.Equal(1, corrections);
+		Assert.Equal(3, h.Clock.Waits.Count);
 	}
 
 	[Fact]
-	public async Task ACorrectionIsFollowedByTheWiggle_ButOnlyWhenOneWasNeeded()
+	public async Task AButtonDuringTheWiggle_StopsBeforeTheNextCorrection()
 	{
-		// Something moved the pointer, so it probably moved the magnified view too. Nothing moved
-		// it, so there is nothing for the view to be brought back to.
-		var clock = new FakeClock();
-		int wiggles = 0;
-		bool drifted = true;
+		// The wiggle that follows a correction takes a while, so the user can easily click while
+		// it runs. Asking again straight after it is what stops the watch correcting once more
+		// first.
+		var h = new Harness();
+		h.Clock.OnWait = () => h.Cursor.Position = new CursorPoint(500, 300); // grabbed every tick
+		h.OnWiggle = () => { h.Acts++; return Task.CompletedTask; };
 
-		await Run(
-			clock,
-			() => false,
-			() => { bool answer = drifted; drifted = false; return answer; },
-			afterRestore: () => { wiggles++; return Task.CompletedTask; });
+		var outcome = await h.Run();
 
-		Assert.Equal(1, wiggles);
+		Assert.Equal(PointerHoldOutcome.UserTookTheMouse, outcome);
+		Assert.Single(h.Cursor.Writes);
+		Assert.Equal(1, h.Wiggles);
+	}
+
+	[Fact]
+	public async Task HandStepsDuringTheWiggle_AreFollowedOnTheNextTick_NotYankedBack()
+	{
+		// The hand moves while the wiggle runs. Those steps must not be swallowed by the wiggle:
+		// the next tick has to read them as the hand and follow, or the movement they left
+		// behind would be undone as though it were a grab.
+		var h = new Harness();
+		var handWentTo = new CursorPoint(300, 300);
+		int tick = 0;
+		h.Clock.OnWait = () =>
+		{
+			tick++;
+			if (tick == 1)
+				h.Cursor.Position = new CursorPoint(500, 300); // a grab; correction follows
+		};
+		h.OnWiggle = () =>
+		{
+			h.Steps++; // the hand moved while the wiggle ran
+			h.Cursor.Position = handWentTo;
+			return Task.CompletedTask;
+		};
+
+		var outcome = await h.Run();
+
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Single(h.Cursor.Writes); // only the one grab was corrected
+		Assert.Equal(new[] { handWentTo }, h.Followed);
 	}
 
 	[Fact]
 	public async Task ANewCaptureTakesOver_AndThisWatchStandsDown()
 	{
-		var clock = new FakeClock();
-		int corrections = 0;
-		bool current = true;
-		clock.OnWait = () =>
+		var h = new Harness();
+		h.Clock.OnWait = () =>
 		{
-			if (clock.Now >= TimeSpan.FromMilliseconds(80))
-				current = false;
+			if (h.Clock.Now >= TimeSpan.FromMilliseconds(80))
+				h.Current = false;
 		};
 
-		var outcome = await Run(
-			clock,
-			() => false,
-			() => { corrections++; return true; },
-			stillCurrent: () => current);
+		var outcome = await h.Run();
 
 		Assert.Equal(PointerHoldOutcome.Superseded, outcome);
-		Assert.Equal(1, corrections);
 	}
 
 	[Fact]
 	public async Task ZeroLength_NeverLooksAtThePointerAtAll()
 	{
-		var clock = new FakeClock();
-		int corrections = 0;
+		var h = new Harness();
 
-		var outcome = await Run(clock, () => false, () => { corrections++; return true; }, hold: TimeSpan.Zero);
+		var outcome = await h.Run(hold: TimeSpan.Zero);
 
 		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
-		Assert.Equal(0, corrections);
-		Assert.Empty(clock.Waits);
+		Assert.Empty(h.Clock.Waits);
+		Assert.Empty(h.Cursor.Writes);
 	}
 
 	[Fact]
 	public async Task ACorrectionOnTheLastTick_DoesNotStartAWiggleThatOutlivesTheWatch()
 	{
 		// The wiggle runs for as long as the user set it to, up to several seconds. Starting one
-		// on the last tick would keep the anchor, the hook and the whole apparatus alive well
-		// past the length the watch promised. The correction has already been made by then; only
-		// the wiggle that would have advertised it is given up.
-		var clock = new FakeClock();
-		int wiggles = 0;
+		// on the last tick would keep the whole apparatus alive well past the length the watch
+		// promised. The correction has already been made by then; only the wiggle that would
+		// have advertised it is given up.
+		var h = new Harness();
+		h.Clock.OnWait = () => h.Cursor.Position = new CursorPoint(500, 300);
 
-		var outcome = await Run(
-			clock,
-			() => false,
-			() => true,
-			afterRestore: () => { wiggles++; return Task.CompletedTask; },
-			hold: Poll); // one tick, and it is over
+		var outcome = await h.Run(hold: Poll); // one tick, and it is over
 
 		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
-		Assert.Equal(0, wiggles);
+		Assert.Single(h.Cursor.Writes);
+		Assert.Equal(0, h.Wiggles);
+	}
+
+	[Fact]
+	public async Task AnUnreadablePointer_IsLeftAlone()
+	{
+		// Not knowing where the pointer is, is not a good enough reason to move it.
+		var h = new Harness();
+		h.Cursor.Readable = false;
+		h.Cursor.Position = new CursorPoint(500, 300);
+
+		var outcome = await h.Run();
+
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Empty(h.Cursor.Writes);
+	}
+
+	[Fact]
+	public async Task AFailedRestore_DoesNotStartTheWiggle()
+	{
+		// The wiggle advertises a correction. If the write failed there is nothing to
+		// advertise, and wiggling around the grabbed position would advertise the grab.
+		var h = new Harness();
+		h.Cursor.Writable = false;
+		h.Clock.OnWait = () => h.Cursor.Position = new CursorPoint(500, 300);
+
+		var outcome = await h.Run();
+
+		Assert.Equal(PointerHoldOutcome.TimeUp, outcome);
+		Assert.Equal(0, h.Wiggles);
 	}
 
 	[Fact]
 	public async Task NullArgumentsAreRejected()
 	{
 		var clock = new FakeClock();
+		var cursor = new FakeCursor();
+		Func<long> zero = () => 0;
 		Func<bool> yes = () => true;
+		Action<CursorPoint> follow = _ => { };
 		Func<Task> nothing = () => Task.CompletedTask;
 
 		await Assert.ThrowsAsync<ArgumentNullException>(() =>
-			PointerHold.RunAsync(null!, yes, yes, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
+			PointerHold.RunAsync(null!, Baseline, zero, zero, yes, follow, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
 		await Assert.ThrowsAsync<ArgumentNullException>(() =>
-			PointerHold.RunAsync(yes, null!, yes, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
+			PointerHold.RunAsync(cursor, Baseline, null!, zero, yes, follow, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
 		await Assert.ThrowsAsync<ArgumentNullException>(() =>
-			PointerHold.RunAsync(yes, yes, null!, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
+			PointerHold.RunAsync(cursor, Baseline, zero, null!, yes, follow, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
 		await Assert.ThrowsAsync<ArgumentNullException>(() =>
-			PointerHold.RunAsync(yes, yes, yes, null!, clock.Delay, clock.Elapsed, Poll, Hold));
+			PointerHold.RunAsync(cursor, Baseline, zero, zero, null!, follow, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
+		await Assert.ThrowsAsync<ArgumentNullException>(() =>
+			PointerHold.RunAsync(cursor, Baseline, zero, zero, yes, null!, nothing, clock.Delay, clock.Elapsed, Poll, Hold));
+		await Assert.ThrowsAsync<ArgumentNullException>(() =>
+			PointerHold.RunAsync(cursor, Baseline, zero, zero, yes, follow, null!, clock.Delay, clock.Elapsed, Poll, Hold));
 	}
 
 	[Fact]
@@ -231,11 +335,12 @@ public class PointerHoldTests
 	{
 		// It would spin without ever advancing the clock.
 		var clock = new FakeClock();
-		Func<bool> yes = () => true;
+		var cursor = new FakeCursor();
+		Func<long> zero = () => 0;
 
 		await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
 			PointerHold.RunAsync(
-				() => false, yes, yes, () => Task.CompletedTask,
+				cursor, Baseline, zero, zero, () => true, _ => { }, () => Task.CompletedTask,
 				clock.Delay, clock.Elapsed, TimeSpan.Zero, Hold));
 	}
 }

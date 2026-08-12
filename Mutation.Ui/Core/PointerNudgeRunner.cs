@@ -34,10 +34,20 @@ public enum PointerNudgeVerdict
 /// <para>
 /// The stand-down rule is the whole reason this is not a plain loop. Before each move it checks
 /// that the pointer is still exactly where the previous move left it. If it is not, something
-/// else has taken hold of it — the user has picked up the mouse, or the next capture has already
-/// started and put the pointer somewhere of its own — and the nudge stops immediately. Half a
-/// second of an application dragging the pointer back under the user's hand would be far worse
-/// than the problem being solved.
+/// else has taken hold of it, and what happens next depends on who. When the watch reports hand
+/// movement since the last look, the run stops immediately and leaves the pointer exactly where
+/// the hand put it — half a second of an application dragging the pointer back under the user's
+/// hand would be far worse than the problem being solved. When the watch reports no hand behind
+/// the move, the pointer was grabbed by a program — the very thing the wiggle exists to defend
+/// against — and the run reclaims it by carrying on: the next planned move puts the pointer back
+/// within a pixel of the anchor. Without the distinction the wiggle died on its first tick every
+/// time, because a hand merely resting on a high-polling-rate mouse drifts the pointer a pixel
+/// between any two looks (issue #382).
+/// </para>
+///
+/// <para>
+/// A caller with no watch to offer passes nothing, and every foreign move then stops the run, as
+/// before — with no way to tell a hand from a grab, stopping is the only safe answer.
 /// </para>
 ///
 /// <para>
@@ -74,13 +84,17 @@ public static class PointerNudgeRunner
 	/// <param name="interval">How long to wait before each move.</param>
 	/// <param name="verdict">Asked before each move, and obeyed. Null means never asked, which
 	/// is the same as always continuing.</param>
+	/// <param name="handSteps">Count of hand-sized real movement events, from the watch.
+	/// Monotonic; the run compares it across each look to decide whether a foreign move was the
+	/// hand or a grab. Null means there is no watch, and every foreign move then ends the run.</param>
 	public static async Task<int> RunAsync(
 		ICursorPosition cursor,
 		Func<TimeSpan, Task> delay,
 		CursorPoint anchor,
 		IReadOnlyList<CursorPoint> plan,
 		TimeSpan interval,
-		Func<PointerNudgeVerdict>? verdict = null)
+		Func<PointerNudgeVerdict>? verdict = null,
+		Func<long>? handSteps = null)
 	{
 		if (cursor is null) throw new ArgumentNullException(nameof(cursor));
 		if (delay is null) throw new ArgumentNullException(nameof(delay));
@@ -95,6 +109,7 @@ public static class PointerNudgeRunner
 		bool mirrored = false;
 		bool directionSettled = false;
 		int applied = 0;
+		long steps = handSteps?.Invoke() ?? 0;
 
 		foreach (var position in plan)
 		{
@@ -108,10 +123,24 @@ public static class PointerNudgeRunner
 					return applied;
 			}
 
-			// The user has the mouse. Leave the pointer exactly as they left it, drift and all —
-			// the one exit that must not tidy up after itself.
-			if (!cursor.TryGet(out var current) || current != expected)
+			long stepsNow = handSteps?.Invoke() ?? 0;
+			bool handMoved = stepsNow != steps;
+			steps = stepsNow;
+
+			if (!cursor.TryGet(out var current))
 				return applied;
+
+			if (current != expected)
+			{
+				// The hand moved since the last look — or there is no watch to say otherwise.
+				// Leave the pointer exactly where it was found, drift and all — the one exit
+				// that must not tidy up after itself.
+				if (handSteps is null || handMoved)
+					return applied;
+
+				// A grab with no hand behind it. Fall through: the write below reclaims the
+				// pointer onto this move's planned position, a pixel from the anchor.
+			}
 
 			var target = mirrored ? Mirror(anchor, position) : position;
 
