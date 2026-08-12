@@ -48,8 +48,13 @@ internal static class MouseInput
 	private const int SM_CXVIRTUALSCREEN = 78;
 	private const int SM_CYVIRTUALSCREEN = 79;
 
-	/// <summary>The normalised grid absolute mouse input is expressed on, per axis.</summary>
-	private const long AbsoluteRange = 65535;
+	/// <summary>
+	/// The number of steps on the grid absolute mouse input is expressed on, per axis. The
+	/// largest value that can be sent is one less than this.
+	/// </summary>
+	private const long AbsoluteGridSteps = 65536;
+
+	private const long HighestGridStep = AbsoluteGridSteps - 1;
 
 	[DllImport("user32.dll")]
 	private static extern int GetSystemMetrics(int nIndex);
@@ -105,14 +110,30 @@ internal static class MouseInput
 	}
 
 	/// <summary>
-	/// Maps a screen coordinate onto the normalised grid: the first pixel of the virtual screen
-	/// becomes 0 and the last becomes 65535, with everything between rounded to nearest. Fails on
-	/// a virtual screen Windows reports as a single pixel or less, where there is nothing to
-	/// divide by and nowhere to move.
+	/// Maps a screen coordinate onto the normalised grid. Fails on a virtual screen Windows
+	/// reports as a single pixel or less, where there is nothing to divide by and nowhere to move.
+	///
 	/// <para>
-	/// Internal so the arithmetic can be checked without a screen. It is the kind that goes wrong
-	/// by one and stays wrong quietly — divide by the width rather than the width less one and
-	/// the last column becomes unreachable.
+	/// It aims at the middle of the target pixel rather than at its leading edge, and that is the
+	/// point of it. Windows does not document how it converts a grid step back into a pixel, and
+	/// the two conventions in circulation disagree at the edges — one divides the grid by the
+	/// number of pixels, the other by one less than that. Aim at a pixel's leading edge and
+	/// rounding can fall on the wrong side of the boundary, so the step maps back to the pixel
+	/// before the one intended. Aim at the middle and the value is comfortably inside the right
+	/// pixel whichever convention is applied.
+	/// </para>
+	///
+	/// <para>
+	/// What that buys is the property the whole feature rests on: neighbouring pixels always get
+	/// different grid steps, so a wiggle of a single pixel is always reported as movement. Under
+	/// the leading-edge form, some positions shared a step with the one beside them, and the
+	/// event went out saying the mouse had not moved — for a magnifier filtering exactly that,
+	/// an entire wiggle that reported nothing. It also makes the reported position and the placed
+	/// position agree, which is what stops the two from fighting over the last pixel.
+	/// </para>
+	///
+	/// <para>
+	/// Internal so the arithmetic can be checked without a screen.
 	/// </para>
 	/// </summary>
 	internal static bool TryNormaliseAxis(int value, int origin, int extent, out int normalised)
@@ -122,7 +143,12 @@ internal static class MouseInput
 			return false;
 
 		long offset = value - origin;
-		normalised = (int)((offset * AbsoluteRange + (extent - 1) / 2) / (extent - 1));
+		// (offset + 0.5) / extent, on the grid, without leaving whole numbers.
+		long step = ((2 * offset + 1) * AbsoluteGridSteps) / (2L * extent);
+		// The planner asks for positions past the edge of the virtual screen on purpose, to find
+		// out whether the pointer can go that way at all. Windows confines the pointer either
+		// way; sending a coordinate off the grid to say so would not.
+		normalised = (int)Math.Clamp(step, 0, HighestGridStep);
 		return true;
 	}
 }

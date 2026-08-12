@@ -1,4 +1,5 @@
 using Mutation.Ui.Core;
+using System;
 
 namespace Mutation.Ui.Services;
 
@@ -30,17 +31,35 @@ namespace Mutation.Ui.Services;
 internal sealed class ReportedCursorPosition : ICursorPosition
 {
 	private readonly ICursorPosition _cursor;
+	private readonly Func<CursorPoint, bool> _report;
 
-	public ReportedCursorPosition(ICursorPosition cursor)
+	/// <param name="cursor">Reads the pointer, and places it exactly.</param>
+	/// <param name="report">Announces a move as injected input. Injected by tests; the real one
+	/// goes to <see cref="MouseInput"/>.</param>
+	public ReportedCursorPosition(ICursorPosition cursor, Func<CursorPoint, bool>? report = null)
 	{
-		_cursor = cursor;
+		_cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
+		_report = report ?? (position => MouseInput.TryReportMoveTo(position.X, position.Y));
 	}
 
 	public bool TryGet(out CursorPoint position) => _cursor.TryGet(out position);
 
 	public bool TrySet(CursorPoint position)
 	{
-		MouseInput.TryReportMoveTo(position.X, position.Y);
-		return _cursor.TrySet(position);
+		_report(position);
+
+		if (!_cursor.TrySet(position))
+			return false;
+
+		// Injected input is put into the input stream, not applied by the time the call returns,
+		// so it can land after the placement above rather than before it. The two aim at the same
+		// pixel, so agreeing is the ordinary case — but if the pointer is not where it was just
+		// put, the injected event got there second and this puts it right. Left uncorrected, the
+		// wiggle's next tick would find a position it did not write, read that as the user taking
+		// the mouse, and stand down leaving the pointer off its anchor.
+		if (_cursor.TryGet(out var landed) && landed != position)
+			return _cursor.TrySet(position);
+
+		return true;
 	}
 }

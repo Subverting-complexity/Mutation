@@ -318,6 +318,23 @@ the window.</p>
 rectangle with the mouse or the keyboard as usual. If you would rather start again, press
 <strong>Esc</strong> to close the overlay first, then press the shortcut once more. If you were told
 to wait, give it a moment and press the shortcut again.</p>
+<h3 id="my-magnifier-still-loses-the-pointer-during-a-capture">My magnifier still loses the pointer during a capture</h3>
+<p><strong>What's happening.</strong> You have switched on <strong>Wiggle the mouse pointer during a capture</strong>,
+but your magnified view still wanders off and stays there. There are three usual reasons,
+and they are easy to tell apart because they happen at different moments.</p>
+<p>Your magnifier may be ignoring the shake because it is too small. Some treat a movement of
+one pixel as an unsteady hand rather than a real one. Raise <strong>Wiggle distance (pixels)</strong>
+in <strong>Settings</strong>, under <strong>Screen capture &amp; OCR</strong>, to 4 or 8. That is still far too small to
+get in your way, and the pointer comes back to exactly the same place.</p>
+<p>The shake may be finishing before your magnifier gets round to moving the view. Raise
+<strong>Keep wiggling for (milliseconds)</strong> to 1000 and see whether the view comes back.</p>
+<p>If it works when the overlay opens but not when it goes away, the app you captured from is
+probably running as an administrator. Windows does not let an ordinary program send mouse
+movement to a program with more privilege than itself, so the shake reaches your magnifier
+in the first case and is refused in the second. Running Mutation as an administrator too
+puts them on the same footing.</p>
+<p><strong>What to do.</strong> Try the distance first, then the duration. If only the end of a capture is
+affected, check whether the app you were in was started as an administrator.</p>
 <h3 id="ocr-read-the-text-but-could-not-copy-it-to-the-clipboard">OCR read the text but could not copy it to the clipboard</h3>
 <p><strong>What's happening.</strong> Only one program can have the clipboard open at a time. Just
 after a screenshot, a clipboard manager or your screen reader often opens it to look at

@@ -208,6 +208,29 @@ rectangle with the mouse or the keyboard as usual. If you would rather start aga
 **Esc** to close the overlay first, then press the shortcut once more. If you were told
 to wait, give it a moment and press the shortcut again.
 
+### My magnifier still loses the pointer during a capture
+
+**What's happening.** You have switched on **Wiggle the mouse pointer during a capture**,
+but your magnified view still wanders off and stays there. There are three usual reasons,
+and they are easy to tell apart because they happen at different moments.
+
+Your magnifier may be ignoring the shake because it is too small. Some treat a movement of
+one pixel as an unsteady hand rather than a real one. Raise **Wiggle distance (pixels)**
+in **Settings**, under **Screen capture & OCR**, to 4 or 8. That is still far too small to
+get in your way, and the pointer comes back to exactly the same place.
+
+The shake may be finishing before your magnifier gets round to moving the view. Raise
+**Keep wiggling for (milliseconds)** to 1000 and see whether the view comes back.
+
+If it works when the overlay opens but not when it goes away, the app you captured from is
+probably running as an administrator. Windows does not let an ordinary program send mouse
+movement to a program with more privilege than itself, so the shake reaches your magnifier
+in the first case and is refused in the second. Running Mutation as an administrator too
+puts them on the same footing.
+
+**What to do.** Try the distance first, then the duration. If only the end of a capture is
+affected, check whether the app you were in was started as an administrator.
+
 ### OCR read the text but could not copy it to the clipboard
 
 **What's happening.** Only one program can have the clipboard open at a time. Just
