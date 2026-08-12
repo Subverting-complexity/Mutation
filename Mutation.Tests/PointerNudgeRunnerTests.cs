@@ -150,7 +150,7 @@ public class PointerNudgeRunnerTests
 		int checks = 0;
 
 		int applied = await PointerNudgeRunner.RunAsync(
-			cursor, clock.Delay, Anchor, PlanOf(6), Interval, stillWanted: () => ++checks <= 2);
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, verdict: () => ++checks <= 2 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndSettle);
 
 		Assert.Equal(2, applied);
 	}
@@ -233,7 +233,7 @@ public class PointerNudgeRunnerTests
 		int checks = 0;
 
 		int applied = await PointerNudgeRunner.RunAsync(
-			cursor, clock.Delay, Anchor, PlanOf(6), Interval, stillWanted: () => ++checks <= 1);
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, verdict: () => ++checks <= 1 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndSettle);
 
 		Assert.Equal(1, applied);
 		Assert.Equal(Anchor, cursor.Position);
@@ -270,6 +270,25 @@ public class PointerNudgeRunnerTests
 		await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
 
 		Assert.Equal(elsewhere, cursor.Position);
+		Assert.DoesNotContain(Anchor, cursor.Writes);
+	}
+
+	[Fact]
+	public async Task DragStarted_TheWiggleStopsWhereItStandsRatherThanTidyingUp()
+	{
+		// The user has put the mouse button down while the wiggle had the pointer a pixel out.
+		// The rectangle they are drawing starts from where the pointer is, so putting it back on
+		// the anchor now would move the edge of their selection just as they pressed.
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		int checks = 0;
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval,
+			verdict: () => ++checks <= 1 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndLeave);
+
+		Assert.Equal(1, applied);
+		Assert.Equal(Away, cursor.Position);
 		Assert.DoesNotContain(Anchor, cursor.Writes);
 	}
 

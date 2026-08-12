@@ -60,4 +60,19 @@ public static class PointerNudgePlanner
 
 		return plan;
 	}
+
+	/// <summary>
+	/// Whether <paramref name="current"/> is a pixel a wiggle around <paramref name="anchor"/>
+	/// could have parked the pointer on — one column either side, same row.
+	/// <para>
+	/// Asked when something wants the pointer back before a wiggle has finished with it. A wiggle
+	/// spends half its life a pixel off the anchor, so anything that re-reads the live pointer
+	/// while one is running — completing a capture, or bringing the overlay forward again — would
+	/// otherwise take that pixel as the truth and keep it. Checking the shape first is what tells
+	/// a displacement the wiggle caused from a pointer the user has moved themselves, which must
+	/// be left exactly as it is.
+	/// </para>
+	/// </summary>
+	public static bool IsWiggleDisplacement(CursorPoint anchor, CursorPoint current) =>
+		current.Y == anchor.Y && Math.Abs(current.X - anchor.X) == 1;
 }

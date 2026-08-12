@@ -60,8 +60,8 @@ it a little shake for you, at both ends: one pixel back and forth for a fifth of
 second, ending exactly where it started. Turn on **Wiggle the mouse pointer during a
 capture** in **Settings**, under **Screen capture & OCR**. It is off unless you switch it
 on, and you can change how fast it shakes and how long each shake lasts. Mutation stops
-shaking the moment you take hold of the mouse, and it never shakes while you are drawing
-a rectangle.
+shaking as soon as you take hold of the mouse or start drawing a rectangle, and shaking
+never moves the corner you have pinned with the keyboard.
 
 ### Picking the rectangle with the mouse
 
