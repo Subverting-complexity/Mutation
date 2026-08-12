@@ -208,6 +208,27 @@ rectangle with the mouse or the keyboard as usual. If you would rather start aga
 **Esc** to close the overlay first, then press the shortcut once more. If you were told
 to wait, give it a moment and press the shortcut again.
 
+### After a capture the pointer ends up in a text box
+
+**What's happening.** Your capture finishes, the app you were in comes back to the front, and
+the mouse pointer jumps into a text box you were never pointing at. Some magnifiers move the
+pointer to the flashing text cursor whenever an app takes focus, and that happens a moment
+after the capture ends.
+
+Mutation watches the pointer for a second and a half after each capture and puts it back
+whenever something else moves it. If your magnifier is slower than that to react, raise **Keep
+the pointer put for (milliseconds)** in **Settings**, under **Screen capture & OCR**.
+
+Very occasionally Mutation cannot watch the pointer at all, because security software on the
+PC blocks the kind of watching it needs. When that happens Mutation does nothing rather than
+guess, so the pointer is put back twice as the capture ends and then left alone. You would see
+the jump come back exactly as it was before this feature existed, and raising the number would
+make no difference.
+
+**What to do.** Raise that number to 3000 and try again. If it changes nothing at all, the
+watch is probably being blocked, and there is nothing to adjust. If you would rather Mutation
+left the pointer alone entirely, set it to 0.
+
 ### My magnifier still loses the pointer during a capture
 
 **What's happening.** You have switched on **Wiggle the mouse pointer during a capture**,

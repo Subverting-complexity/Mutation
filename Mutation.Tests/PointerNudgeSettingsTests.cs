@@ -37,6 +37,7 @@ public class PointerNudgeSettingsTests
 		Assert.Equal(50, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(200, ocr.PointerNudgeDurationMilliseconds);
 		Assert.Equal(1, ocr.PointerNudgeDistancePixels);
+		Assert.Equal(1500, ocr.PointerHoldMilliseconds);
 	}
 
 	[Theory]
@@ -77,15 +78,30 @@ public class PointerNudgeSettingsTests
 		Assert.Equal(expected, Load(distancePx: stored).PointerNudgeDistancePixels);
 	}
 
+	[Theory]
+	[InlineData(0, 0)]          // switched off on purpose, and left switched off
+	[InlineData(-100, 0)]       // a negative is nonsense; off is the nearest sense it makes
+	[InlineData(250, 250)]
+	[InlineData(1500, 1500)]
+	[InlineData(10000, 10000)]
+	[InlineData(99999, 10000)]  // a watch nobody could wait out
+	public void PointerHoldIsClampedOnLoad(int stored, int expected)
+	{
+		// Zero is a real answer here, unlike the wiggle timings, so it must survive rather than
+		// be repaired to the default.
+		Assert.Equal(expected, Load(holdMs: stored).PointerHoldMilliseconds);
+	}
+
 	[Fact]
 	public void ValuesAlreadyInRange_AreLeftExactlyAsTheyAre()
 	{
 		// Whatever the user picked in the dialog has to survive a reload untouched.
-		var ocr = Load(intervalMs: 120, durationMs: 3000, distancePx: 12);
+		var ocr = Load(intervalMs: 120, durationMs: 3000, distancePx: 12, holdMs: 900);
 
 		Assert.Equal(120, ocr.PointerNudgeIntervalMilliseconds);
 		Assert.Equal(3000, ocr.PointerNudgeDurationMilliseconds);
 		Assert.Equal(12, ocr.PointerNudgeDistancePixels);
+		Assert.Equal(900, ocr.PointerHoldMilliseconds);
 	}
 
 	[Fact]
@@ -134,7 +150,7 @@ public class PointerNudgeSettingsTests
 		return settings.AzureComputerVisionSettings!;
 	}
 
-	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 200, int distancePx = 1)
+	private static AzureComputerVisionSettings Load(int intervalMs = 50, int durationMs = 200, int distancePx = 1, int holdMs = 1500)
 	{
 		using var settingsFile = new TempSettingsFile("nudge", "{}");
 
@@ -146,6 +162,7 @@ public class PointerNudgeSettingsTests
 				PointerNudgeIntervalMilliseconds = intervalMs,
 				PointerNudgeDurationMilliseconds = durationMs,
 				PointerNudgeDistancePixels = distancePx,
+				PointerHoldMilliseconds = holdMs,
 			},
 		};
 		manager.EnsureSettings(settings, isNewFile: false);

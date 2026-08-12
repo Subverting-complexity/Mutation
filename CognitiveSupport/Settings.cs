@@ -164,6 +164,18 @@ public class AzureComputerVisionSettings
 	public const int MinPointerNudgeDistancePixels = 1;
 	public const int MaxPointerNudgeDistancePixels = 64;
 
+	// How long to keep the mouse pointer on the spot the capture left it, after the capture is
+	// over. A magnifier that follows the keyboard caret moves the pointer to it once the previous
+	// application has focus again, which is later than the two restores the capture itself does,
+	// so without this the pointer ends up in a text box the user was never pointing at. The watch
+	// stands down the instant real mouse input arrives, so it never argues with a hand on the
+	// mouse. Zero switches it off.
+	public int PointerHoldMilliseconds { get; set; } = DefaultPointerHoldMilliseconds;
+
+	public const int DefaultPointerHoldMilliseconds = 1500;
+	public const int MinPointerHoldMilliseconds = 0;
+	public const int MaxPointerHoldMilliseconds = 10000;
+
 	// Short on purpose. It runs twice per capture now, once at each end, and a wiggle the user
 	// has to wait out is worse than one they barely notice.
 	public const int DefaultPointerNudgeDurationMilliseconds = 200;

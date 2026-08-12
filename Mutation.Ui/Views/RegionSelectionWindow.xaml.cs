@@ -69,6 +69,19 @@ public sealed partial class RegionSelectionWindow : Window
 	public PointerNudgeOptions PointerNudge { get; set; } = PointerNudgeOptions.Off;
 
 	/// <summary>
+	/// How long to keep the pointer on the spot this capture left it once the capture is over.
+	/// Zero switches the watch off. Set by the caller before each capture, like
+	/// <see cref="PointerNudge"/>.
+	/// </summary>
+	public TimeSpan PointerHoldFor { get; set; } = TimeSpan.Zero;
+
+	/// <summary>
+	/// How often the hold looks at the pointer. Short enough that a jump is corrected before the
+	/// user has taken it in, long enough not to spend the whole hold reading the cursor position.
+	/// </summary>
+	private static readonly TimeSpan PointerHoldPollInterval = TimeSpan.FromMilliseconds(40);
+
+	/// <summary>
 	/// True while a wiggle is moving the pointer, so the rest of the overlay can tell the app's
 	/// own movement from the user's.
 	/// <para>
@@ -760,16 +773,29 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </summary>
 	private void RestoreCursorAfterForegroundHandback()
 	{
-		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge);
+		var hold = PointerHoldFor;
+		// Installed here, on the UI thread, because a low-level hook is delivered on the thread
+		// that installed it and that thread needs a message loop. The hold itself runs off the UI
+		// thread and only reads what the hook has seen.
+		//
+		// Only when there is a hold to serve. It is a system-wide hook, and installing one on
+		// every capture for a watch the user has switched off would be a cost paid for nothing.
+		var watch = hold > TimeSpan.Zero ? RealMouseInputWatch.Start() : null;
+		_ = HandPointerBackAsync(_cursorAnchor.Generation, PointerNudge, hold, watch);
 	}
 
-	private async Task HandPointerBackAsync(int generation, PointerNudgeOptions nudge)
+	private async Task HandPointerBackAsync(
+		int generation,
+		PointerNudgeOptions nudge,
+		TimeSpan hold,
+		RealMouseInputWatch? watch)
 	{
 		try
 		{
 			await ForegroundHandedBack.ConfigureAwait(false);
 			_cursorAnchor.RestoreIfCurrent(generation);
 			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+			await HoldPointerAsync(generation, nudge, hold, watch).ConfigureAwait(false);
 		}
 		catch
 		{
@@ -780,7 +806,69 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			// The capture is over and the pointer belongs to the user again.
 			_cursorAnchor.ClearIfCurrent(generation);
+			DisposeOnUiThread(watch);
 		}
+	}
+
+	/// <summary>
+	/// Keeps the pointer on the spot the capture left it for a short while, putting it back
+	/// whenever something else moves it, and standing down for good the moment a hand touches the
+	/// mouse (issue #379).
+	/// <para>
+	/// The two restores above both land before anything has reacted to the foreground changing. A
+	/// magnifier that follows the keyboard caret moves the pointer to it later than that, so
+	/// without this the pointer arrives back where the user left it and is then taken away to a
+	/// text box they were never pointing at — every time, not occasionally.
+	/// </para>
+	/// <para>
+	/// What makes a watch this long safe is that the hook can tell a hand on the mouse from a
+	/// program moving the pointer. It is not guessing, so it never argues with the user.
+	/// </para>
+	/// </summary>
+	private Task HoldPointerAsync(
+		int generation,
+		PointerNudgeOptions nudge,
+		TimeSpan hold,
+		RealMouseInputWatch? watch)
+	{
+		if (hold <= TimeSpan.Zero)
+			return Task.CompletedTask;
+
+		// No hook, no hold. Without the signal, "the user has not touched the mouse" would be an
+		// assumption rather than an observation, and acting on it would mean dragging the pointer
+		// back from under a hand for the length of the hold — the very thing this is built to
+		// avoid. A capture then behaves as it did before the hold existed, which is a real
+		// answer; guessing is not.
+		if (watch is null || !watch.IsWatching)
+			return Task.CompletedTask;
+
+		var since = System.Diagnostics.Stopwatch.StartNew();
+
+		return PointerHold.RunAsync(
+			userHasTheMouse: () => watch.UserHasTheMouse,
+			stillCurrent: () => _cursorAnchor.Generation == generation,
+			restoreIfDrifted: () => _cursorAnchor.RestoreIfCurrent(generation),
+			// Whatever moved the pointer probably moved the magnified view with it, so bring the
+			// view back to where the pointer has been put.
+			afterRestore: () => NudgePointerAsync(generation, nudge),
+			delay: Task.Delay,
+			elapsed: () => since.Elapsed,
+			pollInterval: PointerHoldPollInterval,
+			hold: hold);
+	}
+
+	/// <summary>
+	/// Removes the hook on the thread that installed it, as Windows requires. Falls back to
+	/// removing it here if there is no queue to get back onto — worse than nothing would be
+	/// leaving a system-wide hook installed for ever.
+	/// </summary>
+	private void DisposeOnUiThread(RealMouseInputWatch? watch)
+	{
+		if (watch is null)
+			return;
+
+		if (_dispatcherQueue is null || !_dispatcherQueue.TryEnqueue(watch.Dispose))
+			watch.Dispose();
 	}
 
 	/// <summary>

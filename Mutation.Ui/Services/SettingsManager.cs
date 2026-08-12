@@ -226,6 +226,18 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 
+		// Zero is a real answer here — it switches the hold off — so only a negative is repaired,
+		// and anything above the ceiling is brought down to it.
+		int pointerHold = Math.Clamp(
+			azureComputerVisionSettings.PointerHoldMilliseconds,
+			AzureComputerVisionSettings.MinPointerHoldMilliseconds,
+			AzureComputerVisionSettings.MaxPointerHoldMilliseconds);
+		if (pointerHold != azureComputerVisionSettings.PointerHoldMilliseconds)
+		{
+			azureComputerVisionSettings.PointerHoldMilliseconds = pointerHold;
+			somethingWasMissing = true;
+		}
+
 		int nudgeDistance = azureComputerVisionSettings.PointerNudgeDistancePixels <= 0
 			? AzureComputerVisionSettings.DefaultPointerNudgeDistancePixels
 			: Math.Clamp(

@@ -890,6 +890,7 @@ public class OcrManager
             // Read per capture, not once at startup: the overlay is cached and reused, so a
             // change made in the Settings dialog has to reach the next capture (issue #373).
             overlay.PointerNudge = ReadPointerNudgeOptions();
+            overlay.PointerHoldFor = ReadPointerHold();
             // InitializeAsync already calls UpdateBitmap; calling it again converted and
             // copied the whole virtual screen a second time for nothing (issue #229).
             await overlay.InitializeAsync(bmp);
@@ -946,6 +947,16 @@ public class OcrManager
             ocr.PointerNudgeIntervalMilliseconds,
             ocr.PointerNudgeDurationMilliseconds,
             ocr.PointerNudgeDistancePixels);
+    }
+
+    /// <summary>
+    /// How long the overlay should keep the pointer where the capture left it. Zero when the OCR
+    /// settings are missing altogether, which is the same answer a switched-off watch gives.
+    /// </summary>
+    private TimeSpan ReadPointerHold()
+    {
+        int milliseconds = _settings.AzureComputerVisionSettings?.PointerHoldMilliseconds ?? 0;
+        return milliseconds > 0 ? TimeSpan.FromMilliseconds(milliseconds) : TimeSpan.Zero;
     }
 
     private static async Task<SoftwareBitmap> CropBitmapAsync(SoftwareBitmap src, Rect rect)

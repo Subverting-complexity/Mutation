@@ -48,6 +48,9 @@ internal static class SettingsDefaults
 		public const int PointerNudgeDistancePixels = AzureComputerVisionSettings.DefaultPointerNudgeDistancePixels;
 		public const int MinPointerNudgeDistancePixels = AzureComputerVisionSettings.MinPointerNudgeDistancePixels;
 		public const int MaxPointerNudgeDistancePixels = AzureComputerVisionSettings.MaxPointerNudgeDistancePixels;
+		public const int PointerHoldMilliseconds = AzureComputerVisionSettings.DefaultPointerHoldMilliseconds;
+		public const int MinPointerHoldMilliseconds = AzureComputerVisionSettings.MinPointerHoldMilliseconds;
+		public const int MaxPointerHoldMilliseconds = AzureComputerVisionSettings.MaxPointerHoldMilliseconds;
 	}
 
 	public static class Speech
