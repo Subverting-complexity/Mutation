@@ -811,7 +811,25 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			await ForegroundHandedBack.ConfigureAwait(false);
 			_cursorAnchor.RestoreIfCurrent(generation);
+
+			// Snapshot taken before the wiggle so the reconciliation below can tell whether the
+			// hand moved while it ran.
+			long stepsBeforeNudge = watch?.HandSteps ?? 0;
 			await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
+
+			// If the hand moved during the wiggle, the run left the pointer exactly where the
+			// hand put it — and the anchor still points at the old place. The hold that starts
+			// next would read that difference as a grab and snap the pointer back out from under
+			// the resting hand, because its own counter snapshot is taken after the movement
+			// already happened. So the anchor is brought to the pointer first: the hold then
+			// defends where the hand actually is. When no hand moved, the anchor is left alone —
+			// any divergence is a genuine grab, and the hold's first tick undoes it.
+			if (watch is { IsWatching: true } && watch.HandSteps != stepsBeforeNudge
+				&& _cursor.TryGet(out var handLeftItAt))
+			{
+				_cursorAnchor.RebaseIfCurrent(generation, handLeftItAt);
+			}
+
 			await HoldPointerAsync(generation, nudge, hold, watch).ConfigureAwait(false);
 		}
 		catch
