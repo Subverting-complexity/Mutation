@@ -47,6 +47,12 @@ pressed the shortcut, it is still there when the overlay opens and still there w
 overlay goes away. So you can pick the rectangle with the mouse or the keyboard, either
 way, without the pointer wandering off first.
 
+If your magnifier moves the pointer itself — some move it to the flashing text cursor of
+whatever app comes back to the front — Mutation puts it back, and keeps an eye on it for a
+second and a half afterwards. The moment you touch the mouse, it stops watching and the
+pointer is yours. You can change how long it watches, or switch it off, with **Keep the
+pointer put for (milliseconds)** in **Settings**, under **Screen capture & OCR**.
+
 ### If your magnifier keeps losing the pointer
 
 Some magnifiers follow whatever has just taken over the screen, rather than the mouse.

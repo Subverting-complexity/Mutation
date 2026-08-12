@@ -209,7 +209,8 @@ All hotkeys are global and fully customisable. Below is an example covering ever
     "NudgePointerDuringCapture": false,
     "PointerNudgeIntervalMilliseconds": 50,
     "PointerNudgeDurationMilliseconds": 200,
-    "PointerNudgeDistancePixels": 1
+    "PointerNudgeDistancePixels": 1,
+    "PointerHoldMilliseconds": 1500
   },
 
   "SpeechToTextSettings": {

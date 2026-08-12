@@ -99,6 +99,18 @@
 		</StackPanel>
 
 		<StackPanel Spacing="8">
+			<StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<TextBlock Text="Keep the pointer put for (milliseconds)" VerticalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" />
+					<controls:InfoHint Text="{StaticResource Help.Ocr.PointerHold}" VerticalAlignment="Center" />
+				</StackPanel>
+				<StackPanel Orientation="Horizontal" Spacing="6">
+					<NumberBox x:Name="NbPointerHold" AutomationProperties.Name="Keep the pointer put for (milliseconds)" AutomationProperties.HelpText="{StaticResource Help.Ocr.PointerHold}" Minimum="0" Maximum="10000" SmallChange="100" LargeChange="500" Width="220" SpinButtonPlacementMode="Inline" ValueChanged="NbPointerHold_ValueChanged" />
+					<Button Click="BtnResetPointerHold_Click" ToolTipService.ToolTip="Reset to default" AutomationProperties.Name="Reset keep the pointer put">
+						<FontIcon Glyph="&#xE72C;" FontFamily="Segoe Fluent Icons" FontSize="12" AutomationProperties.AccessibilityView="Raw" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
 			<StackPanel Orientation="Horizontal" Spacing="6">
 				<ToggleSwitch x:Name="ToggleNudgePointer" Header="Wiggle the mouse pointer during a capture" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgePointer}" Toggled="ToggleNudgePointer_Toggled" />
 				<controls:InfoHint Text="{StaticResource Help.Ocr.NudgePointer}" VerticalAlignment="Center" />

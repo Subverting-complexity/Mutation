@@ -242,6 +242,10 @@ Leaving Advanced off simply hides that button.</p>
 <td>Optional keystrokes sent to the app you are in once the text has been delivered — a screen reader command that reads it back, for example. It comes after the paste above.</td>
 </tr>
 <tr>
+<td>Keep the pointer put for (milliseconds)</td>
+<td>1500 by default, and anything up to 10000. After a capture, Mutation watches the mouse pointer for this long and puts it back if something else moves it. Some magnifiers move the pointer to the flashing text cursor of whatever app comes back to the front. Touching the mouse yourself stops the watch at once, so it never fights you. Set it to 0 to switch it off.</td>
+</tr>
+<tr>
 <td>Wiggle the mouse pointer during a capture</td>
 <td>Off by default. Shakes the pointer back and forth at both ends of a capture — when the overlay opens and again when it goes away — then leaves it exactly where it started. Only useful if your magnifier keeps losing the pointer — see <a href="screen-capture-and-ocr.html">Screen capture and OCR</a> for what that looks like.</td>
 </tr>
