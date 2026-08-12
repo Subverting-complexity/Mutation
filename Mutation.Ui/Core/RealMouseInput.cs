@@ -92,6 +92,16 @@ public static class RealMouseInput
 	public const int HandStepLimitPixels = 12;
 
 	/// <summary>
+	/// How far a resting hand's jitter can put the pointer from where a wiggle expected it,
+	/// in pixels on either axis, without meaning anything. Measured jitter is one to two pixels
+	/// between two 50 ms looks; genuine travel crosses this in a single look. A hand crawling
+	/// slower than this per look during an active wiggle is re-centred for the wiggle's duration
+	/// — a real cost, accepted because the alternative was a wiggle that died on the first
+	/// jitter pixel and so never ran at all (issue #384).
+	/// </summary>
+	public const int RestingHandJitterRadiusPixels = 3;
+
+	/// <summary>
 	/// Says what <paramref name="message"/> was, given its hook flags and how far it moved the
 	/// pointer from the previous event, in pixels on the larger axis.
 	/// </summary>

@@ -812,23 +812,17 @@ public sealed partial class RegionSelectionWindow : Window
 			await ForegroundHandedBack.ConfigureAwait(false);
 			_cursorAnchor.RestoreIfCurrent(generation);
 
-			// Snapshot taken before the wiggle so the reconciliation below can tell whether the
-			// hand moved while it ran.
-			long stepsBeforeNudge = watch?.HandSteps ?? 0;
-			await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
-
-			// If the hand moved during the wiggle, the run left the pointer exactly where the
-			// hand put it — and the anchor still points at the old place. The hold that starts
-			// next would read that difference as a grab and snap the pointer back out from under
-			// the resting hand, because its own counter snapshot is taken after the movement
-			// already happened. So the anchor is brought to the pointer first: the hold then
-			// defends where the hand actually is. When no hand moved, the anchor is left alone —
-			// any divergence is a genuine grab, and the hold's first tick undoes it.
-			if (watch is { IsWatching: true } && watch.HandSteps != stepsBeforeNudge
-				&& _cursor.TryGet(out var handLeftItAt))
-			{
+			// If the wiggle saw the hand take the pointer, it left it exactly where the hand put
+			// it — and the anchor still points at the old place. The hold that starts next would
+			// read that difference as a grab and snap the pointer back out from under the
+			// resting hand. So the anchor is brought to the position the wiggle reported first,
+			// and the hold defends where the hand actually is. The run's own report is the only
+			// trustworthy account: the wiggle can last for seconds, and asking the counters "did
+			// a teleport happen anywhere in it?" cannot say whether the hand or a grab had the
+			// last word (issues #382 and #384).
+			var nudgeReport = await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
+			if (nudgeReport is CursorPoint handLeftItAt)
 				_cursorAnchor.RebaseIfCurrent(generation, handLeftItAt);
-			}
 
 			await HoldPointerAsync(generation, nudge, hold, watch).ConfigureAwait(false);
 		}
@@ -887,6 +881,7 @@ public sealed partial class RegionSelectionWindow : Window
 			baseline: _cursorAnchor.Anchor,
 			handActs: () => watch.HandActs,
 			handSteps: () => watch.HandSteps,
+			teleports: () => watch.Teleports,
 			stillCurrent: () => _cursorAnchor.Generation == generation,
 			// Keep the anchor with the hand, so the wiggle below — and the settle, if anything
 			// interrupts it — aim at where the hand actually is, not where the capture ended.
@@ -953,10 +948,10 @@ public sealed partial class RegionSelectionWindow : Window
 	/// advertise the wrong place.
 	/// </para>
 	/// </summary>
-	private async Task NudgePointerAsync(int generation, PointerNudgeOptions nudge, RealMouseInputWatch? watch)
+	private async Task<CursorPoint?> NudgePointerAsync(int generation, PointerNudgeOptions nudge, RealMouseInputWatch? watch)
 	{
 		if (!nudge.Enabled || _cursorAnchor.Generation != generation || !_cursorAnchor.HasAnchor)
-			return;
+			return null;
 
 		var anchor = _cursorAnchor.Anchor;
 		var plan = PointerNudgePlanner.Plan(anchor, nudge);
@@ -964,7 +959,7 @@ public sealed partial class RegionSelectionWindow : Window
 		_nudgeOwnsPointer = true;
 		try
 		{
-			await PointerNudgeRunner.RunAsync(
+			var run = await PointerNudgeRunner.RunAsync(
 				_nudgeCursor,
 				Task.Delay,
 				anchor,
@@ -972,10 +967,12 @@ public sealed partial class RegionSelectionWindow : Window
 				TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
 				() => NudgeVerdict(generation),
 				// The watch is what lets the run tell a grab from the hand and reclaim the
-				// pointer instead of dying on a one-pixel drift (issue #382). Without one — not
-				// asked for, or the hook refused to install — the run keeps the old rule and
-				// stops on any foreign move.
-				watch is { IsWatching: true } ? () => watch.HandSteps : null).ConfigureAwait(false);
+				// pointer instead of dying on a one-pixel drift (issues #382 and #384). Without
+				// one — not asked for, or the hook refused to install — the run keeps the old
+				// rule and stops on any foreign move.
+				watch is { IsWatching: true } ? () => watch.HandSteps : null,
+				watch is { IsWatching: true } ? () => watch.Teleports : null).ConfigureAwait(false);
+			return run.HandTookItAt;
 		}
 		finally
 		{

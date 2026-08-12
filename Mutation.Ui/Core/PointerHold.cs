@@ -58,12 +58,20 @@ public static class PointerHold
 	/// Monotonic; only changes matter, so a snapshot taken before a wait is compared after it.</param>
 	/// <param name="handSteps">Count of hand-sized real movement events seen so far, from the
 	/// watch. Monotonic, compared the same way. This is what tells a followed hand from a grab.</param>
+	/// <param name="teleports">Count of single-event moves too large for a hand — a driver
+	/// grabbing the pointer. Checked before the hand steps, because a resting hand's jitter
+	/// advances the step count in every look: a grab that lands in the same look as jitter would
+	/// otherwise be followed as though the hand had made it, which is how the magnifier's caret
+	/// grab beat the first version of this hold on every capture (issue #384).</param>
 	/// <param name="stillCurrent">Whether the capture this hold belongs to is still the live one.</param>
 	/// <param name="followedTo">Told each time the baseline moves to follow the hand, so whatever
 	/// else aims at the defended position — the wiggle — aims at the new one.</param>
 	/// <param name="afterRestore">Run when a grab was undone — the wiggle, which brings a
 	/// magnified view back to the pointer, since whatever grabbed the pointer probably took the
-	/// view with it.</param>
+	/// view with it. Its answer is where the hand was seen taking the pointer during the run, or
+	/// null when it was not. The answer is trusted over the counters, because the wiggle can last
+	/// for seconds: a teleport early in it and genuine hand travel late in it can both have
+	/// happened, and only the run itself saw the order (issue #384).</param>
 	/// <param name="delay">How to wait one poll interval.</param>
 	/// <param name="elapsed">Time since the hold started. Measured rather than counted, because a
 	/// busy machine makes a count of intervals mean nothing.</param>
@@ -72,9 +80,10 @@ public static class PointerHold
 		CursorPoint baseline,
 		Func<long> handActs,
 		Func<long> handSteps,
+		Func<long> teleports,
 		Func<bool> stillCurrent,
 		Action<CursorPoint> followedTo,
-		Func<Task> afterRestore,
+		Func<Task<CursorPoint?>> afterRestore,
 		Func<TimeSpan, Task> delay,
 		Func<TimeSpan> elapsed,
 		TimeSpan pollInterval,
@@ -83,6 +92,7 @@ public static class PointerHold
 		if (cursor is null) throw new ArgumentNullException(nameof(cursor));
 		if (handActs is null) throw new ArgumentNullException(nameof(handActs));
 		if (handSteps is null) throw new ArgumentNullException(nameof(handSteps));
+		if (teleports is null) throw new ArgumentNullException(nameof(teleports));
 		if (stillCurrent is null) throw new ArgumentNullException(nameof(stillCurrent));
 		if (followedTo is null) throw new ArgumentNullException(nameof(followedTo));
 		if (afterRestore is null) throw new ArgumentNullException(nameof(afterRestore));
@@ -92,6 +102,7 @@ public static class PointerHold
 
 		long acts = handActs();
 		long steps = handSteps();
+		long grabs = teleports();
 
 		while (elapsed() < hold)
 		{
@@ -107,22 +118,31 @@ public static class PointerHold
 			bool handMoved = stepsNow != steps;
 			steps = stepsNow;
 
+			long grabsNow = teleports();
+			bool grabbed = grabsNow != grabs;
+			grabs = grabsNow;
+
 			if (!cursor.TryGet(out var current) || current == baseline)
 				continue;
 
-			if (handMoved)
+			// Asked before the hand steps, on purpose. A resting hand's jitter advances the step
+			// count in every look, so on the tick the magnifier grabs the pointer, "did the hand
+			// move?" is true as well — and a follow here would adopt the grabbed position as
+			// though the hand had walked there. The teleport says a grab happened in this look,
+			// whatever else did; the position the hand actually holds is the baseline, which the
+			// jitter has been walking along a pixel at a time. The one thing given up is a hand
+			// whose genuine travel shares a look with a grab — it is restored once and followed
+			// again on its next step, a cost of one tick.
+			if (handMoved && !grabbed)
 			{
-				// The hand went there. The defense follows it — deliberately not asking whether
-				// something else moved the pointer in the same interval, because when a hand and
-				// a grab land together, deferring to the hand is the mistake that costs one lost
-				// correction, and fighting the hand is the mistake this whole class exists to
-				// never make.
 				baseline = current;
 				followedTo(current);
 				continue;
 			}
 
-			// A grab: the pointer moved and no hand moved it.
+			// A grab: a teleport landed in this look, or the pointer moved with no hand behind
+			// it at all (a silent cursor placement). Either way the pointer goes back to where
+			// the hand holds it.
 			if (!cursor.TrySet(baseline))
 				continue;
 
@@ -134,15 +154,29 @@ public static class PointerHold
 			if (elapsed() >= hold)
 				return PointerHoldOutcome.TimeUp;
 
-			await afterRestore().ConfigureAwait(false);
+			var handTookItAt = await afterRestore().ConfigureAwait(false);
 
 			// The wiggle takes a while, so the user may have clicked during it. Asked again here
 			// rather than only at the top of the loop, so the hold stands down at the first
-			// opportunity. Hand steps during the wiggle are left to the next tick on purpose:
-			// refreshing the snapshot here would swallow them, and the movement they left behind
-			// would then read as a grab and be yanked back.
+			// opportunity.
 			if (handActs() != acts)
 				return PointerHoldOutcome.UserTookTheMouse;
+
+			// The wiggle saw the hand take the pointer: follow it to the position it reported.
+			// Trusted over the counters, which for a window as long as a wiggle cannot say
+			// whether the hand or a teleport had the last word.
+			if (handTookItAt is CursorPoint handAt)
+			{
+				baseline = handAt;
+				followedTo(handAt);
+			}
+
+			// Everything the counters saw during the wiggle has now been accounted for — grabs
+			// were reclaimed by the run, hand travel came back in its report — so the snapshots
+			// are brought up to date rather than left to be re-judged by the next tick, where a
+			// wiggle-old teleport could outvote a fresh hand step.
+			steps = handSteps();
+			grabs = teleports();
 		}
 
 		return PointerHoldOutcome.TimeUp;
