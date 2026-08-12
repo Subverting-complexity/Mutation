@@ -36,9 +36,9 @@ internal static class SettingsDefaults
 		public const int MaxDocumentSizeMbUiMax = 500;
 		public const bool PasteOcrTextIntoActiveApplication = true;
 
-		// Pointer nudge after a capture. Defaults and UI bounds mirror the domain so the
+		// Pointer nudge at both ends of a capture. Defaults and UI bounds mirror the domain so the
 		// dialog, the load-time clamp and the nudge itself all agree on one source of truth.
-		public const bool NudgePointerAfterCapture = false;
+		public const bool NudgePointerDuringCapture = false;
 		public const int PointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.DefaultPointerNudgeIntervalMilliseconds;
 		public const int MinPointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.MinPointerNudgeIntervalMilliseconds;
 		public const int MaxPointerNudgeIntervalMilliseconds = AzureComputerVisionSettings.MaxPointerNudgeIntervalMilliseconds;

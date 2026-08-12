@@ -48,7 +48,7 @@ public sealed partial class OcrSettingsPage : UserControl
 			ToggleUseFreeTier.IsOn = ocr.UseFreeTier;
 			ToggleInvert.IsOn = ocr.InvertScreenshot;
 			TogglePasteOcrText.IsOn = ocr.PasteOcrTextIntoActiveApplication;
-			ToggleNudgePointer.IsOn = ocr.NudgePointerAfterCapture;
+			ToggleNudgePointer.IsOn = ocr.NudgePointerDuringCapture;
 			NbNudgeInterval.Value = ocr.PointerNudgeIntervalMilliseconds > 0
 				? ocr.PointerNudgeIntervalMilliseconds
 				: SettingsDefaults.Ocr.PointerNudgeIntervalMilliseconds;
@@ -108,7 +108,7 @@ public sealed partial class OcrSettingsPage : UserControl
 	private void ToggleNudgePointer_Toggled(object sender, RoutedEventArgs e)
 	{
 		if (_suppressEvents) return;
-		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).NudgePointerAfterCapture = ToggleNudgePointer.IsOn;
+		(_settings.AzureComputerVisionSettings ??= new AzureComputerVisionSettings()).NudgePointerDuringCapture = ToggleNudgePointer.IsOn;
 	}
 
 	private void NbNudgeInterval_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) =>

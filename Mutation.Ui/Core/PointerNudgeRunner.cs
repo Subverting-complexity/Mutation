@@ -5,6 +5,29 @@ using System.Threading.Tasks;
 namespace Mutation.Ui.Core;
 
 /// <summary>
+/// Whether a running wiggle may carry on, and if not, what to do with the pointer on the way out.
+/// </summary>
+public enum PointerNudgeVerdict
+{
+	/// <summary>Carry on to the next move.</summary>
+	Continue,
+
+	/// <summary>
+	/// Stop, and put the pointer back on the anchor first if the wiggle had left it a pixel out.
+	/// For a wiggle that has simply been called off — the capture it belonged to is over — where
+	/// the pointer is still the wiggle's own to tidy up.
+	/// </summary>
+	StopAndSettle,
+
+	/// <summary>
+	/// Stop, and leave the pointer exactly where it stands. For a wiggle interrupted by the user
+	/// putting the mouse button down: the pointer is under their hand and the rectangle they are
+	/// drawing starts from it, so moving it even a pixel would move the edge of their selection.
+	/// </summary>
+	StopAndLeave
+}
+
+/// <summary>
 /// Walks a nudge plan, one position per interval, and gets out of the way the moment the pointer
 /// stops being ours to move.
 ///
@@ -49,15 +72,15 @@ public static class PointerNudgeRunner
 	/// has already taken over from being hauled back to a place it left.</param>
 	/// <param name="plan">Positions to move through, from <see cref="PointerNudgePlanner"/>.</param>
 	/// <param name="interval">How long to wait before each move.</param>
-	/// <param name="stillWanted">Asked before each move. False stops the nudge — used to drop it
-	/// when the capture that started it is over. Null means never asked.</param>
+	/// <param name="verdict">Asked before each move, and obeyed. Null means never asked, which
+	/// is the same as always continuing.</param>
 	public static async Task<int> RunAsync(
 		ICursorPosition cursor,
 		Func<TimeSpan, Task> delay,
 		CursorPoint anchor,
 		IReadOnlyList<CursorPoint> plan,
 		TimeSpan interval,
-		Func<bool>? stillWanted = null)
+		Func<PointerNudgeVerdict>? verdict = null)
 	{
 		if (cursor is null) throw new ArgumentNullException(nameof(cursor));
 		if (delay is null) throw new ArgumentNullException(nameof(delay));
@@ -77,8 +100,13 @@ public static class PointerNudgeRunner
 		{
 			await delay(interval).ConfigureAwait(false);
 
-			if (stillWanted is not null && !stillWanted())
-				return Settle(cursor, anchor, expected, applied);
+			switch (verdict?.Invoke() ?? PointerNudgeVerdict.Continue)
+			{
+				case PointerNudgeVerdict.StopAndSettle:
+					return Settle(cursor, anchor, expected, applied);
+				case PointerNudgeVerdict.StopAndLeave:
+					return applied;
+			}
 
 			// The user has the mouse. Leave the pointer exactly as they left it, drift and all —
 			// the one exit that must not tidy up after itself.

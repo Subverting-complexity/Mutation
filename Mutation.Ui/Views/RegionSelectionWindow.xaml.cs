@@ -53,11 +53,27 @@ public sealed partial class RegionSelectionWindow : Window
 	private readonly CursorAnchor _cursorAnchor;
 
 	/// <summary>
-	/// Whether to nudge the pointer when this capture ends, and how. Set by the caller before
-	/// each capture rather than read from settings here, so the overlay stays free of settings
-	/// and a change made in the dialog takes effect on the next capture.
+	/// Whether to nudge the pointer at each end of this capture, and how. Set by the caller
+	/// before each capture rather than read from settings here, so the overlay stays free of
+	/// settings and a change made in the dialog takes effect on the next capture.
 	/// </summary>
 	public PointerNudgeOptions PointerNudge { get; set; } = PointerNudgeOptions.Off;
+
+	/// <summary>
+	/// True while a wiggle is moving the pointer, so the rest of the overlay can tell the app's
+	/// own movement from the user's.
+	/// <para>
+	/// It matters because the wiggle at the opening end runs while the overlay is live and on
+	/// screen. Every move it makes arrives back as a genuine pointer event, and without this the
+	/// overlay would answer its own wiggle as though a hand had moved the mouse.
+	/// </para>
+	/// <para>
+	/// Written by the wiggle off the UI thread and read on it, so it is volatile. Nothing here
+	/// needs the two to agree to the instant: read a moment late and the overlay treats one of
+	/// its own moves as the user's, which costs a pixel of crosshair, not a wrong capture.
+	/// </para>
+	/// </summary>
+	private volatile bool _nudgeOwnsPointer;
 	private const string AnnouncementActivityId = "RegionSelection";
 	private const string CancelledAnnouncement = "Region selection cancelled.";
 
@@ -179,6 +195,9 @@ public sealed partial class RegionSelectionWindow : Window
 			// to be moved out from under the user. Skipped entirely mid-drag: the pointer is
 			// then the user's drawing hand, and the position to defend is wherever they have
 			// got to, not wherever they started.
+			// Same reason as in CompleteSelection: re-anchor on the pointer, not on a pixel a
+			// wiggle from this capture's opening is still parked on (issue #375).
+			SettleAnyNudgeInProgress();
 			bool anchored = !_dragging && _cursorAnchor.Capture();
 			this.Activate();
 			SetForegroundWindow(_hwnd);
@@ -342,7 +361,16 @@ public sealed partial class RegionSelectionWindow : Window
 		UpdateCrosshair(pos);
 		// Keep the keyboard caret under the pointer so switching to the keys mid-drag
 		// picks up where the mouse left off.
-		_keyboard.SyncCaret(pos.X, pos.Y);
+		//
+		// Not while the overlay is wiggling the pointer itself, though (issue #375). A wiggle
+		// arrives here as an ordinary pointer move, and syncing to it would drag the caret away
+		// from wherever the keys had put it — so pressing Control plus A to take the whole
+		// screen, and then Enter, would capture from the pinned top-left corner to wherever the
+		// mouse happened to be sitting, which is not the region the overlay just announced. The
+		// crosshair still follows, because the wiggle is meant to be visible and ends where it
+		// started anyway.
+		if (!_nudgeOwnsPointer)
+			_keyboard.SyncCaret(pos.X, pos.Y);
 		if (!_dragging) { return; }
 		double x = Math.Min(pos.X, _start.X);
 		double y = Math.Min(pos.Y, _start.Y);
@@ -449,6 +477,9 @@ public sealed partial class RegionSelectionWindow : Window
 	private void CompleteSelection(Rect? result, string announcement, AutomationNotificationKind kind)
 	{
 		_dragging = false;
+		// Before the read below, so it reads the pointer and not a pixel the opening wiggle
+		// happens to be parked on (issue #375).
+		SettleAnyNudgeInProgress();
 		// Where the pointer is at the instant the selection ends — for a mouse drag, exactly
 		// where the button came up. Read here, while the overlay is still up, because hiding it
 		// and handing the foreground back are the next two focus changes that can move the
@@ -650,6 +681,12 @@ public sealed partial class RegionSelectionWindow : Window
 	/// tell those two movements apart from here — the overlay sees an identical pointer event
 	/// either way. Losing the odd very late jump is the better failure.
 	/// </para>
+	/// <para>
+	/// The optional wiggle goes on the same dispatcher turn, and for the same reason the second
+	/// restore is there: holding the pointer perfectly still through the overlay's focus change
+	/// keeps the pointer right, but gives a magnifier no reason to look at it, and ZoomText
+	/// answers the focus change by swinging its view to the top-left corner (issue #375).
+	/// </para>
 	/// </summary>
 	private void RestoreCursorNowAndAfterFocusSettles()
 	{
@@ -661,6 +698,7 @@ public sealed partial class RegionSelectionWindow : Window
 		// Read now, not inside the callback: this identifies the anchor being defended, so a
 		// turn that runs late cannot act on behalf of a capture that has already finished.
 		int generation = _cursorAnchor.Generation;
+		var nudge = PointerNudge;
 
 		_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
 		{
@@ -668,19 +706,21 @@ public sealed partial class RegionSelectionWindow : Window
 			if (allowed == DeferredCursorRestore.StandDown)
 				return;
 
-			if (!_cursorAnchor.RestoreIfCurrent(generation))
-				return;
+			if (_cursorAnchor.RestoreIfCurrent(generation) && allowed == DeferredCursorRestore.MoveAndReseed)
+			{
+				// The pointer really had been moved, so the crosshair and the keyboard caret
+				// were seeded from a position it is no longer at. Seed them again, from the live
+				// pointer rather than from _lastPointerPos, which may itself be the jumped
+				// position that arrived as a pointer-move event.
+				_lastPointerPos = null;
+				ResetKeyboardSelection();
+				RenderKeyboardSelection();
+			}
 
-			if (allowed != DeferredCursorRestore.MoveAndReseed)
-				return;
-
-			// The pointer really had been moved, so the crosshair and the keyboard caret were
-			// seeded from a position it is no longer at. Seed them again, from the live pointer
-			// rather than from _lastPointerPos, which may itself be the jumped position that
-			// arrived as a pointer-move event.
-			_lastPointerPos = null;
-			ResetKeyboardSelection();
-			RenderKeyboardSelection();
+			// Whether or not the pointer had drifted. The magnified view can be pulled away by
+			// the focus change on its own, with the pointer never moving at all — which is the
+			// case that has nothing else to fix it.
+			StartPointerNudge(generation, nudge);
 		});
 	}
 
@@ -734,31 +774,130 @@ public sealed partial class RegionSelectionWindow : Window
 	}
 
 	/// <summary>
-	/// Moves the pointer one pixel back and forth for a while, so a magnifier that has followed
-	/// the keyboard caret somewhere else brings its view back to the mouse (issue #373).
+	/// Starts a wiggle and does not wait for it. Used at the opening end, from a dispatcher
+	/// callback that must not be held up for the length of the wiggle.
+	/// </summary>
+	private void StartPointerNudge(int generation, PointerNudgeOptions nudge)
+	{
+		_ = SafeNudgePointerAsync(generation, nudge);
+	}
+
+	private async Task SafeNudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	{
+		try
+		{
+			await NudgePointerAsync(generation, nudge).ConfigureAwait(false);
+		}
+		catch
+		{
+			// A wiggle that fails is a magnified view left where it was. It is not a reason to
+			// take a capture down with it.
+		}
+	}
+
+	/// <summary>
+	/// Moves the pointer one pixel back and forth for a while, so a magnifier that has swung its
+	/// view somewhere else brings it back to the mouse (issues #373 and #375).
+	/// <para>
+	/// Runs at both ends of a capture, for the same reason each time. The overlay opening and the
+	/// overlay closing are both focus changes, and ZoomText answers a focus change by following
+	/// whatever it thinks is interesting — the top-left corner as the overlay appears, a flashing
+	/// caret in the application underneath as it goes away. The pointer is held perfectly still
+	/// across both, which is right for the pointer and is exactly why the magnifier has no reason
+	/// to look at it.
+	/// </para>
 	/// <para>
 	/// Runs after the restore, not instead of it, and finishes on the very pixel the restore put
-	/// the pointer on. The order matters: nudging around a position that had drifted would
+	/// the pointer on. The order matters: wiggling around a position that had drifted would
 	/// advertise the wrong place.
 	/// </para>
 	/// </summary>
-	private Task NudgePointerAsync(int generation, PointerNudgeOptions nudge)
+	private async Task NudgePointerAsync(int generation, PointerNudgeOptions nudge)
 	{
 		if (!nudge.Enabled || _cursorAnchor.Generation != generation || !_cursorAnchor.HasAnchor)
-			return Task.CompletedTask;
+			return;
 
 		var anchor = _cursorAnchor.Anchor;
 		var plan = PointerNudgePlanner.Plan(anchor, nudge);
 
-		return PointerNudgeRunner.RunAsync(
-			_cursor,
-			Task.Delay,
-			anchor,
-			plan,
-			TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
-			// Drops the nudge the moment a new capture claims the anchor, so two captures in
-			// quick succession never have one nudging against the other's pointer.
-			() => _cursorAnchor.Generation == generation);
+		_nudgeOwnsPointer = true;
+		try
+		{
+			await PointerNudgeRunner.RunAsync(
+				_cursor,
+				Task.Delay,
+				anchor,
+				plan,
+				TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
+				() => NudgeVerdict(generation)).ConfigureAwait(false);
+		}
+		finally
+		{
+			_nudgeOwnsPointer = false;
+		}
+	}
+
+	/// <summary>
+	/// Whether a wiggle in progress may carry on, and what to do with the pointer if not.
+	/// <para>
+	/// A drag in flight is the one case that ends the wiggle where it stands. The pointer is
+	/// under the user's hand, the rectangle they are drawing starts from it, and putting the
+	/// pointer back on the anchor would move the edge of their selection by a pixel just as they
+	/// pressed the button. Only the opening wiggle can meet a drag; the closing one runs after
+	/// the button is already up.
+	/// </para>
+	/// <para>
+	/// Otherwise the wiggle stops when it is no longer this capture's to run — a new capture has
+	/// claimed the anchor, or something on the UI thread has already taken the pointer back —
+	/// and tidies up after itself so it never leaves the pointer a pixel out.
+	/// </para>
+	/// </summary>
+	private PointerNudgeVerdict NudgeVerdict(int generation)
+	{
+		if (_dragging)
+			return PointerNudgeVerdict.StopAndLeave;
+
+		if (!_nudgeOwnsPointer || _cursorAnchor.Generation != generation)
+			return PointerNudgeVerdict.StopAndSettle;
+
+		return PointerNudgeVerdict.Continue;
+	}
+
+	/// <summary>
+	/// Ends any wiggle in progress and puts the pointer back on the anchor, now, on the calling
+	/// thread. Called before anything re-reads the live pointer to anchor on it.
+	/// <para>
+	/// A wiggle spends half its life a pixel off the anchor. Without this, finishing a capture
+	/// from the keyboard or with Escape while one was running would read that pixel as the
+	/// pointer's real position and anchor the rest of the capture on it — and because bringing
+	/// the overlay forward again re-anchors too, pressing the hotkey repeatedly would walk the
+	/// pointer steadily to the right, a pixel a press. That is the drift both the pointer-stays-
+	/// put story (#371) and the wiggle's own plan exist to prevent.
+	/// </para>
+	/// <para>
+	/// Only a displacement shaped like the wiggle's own is undone. A pointer the user has moved
+	/// themselves is left exactly where they put it, which is what keeps this from firing on the
+	/// mouse path, where the release position is genuinely theirs.
+	/// </para>
+	/// </summary>
+	private void SettleAnyNudgeInProgress()
+	{
+		if (!_nudgeOwnsPointer)
+			return;
+
+		// Stops the running wiggle on its next tick; it then finds the pointer already home and
+		// writes nothing.
+		_nudgeOwnsPointer = false;
+
+		if (!_cursorAnchor.HasAnchor)
+			return;
+
+		var anchor = _cursorAnchor.Anchor;
+		if (!_cursor.TryGet(out var current))
+			return;
+
+		if (current != anchor && PointerNudgePlanner.IsWiggleDisplacement(anchor, current))
+			_cursor.TrySet(anchor);
 	}
 
 	private void Announce(string message, AutomationNotificationKind kind)

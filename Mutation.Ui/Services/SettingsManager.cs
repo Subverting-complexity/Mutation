@@ -873,6 +873,21 @@ End of summary.
 				visionSettings.Remove("SendKotKeyAfterOcrOperation");
 				saveRequired = true;
 			}
+
+			// Rename NudgePointerAfterCapture -> NudgePointerDuringCapture. The wiggle grew a
+			// second moment — the overlay opening, as well as the capture ending — so the name
+			// stopped being true. Without this the renamed property would fall back to its
+			// initializer, which is false, and anyone who had switched the wiggle on would find
+			// it silently off after an update.
+			if (visionSettings["NudgePointerDuringCapture"] == null && visionSettings["NudgePointerAfterCapture"] != null)
+			{
+				visionSettings["NudgePointerDuringCapture"] = visionSettings["NudgePointerAfterCapture"];
+				saveRequired = true;
+			}
+			if (visionSettings.Remove("NudgePointerAfterCapture"))
+			{
+				saveRequired = true;
+			}
 		}
 
 		if (jObj["LlmSettings"] is JObject llmSettingsJObj)

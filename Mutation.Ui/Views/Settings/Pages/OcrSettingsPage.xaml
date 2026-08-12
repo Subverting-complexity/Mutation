@@ -100,7 +100,7 @@
 
 		<StackPanel Spacing="8">
 			<StackPanel Orientation="Horizontal" Spacing="6">
-				<ToggleSwitch x:Name="ToggleNudgePointer" Header="Wiggle the mouse pointer after a capture" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgePointer}" Toggled="ToggleNudgePointer_Toggled" />
+				<ToggleSwitch x:Name="ToggleNudgePointer" Header="Wiggle the mouse pointer during a capture" AutomationProperties.HelpText="{StaticResource Help.Ocr.NudgePointer}" Toggled="ToggleNudgePointer_Toggled" />
 				<controls:InfoHint Text="{StaticResource Help.Ocr.NudgePointer}" VerticalAlignment="Center" />
 			</StackPanel>
 			<StackPanel Orientation="Horizontal" Spacing="16">

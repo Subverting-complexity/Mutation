@@ -85,6 +85,20 @@ public class PointerNudgePlannerTests
 	}
 
 	[Theory]
+	// One column either side, same row: the only two places a wiggle around the anchor ever
+	// parks the pointer, and so the only displacement it is safe to undo on the wiggle's behalf.
+	[InlineData(401, 300, true)]
+	[InlineData(399, 300, true)]
+	[InlineData(400, 300, false)] // the anchor itself is not a displacement
+	[InlineData(402, 300, false)] // too far to be ours
+	[InlineData(401, 301, false)] // a wiggle never changes the row
+	[InlineData(900, 700, false)] // the user has moved the mouse; leave it alone
+	public void OnlyTheWigglesOwnDisplacementIsRecognised(int x, int y, bool expected)
+	{
+		Assert.Equal(expected, PointerNudgePlanner.IsWiggleDisplacement(Anchor, new CursorPoint(x, y)));
+	}
+
+	[Theory]
 	[InlineData(0, 500)]
 	[InlineData(-50, 500)]
 	[InlineData(50, 0)]
