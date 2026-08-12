@@ -89,6 +89,7 @@ internal sealed class RealMouseInputWatch : IDisposable
 
 	private long _handActs;
 	private long _handSteps;
+	private long _teleports;
 
 	// Where the previous move event put the pointer, whoever made it. Touched only on the hook
 	// thread. The first move after installation has no previous event to measure a step against,
@@ -113,6 +114,15 @@ internal sealed class RealMouseInputWatch : IDisposable
 	/// hand movement is the caller's rule.
 	/// </summary>
 	public long HandSteps => Interlocked.Read(ref _handSteps);
+
+	/// <summary>
+	/// How many single-event moves too large for a hand have been seen — a driver grabbing the
+	/// pointer. This is the count that lets a grab be recognised even when it lands in the same
+	/// look as the resting hand's jitter (issue #384): the jitter advances
+	/// <see cref="HandSteps"/> every look, so "did the hand move?" says yes in every window, and
+	/// only the teleport itself says what else happened in it.
+	/// </summary>
+	public long Teleports => Interlocked.Read(ref _teleports);
 
 	/// <summary>
 	/// Whether the hook is actually installed. False means there is no signal at all, and a
@@ -191,6 +201,9 @@ internal sealed class RealMouseInputWatch : IDisposable
 						break;
 					case RealMouseEventKind.HandStep when measurable:
 						Interlocked.Increment(ref _handSteps);
+						break;
+					case RealMouseEventKind.Teleport when measurable:
+						Interlocked.Increment(ref _teleports);
 						break;
 				}
 			}

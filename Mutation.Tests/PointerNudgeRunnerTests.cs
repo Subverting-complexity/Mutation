@@ -344,10 +344,12 @@ public class PointerNudgeRunnerTests
 	}
 
 	[Fact]
-	public async Task RestingHandJitterBeforeTheFirstMove_EndsTheRunWithoutAWrite()
+	public async Task RestingHandJitter_IsToleratedAndTheRunCarriesOn()
 	{
-		// The hand is on the mouse, merely resting; the pointer drifted a pixel before the first
-		// look and the watch counted the step. The pointer is the hand's, not the wiggle's.
+		// The hand is on the mouse, merely resting: real steps arrive every look and the pointer
+		// sits a pixel off where the last move left it. That is not the hand going anywhere, and
+		// a run that stopped for it never ran at all — measured, not imagined (issue #384). The
+		// run recentres and carries on.
 		var cursor = new FakeCursor();
 		var clock = new FakeClock();
 		long steps = 0;
@@ -358,10 +360,39 @@ public class PointerNudgeRunnerTests
 		};
 
 		int applied = await PointerNudgeRunner.RunAsync(
-			cursor, clock.Delay, Anchor, PlanOf(4), Interval, handSteps: () => steps);
+			cursor, clock.Delay, Anchor, PlanOf(4), Interval, handSteps: () => steps, teleports: () => 0);
 
-		Assert.Equal(0, applied);
-		Assert.Empty(cursor.Writes);
+		Assert.Equal(4, applied);
+		Assert.Equal(Anchor, cursor.Position);
+	}
+
+	[Fact]
+	public async Task AGrabInTheSameLookAsRestingJitter_IsStillReclaimed()
+	{
+		// The closing scenario that beat the first version of this rule (issue #384): the
+		// resting hand's jitter makes "did the hand move?" true in every look, and the
+		// magnifier's caret grab lands inside one of them. The teleport count says a grab
+		// happened in the window, whatever the jitter did, so the run reclaims and carries on.
+		var cursor = new FakeCursor();
+		var clock = new FakeClock();
+		long steps = 0;
+		long grabs = 0;
+		int waits = 0;
+		clock.OnWait = () =>
+		{
+			steps++; // jitter, every look
+			if (++waits == 3)
+			{
+				grabs++;
+				cursor.Position = new CursorPoint(900, 700); // the caret grab
+			}
+		};
+
+		int applied = await PointerNudgeRunner.RunAsync(
+			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => steps, teleports: () => grabs);
+
+		Assert.Equal(6, applied);
+		Assert.Equal(Anchor, cursor.Position);
 	}
 
 	[Fact]

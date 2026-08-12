@@ -33,16 +33,16 @@ public enum PointerNudgeVerdict
 ///
 /// <para>
 /// The stand-down rule is the whole reason this is not a plain loop. Before each move it checks
-/// that the pointer is still exactly where the previous move left it. If it is not, something
-/// else has taken hold of it, and what happens next depends on who. When the watch reports hand
-/// movement since the last look, the run stops immediately and leaves the pointer exactly where
-/// the hand put it — half a second of an application dragging the pointer back under the user's
-/// hand would be far worse than the problem being solved. When the watch reports no hand behind
-/// the move, the pointer was grabbed by a program — the very thing the wiggle exists to defend
-/// against — and the run reclaims it by carrying on: the next planned move puts the pointer back
-/// within a pixel of the anchor. Without the distinction the wiggle died on its first tick every
-/// time, because a hand merely resting on a high-polling-rate mouse drifts the pointer a pixel
-/// between any two looks (issue #382).
+/// that the pointer is still where the previous move left it. If it is not, something else has
+/// taken hold of it, and what happens next depends on who. A driver teleport — a single move no
+/// hand could make — is a grab, and the run reclaims: the next planned move puts the pointer
+/// back within a pixel of the anchor. A drift within the resting hand's jitter radius is a hand
+/// breathing on the mouse, and the run recentres and carries on. Genuine hand travel beyond
+/// that radius stops the run immediately, leaving the pointer exactly where the hand put it —
+/// half a second of an application dragging the pointer back under the user's hand would be far
+/// worse than the problem being solved. The order matters: the grab is asked about first,
+/// because the resting hand's jitter makes "did the hand move?" true in every look, and a grab
+/// judged second would end the run at the very moment it is needed (issues #382 and #384).
 /// </para>
 ///
 /// <para>
@@ -87,6 +87,10 @@ public static class PointerNudgeRunner
 	/// <param name="handSteps">Count of hand-sized real movement events, from the watch.
 	/// Monotonic; the run compares it across each look to decide whether a foreign move was the
 	/// hand or a grab. Null means there is no watch, and every foreign move then ends the run.</param>
+	/// <param name="teleports">Count of single-event moves too large for a hand — a driver
+	/// grabbing the pointer. Checked before the hand steps, because a resting hand's jitter
+	/// advances the step count in every look, and a grab landing in the same look would
+	/// otherwise read as the hand and end the run exactly when it is needed (issue #384).</param>
 	public static async Task<int> RunAsync(
 		ICursorPosition cursor,
 		Func<TimeSpan, Task> delay,
@@ -94,7 +98,8 @@ public static class PointerNudgeRunner
 		IReadOnlyList<CursorPoint> plan,
 		TimeSpan interval,
 		Func<PointerNudgeVerdict>? verdict = null,
-		Func<long>? handSteps = null)
+		Func<long>? handSteps = null,
+		Func<long>? teleports = null)
 	{
 		if (cursor is null) throw new ArgumentNullException(nameof(cursor));
 		if (delay is null) throw new ArgumentNullException(nameof(delay));
@@ -110,6 +115,7 @@ public static class PointerNudgeRunner
 		bool directionSettled = false;
 		int applied = 0;
 		long steps = handSteps?.Invoke() ?? 0;
+		long grabs = teleports?.Invoke() ?? 0;
 
 		foreach (var position in plan)
 		{
@@ -127,19 +133,39 @@ public static class PointerNudgeRunner
 			bool handMoved = stepsNow != steps;
 			steps = stepsNow;
 
+			long grabsNow = teleports?.Invoke() ?? 0;
+			bool grabbed = grabsNow != grabs;
+			grabs = grabsNow;
+
 			if (!cursor.TryGet(out var current))
 				return applied;
 
 			if (current != expected)
 			{
-				// The hand moved since the last look — or there is no watch to say otherwise.
-				// Leave the pointer exactly where it was found, drift and all — the one exit
-				// that must not tidy up after itself.
-				if (handSteps is null || handMoved)
+				// No watch: no way to tell a hand from a grab, so any foreign move ends the run
+				// — the only safe answer.
+				if (handSteps is null)
 					return applied;
 
-				// A grab with no hand behind it. Fall through: the write below reclaims the
-				// pointer onto this move's planned position, a pixel from the anchor.
+				// A grab landed in this look. Whatever the jitter also did, reclaim: the write
+				// below puts the pointer back on this move's planned position, a pixel from the
+				// anchor. Without this the magnifier's caret grab ended the run every time,
+				// because the resting hand's jitter made "did the hand move?" true in the same
+				// look (issue #384).
+				if (!grabbed)
+				{
+					// The hand walked the pointer somewhere. Leave it exactly where it was
+					// found, drift and all — the one exit that must not tidy up after itself.
+					bool genuineTravel = handMoved
+						&& (Math.Abs(current.X - expected.X) > RealMouseInput.RestingHandJitterRadiusPixels
+							|| Math.Abs(current.Y - expected.Y) > RealMouseInput.RestingHandJitterRadiusPixels);
+					if (genuineTravel)
+						return applied;
+
+					// Within the jitter radius: a resting hand breathing on the mouse. The write
+					// below recentres, and the run carries on. A moved pointer with no hand steps
+					// at all is a silent grab and falls through to be reclaimed too.
+				}
 			}
 
 			var target = mirrored ? Mirror(anchor, position) : position;

@@ -812,9 +812,10 @@ public sealed partial class RegionSelectionWindow : Window
 			await ForegroundHandedBack.ConfigureAwait(false);
 			_cursorAnchor.RestoreIfCurrent(generation);
 
-			// Snapshot taken before the wiggle so the reconciliation below can tell whether the
-			// hand moved while it ran.
+			// Snapshots taken before the wiggle so the reconciliation below can tell what
+			// happened while it ran.
 			long stepsBeforeNudge = watch?.HandSteps ?? 0;
+			long grabsBeforeNudge = watch?.Teleports ?? 0;
 			await NudgePointerAsync(generation, nudge, watch).ConfigureAwait(false);
 
 			// If the hand moved during the wiggle, the run left the pointer exactly where the
@@ -822,9 +823,14 @@ public sealed partial class RegionSelectionWindow : Window
 			// next would read that difference as a grab and snap the pointer back out from under
 			// the resting hand, because its own counter snapshot is taken after the movement
 			// already happened. So the anchor is brought to the pointer first: the hold then
-			// defends where the hand actually is. When no hand moved, the anchor is left alone —
-			// any divergence is a genuine grab, and the hold's first tick undoes it.
-			if (watch is { IsWatching: true } && watch.HandSteps != stepsBeforeNudge
+			// defends where the hand actually is. Not when a teleport also landed in that
+			// stretch, though — the pointer may then be standing where a grab put it, and
+			// rebasing would defend the grab; the anchor is left alone and the hold's first tick
+			// undoes it. And when nothing moved at all, the anchor is left alone for the same
+			// reason (issues #382 and #384).
+			if (watch is { IsWatching: true }
+				&& watch.HandSteps != stepsBeforeNudge
+				&& watch.Teleports == grabsBeforeNudge
 				&& _cursor.TryGet(out var handLeftItAt))
 			{
 				_cursorAnchor.RebaseIfCurrent(generation, handLeftItAt);
@@ -887,6 +893,7 @@ public sealed partial class RegionSelectionWindow : Window
 			baseline: _cursorAnchor.Anchor,
 			handActs: () => watch.HandActs,
 			handSteps: () => watch.HandSteps,
+			teleports: () => watch.Teleports,
 			stillCurrent: () => _cursorAnchor.Generation == generation,
 			// Keep the anchor with the hand, so the wiggle below — and the settle, if anything
 			// interrupts it — aim at where the hand actually is, not where the capture ended.
@@ -972,10 +979,11 @@ public sealed partial class RegionSelectionWindow : Window
 				TimeSpan.FromMilliseconds(nudge.IntervalMilliseconds),
 				() => NudgeVerdict(generation),
 				// The watch is what lets the run tell a grab from the hand and reclaim the
-				// pointer instead of dying on a one-pixel drift (issue #382). Without one — not
-				// asked for, or the hook refused to install — the run keeps the old rule and
-				// stops on any foreign move.
-				watch is { IsWatching: true } ? () => watch.HandSteps : null).ConfigureAwait(false);
+				// pointer instead of dying on a one-pixel drift (issues #382 and #384). Without
+				// one — not asked for, or the hook refused to install — the run keeps the old
+				// rule and stops on any foreign move.
+				watch is { IsWatching: true } ? () => watch.HandSteps : null,
+				watch is { IsWatching: true } ? () => watch.Teleports : null).ConfigureAwait(false);
 		}
 		finally
 		{
