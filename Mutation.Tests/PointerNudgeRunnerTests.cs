@@ -97,7 +97,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor();
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
 
 		Assert.Equal(4, applied);
 		Assert.Equal(new[] { Away, Anchor, Away, Anchor }, cursor.Writes);
@@ -120,7 +120,7 @@ public class PointerNudgeRunnerTests
 				cursor.Position = new CursorPoint(900, 700);
 		};
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
 
 		Assert.Equal(2, applied);
 		Assert.Equal(new CursorPoint(900, 700), cursor.Position);
@@ -135,7 +135,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { Position = new CursorPoint(900, 700) };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
 
 		Assert.Equal(0, applied);
 		Assert.Empty(cursor.Writes);
@@ -149,7 +149,7 @@ public class PointerNudgeRunnerTests
 		var clock = new FakeClock();
 		int checks = 0;
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval, verdict: () => ++checks <= 2 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndSettle);
 
 		Assert.Equal(2, applied);
@@ -161,7 +161,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { CanRead = false };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, Array.Empty<CursorPoint>(), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, Array.Empty<CursorPoint>(), Interval);
 
 		Assert.Equal(0, applied);
 		Assert.Empty(clock.Waits);
@@ -173,7 +173,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { CanRead = false };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
 
 		Assert.Equal(0, applied);
 		Assert.Empty(cursor.Writes);
@@ -187,7 +187,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { WriteSucceeds = false };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
 
 		Assert.Equal(0, applied);
 		Assert.Single(cursor.Writes);
@@ -202,7 +202,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { ClampMaxX = Anchor.X };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
 
 		Assert.Equal(4, applied);
 		Assert.Equal(new CursorPoint(Anchor.X + 1, Anchor.Y), cursor.Writes[0]);
@@ -216,7 +216,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { ClampMinX = Anchor.X, ClampMaxX = Anchor.X };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(4), Interval);
 
 		Assert.Equal(0, applied);
 		Assert.Equal(Anchor, cursor.Position);
@@ -232,7 +232,7 @@ public class PointerNudgeRunnerTests
 		var clock = new FakeClock();
 		int checks = 0;
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval, verdict: () => ++checks <= 1 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndSettle);
 
 		Assert.Equal(1, applied);
@@ -245,7 +245,7 @@ public class PointerNudgeRunnerTests
 		var cursor = new FakeCursor { FailWriteAtIndex = 1 };
 		var clock = new FakeClock();
 
-		int applied = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
+		var (applied, _) = await PointerNudgeRunner.RunAsync(cursor, clock.Delay, Anchor, PlanOf(6), Interval);
 
 		Assert.Equal(1, applied);
 		Assert.Equal(Anchor, cursor.Position);
@@ -283,7 +283,7 @@ public class PointerNudgeRunnerTests
 		var clock = new FakeClock();
 		int checks = 0;
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval,
 			verdict: () => ++checks <= 1 ? PointerNudgeVerdict.Continue : PointerNudgeVerdict.StopAndLeave);
 
@@ -308,7 +308,7 @@ public class PointerNudgeRunnerTests
 				cursor.Position = new CursorPoint(900, 700); // the grab; no hand steps follow
 		};
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => 0);
 
 		Assert.Equal(6, applied);
@@ -333,7 +333,7 @@ public class PointerNudgeRunnerTests
 			}
 		};
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, handTookItAt) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => steps);
 
 		Assert.Equal(2, applied);
@@ -341,6 +341,9 @@ public class PointerNudgeRunnerTests
 		// the pointer stays exactly where the hand put it, with no tidy-up haul to the anchor.
 		Assert.Equal(2, cursor.Writes.Count);
 		Assert.Equal(elsewhere, cursor.Position);
+		// And the run says so, with the position it saw — the report a caller whose window
+		// spans the whole run needs, since its own counters cannot tell who moved last.
+		Assert.Equal(elsewhere, handTookItAt);
 	}
 
 	[Fact]
@@ -359,7 +362,7 @@ public class PointerNudgeRunnerTests
 			steps++;
 		};
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(4), Interval, handSteps: () => steps, teleports: () => 0);
 
 		Assert.Equal(4, applied);
@@ -388,7 +391,7 @@ public class PointerNudgeRunnerTests
 			}
 		};
 
-		int applied = await PointerNudgeRunner.RunAsync(
+		var (applied, _) = await PointerNudgeRunner.RunAsync(
 			cursor, clock.Delay, Anchor, PlanOf(6), Interval, handSteps: () => steps, teleports: () => grabs);
 
 		Assert.Equal(6, applied);

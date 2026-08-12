@@ -28,6 +28,23 @@ public enum PointerNudgeVerdict
 }
 
 /// <summary>
+/// What a wiggle run did, and — the part its callers cannot infer — why it ended.
+///
+/// <para>
+/// The report exists because the run can last for seconds, and "did a teleport happen somewhere
+/// in it?" tells a caller nothing about who owns the pointer at the end: a grab early in the run
+/// and a deliberate hand movement late in it can both be true. The run is the only party that
+/// saw the order, so it says the one thing that matters — whether the hand took the pointer,
+/// and where it was seen holding it (issue #384).
+/// </para>
+/// </summary>
+/// <param name="Applied">How many planned moves were made.</param>
+/// <param name="HandTookItAt">Where the hand was seen holding the pointer when the run stood
+/// down for it, or null when the run ended any other way — completed, called off, or unable to
+/// read or write the pointer.</param>
+public readonly record struct PointerNudgeResult(int Applied, CursorPoint? HandTookItAt);
+
+/// <summary>
 /// Walks a nudge plan, one position per interval, and gets out of the way the moment the pointer
 /// stops being ours to move.
 ///
@@ -71,8 +88,9 @@ public static class PointerNudgeRunner
 {
 	/// <summary>
 	/// Applies each position in <paramref name="plan"/>, waiting <paramref name="interval"/>
-	/// before each one. Returns how many were applied, which is the length of the plan on an
-	/// uninterrupted run.
+	/// before each one. Reports how many were applied — the length of the plan on an
+	/// uninterrupted run — and whether the run ended because the hand took the pointer, which is
+	/// the one fact about a run's ending its callers cannot reconstruct afterwards.
 	/// </summary>
 	/// <param name="cursor">Where the pointer is read and written.</param>
 	/// <param name="delay">How to wait one interval.</param>
@@ -91,7 +109,7 @@ public static class PointerNudgeRunner
 	/// grabbing the pointer. Checked before the hand steps, because a resting hand's jitter
 	/// advances the step count in every look, and a grab landing in the same look would
 	/// otherwise read as the hand and end the run exactly when it is needed (issue #384).</param>
-	public static async Task<int> RunAsync(
+	public static async Task<PointerNudgeResult> RunAsync(
 		ICursorPosition cursor,
 		Func<TimeSpan, Task> delay,
 		CursorPoint anchor,
@@ -106,7 +124,7 @@ public static class PointerNudgeRunner
 		if (plan is null) throw new ArgumentNullException(nameof(plan));
 
 		if (plan.Count == 0)
-			return 0;
+			return new PointerNudgeResult(0, null);
 
 		// Where the pointer has to be found before each move, starting from where the capture
 		// left it.
@@ -124,9 +142,9 @@ public static class PointerNudgeRunner
 			switch (verdict?.Invoke() ?? PointerNudgeVerdict.Continue)
 			{
 				case PointerNudgeVerdict.StopAndSettle:
-					return Settle(cursor, anchor, expected, applied);
+					return new PointerNudgeResult(Settle(cursor, anchor, expected, applied), null);
 				case PointerNudgeVerdict.StopAndLeave:
-					return applied;
+					return new PointerNudgeResult(applied, null);
 			}
 
 			long stepsNow = handSteps?.Invoke() ?? 0;
@@ -138,14 +156,14 @@ public static class PointerNudgeRunner
 			grabs = grabsNow;
 
 			if (!cursor.TryGet(out var current))
-				return applied;
+				return new PointerNudgeResult(applied, null);
 
 			if (current != expected)
 			{
 				// No watch: no way to tell a hand from a grab, so any foreign move ends the run
-				// — the only safe answer.
+				// — the only safe answer. Reported as nobody's, because nobody can say.
 				if (handSteps is null)
-					return applied;
+					return new PointerNudgeResult(applied, null);
 
 				// A grab landed in this look. Whatever the jitter also did, reclaim: the write
 				// below puts the pointer back on this move's planned position, a pixel from the
@@ -155,12 +173,15 @@ public static class PointerNudgeRunner
 				if (!grabbed)
 				{
 					// The hand walked the pointer somewhere. Leave it exactly where it was
-					// found, drift and all — the one exit that must not tidy up after itself.
+					// found, drift and all — the one exit that must not tidy up after itself —
+					// and say so in the report, with the position the hand was seen holding.
+					// The report is what lets a caller whose window spans this whole run trust
+					// the hand over a teleport that landed earlier in it (issue #384).
 					bool genuineTravel = handMoved
 						&& (Math.Abs(current.X - expected.X) > RealMouseInput.RestingHandJitterRadiusPixels
 							|| Math.Abs(current.Y - expected.Y) > RealMouseInput.RestingHandJitterRadiusPixels);
 					if (genuineTravel)
-						return applied;
+						return new PointerNudgeResult(applied, current);
 
 					// Within the jitter radius: a resting hand breathing on the mouse. The write
 					// below recentres, and the run carries on. A moved pointer with no hand steps
@@ -171,7 +192,7 @@ public static class PointerNudgeRunner
 			var target = mirrored ? Mirror(anchor, position) : position;
 
 			if (!cursor.TrySet(target))
-				return Settle(cursor, anchor, expected, applied);
+				return new PointerNudgeResult(Settle(cursor, anchor, expected, applied), null);
 
 			if (!directionSettled && target != anchor)
 			{
@@ -184,7 +205,7 @@ public static class PointerNudgeRunner
 					mirrored = true;
 					target = Mirror(anchor, position);
 					if (!cursor.TrySet(target) || !TookEffect(cursor, target))
-						return Settle(cursor, anchor, expected, applied);
+						return new PointerNudgeResult(Settle(cursor, anchor, expected, applied), null);
 				}
 			}
 
@@ -192,7 +213,7 @@ public static class PointerNudgeRunner
 			applied++;
 		}
 
-		return applied;
+		return new PointerNudgeResult(applied, null);
 	}
 
 	private static CursorPoint Mirror(CursorPoint anchor, CursorPoint position) =>

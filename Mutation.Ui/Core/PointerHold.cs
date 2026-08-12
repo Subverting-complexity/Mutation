@@ -68,7 +68,10 @@ public static class PointerHold
 	/// else aims at the defended position — the wiggle — aims at the new one.</param>
 	/// <param name="afterRestore">Run when a grab was undone — the wiggle, which brings a
 	/// magnified view back to the pointer, since whatever grabbed the pointer probably took the
-	/// view with it.</param>
+	/// view with it. Its answer is where the hand was seen taking the pointer during the run, or
+	/// null when it was not. The answer is trusted over the counters, because the wiggle can last
+	/// for seconds: a teleport early in it and genuine hand travel late in it can both have
+	/// happened, and only the run itself saw the order (issue #384).</param>
 	/// <param name="delay">How to wait one poll interval.</param>
 	/// <param name="elapsed">Time since the hold started. Measured rather than counted, because a
 	/// busy machine makes a count of intervals mean nothing.</param>
@@ -80,7 +83,7 @@ public static class PointerHold
 		Func<long> teleports,
 		Func<bool> stillCurrent,
 		Action<CursorPoint> followedTo,
-		Func<Task> afterRestore,
+		Func<Task<CursorPoint?>> afterRestore,
 		Func<TimeSpan, Task> delay,
 		Func<TimeSpan> elapsed,
 		TimeSpan pollInterval,
@@ -151,15 +154,29 @@ public static class PointerHold
 			if (elapsed() >= hold)
 				return PointerHoldOutcome.TimeUp;
 
-			await afterRestore().ConfigureAwait(false);
+			var handTookItAt = await afterRestore().ConfigureAwait(false);
 
 			// The wiggle takes a while, so the user may have clicked during it. Asked again here
 			// rather than only at the top of the loop, so the hold stands down at the first
-			// opportunity. Hand steps during the wiggle are left to the next tick on purpose:
-			// refreshing the snapshot here would swallow them, and the movement they left behind
-			// would then read as a grab and be yanked back.
+			// opportunity.
 			if (handActs() != acts)
 				return PointerHoldOutcome.UserTookTheMouse;
+
+			// The wiggle saw the hand take the pointer: follow it to the position it reported.
+			// Trusted over the counters, which for a window as long as a wiggle cannot say
+			// whether the hand or a teleport had the last word.
+			if (handTookItAt is CursorPoint handAt)
+			{
+				baseline = handAt;
+				followedTo(handAt);
+			}
+
+			// Everything the counters saw during the wiggle has now been accounted for — grabs
+			// were reclaimed by the run, hand travel came back in its report — so the snapshots
+			// are brought up to date rather than left to be re-judged by the next tick, where a
+			// wiggle-old teleport could outvote a fresh hand step.
+			steps = handSteps();
+			grabs = teleports();
 		}
 
 		return PointerHoldOutcome.TimeUp;
