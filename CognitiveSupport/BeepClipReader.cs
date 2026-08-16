@@ -48,7 +48,8 @@ public static class BeepClipReader
 			throw new ArgumentOutOfRangeException(nameof(channels), "Only mono and stereo are supported.");
 
 		using var reader = new WaveFileReader(wav);
-		ISampleProvider source = reader.ToSampleProvider();
+		using var decoded = Decode(reader);
+		ISampleProvider source = decoded.Provider;
 
 		// Channels first, then rate. The resampler keeps whatever channel count it is handed, so
 		// doing it in this order means only one of them ever has to think about the other.
@@ -57,6 +58,82 @@ public static class BeepClipReader
 			source = new WdlResamplingSampleProvider(source, sampleRate);
 
 		return new BeepClip(ReadToEnd(source, sampleRate, channels), sampleRate, channels);
+	}
+
+	/// <summary>
+	/// Gets samples out of whatever kind of <c>.wav</c> the user pointed the setting at.
+	/// <para>
+	/// NAudio reads plain PCM and 32-bit float directly, and that covers nearly every beep file
+	/// anyone has. It refuses two shapes that the old <c>PlaySound</c> path played without
+	/// complaint, and both are common enough to matter: a file written in the "extensible"
+	/// layout, which many tools use for float audio and which Windows requires above two
+	/// channels; and a compressed one such as ADPCM or mu-law. Losing those would mean a sound
+	/// the user has been hearing for months going quiet the day this shipped, which is not a
+	/// trade worth making for a beep that arrives on time.
+	/// </para>
+	/// <para>
+	/// Extensible files are relabelled: the layout only wraps ordinary PCM or float samples, and
+	/// the sub-format written into the header says which. A compressed file is handed to
+	/// Windows' own audio codecs — the same ones the old path relied on.
+	/// </para>
+	/// </summary>
+	private static DecodedWave Decode(WaveFileReader reader)
+	{
+		try
+		{
+			return new DecodedWave(reader.ToSampleProvider(), null);
+		}
+		catch (ArgumentException)
+		{
+			// Not a shape NAudio converts on its own. Fall through.
+		}
+
+		var relabelled = AsStandardFormat(reader.WaveFormat);
+		if (relabelled is not null)
+		{
+			var raw = new RawSourceWaveStream(reader, relabelled);
+			return new DecodedWave(raw.ToSampleProvider(), raw);
+		}
+
+		// Compressed audio. CreatePcmStream goes through Windows' installed codecs, and throws
+		// if none of them knows this format — which is the honest answer, and reaches the user
+		// as a named beep file that could not be loaded.
+		var pcm = WaveFormatConversionStream.CreatePcmStream(reader);
+		return new DecodedWave(pcm.ToSampleProvider(), pcm);
+	}
+
+	// The sub-format GUID of an extensible header, whose first four bytes say PCM (1) or IEEE
+	// float (3). It sits after the two bytes of valid-bits and the four of channel mask.
+	private const int SubFormatOffset = 6;
+	private const byte SubFormatPcm = 1;
+	private const byte SubFormatIeeeFloat = 3;
+
+	private static WaveFormat? AsStandardFormat(WaveFormat format)
+	{
+		if (format.Encoding != WaveFormatEncoding.Extensible || format is not WaveFormatExtraData extra)
+			return null;
+
+		var data = extra.ExtraData;
+		if (data is null || data.Length < SubFormatOffset + 4)
+			return null;
+
+		return data[SubFormatOffset] switch
+		{
+			SubFormatIeeeFloat when format.BitsPerSample == 32 =>
+				WaveFormat.CreateIeeeFloatWaveFormat(format.SampleRate, format.Channels),
+			SubFormatPcm =>
+				new WaveFormat(format.SampleRate, format.BitsPerSample, format.Channels),
+			_ => null,
+		};
+	}
+
+	/// <param name="Owned">
+	/// The stream wrapped around the reader, when one was needed. Held so it is closed with the
+	/// clip rather than left to a finalizer.
+	/// </param>
+	private readonly record struct DecodedWave(ISampleProvider Provider, IDisposable? Owned) : IDisposable
+	{
+		public void Dispose() => Owned?.Dispose();
 	}
 
 	private static ISampleProvider MatchChannels(ISampleProvider source, int channels)

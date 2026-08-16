@@ -102,12 +102,93 @@ public class BeepClipReaderTests
 		Assert.InRange(clip.Duration, TimeSpan.FromSeconds(29.9), BeepClipReader.MaxDuration);
 	}
 
+	// A WAV in the "extensible" layout, which is what many tools write for float audio and what
+	// Windows requires above two channels. NAudio refuses these on its own, and the old
+	// PlaySound path played them without complaint — so a beep file the user has been hearing
+	// for months would have gone quiet the day this shipped.
+	private static byte[] ExtensibleWav(int sampleRate, short channels, int frames, bool ieeeFloat)
+	{
+		short bits = (short)(ieeeFloat ? 32 : 16);
+		short blockAlign = (short)(channels * bits / 8);
+		int dataBytes = frames * blockAlign;
+
+		using var stream = new MemoryStream();
+		using var writer = new BinaryWriter(stream);
+		writer.Write("RIFF"u8);
+		writer.Write(36 + 24 + dataBytes);
+		writer.Write("WAVE"u8);
+		writer.Write("fmt "u8);
+		writer.Write(40);              // fmt chunk size with the extensible tail
+		writer.Write(unchecked((short)0xFFFE));   // WAVE_FORMAT_EXTENSIBLE
+		writer.Write(channels);
+		writer.Write(sampleRate);
+		writer.Write(sampleRate * blockAlign);
+		writer.Write(blockAlign);
+		writer.Write(bits);
+		writer.Write((short)22);       // cbSize
+		writer.Write(bits);            // valid bits per sample
+		writer.Write(channels == 2 ? 3 : 4);  // channel mask
+		// KSDATAFORMAT_SUBTYPE_PCM / _IEEE_FLOAT: the first four bytes are what tells them apart.
+		writer.Write(ieeeFloat ? 3 : 1);
+		writer.Write(new byte[] { 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 });
+		writer.Write("data"u8);
+		writer.Write(dataBytes);
+		for (var i = 0; i < frames * channels; i++)
+		{
+			if (ieeeFloat)
+				writer.Write(0.25f);
+			else
+				writer.Write((short)4000);
+		}
+		writer.Flush();
+		return stream.ToArray();
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void A_wav_written_in_the_extensible_layout_still_plays(bool ieeeFloat)
+	{
+		var wav = ExtensibleWav(sampleRate: 44100, channels: 2, frames: 4410, ieeeFloat);
+
+		var clip = BeepClipReader.ReadBytes(wav, Rate, Channels);
+
+		Assert.Equal(Rate, clip.SampleRate);
+		Assert.Equal(Channels, clip.Channels);
+		Assert.InRange(clip.Duration.TotalSeconds, 0.08, 0.12);
+		Assert.Contains(clip.Samples.ToArray(), s => s != 0f);
+	}
+
 	[Fact]
 	public void Something_that_is_not_a_wav_file_is_refused_rather_than_played_as_noise()
 	{
 		var garbage = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
 
 		Assert.ThrowsAny<Exception>(() => BeepClipReader.ReadBytes(garbage, Rate, Channels));
+	}
+
+	/// <summary>
+	/// Loading every beep file has to stay quick, because <c>BeepPlayer.Initialize</c> does it on
+	/// the UI thread while holding its lock — at startup and again after every settings save.
+	/// Doing the work there is the whole point: it is what leaves nothing to do at the moment a
+	/// beep is actually wanted. Measured at 29 ms for all six files, so the budget below is wide
+	/// enough not to fail on a loaded build machine and narrow enough to catch decoding that has
+	/// quietly become expensive — or moved to the wrong place.
+	/// </summary>
+	[Fact]
+	public void Loading_every_beep_file_stays_out_of_the_way_of_the_user_interface()
+	{
+		var files = new[] { "Start.wav", "Success.wav", "Failure.wav", "End.wav", "Mute.wav", "Unmute.wav" };
+		var paths = files.Select(f => Path.Combine(AppContext.BaseDirectory, "CustomAudio", f)).ToArray();
+		Assert.All(paths, p => Assert.True(File.Exists(p), $"The fixture assumes {p} is copied next to the tests."));
+
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		var clips = paths.Select(p => BeepClipReader.ReadFile(p, Rate, Channels)).ToArray();
+		stopwatch.Stop();
+
+		Assert.True(stopwatch.ElapsedMilliseconds < 1000,
+			$"Loading the six beep files took {stopwatch.ElapsedMilliseconds} ms on the thread that opens the window.");
+		Assert.All(clips, c => Assert.True(c.Duration > TimeSpan.Zero));
 	}
 
 	// The real beep files ship next to the test host, so this is the shape the app actually

@@ -7,6 +7,14 @@ namespace CognitiveSupport;
 /// Plays one <see cref="BeepClip"/> through the beep mixer, back-to-back
 /// <c>repeatCount</c> times, and then ends so the mixer drops it.
 /// <para>
+/// It must fill every read completely until it is genuinely finished. NAudio's mixer drops an
+/// input the moment a read comes back short — measured against NAudio 2.3.0, the test is
+/// "fewer samples than asked for", not "no samples at all" — so a beep that returned a partial
+/// buffer for any reason other than reaching its end would be cut off there and never heard
+/// again. The samples in that last short read are mixed before the input is dropped, so ending
+/// this way loses nothing.
+/// </para>
+/// <para>
 /// The repeat lives here rather than in a loop at the call site because the mixer is what makes
 /// counting possible at all. The old code ran the clip synchronously on a background thread, N
 /// times over, and Windows only lets one sound play per process — so a success beep raised

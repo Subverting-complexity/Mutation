@@ -139,6 +139,17 @@ public sealed class BeepAudioOutput : IDisposable
 		if (repeatCount <= 0)
 			return;
 
+		// Checked here rather than left to the mixer. NAudio's mixer adds the input to its list
+		// first and validates the format afterwards, so a clip in the wrong format is already in
+		// the mix by the time it throws — and would then be played, at the wrong rate, over
+		// everything else. Every clip the app builds goes through BeepClipReader in this format,
+		// so this only ever catches a mistake made outside it.
+		if (clip.SampleRate != SampleRate || clip.Channels != Channels)
+		{
+			_log("Beep", $"A beep in {clip.SampleRate} Hz / {clip.Channels} channel form was not played; the mixer runs at {SampleRate} Hz / {Channels} channels.");
+			return;
+		}
+
 		Enqueue(new PlayRequest(clip, repeatCount, Stopwatch.GetTimestamp()));
 	}
 
@@ -212,12 +223,21 @@ public sealed class BeepAudioOutput : IDisposable
 		}
 		finally
 		{
-			lock (_idleLock)
+			// Both of these can throw if shutdown gave up waiting for this thread and disposed
+			// the queue and the event underneath it — see Dispose. An exception escaping a
+			// background thread's finally takes the process down with it, which is a poor way
+			// for an app to close because a beep was still in the air.
+			try
 			{
-				_pending = 0;
-				_idle.Set();
+				lock (_idleLock)
+				{
+					_pending = 0;
+					_idle.Set();
+				}
 			}
-			CloseDevice();
+			catch (ObjectDisposedException) { }
+
+			try { CloseDevice(); } catch { }
 		}
 	}
 
@@ -307,11 +327,17 @@ public sealed class BeepAudioOutput : IDisposable
 		_disposed = true;
 
 		try { _requests.CompleteAdding(); } catch { }
-		// Bounded, because shutdown must not hang on an audio driver. The device is closed by the
-		// pump's finally either way, and by the process if the driver never lets go.
-		_pump.Join(TimeSpan.FromSeconds(2));
-		_requests.Dispose();
-		_idle.Dispose();
+
+		// Bounded, because closing the window must not hang on an audio driver. The device is
+		// closed by the pump's finally either way, and by the process if the driver never lets
+		// go. Only tidy up behind the pump if it actually finished: pulling the queue and the
+		// event out from under a thread that is still running them is how a slow driver would
+		// turn a clean exit into a crash.
+		if (_pump.Join(TimeSpan.FromSeconds(2)))
+		{
+			try { _requests.Dispose(); } catch { }
+			try { _idle.Dispose(); } catch { }
+		}
 	}
 
 	/// <param name="Clip">Null asks only that the device be opened — see <see cref="Warm"/>.</param>

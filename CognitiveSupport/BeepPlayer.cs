@@ -72,6 +72,12 @@ public static class BeepPlayer
 			// here — at startup, and again after a settings save — rather than under a user who
 			// is waiting to hear whether their dictation landed (issue #386).
 			Output().Warm();
+
+			// This method reads and converts every beep file while holding the lock, on whichever
+			// thread called it, which in the app is the UI thread. Measured against the six sound
+			// files that ship with Mutation: 29 ms in total, holding 3.2 MB of decoded audio.
+			// BeepClipReaderTests keeps a budget on it, because the whole point of doing the work
+			// here is that none of it is left for the moment a beep is wanted.
 		}
 	}
 
