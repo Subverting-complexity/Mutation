@@ -668,6 +668,30 @@ that depends on the problem:
 
 Until you do, everything still works — you just hear Mutation's own beeps.
 
+### A sound arrives long after the thing it is confirming
+
+**What's happening.** Mutation used to hand each beep to Windows one at a time, and
+Windows had to find your speakers, play the sound and let go of them again for every
+single one. Finding the speakers is usually instant, but not always — and the worst
+moment for it is the end of a dictation, because Mutation has just let go of your
+microphone and Windows may still be sorting the device out. That is how a success sound
+came to arrive five or ten seconds after the text had already been pasted.
+
+Mutation now holds a connection to your speakers open the whole time it is running, so
+there is nothing to find when a sound is wanted. See **Audio** in
+[Settings](settings.md) for what else that changes.
+
+**What to do.** If a sound still arrives late, Mutation writes a line to its log saying
+how long it waited, so the delay can be looked at rather than guessed at. Open the log
+(see below) and look for entries marked `[Beep]`. Two things are worth trying first:
+
+1. Check Windows' own sound settings. If your headset or speakers are set to be used for
+   calls as well as everything else, Windows quietens or holds up other sounds while an
+   app is using the microphone, and it takes a few seconds to undo that afterwards.
+2. If you are on a Bluetooth headset, try a wired one or your built-in speakers for a
+   run or two. Bluetooth headsets switch between a call mode and a music mode when an
+   app picks up the microphone, and that switch takes seconds on some models.
+
 ## Finding the log file
 
 When something goes wrong, Mutation writes a timestamped entry to a log file called
