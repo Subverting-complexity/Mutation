@@ -52,6 +52,21 @@ Your microphone and the little sounds Mutation makes.
 | Use custom beeps | Play your own sound files instead of the built-in beeps for status cues. |
 | Beep files | One file each for Success, Failure, Start, End, Mute and Unmute. **Browse...** picks a file, and the small play button lets you hear it. The low falling "waiting for the microphone" sound is built in and always plays as-is. |
 
+Mutation keeps a connection to your speakers open for the whole time it is running, so
+that a sound arrives the moment it is meant to. This is why the success sound now
+follows your dictation straight away instead of turning up several seconds later. Two
+things follow from it, and neither one needs anything from you:
+
+- Windows lists Mutation in its volume mixer for as long as the app is open, even when
+  it is not making a sound. You can set Mutation's own level there if the beeps are
+  louder or quieter than you would like.
+- Sounds that happen close together now play over each other instead of cutting each
+  other off. If a slow transcription is beeping to say it is trying again, and the
+  transcript arrives mid-count, you hear both.
+
+If you use a Bluetooth headset, this also keeps it awake rather than letting it doze
+between sounds.
+
 ### Screen capture & OCR
 
 Reading text out of pictures. OCR just means "pulling the words out of an image".

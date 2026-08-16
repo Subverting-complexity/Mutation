@@ -1,4 +1,7 @@
-﻿using System.Media;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace CognitiveSupport;
 
@@ -32,54 +35,64 @@ public static class BeepPlayer
 	private static readonly object SyncLock = new();
 	private static readonly TimeSpan DuplicateSuppressWindow = TimeSpan.FromMilliseconds(500);
 	private static readonly Dictionary<BeepType, DateTime> _lastPlayed = new();
-	private static SoundPlayer? _playerStart;
-	private static SoundPlayer? _playerSuccess;
-	private static SoundPlayer? _playerFailure;
-	private static SoundPlayer? _playerEnd;
-	private static SoundPlayer? _playerMute;
-	private static SoundPlayer? _playerUnmute;
-	private static SoundPlayer? _previewPlayer;
-	// Bumped whenever the per-type players are torn down, so an in-flight repeat loop
-	// can tell that the SoundPlayer it captured is no longer the live one.
-	private static int _playerGeneration;
-	private static readonly Dictionary<(BeepType Type, int RepeatCount), (SoundPlayer Player, MemoryStream Stream)> _defaultPlayers = new();
+
+	// The user's own sound files, decoded once when settings are loaded. Empty when custom
+	// beeps are switched off, or when a file could not be read — either way the synthesized
+	// tone below is played instead, so the app is never silent about an outcome.
+	private static readonly Dictionary<BeepType, BeepClip> _customClips = new();
+
+	// The synthesized tones, built on first use and kept. Keyed by repeat count as well as
+	// type because a repeat of a default beep is one longer sequence with gaps in it, not the
+	// same sound played twice — that is what lets a listener count the retries (issue #216).
+	private static readonly Dictionary<(BeepType Type, int RepeatCount), BeepClip> _defaultClips = new();
+
+	private static BeepAudioOutput? _output;
+
 	public static IReadOnlyList<string> LastInitializationIssues { get; private set; } = Array.Empty<string>();
 
 	public static void Initialize(Settings settings)
 	{
 		lock (SyncLock)
 		{
-			DisposePlayersCore();
+			_customClips.Clear();
 			var issues = new List<string>();
 			var custom = settings.AudioSettings?.CustomBeepSettings;
 			if (custom?.UseCustomBeeps == true)
 			{
-				_playerStart = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepStartFile ?? string.Empty), fp => issues.Add($"Could not load start beep file: {fp}"));
-				_playerSuccess = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepSuccessFile ?? string.Empty), fp => issues.Add($"Could not load success beep file: {fp}"));
-				_playerFailure = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepFailureFile ?? string.Empty), fp => issues.Add($"Could not load failure beep file: {fp}"));
-				_playerEnd = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepEndFile ?? string.Empty), fp => issues.Add($"Could not load end beep file: {fp}"));
-				_playerMute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepMuteFile ?? string.Empty), fp => issues.Add($"Could not load mute beep file: {fp}"));
-				_playerUnmute = LoadPlayer(custom.ResolveAudioFilePath(custom.BeepUnmuteFile ?? string.Empty), fp => issues.Add($"Could not load unmute beep file: {fp}"));
+				Load(BeepType.Start, custom.ResolveAudioFilePath(custom.BeepStartFile ?? string.Empty), "start", issues);
+				Load(BeepType.Success, custom.ResolveAudioFilePath(custom.BeepSuccessFile ?? string.Empty), "success", issues);
+				Load(BeepType.Failure, custom.ResolveAudioFilePath(custom.BeepFailureFile ?? string.Empty), "failure", issues);
+				Load(BeepType.End, custom.ResolveAudioFilePath(custom.BeepEndFile ?? string.Empty), "end", issues);
+				Load(BeepType.Mute, custom.ResolveAudioFilePath(custom.BeepMuteFile ?? string.Empty), "mute", issues);
+				Load(BeepType.Unmute, custom.ResolveAudioFilePath(custom.BeepUnmuteFile ?? string.Empty), "unmute", issues);
 			}
 			LastInitializationIssues = issues;
+
+			// Opening an audio device is the one slow step left in the beep path, so it is done
+			// here — at startup, and again after a settings save — rather than under a user who
+			// is waiting to hear whether their dictation landed (issue #386).
+			Output().Warm();
+
+			// This method reads and converts every beep file while holding the lock, on whichever
+			// thread called it, which in the app is the UI thread. Measured against the six sound
+			// files that ship with Mutation: 29 ms in total, holding 3.2 MB of decoded audio.
+			// BeepClipReaderTests keeps a budget on it, because the whole point of doing the work
+			// here is that none of it is left for the moment a beep is wanted.
 		}
 	}
 
-	private static SoundPlayer? LoadPlayer(string filePath, Action<string> onError)
+	private static void Load(BeepType type, string filePath, string name, List<string> issues)
 	{
 		if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
-			return null;
+			return;
 
 		try
 		{
-			var player = new SoundPlayer(filePath);
-			player.Load();
-			return player;
+			_customClips[type] = BeepClipReader.ReadFile(filePath, BeepAudioOutput.SampleRate, BeepAudioOutput.Channels);
 		}
 		catch
 		{
-			onError(filePath);
-			return null;
+			issues.Add($"Could not load {name} beep file: {filePath}");
 		}
 	}
 
@@ -94,18 +107,20 @@ public static class BeepPlayer
 				return;
 			}
 			_lastPlayed[type] = now;
+
+			PlayCore(type, repeatCount: 1);
 		}
-		if (TryPlayCustom(type))
-			return;
-		PlayDefault(type, repeatCount: 1);
 	}
 
-	// Plays <paramref name="repeatCount"/> copies of a beep as a single sound so the
-	// listener can actually count them. Playing Play() in a loop does not work: the
-	// duplicate-suppression window above swallows every call after the first (issue
-	// #216), and even without it SoundPlayer.Play restarts rather than queues. The
-	// default beeps are therefore synthesized as one N-tone WAV, and custom beep files
-	// are played back-to-back synchronously off the calling thread.
+	/// <summary>
+	/// Plays <paramref name="repeatCount"/> copies of a beep so the listener can count them.
+	/// <para>
+	/// Calling <see cref="Play"/> in a loop does not work: the duplicate-suppression window
+	/// above swallows every call after the first (issue #216). The default beeps are therefore
+	/// synthesized as one sequence with gaps in it, and a custom sound file is played
+	/// back-to-back the requested number of times.
+	/// </para>
+	/// </summary>
 	public static void PlayRepeated(BeepType type, int repeatCount)
 	{
 		repeatCount = ClampRepeatCount(repeatCount);
@@ -116,12 +131,47 @@ public static class BeepPlayer
 			// repeat, so it must never be collapsed. Still stamped so a stray single
 			// Play right behind it stays suppressed.
 			_lastPlayed[type] = DateTime.UtcNow;
-		}
 
-		if (TryPlayCustomRepeated(type, repeatCount))
-			return;
-		PlayDefault(type, repeatCount);
+			PlayCore(type, repeatCount);
+		}
 	}
+
+	// Held under SyncLock by both callers. Everything here is a dictionary lookup or a handover
+	// to the output's own thread, so the lock is never held across anything that waits.
+	private static void PlayCore(BeepType type, int repeatCount)
+	{
+		try
+		{
+			if (_customClips.TryGetValue(type, out var custom))
+			{
+				Output().Play(custom, repeatCount);
+				return;
+			}
+
+			Output().Play(DefaultClip(type, repeatCount));
+		}
+		catch
+		{
+			// A beep that will not play must never take down the operation it is reporting on:
+			// this runs inside Polly retry lambdas, where an escaping exception aborts the
+			// transcription. Playback itself cannot throw here — it is a handover to another
+			// thread — but synthesizing a default tone for the first time can.
+		}
+	}
+
+	private static BeepClip DefaultClip(BeepType type, int repeatCount)
+	{
+		var key = (type, ClampRepeatCount(repeatCount));
+		if (_defaultClips.TryGetValue(key, out var cached))
+			return cached;
+
+		var wav = BeepToneSynthesizer.SynthesizeWav(GetRepeatedSequence(key.Item1, key.Item2));
+		var clip = BeepClipReader.ReadBytes(wav, BeepAudioOutput.SampleRate, BeepAudioOutput.Channels);
+		_defaultClips[key] = clip;
+		return clip;
+	}
+
+	private static BeepAudioOutput Output() => _output ??= new BeepAudioOutput();
 
 	private static int ClampRepeatCount(int repeatCount) => Math.Clamp(repeatCount, 1, MaxRepeatCount);
 
@@ -140,125 +190,6 @@ public static class BeepPlayer
 		return sequence;
 	}
 
-	private static bool TryPlayCustomRepeated(BeepType type, int repeatCount)
-	{
-		SoundPlayer player;
-		int generation;
-
-		// The player field and the generation counter are read together under the lock so
-		// they cannot disagree: DisposePlayers bumps the generation and disposes in one
-		// locked step, so a stale player never pairs with a still-current generation.
-		lock (SyncLock)
-		{
-			var candidate = GetCustomPlayer(type);
-			if (candidate is null)
-				return false;
-
-			if (repeatCount == 1)
-			{
-				PlaySafely(candidate);
-				return true;
-			}
-
-			player = candidate;
-			generation = Volatile.Read(ref _playerGeneration);
-		}
-
-		// PlaySync blocks, so the repeat runs off the caller's thread rather than
-		// stalling the transcription retry it is reporting on. That leaves the loop
-		// running while Initialize/DisposePlayers may replace these players (a Settings
-		// save, or shutdown), so it bails out the moment its generation is superseded
-		// instead of hammering a disposed SoundPlayer.
-		Task.Run(() =>
-		{
-			for (var i = 0; i < repeatCount; i++)
-			{
-				if (Volatile.Read(ref _playerGeneration) != generation)
-					return;
-
-				try
-				{
-					player.PlaySync();
-				}
-				catch
-				{
-					// A failed beep must never take down the operation it reports on.
-					return;
-				}
-			}
-		});
-		return true;
-	}
-
-	private static bool TryPlayCustom(BeepType type)
-	{
-		// The lock covers the Play call, not just the field read. SoundPlayer.Play is
-		// asynchronous — it returns as soon as playback is queued — so holding the lock that
-		// long is cheap, and it is what stops DisposePlayers from disposing this player in
-		// the gap between reading the field and using it.
-		lock (SyncLock)
-		{
-			var player = GetCustomPlayer(type);
-			if (player is null)
-				return false;
-
-			PlaySafely(player);
-			return true;
-		}
-	}
-
-	// A beep that will not play must never take down the operation it is reporting on: this
-	// runs inside Polly retry lambdas, where an escaping exception aborts the transcription.
-	private static void PlaySafely(SoundPlayer player)
-	{
-		try
-		{
-			player.Play();
-		}
-		catch
-		{
-			// Nothing useful to do — the user simply does not hear this beep.
-		}
-	}
-
-	private static SoundPlayer? GetCustomPlayer(BeepType type) => type switch
-	{
-		BeepType.Start => _playerStart,
-		BeepType.Success => _playerSuccess,
-		BeepType.Failure => _playerFailure,
-		BeepType.End => _playerEnd,
-		BeepType.Mute => _playerMute,
-		BeepType.Unmute => _playerUnmute,
-		// Waiting has no custom-file slot: the Settings dialog offers a file per beep the
-		// user already knew about, and a null here simply falls through to the synthesized
-		// default rather than going silent.
-		_ => null
-	};
-
-	// Default beeps are synthesized once into in-memory WAVs and played through
-	// SoundPlayer.Play (asynchronous), so they never block the calling thread the
-	// way Console.Beep did (issue #169).
-	private static void PlayDefault(BeepType type, int repeatCount)
-	{
-		var key = (type, ClampRepeatCount(repeatCount));
-
-		// Play stays inside the lock so DisposePlayers cannot dispose the cached player — or
-		// clear the dictionary out from under this lookup — between the two.
-		lock (SyncLock)
-		{
-			if (!_defaultPlayers.TryGetValue(key, out var cached))
-			{
-				var wav = BeepToneSynthesizer.SynthesizeWav(GetRepeatedSequence(key.Item1, key.Item2));
-				var stream = new MemoryStream(wav, writable: false);
-				cached = (new SoundPlayer(stream), stream);
-				cached.Player.Load();
-				_defaultPlayers[key] = cached;
-			}
-
-			PlaySafely(cached.Player);
-		}
-	}
-
 	public static IReadOnlyList<(int Frequency, int Duration)> GetDefaultSequence(BeepType type) => type switch
 	{
 		BeepType.Start => new[] { (DefaultStartFrequency, DefaultStartDuration) },
@@ -271,10 +202,12 @@ public static class BeepPlayer
 		_ => throw new ArgumentOutOfRangeException(nameof(type))
 	};
 
-	// Plays an arbitrary .wav file for previewing (e.g. from the settings dialog),
-	// independent of the UseCustomBeeps toggle and the cached per-type players.
-	// Expects an already-resolved file path (see CustomBeepSettingsData.ResolveAudioFilePath).
-	// Returns true if playback started; false if the file is missing or could not be loaded.
+	/// <summary>
+	/// Plays an arbitrary .wav file for previewing (e.g. from the settings dialog), independent
+	/// of the UseCustomBeeps toggle and the clips loaded for each beep type. Expects an
+	/// already-resolved file path (see <c>CustomBeepSettingsData.ResolveAudioFilePath</c>).
+	/// Returns true if the file was read and handed over; false if it is missing or unreadable.
+	/// </summary>
 	public static bool PreviewFile(string? resolvedFilePath)
 	{
 		if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
@@ -284,57 +217,30 @@ public static class BeepPlayer
 		{
 			try
 			{
-				_previewPlayer?.Dispose();
-				_previewPlayer = new SoundPlayer(resolvedFilePath);
-				_previewPlayer.Load();
-				_previewPlayer.Play();
+				var clip = BeepClipReader.ReadFile(resolvedFilePath, BeepAudioOutput.SampleRate, BeepAudioOutput.Channels);
+				Output().Play(clip);
 				return true;
 			}
 			catch
 			{
-				_previewPlayer?.Dispose();
-				_previewPlayer = null;
 				return false;
 			}
 		}
 	}
 
 	/// <summary>
-	/// Tears down every cached player. Stays public because the UI project calls it on window
-	/// close; every sibling that touches these statics holds <c>SyncLock</c>, and so does this.
+	/// Releases the audio device and everything loaded for it. Stays public because the UI
+	/// project calls it on window close; every sibling that touches these statics holds
+	/// <c>SyncLock</c>, and so does this. A beep after this point simply opens a new device.
 	/// </summary>
 	public static void DisposePlayers()
 	{
 		lock (SyncLock)
-			DisposePlayersCore();
-	}
-
-	// Callers already holding SyncLock use this, so Initialize does not re-enter the public
-	// entry point. Monitor is re-entrant, but routing through one core keeps it obvious that
-	// nothing here runs unlocked.
-	private static void DisposePlayersCore()
-	{
-		// Signal before disposing, so a repeat loop stops rather than racing the tear-down.
-		Interlocked.Increment(ref _playerGeneration);
-		_previewPlayer?.Dispose();
-		_previewPlayer = null;
-		_playerStart?.Dispose();
-		_playerSuccess?.Dispose();
-		_playerFailure?.Dispose();
-		_playerEnd?.Dispose();
-		_playerMute?.Dispose();
-		_playerUnmute?.Dispose();
-		_playerStart = null;
-		_playerSuccess = null;
-		_playerFailure = null;
-		_playerEnd = null;
-		_playerMute = null;
-		_playerUnmute = null;
-		foreach (var (player, stream) in _defaultPlayers.Values)
 		{
-			player.Dispose();
-			stream.Dispose();
+			_customClips.Clear();
+			_defaultClips.Clear();
+			_output?.Dispose();
+			_output = null;
 		}
-		_defaultPlayers.Clear();
 	}
 }
