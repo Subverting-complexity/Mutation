@@ -334,13 +334,15 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 * Paste OpenAI/Whisper and Deepgram keys into the top-level `ApiKeys` section (`OpenAiApiKey`, `DeepgramApiKey`); they are shared with the rest of the app.
 * A service's own `ApiKey` under `SpeechToTextSettings → Services` is an optional override — set it only when that service needs a different key (for example a Groq endpoint that reuses the OpenAI provider).
 
-## Contribute
+## Contributing
 
-Pull requests are welcome—open an issue to discuss ideas first, then fork, commit, and PR.
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting issues, submitting changes, and the code style used in this project.
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-See [License.txt](License.txt) in the repository.
+This project is licensed under the MIT License. See [License.txt](License.txt) for details.
 
 
 ## Backstory.
