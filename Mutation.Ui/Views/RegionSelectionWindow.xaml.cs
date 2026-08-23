@@ -139,6 +139,21 @@ public sealed partial class RegionSelectionWindow : Window
 	private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
 	[DllImport("user32.dll")]
+	private static extern bool GetClientRect(IntPtr hWnd, out Win32Rect rect);
+
+	[DllImport("user32.dll")]
+	private static extern bool GetWindowRect(IntPtr hWnd, out Win32Rect rect);
+
+	[DllImport("user32.dll")]
+	private static extern bool ClientToScreen(IntPtr hWnd, ref Win32Point point);
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct Win32Rect { public int Left, Top, Right, Bottom; }
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct Win32Point { public int X, Y; }
+
+	[DllImport("user32.dll")]
 	private static extern bool SetForegroundWindow(IntPtr hWnd);
 
 	[DllImport("user32.dll")]
@@ -267,7 +282,9 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			try
 			{
-				appWindow.MoveAndResize(new RectInt32(left, top, width, height));
+				// Chrome off before sizing, so the first layout pass already runs against
+				// the drawing area the window is going to keep. It does not on its own make
+				// that area the right size — see MatchDrawingAreaToScreen below.
 				if (appWindow.Presenter is OverlappedPresenter presenter)
 				{
 					presenter.IsResizable = false;
@@ -275,20 +292,131 @@ public sealed partial class RegionSelectionWindow : Window
 					presenter.IsMinimizable = false;
 					presenter.SetBorderAndTitleBar(false, false);
 				}
+				appWindow.MoveAndResize(new RectInt32(left, top, width, height));
 			}
 			catch { }
 		}
 		try
 		{
+			// Kept even though MoveAndResize has already placed the window and
+			// MatchDrawingAreaToScreen is about to place it again. This is the only one of
+			// the three that runs outside the try above, so it is what re-asserts topmost
+			// if MoveAndResize threw. All three run synchronously before the message pump
+			// turns, so XAML still lays out once.
 			SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE);
 		}
 		catch { }
 		// Expand content into title bar area (hide chrome).
+		//
+		// Ahead of MatchDrawingAreaToScreen, not after it. Every chrome setting has to be in
+		// its final state before the frame is measured, or the measurement describes a window
+		// that no longer exists and the compensation is built on it. Ordering this one last
+		// was safe only by luck: PrepareWindow runs again per capture on the pre-warmed
+		// overlay, so the second run would have measured the settled window. An overlay built
+		// fresh, which happens when the startup pre-warm throws, gets exactly one run and
+		// would have kept the stale measurement for its whole life.
 		if (this.AppWindow?.TitleBar is AppWindowTitleBar tb)
 		{
 			tb.ExtendsContentIntoTitleBar = true;
 			tb.ButtonBackgroundColor = Windows.UI.Color.FromArgb(1, 0, 0, 0);
 			tb.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(1, 0, 0, 0);
+		}
+		MatchDrawingAreaToScreen(left, top, width, height);
+	}
+
+	/// <summary>
+	/// Grows the window until the area it actually draws into is exactly the virtual
+	/// screen, rather than the window's outer rectangle being that size.
+	/// <para>
+	/// This is what made the capture preview look soft. The preview is one image stretched
+	/// to fill the drawing area, so it is only sharp when that area holds exactly as many
+	/// pixels as the picture does. Sizing the window to the screen does not achieve that:
+	/// a window is measured by its outer rectangle, and the area inside it is smaller by
+	/// whatever frame the window still carries. Measured on a 1920 by 1080 display the
+	/// drawing area came back as 1914 by 1074, six pixels short each way, and the whole
+	/// screenshot was being squeezed into it. A shrink of a third of a percent moves
+	/// nothing you could see, but it resamples every pixel in the picture, and text loses
+	/// the hard one-pixel edges that make it look crisp. Turning the frame off does not
+	/// give those six pixels back.
+	/// </para>
+	/// <para>
+	/// So measure the frame rather than assume it. Ask the window where its drawing area
+	/// sits and how big it is, and hand those numbers to <see cref="OverlayDrawingArea"/>,
+	/// which works out the outer rectangle that puts the drawing area on the screen. The
+	/// window then hangs very slightly off every edge, which nothing can see because the
+	/// frame is what hangs off, and the drawing area lands exactly on the screen. One bitmap
+	/// pixel, one screen pixel.
+	/// </para>
+	/// <para>
+	/// A window with no frame at all measures a difference of zero and is left alone. The
+	/// arithmetic lives in <see cref="OverlayDrawingArea"/> rather than here so it can be
+	/// checked without a window; this method is only the Win32 reading and writing around it.
+	/// </para>
+	/// </summary>
+	private void MatchDrawingAreaToScreen(int left, int top, int width, int height)
+	{
+		var target = new PixelRect(left, top, width, height);
+
+		// Twice at most. The first pass compensates for the frame as it stands; the second
+		// exists because moving the window is not always inert. Growing it by a few pixels can
+		// change which monitor owns most of it, and on a mixed-DPI desktop that arrives as a
+		// DPI change, which resizes the window again and undoes the correction. The frame is a
+		// different thickness at the new scale too, so the answer has to be measured again
+		// rather than reapplied. Bounded rather than looped: if two passes have not settled it,
+		// something is moving the window faster than this can follow, and the picture being
+		// slightly soft is a far better outcome than a window that will not stop resizing.
+		for (int attempt = 0; attempt < 2; attempt++)
+		{
+			if (!TryFitDrawingArea(target, out PixelRect fitted))
+				return;
+
+			if (!SetWindowPos(_hwnd, HWND_TOPMOST, fitted.Left, fitted.Top, fitted.Width, fitted.Height, SWP_NOACTIVATE))
+			{
+				System.Diagnostics.Debug.WriteLine("MatchDrawingAreaToScreen: SetWindowPos failed; the capture preview may be resampled.");
+				return;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Measures the window and works out the outer rectangle it needs. False when there is
+	/// nothing to do, or when the window cannot be measured.
+	/// </summary>
+	private bool TryFitDrawingArea(PixelRect target, out PixelRect fitted)
+	{
+		fitted = default;
+		try
+		{
+			if (!GetWindowRect(_hwnd, out Win32Rect window) || !GetClientRect(_hwnd, out Win32Rect client))
+			{
+				System.Diagnostics.Debug.WriteLine("MatchDrawingAreaToScreen: could not measure the window; the capture preview may be resampled.");
+				return false;
+			}
+
+			Win32Point origin = default;
+			if (!ClientToScreen(_hwnd, ref origin))
+			{
+				System.Diagnostics.Debug.WriteLine("MatchDrawingAreaToScreen: could not locate the drawing area; the capture preview may be resampled.");
+				return false;
+			}
+
+			PixelRect? answer = OverlayDrawingArea.Fit(
+				new PixelRect(window.Left, window.Top, window.Right - window.Left, window.Bottom - window.Top),
+				client.Right - client.Left,
+				client.Bottom - client.Top,
+				(origin.X, origin.Y),
+				target);
+
+			if (answer is null)
+				return false;
+
+			fitted = answer.Value;
+			return true;
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"MatchDrawingAreaToScreen failed: {ex.Message}");
+			return false;
 		}
 	}
 

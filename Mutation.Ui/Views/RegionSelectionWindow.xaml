@@ -7,13 +7,18 @@
     mc:Ignorable="d"
     Title="Select Region">
     <Grid Background="Transparent" UseLayoutRounding="True">
+        <!--
+            No CacheMode here, deliberately. A BitmapCache was added for speed, and it
+            rasterises this element into an offscreen surface that the compositor then
+            samples to get the pixels on screen. For an image already sized to fill the
+            display that buys nothing: it is one full-screen surface either way. What it
+            costs is a resampling step the source pixels did not need, and the picture
+            comes out soft. Feeding the Image straight to the compositor lets one bitmap
+            pixel land on one screen pixel.
+        -->
         <Image x:Name="Img" Stretch="Fill"
             AutomationProperties.AccessibilityView="Raw"
-            AutomationProperties.Name="Screen capture preview">
-            <Image.CacheMode>
-                <BitmapCache />
-            </Image.CacheMode>
-        </Image>
+            AutomationProperties.Name="Screen capture preview" />
 
         <Canvas x:Name="Overlay" Background="Transparent"
             IsTabStop="True"
