@@ -139,6 +139,21 @@ public sealed partial class RegionSelectionWindow : Window
 	private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
 	[DllImport("user32.dll")]
+	private static extern bool GetClientRect(IntPtr hWnd, out Win32Rect rect);
+
+	[DllImport("user32.dll")]
+	private static extern bool GetWindowRect(IntPtr hWnd, out Win32Rect rect);
+
+	[DllImport("user32.dll")]
+	private static extern bool ClientToScreen(IntPtr hWnd, ref Win32Point point);
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct Win32Rect { public int Left, Top, Right, Bottom; }
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct Win32Point { public int X, Y; }
+
+	[DllImport("user32.dll")]
 	private static extern bool SetForegroundWindow(IntPtr hWnd);
 
 	[DllImport("user32.dll")]
@@ -267,7 +282,9 @@ public sealed partial class RegionSelectionWindow : Window
 		{
 			try
 			{
-				appWindow.MoveAndResize(new RectInt32(left, top, width, height));
+				// Chrome off before sizing, so the first layout pass already runs against
+				// the drawing area the window is going to keep. It does not on its own make
+				// that area the right size — see MatchDrawingAreaToScreen below.
 				if (appWindow.Presenter is OverlappedPresenter presenter)
 				{
 					presenter.IsResizable = false;
@@ -275,6 +292,7 @@ public sealed partial class RegionSelectionWindow : Window
 					presenter.IsMinimizable = false;
 					presenter.SetBorderAndTitleBar(false, false);
 				}
+				appWindow.MoveAndResize(new RectInt32(left, top, width, height));
 			}
 			catch { }
 		}
@@ -283,6 +301,7 @@ public sealed partial class RegionSelectionWindow : Window
 			SetWindowPos(_hwnd, HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE);
 		}
 		catch { }
+		MatchDrawingAreaToScreen(left, top, width, height);
 		// Expand content into title bar area (hide chrome).
 		if (this.AppWindow?.TitleBar is AppWindowTitleBar tb)
 		{
@@ -290,6 +309,71 @@ public sealed partial class RegionSelectionWindow : Window
 			tb.ButtonBackgroundColor = Windows.UI.Color.FromArgb(1, 0, 0, 0);
 			tb.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(1, 0, 0, 0);
 		}
+	}
+
+	/// <summary>
+	/// Grows the window until the area it actually draws into is exactly the virtual
+	/// screen, rather than the window's outer rectangle being that size.
+	/// <para>
+	/// This is what made the capture preview look soft. The preview is one image stretched
+	/// to fill the drawing area, so it is only sharp when that area holds exactly as many
+	/// pixels as the picture does. Sizing the window to the screen does not achieve that:
+	/// a window is measured by its outer rectangle, and the area inside it is smaller by
+	/// whatever frame the window still carries. Measured on a 1920 by 1080 display the
+	/// drawing area came back as 1914 by 1074, six pixels short each way, and the whole
+	/// screenshot was being squeezed into it. A shrink of a third of a percent moves
+	/// nothing you could see, but it resamples every pixel in the picture, and text loses
+	/// the hard one-pixel edges that make it look crisp. Turning the frame off does not
+	/// give those six pixels back.
+	/// </para>
+	/// <para>
+	/// So measure the frame rather than assume it. Ask the window where its drawing area
+	/// sits and how big it is, work out the difference from the outer rectangle, and add
+	/// that difference back. The window then hangs very slightly off every edge of the
+	/// screen, which nothing can see because the frame is what hangs off, and the drawing
+	/// area lands exactly on the screen. One bitmap pixel, one screen pixel.
+	/// </para>
+	/// <para>
+	/// A window with no frame at all measures a difference of zero and is left alone.
+	/// </para>
+	/// </summary>
+	private void MatchDrawingAreaToScreen(int left, int top, int width, int height)
+	{
+		try
+		{
+			if (!GetClientRect(_hwnd, out Win32Rect client) || !GetWindowRect(_hwnd, out Win32Rect window))
+				return;
+
+			int drawingWidth = client.Right - client.Left;
+			int drawingHeight = client.Bottom - client.Top;
+			if (drawingWidth <= 0 || drawingHeight <= 0)
+				return;
+
+			int extraWidth = (window.Right - window.Left) - drawingWidth;
+			int extraHeight = (window.Bottom - window.Top) - drawingHeight;
+			if (extraWidth <= 0 && extraHeight <= 0)
+				return;
+
+			// Where the drawing area starts, relative to the window's own corner. The frame
+			// is not always shared evenly between the edges, so this is asked for rather
+			// than halved.
+			Win32Point origin = default;
+			if (!ClientToScreen(_hwnd, ref origin))
+				return;
+
+			int insetLeft = origin.X - window.Left;
+			int insetTop = origin.Y - window.Top;
+
+			SetWindowPos(
+				_hwnd,
+				HWND_TOPMOST,
+				left - insetLeft,
+				top - insetTop,
+				width + extraWidth,
+				height + extraHeight,
+				SWP_NOACTIVATE);
+		}
+		catch { }
 	}
 
 	public void UpdateBitmap(SoftwareBitmap bitmap)
