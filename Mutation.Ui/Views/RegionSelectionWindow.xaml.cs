@@ -45,6 +45,17 @@ public sealed partial class RegionSelectionWindow : Window
 	private readonly ICursorPosition _cursor = new Win32CursorPosition();
 
 	/// <summary>
+	/// Where the pointer was, in virtual-screen pixels, when the button went down to start the
+	/// current drag. Null until a drag starts, and for the keyboard path, which has no pointer.
+	/// <para>
+	/// Read here rather than converted from the overlay's own coordinates later, because the
+	/// screenshot is in these units and a corner that never leaves them cannot be scaled wrong
+	/// on the way (issue #393).
+	/// </para>
+	/// </summary>
+	private CursorPoint? _startOnScreen;
+
+	/// <summary>
 	/// How the wiggle moves the pointer, as opposed to how everything else does. It reports each
 	/// move as real mouse input as well as placing the pointer, because a magnifier watches the
 	/// mouse through the input stream and a placed cursor is invisible to it (issue #377). Only
@@ -444,6 +455,7 @@ public sealed partial class RegionSelectionWindow : Window
 		_tcs = new TaskCompletionSource<Rect?>();
 		_dragging = false;
 		_lastPointerPos = null;
+		_startOnScreen = null;
 		// Read the pointer before anything below can move it. Showing the overlay, taking the
 		// foreground and moving focus onto the canvas are three focus changes in a row, and a
 		// tool that follows focus answers each of them by moving the pointer (issue #371).
@@ -505,6 +517,9 @@ public sealed partial class RegionSelectionWindow : Window
 			return;
 		}
 		_start = pp.Position;
+		// The same corner in the screenshot's own units, taken now while the button is down and
+		// nothing else has had a chance to move the pointer (issue #393).
+		_startOnScreen = _cursor.TryGet(out var pressedAt) ? pressedAt : null;
 		_dragging = true;
 		_lastPointerPos = _start;
 		// A mouse drag supersedes any half-finished keyboard selection.
@@ -567,7 +582,10 @@ public sealed partial class RegionSelectionWindow : Window
 			return;
 		}
 		if (!_dragging) return;
-		FinishSelection(e.GetCurrentPoint(_overlay).Position);
+		// Read before anything else can move the pointer. The button is up, so this is the
+		// position the user chose.
+		CursorPoint? releasedAt = _cursor.TryGet(out var releasePoint) ? releasePoint : null;
+		FinishSelection(e.GetCurrentPoint(_overlay).Position, releasedAt);
 	}
     
 	// Handle cases where the system cancels the pointer (e.g., edge conditions) or capture is lost
@@ -578,7 +596,10 @@ public sealed partial class RegionSelectionWindow : Window
 		if (!_dragging) return;
 		// Fall back to last known pointer position if current point unavailable
 		var pos = _lastPointerPos ?? (_overlay is not null ? new Point(_overlay.ActualWidth / 2.0, _overlay.ActualHeight / 2.0) : new Point(0, 0));
-		FinishSelection(pos);
+		// No pointer reading here on purpose. The drag ended because the system took it away,
+		// so wherever the pointer is now is not where the user left off; the remembered overlay
+		// position is the better of the two.
+		FinishSelection(pos, null);
 	}
 
 	private void Overlay_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
@@ -587,42 +608,128 @@ public sealed partial class RegionSelectionWindow : Window
 		try { _overlay.ReleasePointerCaptures(); } catch { }
 		if (!_dragging) return;
 		var pos = _lastPointerPos ?? (_overlay is not null ? new Point(_overlay.ActualWidth / 2.0, _overlay.ActualHeight / 2.0) : new Point(0, 0));
-		FinishSelection(pos);
+		// No pointer reading here on purpose. The drag ended because the system took it away,
+		// so wherever the pointer is now is not where the user left off; the remembered overlay
+		// position is the better of the two.
+		FinishSelection(pos, null);
 	}
 
-	private void FinishSelection(Point pos)
+	/// <summary>
+	/// Works out which part of the screenshot to keep, and finishes the capture.
+	/// </summary>
+	/// <param name="pos">
+	/// Where the selection ended, in the overlay's own coordinates. Always supplied — it is
+	/// what the keyboard path has, and what the mouse path draws its rectangle from.
+	/// </param>
+	/// <param name="releaseOnScreen">
+	/// Where the pointer was, in virtual-screen pixels, when the button came up. Null for the
+	/// keyboard path, which has no pointer, and for a drag the system took away from us.
+	/// <para>
+	/// When this and the matching reading from the button going down are both present, they
+	/// decide the crop. The screenshot is in virtual-screen pixels too, so the two corners and
+	/// the picture are already in one unit and the answer is a subtraction. Everything the old
+	/// route had to get right — the drawing area's reported size, the window's drawing area
+	/// covering exactly the screen, the display scale, device-independent pixels — is simply
+	/// not in it. That is the fix for issue #393: not a better conversion, no conversion.
+	/// </para>
+	/// </param>
+	private void FinishSelection(Point pos, CursorPoint? releaseOnScreen)
 	{
 		_dragging = false;
 		if (_overlay is null) return;
-		double x = Math.Min(pos.X, _start.X);
-		double y = Math.Min(pos.Y, _start.Y);
-		double w = Math.Abs(pos.X - _start.X);
-		double h = Math.Abs(pos.Y - _start.Y);
-		// Map selection (Overlay coords in DIP) to bitmap pixel coords for accurate crop
-		double scaleX = _bmpW / Math.Max(1.0, _overlay.ActualWidth);
-		double scaleY = _bmpH / Math.Max(1.0, _overlay.ActualHeight);
 
-		int ix = (int)Math.Round(x * scaleX);
-		int iy = (int)Math.Round(y * scaleY);
-		int iw = (int)Math.Round(w * scaleX);
-		int ih = (int)Math.Round(h * scaleY);
+		// A press and a release in the same place is a mis-click, not a selection, and has
+		// always been handed back as nothing for the caller to report as cancelled. Said here
+		// rather than left to the geometry, which now guarantees at least one pixel: a capture
+		// is a rectangle and a rectangle cannot be empty, but a mis-click is not a capture. A
+		// one-pixel picture and a success beep would tell someone who cannot see the screen
+		// that their capture had worked.
+		if (_start.X == pos.X && _start.Y == pos.Y)
+		{
+			CompleteSelection(
+				new Rect(0, 0, 0, 0),
+				"Region captured, 0 by 0 pixels.",
+				AutomationNotificationKind.ActionCompleted);
+			return;
+		}
 
-		// Clamp to bitmap bounds
-		int x1 = Math.Max(0, Math.Min(ix, _bmpW));
-		int y1 = Math.Max(0, Math.Min(iy, _bmpH));
-		int x2 = Math.Max(0, Math.Min(ix + iw, _bmpW));
-		int y2 = Math.Max(0, Math.Min(iy + ih, _bmpH));
+		// Worked out either way, on every capture. The screen-pixel answer is the one used
+		// when it exists, but the two are compared and a real disagreement is written down —
+		// that difference is the evidence that named the broken measurement, and it goes on
+		// naming it if the same fault ever returns on another desktop.
+		PixelRect fromDrawingArea = RegionCropGeometry.FromDrawingArea(
+			_start.X, _start.Y, pos.X, pos.Y,
+			_overlay.ActualWidth, _overlay.ActualHeight,
+			_bmpW, _bmpH);
 
-		Rect rectPx = new(
-			x1,
-			y1,
-			Math.Max(0, x2 - x1),
-			Math.Max(0, y2 - y1)
-		);
+		PixelRect? fromScreen = null;
+		if (_startOnScreen is CursorPoint pressedAt && releaseOnScreen is CursorPoint releasedAt)
+		{
+			fromScreen = RegionCropGeometry.FromScreenPixels(
+				pressedAt, releasedAt,
+				GetSystemMetrics(SM_XVIRTUALSCREEN),
+				GetSystemMetrics(SM_YVIRTUALSCREEN),
+				_bmpW, _bmpH);
+		}
+
+		PixelRect chosen = fromScreen ?? fromDrawingArea;
+		LogCaptureGeometry(pos, fromDrawingArea, fromScreen, chosen);
+
+		Rect rectPx = new(chosen.Left, chosen.Top, chosen.Width, chosen.Height);
 		CompleteSelection(
 			rectPx,
-			$"Region captured, {Math.Round(rectPx.Width)} by {Math.Round(rectPx.Height)} pixels.",
+			$"Region captured, {chosen.Width} by {chosen.Height} pixels.",
 			AutomationNotificationKind.ActionCompleted);
+	}
+
+	/// <summary>
+	/// Writes down what the capture did, in one line, in the temp folder.
+	/// <para>
+	/// Both answers, every number behind them, and the display scale from two independent
+	/// sources: the ratio the drawing area and the screenshot imply between them, and the one
+	/// the window reports from its own DPI. Those two are meant to be the same number. When
+	/// they are not, the line says so, and which measurement is lying stops being a guess.
+	/// </para>
+	/// </summary>
+	private void LogCaptureGeometry(Point pos, PixelRect fromDrawingArea, PixelRect? fromScreen, PixelRect chosen)
+	{
+		try
+		{
+			double drawingWidth = _overlay?.ActualWidth ?? 0;
+			double drawingHeight = _overlay?.ActualHeight ?? 0;
+			double impliedScaleX = drawingWidth > 0 ? _bmpW / drawingWidth : 0;
+			double impliedScaleY = drawingHeight > 0 ? _bmpH / drawingHeight : 0;
+
+			double reportedScale = 0;
+			try
+			{
+				uint dpi = GetDpiForWindow(_hwnd);
+				if (dpi > 0)
+					reportedScale = dpi / 96.0;
+			}
+			catch { }
+
+			string source = fromScreen is null ? "drawing-area" : "screen-pixels";
+			string screenText = fromScreen is PixelRect s
+				? $"{s.Left},{s.Top} {s.Width}x{s.Height}"
+				: "none";
+			string verdict = fromScreen is PixelRect other && !RegionCropGeometry.Agree(fromDrawingArea, other)
+				? " DISAGREE"
+				: string.Empty;
+
+			CaptureLog.Write(
+				$"capture used={source} crop={chosen.Left},{chosen.Top} {chosen.Width}x{chosen.Height}{verdict} " +
+				$"screen-px=[{screenText}] " +
+				$"drawing-area=[{fromDrawingArea.Left},{fromDrawingArea.Top} {fromDrawingArea.Width}x{fromDrawingArea.Height}] " +
+				$"corners=[{_start.X:0.##},{_start.Y:0.##} to {pos.X:0.##},{pos.Y:0.##}] " +
+				$"drawing={drawingWidth:0.##}x{drawingHeight:0.##} bitmap={_bmpW}x{_bmpH} " +
+				$"scale-implied={impliedScaleX:0.####}x{impliedScaleY:0.####} scale-reported={reportedScale:0.####}");
+		}
+		catch (Exception ex)
+		{
+			// A capture must not fail because its own diagnostics did.
+			System.Diagnostics.Debug.WriteLine($"LogCaptureGeometry failed: {ex.Message}");
+		}
 	}
 
 	/// <summary>
@@ -796,7 +903,10 @@ public sealed partial class RegionSelectionWindow : Window
 		// FinishSelection maps overlay DIPs to bitmap pixels and clamps; feed it the
 		// anchor as the drag origin so both input paths crop identically.
 		_start = new Point(_keyboard.AnchorX, _keyboard.AnchorY);
-		FinishSelection(new Point(_keyboard.CaretX, _keyboard.CaretY));
+		// Cleared so a screen-pixel corner left over from an abandoned mouse drag cannot be
+		// paired with a keyboard caret.
+		_startOnScreen = null;
+		FinishSelection(new Point(_keyboard.CaretX, _keyboard.CaretY), null);
 	}
 
 	private void ResetKeyboardSelection()
