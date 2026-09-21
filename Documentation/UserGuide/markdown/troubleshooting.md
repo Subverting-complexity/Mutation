@@ -158,6 +158,29 @@ different pages.
    to right, top to bottom, which is better for a plain block of text that Natural has
    scrambled. Each has its own shortcut, so you can just try the other one.
 
+### A capture cuts off the edge of what I selected
+
+**What's happening.** Mutation used to give you back slightly less than the rectangle
+you drew. If you left room to spare you never noticed, because the spare room absorbed
+it. If you drew tightly around a word, the last letter could be missing and the one
+before it sliced down the middle — and OCR would then guess at the half letter and
+give you the wrong word.
+
+This is fixed. Mutation now takes the corners of your rectangle straight from where
+your mouse pointer actually was, in the same units the picture is measured in, so
+there is no sum in between to get wrong. Where an edge lands between two pixels,
+Mutation now keeps the pixel rather than dropping it. A capture may come out a pixel
+wider or taller than before. Nothing else about drawing a rectangle has changed.
+
+**What to do.** If you still see an edge cut off, Mutation keeps a note of what each
+capture did. You will find it in a file called **Mutation.Capture.log** in your
+temporary files folder — press **Windows+R**, type `%TEMP%` and press Enter, and the
+file is in the folder that opens. Send that file with your report and it will say
+exactly where the capture went wrong.
+
+In the meantime, drawing your rectangle with a little room around the text always
+works, and a bit of extra space never hurts the reading.
+
 ### The screenshot could not be copied to the clipboard
 
 **What's happening.** Only one program can have the clipboard open at a time, and the
