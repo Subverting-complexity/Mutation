@@ -282,6 +282,7 @@ relevant to what you're working on.
 | `Documentation/README.md` | User guide folder layout, which files are authoritative, and how to regenerate the HTML. Read whenever a change affects what users see. |
 | `Documentation/UserGuide/README.md` | Adding a chapter, supported Markdown, how the generated pages stay accessible. |
 | `.claude/ecosystem.md` | Installed Claude Code companion tool cheat-sheet — graphify queries, cost tracking, security scanning. |
+| `docs/neural-tts-architecture.md` | Shared design for the local neural voices feature — what the reading engine owns, the speech engine contract, buffering, model downloads. Read before any neural-TTS story. |
 
 Add your own reference docs to this table as needed — architecture
 decisions, coding standards, API specs, etc. — so future sessions
