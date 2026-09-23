@@ -741,7 +741,11 @@ app picks up the microphone, and that switch takes seconds on some models.</li>
 <code>Mutation_Errors.log</code>. It lives here:</p>
 <pre><code>%LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log
 </code></pre>
-<p>To open the folder, press <strong>Windows+R</strong>, paste <code>%LOCALAPPDATA%\Mutation\logs</code> into the
+<p>The quickest way to open it is from Mutation itself: open the menu at the top left,
+choose <strong>Debug</strong>, then <strong>Open Error Log</strong>. It opens in the program Windows uses for text
+files, such as Notepad. If nothing has gone wrong yet, there is no log, and Mutation
+tells you so.</p>
+<p>To open the folder instead, press <strong>Windows+R</strong>, paste <code>%LOCALAPPDATA%\Mutation\logs</code> into the
 box, and press Enter. Mutation also writes a copy of the log next to its own program
 file, in case the first location is unavailable.</p>
 <p>The log is capped in size. When it gets too big, the old contents are moved to
@@ -750,6 +754,14 @@ while back, check the <code>.old</code> file too.</p>
 <p>Your API keys are stripped out of the log before anything is written, so it is safe to
 share. The same applies to anything Mutation shows you on screen or reads out — an error
 message never contains one of your keys.</p>
+<h3 id="the-delivery-and-hotkey-log">The delivery and hotkey log</h3>
+<p>A second log records, to the thousandth of a second, each step after a transcript is
+ready: the paste, the shortcut Mutation sends afterwards, and the success beep. It is
+useful when something arrives late, because it shows which step took the time.</p>
+<p>Open it from the menu: <strong>Debug</strong>, then <strong>Open Delivery and Hotkey Log</strong>. The file is
+called <code>Mutation.Hotkey.log</code> and lives in your Windows temporary folder
+(<code>%TEMP%</code>). Like the error log, it is capped in size, and older lines move to
+<code>Mutation.Hotkey.log.old</code>.</p>
 <h3 id="when-an-error-message-appears">When an error message appears</h3>
 <p>An error message tells you what went wrong in up to four short lines, then points at the
 log file. The lines run from the thing you were doing down to the underlying cause, so a
@@ -767,6 +779,8 @@ the problem, copy the message and then open the log for the rest.</p>
 <li>The exact wording of any message you saw or heard.</li>
 <li>Which shortcut you pressed.</li>
 <li>The relevant entries from <code>Mutation_Errors.log</code>, with their timestamps.</li>
+<li>If something arrived late, such as the success beep, the lines from
+<code>Mutation.Hotkey.log</code> around that time, and roughly when it happened.</li>
 <li>Your Windows version, and the name of your screen reader or magnifier if one was
 running.</li>
 </ul>
