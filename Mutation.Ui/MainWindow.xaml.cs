@@ -2790,6 +2790,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		await GuardedUiOperation.RunAsync(
 			work: async () =>
 			{
+				DeliveryTrace.Write($"Transcript delivery started ({rawText.Length} characters).");
 				string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
 				TxtRawTranscript.Text = rawText;
@@ -2798,6 +2799,8 @@ public sealed partial class MainWindow : Window, IDisposable
 				bool copied = await _clipboard.TrySetTextAsync(formatted);
 				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
 				var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "transcript");
+				DeliveryTrace.Write(
+					$"Transcript delivered: {outcome}; clipboard {(copied ? "set" : "not set")}; shortcut {(plan.SendConfiguredHotkey ? "will be sent" : "not sent")}; {plan.Beep} beep next.");
 
 				// Ahead of the beep and the status rather than after them. A throw from
 				// either lands in onFailure below, which announces that the delivery went
@@ -3486,7 +3489,13 @@ public sealed partial class MainWindow : Window, IDisposable
 					return TranscriptDeliveryOutcome.InjectionFailed;
 				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
 				// literal would throw and drop to the SendKeys.SendWait fallback.
+				long pasteStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 				bool pasted = await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
+				// Measured across the thread hop and back, so a UI thread that was slow to take the
+				// continuation shows up here rather than being folded into "the beep was late"
+				// (issue #411).
+				DeliveryTrace.Write(
+					$"Paste finished and back on the UI thread after {System.Diagnostics.Stopwatch.GetElapsedTime(pasteStarted).TotalMilliseconds:F0} ms.");
 				return pasted ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
 		}
 
@@ -3869,6 +3878,42 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private void DebugSimulateTaskCrash_Click(object sender, RoutedEventArgs e)
 	{
+	}
+
+	private void DebugOpenDeliveryLog_Click(object sender, RoutedEventArgs e) =>
+		OpenLogFile("Delivery and hotkey log", HotkeyManager.LogFilePath);
+
+	private void DebugOpenErrorLog_Click(object sender, RoutedEventArgs e) =>
+		OpenLogFile("Error log", ErrorLogger.PrimaryLogPath);
+
+	// Opens a log in whatever the user has set to open text files. A missing file is said out
+	// loud rather than handed to the shell, which would answer with a Windows error dialog about
+	// a path the user never typed: the log is only created by its first line.
+	private async void OpenLogFile(string title, string path)
+	{
+		try
+		{
+			if (!File.Exists(path))
+			{
+				ShowStatus(title, $"There is nothing in this log yet. It will be created at {path}.", InfoBarSeverity.Informational);
+				return;
+			}
+
+			// Off the UI thread, like the user guide: the shell can take a moment to start the viewer.
+			await Task.Run(() =>
+			{
+				using var _ = System.Diagnostics.Process.Start(
+					new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+			});
+
+			ShowStatus(title, $"Opening {path}.", InfoBarSeverity.Informational);
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError(nameof(OpenLogFile), ex);
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus(title, $"The log could not be opened. It is at {path}.", InfoBarSeverity.Warning);
+		}
 	}
 
     private void BtnAddPrompt_Click(object sender, RoutedEventArgs e) =>

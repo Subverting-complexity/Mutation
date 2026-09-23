@@ -115,4 +115,31 @@ public class BeepClipSampleProviderTests
 		Assert.All(buffer.Skip(4).Take(10), s => Assert.Equal(0.5f, s));
 		Assert.Equal(0f, buffer[14]);
 	}
+
+	// The moment the speaker first pulls a beep is the last point the app can see, so it is what
+	// tells a beep held up in the app from one held up in Windows (issue #411). Reported once,
+	// however many reads the device makes.
+	[Fact]
+	public void The_first_read_is_reported_once_however_many_reads_follow()
+	{
+		var reports = 0;
+		var provider = new BeepClipSampleProvider(Clip(frames: 100), repeatCount: 2, onFirstRead: () => reports++);
+
+		DrainInChunks(provider, chunk: 16);
+
+		Assert.Equal(1, reports);
+	}
+
+	[Fact]
+	public void A_first_read_report_that_throws_does_not_stop_the_beep()
+	{
+		var provider = new BeepClipSampleProvider(
+			Clip(frames: 100),
+			repeatCount: 1,
+			onFirstRead: () => throw new InvalidOperationException("the log is gone"));
+
+		var heard = DrainInChunks(provider, chunk: 64);
+
+		Assert.Equal(200, heard.Length);
+	}
 }

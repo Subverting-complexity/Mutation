@@ -724,7 +724,12 @@ When something goes wrong, Mutation writes a timestamped entry to a log file cal
 %LOCALAPPDATA%\Mutation\logs\Mutation_Errors.log
 ```
 
-To open the folder, press **Windows+R**, paste `%LOCALAPPDATA%\Mutation\logs` into the
+The quickest way to open it is from Mutation itself: open the menu at the top left,
+choose **Debug**, then **Open Error Log**. It opens in the program Windows uses for text
+files, such as Notepad. If nothing has gone wrong yet, there is no log, and Mutation
+tells you so.
+
+To open the folder instead, press **Windows+R**, paste `%LOCALAPPDATA%\Mutation\logs` into the
 box, and press Enter. Mutation also writes a copy of the log next to its own program
 file, in case the first location is unavailable.
 
@@ -735,6 +740,17 @@ while back, check the `.old` file too.
 Your API keys are stripped out of the log before anything is written, so it is safe to
 share. The same applies to anything Mutation shows you on screen or reads out — an error
 message never contains one of your keys.
+
+### The delivery and hotkey log
+
+A second log records, to the thousandth of a second, each step after a transcript is
+ready: the paste, the shortcut Mutation sends afterwards, and the success beep. It is
+useful when something arrives late, because it shows which step took the time.
+
+Open it from the menu: **Debug**, then **Open Delivery and Hotkey Log**. The file is
+called `Mutation.Hotkey.log` and lives in your Windows temporary folder
+(`%TEMP%`). Like the error log, it is capped in size, and older lines move to
+`Mutation.Hotkey.log.old`.
 
 ### When an error message appears
 
@@ -758,6 +774,8 @@ Include as much of this as you can:
 - The exact wording of any message you saw or heard.
 - Which shortcut you pressed.
 - The relevant entries from `Mutation_Errors.log`, with their timestamps.
+- If something arrived late, such as the success beep, the lines from
+  `Mutation.Hotkey.log` around that time, and roughly when it happened.
 - Your Windows version, and the name of your screen reader or magnifier if one was
   running.
 

@@ -73,6 +73,17 @@
                                 Text="Simulate Task Crash" 
                                 Click="DebugSimulateTaskCrash_Click"
                                 ToolTipService.ToolTip="Throws an unobserved exception in an async Task"/>
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                Text="Open Delivery and Hotkey Log"
+                                Click="DebugOpenDeliveryLog_Click"
+                                AutomationProperties.HelpText="Opens the log that times each step of pasting a transcript, sending the shortcut afterwards, and playing the beep"
+                                ToolTipService.ToolTip="Opens the log that times each step of pasting a transcript, sending the shortcut afterwards, and playing the beep"/>
+                            <MenuFlyoutItem
+                                Text="Open Error Log"
+                                Click="DebugOpenErrorLog_Click"
+                                AutomationProperties.HelpText="Opens the log of errors and warnings, including slow or failed beeps"
+                                ToolTipService.ToolTip="Opens the log of errors and warnings, including slow or failed beeps"/>
                         </MenuFlyoutSubItem>
                     </MenuFlyout>
                 </Button.Flyout>

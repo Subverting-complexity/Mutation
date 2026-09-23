@@ -28,8 +28,15 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 	private readonly int _repeatCount;
 	private int _repeatsDone;
 	private int _position;
+	private Action? _onFirstRead;
 
-	public BeepClipSampleProvider(BeepClip clip, int repeatCount)
+	/// <param name="onFirstRead">
+	/// Called once, on the audio device's thread, the first time the device pulls samples from
+	/// this beep. That is the moment the beep leaves the app for the speaker, and the last one the
+	/// app can see — which is what tells a late beep held up in here from one held up in Windows
+	/// (issue #411).
+	/// </param>
+	public BeepClipSampleProvider(BeepClip clip, int repeatCount, Action? onFirstRead = null)
 	{
 		ArgumentNullException.ThrowIfNull(clip);
 		if (repeatCount <= 0)
@@ -37,6 +44,7 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 
 		_clip = clip;
 		_repeatCount = repeatCount;
+		_onFirstRead = onFirstRead;
 		WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(clip.SampleRate, clip.Channels);
 	}
 
@@ -45,6 +53,13 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 	public int Read(float[] buffer, int offset, int count)
 	{
 		ArgumentNullException.ThrowIfNull(buffer);
+
+		var firstRead = _onFirstRead;
+		if (firstRead is not null)
+		{
+			_onFirstRead = null;
+			try { firstRead(); } catch { /* A report must never stop the beep it reports on. */ }
+		}
 
 		var samples = _clip.Samples.Span;
 		int written = 0;
