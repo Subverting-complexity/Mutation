@@ -6,9 +6,10 @@ using Mutation.Ui.Views.SettingsUi;
 
 namespace Mutation.Tests;
 
-// Covers the move of the default dictation temp directory from the
-// world-readable C:\Temp\Mutation to %LOCALAPPDATA%\Mutation (#159):
-// the settings rewrite rules and the best-effort recording migration.
+// Covers the moves of the default dictation temp directory: from the
+// world-readable C:\Temp\Mutation to %LOCALAPPDATA%\Mutation (#159), and from there
+// to %USERPROFILE%\Mutation, stored with the variable. Both the settings rewrite
+// rules and the best-effort recording migration.
 public class TempDirectoryMigrationTests : IDisposable
 {
 	private readonly string _root;
@@ -36,11 +37,16 @@ public class TempDirectoryMigrationTests : IDisposable
 		return settings;
 	}
 
+	// Stored with the variable, so a settings file moved to another account follows that
+	// account's home folder, and expanded to a folder under this user's home when used.
 	[Fact]
-	public void DefaultTempDirectory_IsUnderLocalAppData()
+	public void DefaultTempDirectory_IsUnderTheHomeFolderByVariable()
 	{
-		string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-		Assert.StartsWith(localAppData, SettingsDefaults.Speech.TempDirectory, StringComparison.OrdinalIgnoreCase);
+		Assert.StartsWith("%USERPROFILE%", SettingsDefaults.Speech.TempDirectory, StringComparison.Ordinal);
+
+		string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+		string resolved = TempDirectorySetting.Resolve(SettingsDefaults.Speech.TempDirectory);
+		Assert.Equal(Path.Combine(home, "Mutation"), resolved, ignoreCase: true);
 	}
 
 	[Fact]
@@ -58,6 +64,24 @@ public class TempDirectoryMigrationTests : IDisposable
 	{
 		var settings = EnsureSettingsOn(legacy);
 		Assert.Equal(SettingsDefaults.Speech.TempDirectory, settings.SpeechToTextSettings!.TempDirectory);
+	}
+
+	// The LocalAppData default was stored already expanded. An unchanged one moves to the
+	// home-folder default, the same as the C:\Temp one did.
+	[Fact]
+	public void EnsureSettings_PreviousLocalAppDataDefault_IsRewrittenToProfileDefault()
+	{
+		var settings = EnsureSettingsOn(SettingsDefaults.Speech.PreviousTempDirectory + Path.DirectorySeparatorChar);
+		Assert.Equal(SettingsDefaults.Speech.TempDirectory, settings.SpeechToTextSettings!.TempDirectory);
+	}
+
+	[Fact]
+	public void SupersededDefault_NamesTheFolderToMigrateFrom()
+	{
+		Assert.Equal(SettingsDefaults.Speech.LegacyTempDirectory, SettingsManager.SupersededDefaultTempDirectory(@"c:\temp\mutation\"));
+		Assert.Equal(SettingsDefaults.Speech.PreviousTempDirectory, SettingsManager.SupersededDefaultTempDirectory(SettingsDefaults.Speech.PreviousTempDirectory));
+		Assert.Null(SettingsManager.SupersededDefaultTempDirectory(@"D:\MyRecordings"));
+		Assert.Null(SettingsManager.SupersededDefaultTempDirectory(SettingsDefaults.Speech.TempDirectory));
 	}
 
 	[Fact]

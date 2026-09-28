@@ -653,9 +653,14 @@ goes back to its old value the next time you start Mutation.</p>
 <h3 id="the-temp-directory-box-wont-accept-what-i-typed">The temp directory box won't accept what I typed</h3>
 <p><strong>What's happening.</strong> The <strong>Temp directory</strong> on the <strong>Speech to Text</strong> page is the
 folder your recordings are written to. It has to be a full path that starts with a
-drive, like <code>D:\Recordings</code>. If you clear the box, or type just a folder name like
-<code>Recordings</code>, Mutation would have nowhere sensible to put your recordings — they would
-end up next to the program itself, or fail outright.</p>
+drive, like <code>D:\Recordings</code>, or with a Windows variable (a short code in percent signs that Windows swaps for a
+real folder), like <code>%USERPROFILE%\Recordings</code>, where <code>%USERPROFILE%</code> means your own
+user folder. If you clear
+the box, or type just a folder name like <code>Recordings</code>, Mutation would have nowhere
+sensible to put your recordings — they would end up next to the program itself, or
+fail outright. A misspelt variable, like <code>%USERPROFILES%</code>, is turned down too,
+because Windows does not know it and Mutation would otherwise make a folder with that
+odd name.</p>
 <p>So when you press Save, Mutation puts its own folder back in the box, plays the
 failure beep, and tells you what was wrong and where recordings will go instead.</p>
 <p><strong>What to do.</strong> Press <strong>Save</strong> again to accept the folder Mutation filled in, or type

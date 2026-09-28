@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Mutation.Ui.Views.SettingsUi;
 using Xunit;
@@ -94,6 +95,94 @@ public class TempDirectorySettingTests
 		Assert.True(result.WasRepaired);
 	}
 
+	// A path that names a variable is kept as typed, so it keeps following the variable
+	// — the whole point of typing one.
+	[Theory]
+	[InlineData(@"%USERPROFILE%\Recordings")]
+	[InlineData(@"%LOCALAPPDATA%\Mutation")]
+	[InlineData(@"%userprofile%\Recordings\")]
+	[InlineData(@"~\Recordings")]
+	[InlineData("~/Recordings")]
+	[InlineData("~")]
+	public void Normalize_PathWithVariables_IsKeptAsTyped(string value)
+	{
+		var result = TempDirectorySetting.Normalize("  " + value + " ");
+
+		Assert.Equal(value, result.Path);
+		Assert.False(result.WasRepaired);
+	}
+
+	[Fact]
+	public void Resolve_ExpandsTheHomeFolderVariable()
+	{
+		string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+		Assert.Equal(Path.Combine(home, "Recordings"), TempDirectorySetting.Resolve(@"%USERPROFILE%\Recordings"));
+		Assert.Equal(home + @"\Recordings", TempDirectorySetting.Resolve(@"~\Recordings"));
+		Assert.Equal(home, TempDirectorySetting.Resolve("~"));
+	}
+
+	[Fact]
+	public void Resolve_PlainPath_IsUnchanged()
+	{
+		Assert.Equal(@"D:\Recordings", TempDirectorySetting.Resolve(@"D:\Recordings"));
+	}
+
+	// A misspelt variable is left in by Windows and would become a folder literally named
+	// "%USERPROFILES%", so it is refused rather than stored.
+	[Fact]
+	public void Normalize_UnknownVariable_FallsBackToTheDefault()
+	{
+		var result = TempDirectorySetting.Normalize(@"%MUTATION_NO_SUCH_VARIABLE%\Recordings");
+
+		Assert.Equal(SettingsDefaults.Speech.TempDirectory, result.Path);
+		Assert.True(result.WasRepaired);
+		Assert.Contains("variable Windows does not know", result.Problem);
+	}
+
+	// A variable that expands to something relative is no better than a relative path:
+	// recordings would land next to the executable (issue #230).
+	[Fact]
+	public void Normalize_VariableThatExpandsToARelativePath_FallsBackToTheDefault()
+	{
+		const string name = "MUTATION_TEST_RELATIVE_FOLDER";
+		Environment.SetEnvironmentVariable(name, "Recordings");
+		try
+		{
+			var result = TempDirectorySetting.Normalize($"%{name}%\\Mutation");
+
+			Assert.Equal(SettingsDefaults.Speech.TempDirectory, result.Path);
+			Assert.Contains("not a full path", result.Problem);
+		}
+		finally
+		{
+			Environment.SetEnvironmentVariable(name, null);
+		}
+	}
+
+	// A path with the '~' anywhere but the start is an ordinary folder name, like the
+	// short names Windows gives long ones (PROGRA~1), and is left alone.
+	[Fact]
+	public void Normalize_TildeInsideAPath_IsAnOrdinaryPath()
+	{
+		var result = TempDirectorySetting.Normalize(@"C:\PROGRA~1\Mutation");
+
+		Assert.Equal(@"C:\PROGRA~1\Mutation", result.Path);
+		Assert.False(result.WasRepaired);
+	}
+
+	// When the fallback names a variable, the message shows the real folder too, so the
+	// user is not left to work out what %USERPROFILE% means on their machine.
+	[Fact]
+	public void ComposeMessage_ExpandsAReplacementWithVariables()
+	{
+		string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+		string message = TempDirectorySetting.ComposeMessage("Bad.", @"%USERPROFILE%\Mutation");
+
+		Assert.Contains($@"%USERPROFILE%\Mutation ({Path.Combine(home, "Mutation")})", message);
+	}
+
 	// The message has to say where the recordings are going, or "that path was no
 	// good" leaves the user with no idea what happened to them.
 	[Fact]
@@ -115,7 +204,7 @@ public class TempDirectorySettingTests
 	{
 		var result = TempDirectorySetting.Normalize(badValue);
 
-		string sessions = Path.Combine(result.Path, "Sessions");
+		string sessions = Path.Combine(TempDirectorySetting.Resolve(result.Path), "Sessions");
 
 		Assert.True(Path.IsPathFullyQualified(sessions));
 	}
