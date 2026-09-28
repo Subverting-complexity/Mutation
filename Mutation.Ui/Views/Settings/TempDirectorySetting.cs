@@ -49,17 +49,19 @@ public static class TempDirectorySetting
 
 		string expanded = FolderPathVariables.Expand(trimmed);
 
+		// A leftover %NAME% is taken as a misspelt variable when the path could not be used
+		// without it, or when the value already relies on other variables. A plain full path
+		// is left alone: Windows allows '%' in folder names, 'D:\Reports %Q3%' is legal, and
+		// refusing it would move someone's recordings away from a folder that used to work.
+		if (FolderPathVariables.HasUnresolvedVariable(expanded)
+			&& (!Path.IsPathFullyQualified(expanded) || FolderPathVariables.UsesVariables(trimmed)))
+		{
+			return Repaired(
+				$"'{trimmed}' names a variable Windows does not know. Check the spelling, for example %USERPROFILE%\\Recordings.");
+		}
+
 		if (!Path.IsPathFullyQualified(expanded))
 		{
-			// Only here is a leftover %NAME% taken as a misspelt variable. In a full path it
-			// may be a real folder name — 'D:\Reports %Q3%' is legal — and refusing it would
-			// move someone's recordings away from a folder that used to work.
-			if (FolderPathVariables.HasUnresolvedVariable(expanded))
-			{
-				return Repaired(
-					$"'{trimmed}' names a variable Windows does not know. Check the spelling, for example %USERPROFILE%\\Recordings.");
-			}
-
 			return Repaired(
 				$"'{trimmed}' is not a full path. The temp directory must start with a drive or a variable, for example C:\\Recordings or %USERPROFILE%\\Recordings.");
 		}

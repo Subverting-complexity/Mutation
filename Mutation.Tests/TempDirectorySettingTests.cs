@@ -140,6 +140,17 @@ public class TempDirectorySettingTests
 		Assert.Contains("variable Windows does not know", result.Problem);
 	}
 
+	// Once the value relies on one variable, a leftover %NAME% beside it is a typo, not a
+	// folder name, and would otherwise become a folder literally called that.
+	[Fact]
+	public void Normalize_UnknownVariableBesideAKnownOne_FallsBackToTheDefault()
+	{
+		var result = TempDirectorySetting.Normalize(@"%USERPROFILE%\%MUTATION_NO_SUCH_VARIABLE%");
+
+		Assert.Equal(SettingsDefaults.Speech.TempDirectory, result.Path);
+		Assert.Contains("variable Windows does not know", result.Problem);
+	}
+
 	// Windows allows '%' in folder names, so a full path holding a pair of them is a real
 	// folder, not a misspelt variable, and a setting that worked before is left alone.
 	[Fact]
