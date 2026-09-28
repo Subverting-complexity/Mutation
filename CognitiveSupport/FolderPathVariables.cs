@@ -46,13 +46,14 @@ public static class FolderPathVariables
 	/// resolved form; a path with one is stored as typed, so it keeps following the variable.
 	/// </summary>
 	public static bool UsesVariables(string? path) =>
-		!string.Equals((path ?? string.Empty).Trim(), Expand(path), StringComparison.Ordinal)
-		|| HasUnresolvedVariable(path);
+		!string.Equals((path ?? string.Empty).Trim(), Expand(path), StringComparison.Ordinal);
 
 	/// <summary>
 	/// Whether <paramref name="expandedPath"/> still holds a <c>%NAME%</c> after expansion —
 	/// a variable Windows does not know, most often a typing mistake such as
-	/// <c>%USERPROFILES%</c>. Left in, it would become a folder literally named that.
+	/// <c>%USERPROFILES%</c>. It can also be an ordinary folder name, since Windows allows
+	/// <c>%</c> in names, so callers only treat it as a mistake where the path is otherwise
+	/// unusable.
 	/// </summary>
 	public static bool HasUnresolvedVariable(string? expandedPath) =>
 		expandedPath is not null && UnresolvedVariable.IsMatch(expandedPath);

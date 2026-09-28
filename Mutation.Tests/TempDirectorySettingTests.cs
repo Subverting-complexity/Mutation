@@ -140,6 +140,17 @@ public class TempDirectorySettingTests
 		Assert.Contains("variable Windows does not know", result.Problem);
 	}
 
+	// Windows allows '%' in folder names, so a full path holding a pair of them is a real
+	// folder, not a misspelt variable, and a setting that worked before is left alone.
+	[Fact]
+	public void Normalize_FullPathWithPercentSigns_IsKept()
+	{
+		var result = TempDirectorySetting.Normalize(@"D:\Reports %MUTATION_NO_SUCH_VARIABLE%");
+
+		Assert.Equal(@"D:\Reports %MUTATION_NO_SUCH_VARIABLE%", result.Path);
+		Assert.False(result.WasRepaired);
+	}
+
 	// A variable that expands to something relative is no better than a relative path:
 	// recordings would land next to the executable (issue #230).
 	[Fact]
