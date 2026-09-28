@@ -511,7 +511,9 @@ public class HotkeyManager : IDisposable
 	private static bool SendHotkeyViaSendInput(Hotkey hotkey)
 	{
 		// Wait until user releases modifier keys from the original chord to avoid contamination
+		long waitStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 		WaitForModifierRelease(timeoutMs: AppConstants.ModifierReleaseTimeoutMs);
+		double waitedMs = System.Diagnostics.Stopwatch.GetElapsedTime(waitStarted).TotalMilliseconds;
 
 		var inputs = new List<KeyboardInput.INPUT>();
 
@@ -555,8 +557,18 @@ public class HotkeyManager : IDisposable
 		if (hotkey.Control) inputs.Add(KeyUp(VK_CONTROL));
 
 		var count = (uint)inputs.Count;
+		long sendStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 		var sent = KeyboardInput.Send(inputs.ToArray());
+		double sendMs = System.Diagnostics.Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds;
 		bool ok = sent == count && count > 0;
+
+		// Written for every chord, not only a failed one. The log already shows when a chord was
+		// about to be sent; this shows when Windows gave the call back, and how long was spent
+		// waiting on keys the user was still holding. Low-level keyboard hooks — a screen reader's
+		// among them — can hold injected input up, so a slow return here points at a hook, and a
+		// prompt one rules the app's side of the keystroke path out (issue #411).
+		DeliveryTrace.Write(
+			$"SendInput returned {sent}/{count} for '{hotkey}' in {sendMs:F0} ms, after waiting {waitedMs:F0} ms for held modifiers.");
 		if (!ok)
 		{
 			int err = Marshal.GetLastWin32Error();
@@ -595,6 +607,16 @@ public class HotkeyManager : IDisposable
 	}
 
 	private static readonly string LogFile = Path.Combine(Path.GetTempPath(), "Mutation.Hotkey.log");
+
+	/// <summary>Where this log is written, so the Debug menu can open it.</summary>
+	internal static string LogFilePath => LogFile;
+
+	/// <summary>
+	/// Writes one line to this log. The sink for <see cref="DeliveryTrace"/>, so the beep's steps
+	/// land in the same file as the paste and the shortcut, on one clock (issue #411).
+	/// </summary>
+	internal static void WriteDiagnostic(string message) => Log(message);
+
 	private const long MaxLogFileSize = 100 * 1024; // 100 KB max log size
 
 	// Off-UI-thread logging: WndProc-bound callers enqueue here without blocking;

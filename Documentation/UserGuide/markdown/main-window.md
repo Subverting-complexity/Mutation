@@ -17,7 +17,7 @@ Top left is a single **Menu** button (the three-line "hamburger" icon). Press **
 | Item | What it does |
 |---|---|
 | **Settings** | Opens the Settings window. Same as pressing **Ctrl+Comma** from anywhere in Mutation. |
-| **Debug** | A submenu with three "Simulate ... Crash" items. These exist so the developer can test error handling. Ordinary users can ignore them entirely. |
+| **Debug** | A submenu with three "Simulate ... Crash" items, which exist so the developer can test error handling, and two items that open Mutation's log files: **Open Delivery and Hotkey Log** and **Open Error Log**. You only need these when you are reporting a problem. |
 
 See [The Settings window](settings.md) for what is inside Settings.
 

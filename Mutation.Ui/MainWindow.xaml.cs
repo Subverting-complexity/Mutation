@@ -2358,17 +2358,13 @@ public sealed partial class MainWindow : Window, IDisposable
 		string formatted = _transcriptFormatter.ApplyRules(raw, false);
 		TxtFormatTranscript.Text = formatted;
 		bool copied = await _clipboard.TrySetTextAsync(formatted);
-		var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
 
 		// Through the planner like the other two delivery sites. This one kept its own
 		// copy of the beep-and-message half and had no idea the shortcut was the third
 		// part of the same decision, so formatting a transcript delivered the text and
-		// then did nothing the user had asked for afterwards (issue #335).
-		var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "formatted transcript");
-
-		// Before the beep and the status, either of which can throw — a status builds an
-		// automation peer and starts a timer (issue #234). The text has already landed by
-		// this point, so the shortcut that acts on it should not be the thing that is lost.
+		// then did nothing the user had asked for afterwards (issue #335). The confirmation
+		// sends the shortcut ahead of the beep, and both ahead of the status, which can
+		// throw (issue #234).
 		//
 		// This button is the one delivery site with no hotkey of its own, so Mutation is
 		// always the foreground window when it runs — which is why the insert above
@@ -2376,12 +2372,10 @@ public sealed partial class MainWindow : Window, IDisposable
 		// a screen-reader command, which is global and wants running wherever the user is.
 		// A shortcut that only means something in another application will land here instead,
 		// and that is the same bargain the eight OCR buttons already make (PR #339).
-		if (plan.SendConfiguredHotkey)
-			HotkeyManager.SendHotkeyAfterDelay(
-				_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
-				PostOperationHotkey.SuccessDelayMs);
+		var confirmation = CreateTranscriptConfirmation(copied, "formatted transcript");
+		var outcome = await TryInsertIntoActiveApplicationAsync(formatted, confirmation, clipboardAvailable: copied);
+		var plan = confirmation.Confirm(outcome);
 
-		BeepPlayer.Play(plan.Beep);
 		ShowStatus("Formatting",
 			plan.FailureMessage ?? "Transcript formatted and copied.",
 			plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
@@ -2501,8 +2495,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			TxtFormatTranscript.Text = processed;
 			bool copied = await _clipboard.TrySetTextAsync(processed);
-			var outcome = await TryInsertIntoActiveApplicationAsync(processed, clipboardAvailable: copied);
-			var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "processed text");
+			// The beep and the shortcut go the moment the paste lands, from the insert path
+			// itself, ahead of the status that can throw (issues #234, #335) and without
+			// waiting for the UI thread (issue #411).
+			var confirmation = CreateTranscriptConfirmation(copied, "processed text");
+			var outcome = await TryInsertIntoActiveApplicationAsync(processed, confirmation, clipboardAvailable: copied);
+			var plan = confirmation.Confirm(outcome);
 
 			// Claimed after everything that can throw and just before the announcement,
 			// so a failure on the delivery path cannot burn the one notice the user gets
@@ -2510,16 +2508,6 @@ public sealed partial class MainWindow : Window, IDisposable
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
 
-			// Ahead of the beep and the status rather than after them. Both can throw —
-			// ShowStatus builds an automation peer and starts a timer, which is what
-			// issue #234 was about — and the catch below would then swallow the shortcut
-			// as well, after the text had already been delivered (issue #335).
-			if (plan.SendConfiguredHotkey)
-				HotkeyManager.SendHotkeyAfterDelay(
-					_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
-					PostOperationHotkey.SuccessDelayMs);
-
-			BeepPlayer.Play(plan.Beep);
 			ShowStatus("Processing",
 				FastModeMessages.AppendTo(
 					plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
@@ -2790,25 +2778,25 @@ public sealed partial class MainWindow : Window, IDisposable
 		await GuardedUiOperation.RunAsync(
 			work: async () =>
 			{
+				DeliveryTrace.Write($"Transcript delivery started ({rawText.Length} characters).");
 				string formatted = formattedText ?? _transcriptFormatter.ApplyRules(rawText, false);
 
 				TxtRawTranscript.Text = rawText;
 				TxtFormatTranscript.Text = formatted;
 
 				bool copied = await _clipboard.TrySetTextAsync(formatted);
-				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, clipboardAvailable: copied);
-				var plan = TranscriptCompletionPlanner.Plan(copied, outcome, "transcript");
+				// The shortcut and the beep go the moment the paste lands, from the insert path
+				// itself, rather than here. The UI thread was measured taking 4.8 seconds to
+				// come back to this line after Windows had accepted the paste in 5 ms, and the
+				// user heard nothing for all of it (issue #411). Both also stay ahead of the
+				// status, which can throw into onFailure below after the text has already
+				// landed (issue #335).
+				var confirmation = CreateTranscriptConfirmation(copied, "transcript");
+				var outcome = await TryInsertIntoActiveApplicationAsync(formatted, confirmation, clipboardAvailable: copied);
+				var plan = confirmation.Confirm(outcome);
+				DeliveryTrace.Write(
+					$"Transcript delivered: {outcome}; clipboard {(copied ? "set" : "not set")}; status next.");
 
-				// Ahead of the beep and the status rather than after them. A throw from
-				// either lands in onFailure below, which announces that the delivery went
-				// wrong — but the transcript is on the clipboard and already pasted by
-				// then, and the user's shortcut would have been lost with it (issue #335).
-				if (plan.SendConfiguredHotkey)
-					HotkeyManager.SendHotkeyAfterDelay(
-						_settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation,
-						PostOperationHotkey.SuccessDelayMs);
-
-				BeepPlayer.Play(plan.Beep);
 				ShowStatus("Speech to Text",
 					FastModeMessages.AppendTo(plan.FailureMessage ?? successMessage, fastModeNotice),
 					plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
@@ -3452,7 +3440,14 @@ public sealed partial class MainWindow : Window, IDisposable
 	// question first. When the window in front runs at a higher integrity level, Windows
 	// takes the events and discards them with no failure reported anywhere, so the
 	// elevated-app case has to be detected before sending rather than after (issue #294).
-	private async Task<TranscriptDeliveryOutcome> TryInsertIntoActiveApplicationAsync(string text, bool clipboardAvailable = true)
+	//
+	// The confirmation is made from the background thread the moment the keystrokes are
+	// accepted, before the hop back here. The paths that return without leaving this thread
+	// leave it to the caller, whose own Confirm is then the first one.
+	private async Task<TranscriptDeliveryOutcome> TryInsertIntoActiveApplicationAsync(
+		string text,
+		TranscriptConfirmation confirmation,
+		bool clipboardAvailable = true)
 	{
 		if (string.IsNullOrWhiteSpace(text))
 			return TranscriptDeliveryOutcome.Delivered;
@@ -3472,7 +3467,7 @@ public sealed partial class MainWindow : Window, IDisposable
 				if (ForegroundIntegrityProbe.ForegroundWindowWillDiscardInput())
 					return TranscriptDeliveryOutcome.InjectionFailed;
 				BeepPlayer.Play(BeepType.Start);
-				bool typed = await Task.Run(() => HotkeyManager.SendText(text));
+				bool typed = await Task.Run(() => ConfirmedOffUiThread(HotkeyManager.SendText(text), confirmation));
 				return typed ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
 			case DictationInsertOption.Paste:
 				// Pasting sends Ctrl+V, so the text must actually be on the
@@ -3486,11 +3481,36 @@ public sealed partial class MainWindow : Window, IDisposable
 					return TranscriptDeliveryOutcome.InjectionFailed;
 				// "Ctrl+V" (not "^v"): Hotkey.Parse has no caret syntax, so the
 				// literal would throw and drop to the SendKeys.SendWait fallback.
-				bool pasted = await Task.Run(() => HotkeyManager.SendHotkey("Ctrl+V"));
+				long pasteStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+				bool pasted = await Task.Run(() => ConfirmedOffUiThread(HotkeyManager.SendHotkey("Ctrl+V"), confirmation));
+				// Measured across the thread hop and back, so a UI thread that was slow to take the
+				// continuation shows up here. It was 4.8 seconds once (issue #411); the beep and the
+				// shortcut no longer wait for it, but the status and the transcript box still do.
+				DeliveryTrace.Write(
+					$"Paste finished and back on the UI thread after {System.Diagnostics.Stopwatch.GetElapsedTime(pasteStarted).TotalMilliseconds:F0} ms.");
 				return pasted ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed;
 		}
 
 		return TranscriptDeliveryOutcome.Delivered;
+	}
+
+	// Confirms from the thread that sent the keystrokes, so the beep and the shortcut do not
+	// wait for the UI thread to take the work back (issue #411), and hands the result on.
+	private static bool ConfirmedOffUiThread(bool injected, TranscriptConfirmation confirmation)
+	{
+		confirmation.Confirm(injected ? TranscriptDeliveryOutcome.Delivered : TranscriptDeliveryOutcome.InjectionFailed);
+		return injected;
+	}
+
+	private TranscriptConfirmation CreateTranscriptConfirmation(bool clipboardCopied, string subject)
+	{
+		// Read now, on the UI thread, not when the confirmation runs on a background one.
+		string? hotkey = _settings.SpeechToTextSettings?.SendHotkeyAfterTranscriptionOperation;
+		return new TranscriptConfirmation(
+			clipboardCopied,
+			subject,
+			BeepPlayer.Play,
+			() => HotkeyManager.SendHotkeyAfterDelay(hotkey, PostOperationHotkey.SuccessDelayMs));
 	}
 
 	private async void TxtSpeechToText_TextChanged(object sender, TextChangedEventArgs e)
@@ -3869,6 +3889,42 @@ public sealed partial class MainWindow : Window, IDisposable
 
 	private void DebugSimulateTaskCrash_Click(object sender, RoutedEventArgs e)
 	{
+	}
+
+	private void DebugOpenDeliveryLog_Click(object sender, RoutedEventArgs e) =>
+		OpenLogFile("Delivery and hotkey log", HotkeyManager.LogFilePath);
+
+	private void DebugOpenErrorLog_Click(object sender, RoutedEventArgs e) =>
+		OpenLogFile("Error log", ErrorLogger.PrimaryLogPath);
+
+	// Opens a log in whatever the user has set to open text files. A missing file is said out
+	// loud rather than handed to the shell, which would answer with a Windows error dialog about
+	// a path the user never typed: the log is only created by its first line.
+	private async void OpenLogFile(string title, string path)
+	{
+		try
+		{
+			if (!File.Exists(path))
+			{
+				ShowStatus(title, $"There is nothing in this log yet. It will be created at {path}.", InfoBarSeverity.Informational);
+				return;
+			}
+
+			// Off the UI thread, like the user guide: the shell can take a moment to start the viewer.
+			await Task.Run(() =>
+			{
+				using var _ = System.Diagnostics.Process.Start(
+					new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+			});
+
+			ShowStatus(title, $"Opening {path}.", InfoBarSeverity.Informational);
+		}
+		catch (Exception ex)
+		{
+			ErrorLogger.LogError(nameof(OpenLogFile), ex);
+			BeepPlayer.Play(BeepType.Failure);
+			ShowStatus(title, $"The log could not be opened. It is at {path}.", InfoBarSeverity.Warning);
+		}
 	}
 
     private void BtnAddPrompt_Click(object sender, RoutedEventArgs e) =>

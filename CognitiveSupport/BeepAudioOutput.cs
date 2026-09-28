@@ -211,6 +211,7 @@ public sealed class BeepAudioOutput : IDisposable
 					// the next beep open a fresh one rather than failing for the rest of the run.
 					CloseDevice();
 					_nextOpenAttempt = _now() + ReopenBackoff;
+					DeliveryTrace.Write($"Beep not played: {ex.Message}");
 					_log("Beep", $"Could not play a beep: {ex.Message}. The audio device will be reopened on a later beep.");
 				}
 
@@ -247,16 +248,26 @@ public sealed class BeepAudioOutput : IDisposable
 			CloseDevice();
 
 		if (_device is null && _now() < _nextOpenAttempt)
+		{
+			if (request.Clip is not null)
+				DeliveryTrace.Write("Beep not played: the speaker failed recently and is not being retried yet.");
 			return;
+		}
 
 		OpenDeviceIfNeeded();
 
 		if (request.Clip is null || _mixer is null)
 			return;
 
-		_mixer.AddMixerInput((ISampleProvider)new BeepClipSampleProvider(request.Clip, request.RepeatCount));
+		long queuedAt = request.QueuedAt;
+		_mixer.AddMixerInput((ISampleProvider)new BeepClipSampleProvider(
+			request.Clip,
+			request.RepeatCount,
+			onFirstRead: () => DeliveryTrace.Write(
+				$"Beep first read by the speaker {Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds:F0} ms after it was requested.")));
 
 		var waited = Stopwatch.GetElapsedTime(request.QueuedAt);
+		DeliveryTrace.Write($"Beep handed to the mixer {waited.TotalMilliseconds:F0} ms after it was requested.");
 		if (waited.TotalMilliseconds > SlowReportThresholdMs)
 			_log("Beep", $"A beep waited {waited.TotalMilliseconds:F0} ms to reach the speaker.");
 	}
@@ -296,6 +307,7 @@ public sealed class BeepAudioOutput : IDisposable
 		DeviceOpenCount++;
 
 		var elapsed = Stopwatch.GetElapsedTime(started);
+		DeliveryTrace.Write($"Speaker connection opened in {elapsed.TotalMilliseconds:F0} ms.");
 		if (elapsed.TotalMilliseconds > SlowReportThresholdMs)
 			_log("Beep", $"Opening the audio output took {elapsed.TotalMilliseconds:F0} ms.");
 	}
@@ -303,7 +315,13 @@ public sealed class BeepAudioOutput : IDisposable
 	// Raised on the device's own thread when playback ends. With ReadFully the audio never runs
 	// out, so this only happens when the device fails or is stopped — either way the handle is no
 	// longer worth beeping into.
-	private void OnPlaybackStopped(object? sender, StoppedEventArgs e) => _deviceFaulted = true;
+	private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
+	{
+		_deviceFaulted = true;
+		DeliveryTrace.Write(e.Exception is null
+			? "Speaker connection stopped; it will be reopened on the next beep."
+			: $"Speaker connection failed: {e.Exception.Message}. It will be reopened on the next beep.");
+	}
 
 	private void CloseDevice()
 	{

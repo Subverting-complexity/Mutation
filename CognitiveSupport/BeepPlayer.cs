@@ -104,9 +104,11 @@ public static class BeepPlayer
 			if (_lastPlayed.TryGetValue(type, out var last) && (now - last) < DuplicateSuppressWindow)
 			{
 				// Suppress near-duplicate beep
+				DeliveryTrace.Write($"{type} beep not played: the same beep played {(now - last).TotalMilliseconds:F0} ms ago.");
 				return;
 			}
 			_lastPlayed[type] = now;
+			DeliveryTrace.Write($"{type} beep requested.");
 
 			PlayCore(type, repeatCount: 1);
 		}

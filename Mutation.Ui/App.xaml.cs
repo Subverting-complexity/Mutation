@@ -186,6 +186,9 @@ public partial class App : Application
 					throw;
 				settings = recovered;
 			}
+			// Set before the first beep, so the delivery timeline has the speaker opening in it too
+			// (issue #411).
+			DeliveryTrace.SetSink(Mutation.Ui.Services.HotkeyManager.WriteDiagnostic);
 			BeepPlayer.Initialize(settings);
 
 			builder.Services.AddSingleton<ISettingsManager>(settingsManager);
