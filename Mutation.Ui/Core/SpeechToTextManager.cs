@@ -67,7 +67,11 @@ public class SpeechToTextManager : IDisposable
 		}
 	}
 
-	private string SessionsDirectory => Path.Combine(_settings.SpeechToTextSettings!.TempDirectory!, Constants.SessionsDirectoryName);
+	// The setting may name variables such as %USERPROFILE%, so it is expanded on each use
+	// rather than handed to Path.Combine as typed.
+	private string TempDirectory => FolderPathVariables.Expand(_settings.SpeechToTextSettings!.TempDirectory);
+
+	private string SessionsDirectory => Path.Combine(TempDirectory, Constants.SessionsDirectoryName);
 
 	// Minimum trimmed speech below which we treat a recording as "no speech detected".
 	private const double MinSpeechSecondsForTranscription = 0.25;
@@ -91,7 +95,9 @@ public class SpeechToTextManager : IDisposable
 		_settings.SpeechToTextSettings?.MaxTranscriptionUploadBytes
 		?? SpeechToTextSettings.DefaultMaxTranscriptionUploadBytes);
 
-	private string ChunkWorkingDirectory => _settings.SpeechToTextSettings?.TempDirectory ?? Path.GetTempPath();
+	private string ChunkWorkingDirectory => _settings.SpeechToTextSettings?.TempDirectory is null
+		? Path.GetTempPath()
+		: TempDirectory;
 
 	/// <summary>
 	/// Sends a processed recording for transcription, splitting it first if it is over the

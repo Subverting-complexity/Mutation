@@ -58,12 +58,18 @@ internal static class SettingsDefaults
 		public const string SpeechToTextHotKey = "SHIFT+ALT+U";
 		public const string SpeechToTextWithLlmProcessingHotKey = "SHIFT+ALT+I";
 		// Recordings hold dictated speech (often personal or sensitive), so the
-		// default lives under the user profile where ACLs block other local users.
-		// The pre-existing C:\Temp default was world-readable; EnsureSettings
-		// rewrites it and session files are migrated on first run.
-		public static readonly string TempDirectory = Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mutation");
+		// default lives under the user's home folder where ACLs block other local
+		// users. It is stored with the variable rather than expanded, so a settings
+		// file moved to another account still points at that account's own folder;
+		// TempDirectorySetting.Resolve expands it wherever a real path is needed.
+		public const string TempDirectory = @"%USERPROFILE%\Mutation";
+		// Earlier defaults. EnsureSettings rewrites an unchanged one to TempDirectory
+		// and the recordings in it are moved on first run. The C:\Temp one was
+		// world-readable; the LocalAppData one was stored already expanded, so it
+		// could not follow the user to another account.
 		public const string LegacyTempDirectory = @"C:\Temp\Mutation";
+		public static readonly string PreviousTempDirectory = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Mutation");
 		public const int FileTranscriptionTimeoutSeconds = 300;
 		// Retained-session count: default and UI bounds mirror the domain so the dialog,
 		// the load-time clamp, and cleanup all agree on one source of truth.

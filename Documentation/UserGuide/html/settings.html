@@ -304,7 +304,7 @@ help. Leave them alone unless something is timing out on you.</p>
 </tr>
 <tr>
 <td>Temp directory</td>
-<td>The folder your recordings are written to while they are being made. It has to be a full path that starts with a drive, like <code>D:\Recordings</code>.</td>
+<td>The folder your recordings are written to while they are being made. It starts out as <code>%USERPROFILE%\Mutation</code>, which means a folder called Mutation inside your own user folder. You can type a full path that starts with a drive, like <code>D:\Recordings</code>, or one that starts with a Windows variable (a short code in percent signs that Windows swaps for a real folder), like <code>%USERPROFILE%</code> for your user folder or <code>%LOCALAPPDATA%</code>. A <code>~</code> at the start also means your user folder, so <code>~\Recordings</code> works too.</td>
 </tr>
 <tr>
 <td>Send hotkey after transcription</td>
@@ -333,8 +333,8 @@ and separate them with commas, like this:</p>
 </code></pre>
 <p>Everything to the end of that line is the list, so full stops inside a name are safe. A
 full stop at the very end is optional and is not treated as part of the last word.</p>
-<p>If you clear the <strong>Temp directory</strong> box, or type a folder name on its own like
-<code>Recordings</code>, Mutation cannot save yet. It puts its own folder back in the box, plays
+<p>If you clear the <strong>Temp directory</strong> box, type a folder name on its own like
+<code>Recordings</code>, or misspell a variable like <code>%USERPROFILES%</code>, Mutation cannot save yet. It puts its own folder back in the box, plays
 the failure beep, and tells you what it did. Press <strong>Save</strong> again to accept that
 folder, or type a full path of your own. The <strong>Browse...</strong> button next to the box
 always gives you a full path.</p>

@@ -614,9 +614,14 @@ goes back to its old value the next time you start Mutation.
 
 **What's happening.** The **Temp directory** on the **Speech to Text** page is the
 folder your recordings are written to. It has to be a full path that starts with a
-drive, like `D:\Recordings`. If you clear the box, or type just a folder name like
-`Recordings`, Mutation would have nowhere sensible to put your recordings — they would
-end up next to the program itself, or fail outright.
+drive, like `D:\Recordings`, or with a Windows variable (a short code in percent signs that Windows swaps for a
+real folder), like `%USERPROFILE%\Recordings`, where `%USERPROFILE%` means your own
+user folder. If you clear
+the box, or type just a folder name like `Recordings`, Mutation would have nowhere
+sensible to put your recordings — they would end up next to the program itself, or
+fail outright. A misspelt variable, like `%USERPROFILES%`, is turned down too,
+because Windows does not know it and Mutation would otherwise make a folder with that
+odd name.
 
 So when you press Save, Mutation puts its own folder back in the box, plays the
 failure beep, and tells you what was wrong and where recordings will go instead.

@@ -344,10 +344,11 @@ internal class SettingsManager : ISettingsManager
 			somethingWasMissing = true;
 		}
 		TempDirectoryIssue = null;
-		if (IsLegacyTempDirectory(speechToTextSettings.TempDirectory))
+		if (SupersededDefaultTempDirectory(speechToTextSettings.TempDirectory) is not null)
 		{
-			// The old default under C:\ was readable by every local user; only an
-			// unchanged default is rewritten — an explicitly different path is kept.
+			// An earlier default (C:\Temp\Mutation, readable by every local user, or the
+			// expanded LocalAppData folder) moves to the current one. Only an unchanged
+			// default is rewritten — an explicitly different path is kept.
 			speechToTextSettings.TempDirectory = SettingsDefaults.Speech.TempDirectory;
 			somethingWasMissing = true;
 		}
@@ -1117,12 +1118,22 @@ End of summary.
 			? provider.ToString()
 			: nameof(SpeechToTextProviders.OpenAi);
 
-	internal static bool IsLegacyTempDirectory(string? tempDirectory)
+	/// <summary>
+	/// The earlier default <paramref name="tempDirectory"/> matches, or null when it is not
+	/// one. The caller needs the folder itself, not just a yes, because that is where the
+	/// recordings to move are.
+	/// </summary>
+	internal static string? SupersededDefaultTempDirectory(string? tempDirectory)
 	{
 		if (string.IsNullOrWhiteSpace(tempDirectory))
-			return false;
+			return null;
 		string normalized = tempDirectory.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-		return string.Equals(normalized, SettingsDefaults.Speech.LegacyTempDirectory, StringComparison.OrdinalIgnoreCase);
+		foreach (string earlier in new[] { SettingsDefaults.Speech.LegacyTempDirectory, SettingsDefaults.Speech.PreviousTempDirectory })
+		{
+			if (string.Equals(normalized, earlier, StringComparison.OrdinalIgnoreCase))
+				return earlier;
+		}
+		return null;
 	}
 
 	public void SaveSettingsToFile(Settings settings)
@@ -1197,18 +1208,18 @@ End of summary.
         if (!DeclaresTranscriptFormatRules(json))
             settings.TranscriptFormatRules = null!;
 
-        bool hadLegacyTempDirectory = IsLegacyTempDirectory(settings.SpeechToTextSettings?.TempDirectory);
+        string? supersededTempDirectory = SupersededDefaultTempDirectory(settings.SpeechToTextSettings?.TempDirectory);
 
         if (EnsureSettings(settings, isNewFile: newFile))
         {
             SaveSettingsToFile(settings);
         }
 
-        if (hadLegacyTempDirectory)
+        if (supersededTempDirectory is not null)
         {
             SessionRecordingsMigrator.MigrateSessions(
-                SettingsDefaults.Speech.LegacyTempDirectory,
-                settings.SpeechToTextSettings!.TempDirectory!);
+                supersededTempDirectory,
+                TempDirectorySetting.Resolve(settings.SpeechToTextSettings!.TempDirectory));
         }
 
         // Register the loaded keys so any error logged during this run redacts
