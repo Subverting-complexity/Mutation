@@ -621,7 +621,8 @@ the box, or type just a folder name like `Recordings`, Mutation would have nowhe
 sensible to put your recordings — they would end up next to the program itself, or
 fail outright. A misspelt variable, like `%USERPROFILES%`, is turned down too,
 because Windows does not know it and Mutation would otherwise make a folder with that
-odd name.
+odd name. So is a path with a character Windows does not allow in a folder name, such
+as `|`, because Windows would refuse to make that folder the first time you record.
 
 So when you press Save, Mutation puts its own folder back in the box, plays the
 failure beep, and tells you what was wrong and where recordings will go instead.

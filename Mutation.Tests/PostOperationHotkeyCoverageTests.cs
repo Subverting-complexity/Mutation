@@ -192,8 +192,31 @@ public class PostOperationHotkeyCoverageTests
 			$"the configured shortcut ({TranscriptionSetting}).");
 	}
 
-	// The order — the shortcut before the beep, so a throw from the beep cannot lose the
-	// shortcut (issue #335) — used to be pinned here by reading MainWindow. Since issue #411
-	// TranscriptConfirmation makes both calls, and TranscriptConfirmationTests pins the order
-	// by running it, which is the stronger test this class says it would prefer.
+	[Fact]
+	public void Every_transcript_site_confirms_before_the_status_that_can_throw()
+	{
+		var source = MainWindowSource();
+		var sites = TranscriptConfirmations(source);
+
+		Assert.NotEmpty(sites);
+
+		// Confirm sends the shortcut and plays the beep. ShowStatus builds an automation peer
+		// and starts a timer, the operation issue #234 was filed about throwing; a throw there
+		// before Confirm took the shortcut with it, after the text had already reached the
+		// clipboard (issue #335). The order inside Confirm, shortcut before beep, is pinned by
+		// running it in TranscriptConfirmationTests.
+		foreach (int site in sites)
+		{
+			var window = Enumerable.Range(site, Math.Min(WindowLines, source.Length - site)).ToList();
+			int confirm = window.FirstOrDefault(i => source[i].Contains(".Confirm(", StringComparison.Ordinal), -1);
+			int status = window.FirstOrDefault(i => source[i].Contains("ShowStatus(", StringComparison.Ordinal), -1);
+
+			Assert.True(confirm >= 0,
+				$"MainWindow.xaml.cs:{site + 1}: no Confirm within {WindowLines} lines of the confirmation, " +
+				"so the shortcut and the beep may never go.");
+			Assert.True(status < 0 || confirm < status,
+				$"MainWindow.xaml.cs:{site + 1}: the status is shown before Confirm, " +
+				"so a throw from it loses the shortcut.");
+		}
+	}
 }

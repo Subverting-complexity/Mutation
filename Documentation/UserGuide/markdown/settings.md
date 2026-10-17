@@ -119,7 +119,7 @@ Everything to the end of that line is the list, so full stops inside a name are 
 full stop at the very end is optional and is not treated as part of the last word.
 
 If you clear the **Temp directory** box, type a folder name on its own like
-`Recordings`, or misspell a variable like `%USERPROFILES%`, Mutation cannot save yet. It puts its own folder back in the box, plays
+`Recordings`, misspell a variable like `%USERPROFILES%`, or type a character Windows does not allow in a folder name, such as `|`, Mutation cannot save yet. It puts its own folder back in the box, plays
 the failure beep, and tells you what it did. Press **Save** again to accept that
 folder, or type a full path of your own. The **Browse...** button next to the box
 always gives you a full path.
