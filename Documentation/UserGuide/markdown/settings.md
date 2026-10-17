@@ -164,13 +164,55 @@ The AI models Mutation can send your text to.
 |---|---|
 | Request timeout (seconds) | How long to wait for the model to answer before giving up. |
 | Retries | How many times to try again after a failed request. Retries help the very first request after a reboot succeed while the network warms up. Three by default. |
-| Models | Your list of models. Each row has a name, a provider, and an optional temperature — which controls how random the answers are. Leave temperature empty to use the provider's own setting. |
+| Models | Your list of models. Each row has a name, a provider, an optional temperature, and a **Reasoning levels** button. Temperature controls how random the answers are. Leave it empty to use the provider's own setting. |
 
 Capital letters in a model name do not matter, so `GPT-4.1` and `gpt-4.1` are the same
 model. Each name may only appear once in the list, though — if two rows have the same
 name, Mutation tells you which one is duplicated instead of quietly picking one.
 
 Your prompts themselves are edited on the main window, not here.
+
+#### Reasoning levels
+
+Some AI models can think a problem through before they answer. A reasoning level says
+how hard they think. A higher level can give a better answer, but it is slower and
+costs more.
+
+Each model row has a button that shows which levels you ticked, for example
+**Reasoning levels: Low to Max**, **Reasoning levels: Off, Low, High**, or
+**Reasoning levels: none**. A screen reader also reads the model's name with it.
+
+To change them:
+
+1. Press the button. A small window opens with a check box for each level, from
+   lightest to heaviest. Focus starts on the first check box.
+2. Tick the levels this model accepts. Press **Space** to tick or untick a check box.
+3. Press **OK** to keep your changes. **Enter** on a check box does the same.
+   Press **Cancel** or **Esc** to leave the levels as they were.
+
+Focus then goes back to the button, and its text shows your new choice.
+
+The levels depend on the provider:
+
+| Provider | Levels, lightest first |
+|---|---|
+| OpenAI | None, Minimal, Low, Medium, High, Extra high |
+| Anthropic | Off, Low, Medium, High, Extra high, Max |
+
+**Off** and **None** ask the model not to think first. If you change a model's
+provider, the button shows the new provider's levels.
+
+Each prompt asks for one level. If the model has that level ticked, the prompt uses
+it. If not, the prompt uses the lightest level you ticked other than Off or None. If
+nothing else is ticked, Mutation sends no level, and the model does what it does by
+default.
+
+The models Mutation comes with have every level ticked. A model you add yourself
+starts with none ticked.
+
+**Temperature and reasoning.** While a prompt runs at a level other than Off or None,
+Mutation does not send the model's temperature. The providers do not accept a
+temperature while the model is thinking.
 
 ### Text to Speech
 

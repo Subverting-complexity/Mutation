@@ -401,7 +401,7 @@ the key here is the one used.</p>
 </tr>
 <tr>
 <td>Models</td>
-<td>Your list of models. Each row has a name, a provider, and an optional temperature — which controls how random the answers are. Leave temperature empty to use the provider's own setting.</td>
+<td>Your list of models. Each row has a name, a provider, an optional temperature, and a <strong>Reasoning levels</strong> button. Temperature controls how random the answers are. Leave it empty to use the provider's own setting.</td>
 </tr>
 </tbody>
 </table>
@@ -410,6 +410,53 @@ the key here is the one used.</p>
 model. Each name may only appear once in the list, though — if two rows have the same
 name, Mutation tells you which one is duplicated instead of quietly picking one.</p>
 <p>Your prompts themselves are edited on the main window, not here.</p>
+<h4 id="reasoning-levels">Reasoning levels</h4>
+<p>Some AI models can think a problem through before they answer. A reasoning level says
+how hard they think. A higher level can give a better answer, but it is slower and
+costs more.</p>
+<p>Each model row has a button that shows which levels you ticked, for example
+<strong>Reasoning levels: Low to Max</strong>, <strong>Reasoning levels: Off, Low, High</strong>, or
+<strong>Reasoning levels: none</strong>. A screen reader also reads the model's name with it.</p>
+<p>To change them:</p>
+<ol>
+<li>Press the button. A small window opens with a check box for each level, from
+lightest to heaviest. Focus starts on the first check box.</li>
+<li>Tick the levels this model accepts. Press <strong>Space</strong> to tick or untick a check box.</li>
+<li>Press <strong>OK</strong> to keep your changes. <strong>Enter</strong> on a check box does the same.
+Press <strong>Cancel</strong> or <strong>Esc</strong> to leave the levels as they were.</li>
+</ol>
+<p>Focus then goes back to the button, and its text shows your new choice.</p>
+<p>The levels depend on the provider:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th scope="col">Provider</th>
+<th scope="col">Levels, lightest first</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI</td>
+<td>None, Minimal, Low, Medium, High, Extra high</td>
+</tr>
+<tr>
+<td>Anthropic</td>
+<td>Off, Low, Medium, High, Extra high, Max</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Off</strong> and <strong>None</strong> ask the model not to think first. If you change a model's
+provider, the button shows the new provider's levels.</p>
+<p>Each prompt asks for one level. If the model has that level ticked, the prompt uses
+it. If not, the prompt uses the lightest level you ticked other than Off or None. If
+nothing else is ticked, Mutation sends no level, and the model does what it does by
+default.</p>
+<p>The models Mutation comes with have every level ticked. A model you add yourself
+starts with none ticked.</p>
+<p><strong>Temperature and reasoning.</strong> While a prompt runs at a level other than Off or None,
+Mutation does not send the model's temperature. The providers do not accept a
+temperature while the model is thinking.</p>
 <h3 id="text-to-speech">Text to Speech</h3>
 <p>How Mutation reads text out loud. Voice, rate and volume live on the main window;
 this page holds everything else.</p>

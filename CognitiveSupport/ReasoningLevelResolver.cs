@@ -34,11 +34,7 @@ public static class ReasoningLevelResolver
 		IEnumerable<ReasoningLevel>? ticked,
 		ReasoningLevel promptLevel)
 	{
-		if (ticked is null)
-			return null;
-
-		var tickedSet = new HashSet<ReasoningLevel>(ticked);
-		var usable = ReasoningLevelCatalog.FullList(provider).Where(tickedSet.Contains).ToList();
+		var usable = ReasoningLevelCatalog.InServiceOrder(provider, ticked);
 
 		if (usable.Contains(promptLevel))
 			return promptLevel;
