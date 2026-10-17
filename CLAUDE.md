@@ -132,8 +132,11 @@ continue to implementation. Never stop to ask "Ready to implement?"
 
 ## Story Execution
 
-Work on **one story at a time** in a **fresh session per story**.
-Complete it (PR created) or mark it blocked before starting the next.
+Work on **one story at a time**. A session may run several stories one
+after another, within the session budget under **Session Hygiene**.
+Finish each story completely (PR opened, independently reviewed, fixed and
+merged) or mark it blocked before starting the next. Never start a story
+until every story it waits on is merged into the default branch.
 
 ### Claim the story first
 
@@ -260,11 +263,15 @@ Do not regress those when changing the page template or stylesheet.
 
 ## Session Hygiene
 
-- Start a **new session** for each story.
-- Target **~100k tokens per session**. One story, one session. Commit
-  and push progress early so work survives session boundaries.
-- If a story is too large for one session, implement the most important
-  slice, open a PR for it, and create follow-up issues for the rest.
+- A session may run stories **sequentially**, one after another, up to a
+  budget of **~300k tokens** of context.
+- After each merge, check how much of the budget is left. If fewer than
+  **~80k tokens** remain, do not start another story: stop and leave the
+  board clean. Never stop part way through a story because of the budget.
+- Size each story to fit in **~100k tokens**. If a story turns out too
+  large, implement the most important slice, open a PR for it, and create
+  follow-up issues for the rest.
+- Commit and push progress early so work survives session boundaries.
 - When compacting, preserve: modified files list, current test status,
   story number, branch name, and any blockers found.
 
