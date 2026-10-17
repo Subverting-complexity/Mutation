@@ -323,6 +323,13 @@ public class LlmSettings
 		/// </summary>
 		public bool FastMode { get; set; }
 
+		/// <summary>
+		/// How hard this prompt asks the model to think. New prompts start at Low. When the
+		/// model does not have this level ticked, <see cref="ReasoningLevelResolver"/> picks
+		/// the level that is actually sent.
+		/// </summary>
+		public ReasoningLevel ReasoningLevel { get; set; } = ReasoningLevel.Low;
+
 		public LlmPrompt() { }
 	}
 }
