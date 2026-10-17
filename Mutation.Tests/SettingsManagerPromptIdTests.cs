@@ -141,7 +141,7 @@ public class SettingsManagerPromptIdTests : IDisposable
 	[Fact]
 	public void PerPromptStateIsNoLongerSharedAcrossHandWrittenPrompts()
 	{
-		// The bug this fixes: FastModeNoticeTracker keys on prompt Id, so with every
+		// The bug this fixes: FallbackNoticeTracker keys on prompt Id, so with every
 		// prompt at 0 the first Fast mode notice silenced the notice for all the others.
 		File.WriteAllText(_tempPath, """
 			{
@@ -154,7 +154,7 @@ public class SettingsManagerPromptIdTests : IDisposable
 			}
 			""");
 		var prompts = Load().LlmSettings!.Prompts;
-		var tracker = new FastModeNoticeTracker();
+		var tracker = new FallbackNoticeTracker();
 
 		Assert.True(tracker.ShouldAnnounce(prompts[0].Id, FastModeFallbackReason.Unavailable));
 		Assert.True(tracker.ShouldAnnounce(prompts[1].Id, FastModeFallbackReason.Unavailable));

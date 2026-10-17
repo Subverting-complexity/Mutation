@@ -490,6 +490,20 @@ different reasons, and each needs a different response:
 different for each. You can also turn Fast mode off for that prompt in the prompt
 editor, which stops the notice appearing every time.
 
+### This prompt ran without a reasoning level
+
+**What's happening.** A prompt asks the model to think at a reasoning level, such as
+**High**. This model turned that level down. Mutation does not throw your text away —
+it runs the prompt again without a reasoning level, and then tells you "This prompt ran
+without a reasoning level, because" the model "did not accept" the level. Your answer
+is still there, but the model did not think as hard as you asked.
+
+**What to do.** Open the prompt with **Edit** and pick a different **Reasoning level**,
+or pick a different model. If the model never accepts that level, untick it for the
+model under **Reasoning levels** on the **AI assistance** settings page, so prompts stop
+asking for it. You hear this notice once for each prompt and level until you restart
+Mutation.
+
 ### The AI's answer was cut short
 
 **What's happening.** Each AI answer has a length limit. When the answer reaches it,

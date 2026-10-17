@@ -3,12 +3,12 @@ using Mutation.Ui.Services;
 
 namespace Mutation.Tests;
 
-public class FastModeNoticeTrackerTests
+public class FallbackNoticeTrackerTests
 {
 	[Fact]
 	public void ShouldAnnounce_FirstTimeOnly_ForThePromptAndReason()
 	{
-		var tracker = new FastModeNoticeTracker();
+		var tracker = new FallbackNoticeTracker();
 
 		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
 		Assert.False(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
@@ -18,7 +18,7 @@ public class FastModeNoticeTrackerTests
 	[Fact]
 	public void ShouldAnnounce_TracksEachPromptSeparately()
 	{
-		var tracker = new FastModeNoticeTracker();
+		var tracker = new FallbackNoticeTracker();
 
 		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
 		Assert.True(tracker.ShouldAnnounce(2, FastModeFallbackReason.Unavailable));
@@ -30,7 +30,7 @@ public class FastModeNoticeTrackerTests
 	{
 		// The two need different actions from the user, so the second must not be
 		// swallowed just because the first was already announced.
-		var tracker = new FastModeNoticeTracker();
+		var tracker = new FallbackNoticeTracker();
 
 		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
 		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Busy));
@@ -40,19 +40,57 @@ public class FastModeNoticeTrackerTests
 	[Fact]
 	public void ShouldAnnounce_ANewTrackerStartsClear_AsAtSessionStart()
 	{
-		var previousSession = new FastModeNoticeTracker();
+		var previousSession = new FallbackNoticeTracker();
 		previousSession.ShouldAnnounce(1, FastModeFallbackReason.Unavailable);
 
 		// Suppression is per app session and never persisted: access can be granted
 		// server-side at any time, so a restart must tell the user again.
-		Assert.True(new FastModeNoticeTracker().ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
+		Assert.True(new FallbackNoticeTracker().ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
+	}
+
+	[Fact]
+	public void ShouldAnnounce_AReasoningFallbackIsHeardOncePerPromptAndLevel()
+	{
+		var tracker = new FallbackNoticeTracker();
+
+		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.High));
+		Assert.False(tracker.ShouldAnnounce(1, ReasoningLevel.High));
+		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.Max));
+		Assert.True(tracker.ShouldAnnounce(2, ReasoningLevel.High));
+	}
+
+	[Fact]
+	public void ShouldAnnounce_FastModeAndReasoningNoticesDoNotUseEachOtherUp()
+	{
+		// Both enums have a member with the value 1; the kinds must still be told apart.
+		var tracker = new FallbackNoticeTracker();
+
+		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
+		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.Off));
+	}
+
+	[Fact]
+	public void ClaimReasoningNotice_WordsTheFirstFallback_AndThenStaysQuiet()
+	{
+		var tracker = new FallbackNoticeTracker();
+
+		Assert.Equal(
+			ReasoningMessages.Fallback("gpt-5", ReasoningLevel.High),
+			tracker.ClaimReasoningNotice(3, "gpt-5", ReasoningLevel.High));
+		Assert.Null(tracker.ClaimReasoningNotice(3, "gpt-5", ReasoningLevel.High));
+	}
+
+	[Fact]
+	public void ClaimReasoningNotice_IsNull_WhenNothingWasRefused()
+	{
+		Assert.Null(new FallbackNoticeTracker().ClaimReasoningNotice(3, "gpt-5", null));
 	}
 
 	[Fact]
 	public void ShouldAnnounce_ExactlyOneCallerWinsUnderConcurrency()
 	{
 		// Prompts run from hotkey threads as well as the UI thread.
-		var tracker = new FastModeNoticeTracker();
+		var tracker = new FallbackNoticeTracker();
 		int winners = 0;
 
 		Parallel.For(0, 200, _ =>

@@ -80,7 +80,7 @@ internal sealed class PromptLibraryController
 			return;
 
 		var dialog = new PromptEditorWindow(
-			null, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken,
+			null, _transcriptFormatter, GetAvailableModels(), _shutdownToken,
 			ClaimedHotkeys.Excluding(_settings, excludedPrompt: null));
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
@@ -108,7 +108,7 @@ internal sealed class PromptLibraryController
 		// This prompt is left out of its own check: its saved shortcut is the one in the box,
 		// and a prompt cannot be a duplicate of itself.
 		var dialog = new PromptEditorWindow(
-			prompt, _transcriptFormatter, GetAvailableModelNames(), _shutdownToken,
+			prompt, _transcriptFormatter, GetAvailableModels(), _shutdownToken,
 			ClaimedHotkeys.Excluding(_settings, prompt));
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
@@ -143,9 +143,11 @@ internal sealed class PromptLibraryController
 		return true;
 	}
 
-	private IReadOnlyList<string> GetAvailableModelNames()
+	// The whole model entries, not only their names: the editor's reasoning level list shows
+	// the levels ticked for the chosen model.
+	private IReadOnlyList<LlmModelConfig> GetAvailableModels()
 	{
-		return _settings.LlmSettings?.Models?.Select(m => m.Name).ToList() ?? new List<string>();
+		return _settings.LlmSettings?.Models?.ToList() ?? new List<LlmModelConfig>();
 	}
 
 	private void SaveAndRefresh()
