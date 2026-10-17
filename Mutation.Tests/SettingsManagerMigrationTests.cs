@@ -91,7 +91,7 @@ public class SettingsManagerMigrationTests : IDisposable
 			{
 				"LlmSettings": {
 					"Prompts": [
-						{ "Id": 1, "Name": "P1", "Content": "x", "ModelName": "chat-latest" }
+						{ "Id": 1, "Name": "P1", "Content": "x", "ModelName": "chat-latest", "ReasoningLevel": "Low" }
 					]
 				}
 			}
@@ -209,7 +209,7 @@ public class SettingsManagerMigrationTests : IDisposable
 				},
 				"LlmSettings": {
 					"Prompts": [
-						{ "Id": 1, "Name": "P1", "Content": "x", "ModelName": "chat-latest" }
+						{ "Id": 1, "Name": "P1", "Content": "x", "ModelName": "chat-latest", "ReasoningLevel": "Low" }
 					]
 				}
 			}
@@ -331,7 +331,7 @@ public class SettingsManagerMigrationTests : IDisposable
 			{
 				"LlmSettings": {
 					"Models": [
-						{ "Name": "gpt-4.1", "Provider": "OpenAI", "CustomTemperature": 0.7 }
+						{ "Name": "gpt-4.1", "Provider": "OpenAI", "CustomTemperature": 0.7, "ReasoningLevels": [] }
 					]
 				}
 			}

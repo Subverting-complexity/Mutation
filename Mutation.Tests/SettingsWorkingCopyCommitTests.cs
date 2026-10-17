@@ -26,7 +26,7 @@ public class SettingsWorkingCopyCommitTests
 		};
 		settings.LlmSettings.Prompts.Add(new LlmSettings.LlmPrompt { Id = 1, Name = "Tidy", Content = "tidy this" });
 		settings.LlmSettings.Prompts.Add(new LlmSettings.LlmPrompt { Id = 2, Name = "Summarise", Content = "summarise this" });
-		settings.LlmSettings.Models.Add(new LlmModelConfig { Name = "gpt-4.1" });
+		settings.LlmSettings.Models.Add(new LlmModelConfig { Name = "gpt-4.1", ReasoningLevels = { ReasoningLevel.Low } });
 		settings.TranscriptFormatRules.Add(new TranscriptFormatRule("a", "b", false, TranscriptFormatRule.MatchTypeEnum.Plain));
 
 		// Every branch of the committer needs a populated example, or a dropped property

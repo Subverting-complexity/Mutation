@@ -88,7 +88,7 @@ Process text through OpenAI, Anthropic, or any OpenAI-compatible endpoint. Defin
 - Set `ModelName` on a prompt to override the default model on a per-prompt basis (must match a `Name` from `LlmSettings.Models`)
 
 **Model Configuration:**
-Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter). Provider API keys live in the top-level `ApiKeys` section: `OpenAiApiKey`, `AnthropicApiKey`, and `DeepgramApiKey`.
+Each entry in `LlmSettings.Models` is an object with `Name`, `Provider` (`OpenAI` or `Anthropic`), and an optional `CustomTemperature` (leave `null` for models that only accept the API default — the request will then omit the temperature parameter), and `ReasoningLevels`, the reasoning levels ticked for the model. OpenAI models choose from `None`, `Minimal`, `Low`, `Medium`, `High` and `ExtraHigh`; Anthropic models from `Off`, `Low`, `Medium`, `High`, `ExtraHigh` and `Max`. An empty list means the model does not reason. Each prompt stores one `ReasoningLevel`, `Low` for a new prompt. When a settings file from before reasoning levels loads, every model gets its full list ticked and every prompt gets `Low`, once. Mutation stores these levels but does not send them with a request yet. Provider API keys live in the top-level `ApiKeys` section: `OpenAiApiKey`, `AnthropicApiKey`, and `DeepgramApiKey`.
 
 ### 5. Transcript Formatting Rules  
 Apply find-and-replace rules to transcripts before or instead of LLM processing:
@@ -246,8 +246,10 @@ All hotkeys are global and fully customisable. Below is an example covering ever
 
   "LlmSettings": {
     "Models": [
-      { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null },
-      { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null }
+      { "Name": "gpt-4.1",           "Provider": "OpenAI",    "CustomTemperature": null,
+        "ReasoningLevels": ["None", "Minimal", "Low", "Medium", "High", "ExtraHigh"] },
+      { "Name": "claude-sonnet-4-6", "Provider": "Anthropic", "CustomTemperature": null,
+        "ReasoningLevels": ["Off", "Low", "Medium", "High", "ExtraHigh", "Max"] }
     ],
     "Prompts": [
       {
@@ -257,7 +259,8 @@ All hotkeys are global and fully customisable. Below is an example covering ever
         "Hotkey": "Ctrl+Alt+G",
         "AutoRun": true,
         "ModelName": "gpt-4.1",
-        "FastMode": false
+        "FastMode": false,
+        "ReasoningLevel": "Low"
       }
     ]
   },
