@@ -268,9 +268,10 @@ Do not regress those when changing the page template or stylesheet.
 - After each merge, check how much of the budget is left. If fewer than
   **~80k tokens** remain, do not start another story: stop and leave the
   board clean. Never stop part way through a story because of the budget.
-- Size each story to fit in **~100k tokens**. If a story turns out too
-  large, implement the most important slice, open a PR for it, and create
-  follow-up issues for the rest.
+- A single story may use up to **~300k tokens**, the whole session
+  budget. If a story turns out too large even for that, implement the
+  most important slice, open a PR for it, and create follow-up issues for
+  the rest.
 - Commit and push progress early so work survives session boundaries.
 - When compacting, preserve: modified files list, current test status,
   story number, branch name, and any blockers found.
