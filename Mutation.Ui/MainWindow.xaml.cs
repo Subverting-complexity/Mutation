@@ -2776,12 +2776,18 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// Set when the model's answer stopped at its length limit. Folded in for the same
 	/// reason as <paramref name="fastModeNotice"/>, and lowers a success to a warning.
 	/// </param>
+	/// <param name="llmRefused">
+	/// Set when the model declined and the rules-formatted transcript was delivered instead.
+	/// The refusal itself is already in <paramref name="successMessage"/>; this lowers a
+	/// success to a warning.
+	/// </param>
 	private async void FinalizeTranscript(
 		string rawText,
 		string successMessage,
 		string? formattedText = null,
 		FastModeFallbackReason? fastModeNotice = null,
-		bool llmCutShort = false)
+		bool llmCutShort = false,
+		bool llmRefused = false)
 	{
 		// The restoration below is what gives the user their transcript box back. It ran
 		// last, unguarded, so any throw on the delivery path — a beep, an automation peer
@@ -2815,7 +2821,7 @@ public sealed partial class MainWindow : Window, IDisposable
 						CutShortMessages.AppendTo(plan.FailureMessage ?? successMessage, llmCutShort),
 						fastModeNotice),
 					!plan.Succeeded ? InfoBarSeverity.Error
-						: llmCutShort ? InfoBarSeverity.Warning
+						: llmCutShort || llmRefused ? InfoBarSeverity.Warning
 						: InfoBarSeverity.Success);
 			},
 			onFailure: ex =>
@@ -2880,10 +2886,13 @@ public sealed partial class MainWindow : Window, IDisposable
                 // earlier is superseded by it and heard by nobody.
                 result.LlmCancelled
                     ? CancellationMessages.LlmCancelledThen("Transcript ready.")
-                    : "Transcript ready.",
+                    : result.LlmRefused
+                        ? LlmRefusalMessages.RefusedThen("Transcript ready.")
+                        : "Transcript ready.",
                 result.FormattedText,
                 result.FastModeNotice,
-                result.LlmCutShort);
+                result.LlmCutShort,
+                result.LlmRefused);
         });
     }
 
