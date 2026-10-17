@@ -48,17 +48,33 @@ public class ReasoningLevelPickTests
 		Assert.True(pick.MovedFrom(ReasoningLevel.High));
 	}
 
-	[Fact]
-	public void For_ShowsOffOrNone_WhenTheyAreTheOnlyLevelsTicked()
+	[Theory]
+	[InlineData(LlmProvider.Anthropic, ReasoningLevel.Off)]
+	[InlineData(LlmProvider.OpenAI, ReasoningLevel.None)]
+	public void For_SelectsNothing_WhenOnlyOffOrNoneIsTicked(LlmProvider provider, ReasoningLevel only)
 	{
-		// A run sends no level here, which is what Off means, so the list shows Off
-		// rather than a blank selection.
-		var model = Model(LlmProvider.Anthropic, ReasoningLevel.Off);
+		// A run sends no level here. Selecting Off or None instead would make saving store
+		// it, and a stored Off or None is sent, which changes the request.
+		var model = Model(provider, only);
 
 		var pick = ReasoningLevelPick.For(model, ReasoningLevel.Low);
 
+		Assert.Equal(new[] { only }, pick.Levels);
+		Assert.Null(pick.Selected);
+		Assert.Equal(-1, pick.SelectedIndex);
+		Assert.True(pick.SendsNoLevel);
+		Assert.False(pick.MovedFrom(ReasoningLevel.Low));
+	}
+
+	[Fact]
+	public void For_SelectsOff_WhenThePromptAsksForIt()
+	{
+		var model = Model(LlmProvider.Anthropic, ReasoningLevel.Off);
+
+		var pick = ReasoningLevelPick.For(model, ReasoningLevel.Off);
+
 		Assert.Equal(ReasoningLevel.Off, pick.Selected);
-		Assert.True(pick.MovedFrom(ReasoningLevel.Low));
+		Assert.False(pick.SendsNoLevel);
 	}
 
 	[Fact]
@@ -67,6 +83,7 @@ public class ReasoningLevelPickTests
 		var pick = ReasoningLevelPick.For(Model(LlmProvider.OpenAI), ReasoningLevel.Low);
 
 		Assert.False(pick.Reasons);
+		Assert.False(pick.SendsNoLevel);
 		Assert.Empty(pick.Levels);
 		Assert.Null(pick.Selected);
 		Assert.Equal(-1, pick.SelectedIndex);
@@ -106,7 +123,7 @@ public class ReasoningLevelPickTests
 		{
 			var pick = ReasoningLevelPick.For(model, wanted);
 			var sent = ReasoningLevelResolver.Resolve(model, wanted);
-			Assert.Equal(sent ?? ReasoningLevel.Off, pick.Selected);
+			Assert.Equal(sent, pick.Selected);
 		}
 	}
 }

@@ -111,7 +111,7 @@ A higher level can give a better answer to a hard task, such as untangling long,
 
 The list shows only the levels you ticked for the prompt's model, under **Reasoning levels** on the **AI assistance** settings page. See [Settings](settings.md) for how to tick them. If the model has no levels ticked, the list is turned off and says "This model does not reason".
 
-If you pick a different model and it does not have the prompt's level ticked, the list moves to the lightest level ticked for that model, not counting **Off** or **None**. The status line at the bottom of the editor tells you what changed, for example "gpt-5 does not have Max ticked, so the reasoning level is now Low." The same happens when you open a prompt whose level is no longer ticked for its model.
+If you pick a different model and it does not have the prompt's level ticked, the list moves to the lightest level ticked for that model, not counting **Off** or **None**. The status line at the bottom of the editor tells you what changed, for example "gpt-5 does not have Max ticked, so the reasoning level is now Low." The same happens when you open a prompt whose level is no longer ticked for its model. If the model has only **Off** or **None** ticked, the list selects nothing and shows "No level is sent". The prompt then runs without a reasoning level, and it keeps its own level unless you pick one.
 
 The level goes with every run of the prompt: its shortcut or **Run** button, the Auto-Run step after dictation, and **Test Run**.
 

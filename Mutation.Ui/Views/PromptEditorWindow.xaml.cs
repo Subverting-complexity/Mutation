@@ -153,9 +153,20 @@ public sealed partial class PromptEditorWindow : Window
         }
 
         // Filled once the model is chosen, and subscribed only then, so opening the editor
-        // fills the list once. Said aloud at open too: a saved level the model no longer
-        // has ticked is exactly what the user opening this prompt needs to hear about.
-        RefreshReasoningLevels(announceMove: true);
+        // fills the list once. Said aloud at open too, since a saved level the model no
+        // longer has ticked is exactly what the user opening this prompt needs to hear
+        // about — but only once the window's content has loaded, because a notification
+        // raised from the constructor comes before the window exists and is heard by nobody.
+        string? openNotice = RefreshReasoningLevels();
+        if (openNotice is not null && Content is FrameworkElement root)
+        {
+            void OnLoaded(object s, RoutedEventArgs e)
+            {
+                root.Loaded -= OnLoaded;
+                ShowStatus("Reasoning level", openNotice, InfoBarSeverity.Informational);
+            }
+            root.Loaded += OnLoaded;
+        }
         CmbModel.SelectionChanged += CmbModel_SelectionChanged;
         CmbReasoningLevel.SelectionChanged += CmbReasoningLevel_SelectionChanged;
 
@@ -168,8 +179,12 @@ public sealed partial class PromptEditorWindow : Window
 
     private string SelectedModelName => CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
 
-    private void CmbModel_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        RefreshReasoningLevels(announceMove: true);
+    private void CmbModel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        string? notice = RefreshReasoningLevels();
+        if (notice is not null)
+            ShowStatus("Reasoning level", notice, InfoBarSeverity.Informational);
+    }
 
     private void CmbReasoningLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -185,11 +200,11 @@ public sealed partial class PromptEditorWindow : Window
     /// from <see cref="ReasoningLevelPick"/>, which settles them the way a run does, so the
     /// level shown is the level sent.
     /// </summary>
-    /// <param name="announceMove">
-    /// Say so on the status line when the list cannot show the wanted level and shows
-    /// another. Without it a screen-reader user would save a level they never chose.
-    /// </param>
-    private void RefreshReasoningLevels(bool announceMove)
+    /// <returns>
+    /// What to say on the status line when the list cannot show the wanted level, or null.
+    /// Without it a screen-reader user would save a level they never chose.
+    /// </returns>
+    private string? RefreshReasoningLevels()
     {
         string modelName = SelectedModelName;
         _modelsByName.TryGetValue(modelName, out var model);
@@ -202,7 +217,10 @@ public sealed partial class PromptEditorWindow : Window
             if (pick.Reasons)
             {
                 CmbReasoningLevel.ItemsSource = pick.Levels.Select(ReasoningLevelCatalog.DisplayName).ToList();
+                // -1 when a run sends no level: nothing is selected, and saving keeps the
+                // prompt's own level, unless the user picks one.
                 CmbReasoningLevel.SelectedIndex = pick.SelectedIndex;
+                CmbReasoningLevel.PlaceholderText = pick.SendsNoLevel ? ReasoningMessages.NoLevelSelected : string.Empty;
                 CmbReasoningLevel.IsEnabled = true;
             }
             else
@@ -211,6 +229,7 @@ public sealed partial class PromptEditorWindow : Window
                 // which is what a screen reader reads for a list that is turned off.
                 CmbReasoningLevel.ItemsSource = new List<string> { ReasoningMessages.NoReasoning };
                 CmbReasoningLevel.SelectedIndex = 0;
+                CmbReasoningLevel.PlaceholderText = string.Empty;
                 CmbReasoningLevel.IsEnabled = false;
             }
         }
@@ -219,14 +238,18 @@ public sealed partial class PromptEditorWindow : Window
             _refillingReasoningLevels = false;
         }
 
-        if (announceMove && pick.MovedFrom(_wantedLevel) && pick.Selected is { } shown)
-            ShowStatus("Reasoning level", ReasoningMessages.Moved(modelName, _wantedLevel, shown), InfoBarSeverity.Informational);
+        if (pick.SendsNoLevel)
+            return ReasoningMessages.NoLevelSent(modelName, _wantedLevel);
+        if (pick.MovedFrom(_wantedLevel) && pick.Selected is { } shown)
+            return ReasoningMessages.Moved(modelName, _wantedLevel, shown);
+        return null;
     }
 
     /// <summary>
     /// The level saving would store and a test run sends: the one the list shows, or, while
-    /// the chosen model does not reason, the wanted level, so a prompt moved to such a model
-    /// keeps its level for the day it moves back.
+    /// the list selects nothing (the model does not reason, or a run sends no level), the
+    /// wanted level, so the prompt keeps its level and a test run resolves it exactly as a
+    /// real run does.
     /// </summary>
     private ReasoningLevel CurrentReasoningLevel()
     {

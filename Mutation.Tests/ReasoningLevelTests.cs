@@ -221,6 +221,14 @@ public class ReasoningLevelTests
 	}
 
 	[Fact]
+	public void NoLevelSentMessage_NamesTheModelAndTheWantedLevel()
+	{
+		Assert.Equal(
+			"claude-haiku does not have Low ticked, so this prompt runs without a reasoning level.",
+			ReasoningMessages.NoLevelSent("claude-haiku", ReasoningLevel.Low));
+	}
+
+	[Fact]
 	public void AppendTo_FoldsTheNoticeAfterTheOutcome()
 	{
 		Assert.Equal(
