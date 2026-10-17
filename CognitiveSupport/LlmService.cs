@@ -75,20 +75,28 @@ public class LlmService : ILlmService
 		var openAiMessages = messages.Select(ToOpenAiMessage).ToList();
 
 		requestOptions ??= LlmRequestOptions.Default;
-		bool fastMode = requestOptions.FastMode;
+
+		// The service settles the prompt's level against the levels ticked for this model,
+		// so every caller gets the same answer without resolving it first.
+		ReasoningLevel? level = requestOptions.ReasoningLevel is { } asked
+			? ReasoningLevelResolver.Resolve(config, asked)
+			: null;
 
 		// The retry shape lives in TransientRetry.cs, shared with the other four remote
 		// services, so the cold-start path (slow DNS/TLS/JIT warmup on the first call after
 		// a reboot) gets a few escalating-timeout attempts instead of an unhandled failure.
 		// A retry count of 0 still runs the body once.
 		//
-		// Each send counts its own attempts, so the standard-speed retry after a Fast mode
-		// fallback starts from 1 rather than inheriting the abandoned send's stretched
-		// timeout — the attempt lives in Polly's per-execution context, not in the shared
-		// pipeline.
-		async Task<ClientResult<ChatCompletion>> SendAsync(bool useFastMode)
+		// Each send counts its own attempts, so the retry after a fallback starts from 1
+		// rather than inheriting the abandoned send's stretched timeout — the attempt lives
+		// in Polly's per-execution context, not in the shared pipeline.
+		async Task<ClientResult<ChatCompletion>> SendAsync(RequestShape shape)
 		{
-			ChatCompletionOptions options = BuildChatOptions(config, useFastMode);
+			ChatCompletionOptions options = BuildChatOptions(config, shape.FastMode, shape.Level);
+
+			// Heavier reasoning takes longer, so each try may wait a multiple of the user's
+			// wait time; the multiple comes from the one limits table both services share.
+			TimeSpan waitPerTry = ReasoningLimits.For(shape.Level).WaitPerTry(TimeSpan.FromSeconds(_timeoutSeconds));
 
 			// Handing the token to the pipeline is what makes the ladder escapable, and it
 			// is the whole mechanism: Polly checks it at the head of every attempt and
@@ -96,18 +104,19 @@ public class LlmService : ILlmService
 			// there rather than being re-read as one more transient blip (issue #256).
 			return await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 			{
-				int timeout = _timeoutSeconds * attempt;
-				using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout), _timeProvider);
+				using var thisTryCts = new CancellationTokenSource(waitPerTry * attempt, _timeProvider);
 				using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 				return await client.CompleteChatAsync(openAiMessages, options, linkedCts.Token).ConfigureAwait(false);
 			}, cancellationToken).ConfigureAwait(false);
 		}
 
-		ClientResult<ChatCompletion> result = fastMode
-			? await SendWithFastModeFallbackAsync(SendAsync, requestOptions).ConfigureAwait(false)
-			: await SendAsync(useFastMode: false).ConfigureAwait(false);
+		var (result, sent) = await SendWithFallbacksAsync(
+			SendAsync,
+			config,
+			new RequestShape(level, requestOptions.FastMode),
+			requestOptions).ConfigureAwait(false);
 
-		if (fastMode)
+		if (sent.FastMode)
 			LogServedTier(result.Value);
 
 		if (result.Value.Content.Count > 0)
@@ -118,40 +127,87 @@ public class LlmService : ILlmService
 	}
 
 	/// <summary>
-	/// Mirrors the Anthropic service: if the request failed *because* of the fast service
-	/// tier, retry once with the tier omitted rather than losing the user's text. §8 of the
-	/// story scopes this to Anthropic, but its reasoning is provider-neutral — dropping the
-	/// tier is always the cheaper direction, so it cannot surprise anyone's bill, and losing
-	/// a long dictated transcript to a rejected tier value is far worse than a slower reply.
+	/// The two settings a fallback can drop from a request: the reasoning level and Fast
+	/// mode. Everything else about the request stays the same on every send.
 	/// </summary>
-	private static async Task<ClientResult<ChatCompletion>> SendWithFastModeFallbackAsync(
-		Func<bool, Task<ClientResult<ChatCompletion>>> send,
+	/// <param name="Level">The resolved level to send, or null to send none.</param>
+	/// <param name="FastMode">Whether to ask for Fast mode.</param>
+	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode);
+
+	/// <summary>
+	/// Sends the request and, if the reasoning level or the fast service tier is what the
+	/// service refused, sends it again without that one setting rather than losing the
+	/// user's text. Mirrors the Anthropic service. Each setting can be dropped once, so a
+	/// request that asked for both is sent at most three times. Both fallbacks go in the
+	/// cheaper direction (no reasoning, standard speed), so recovering without asking can
+	/// never surprise anyone's bill. The user's saved settings are never changed: access
+	/// may be granted, or the model changed, later.
+	/// <para>
+	/// The callbacks run only after a send succeeded, so the user is never told "it ran
+	/// without a reasoning level" about a request that then failed outright.
+	/// </para>
+	/// <para>
+	/// Unlike Anthropic, OpenAI Fast mode has no capacity pool or rate limit of its own, so
+	/// a 429 is the account's ordinary limit: dropping the tier would not get the user
+	/// served any sooner, and the retry ladder around each send already had a go at it.
+	/// Only a rejected tier is handled here.
+	/// </para>
+	/// </summary>
+	private static async Task<(ClientResult<ChatCompletion> Result, RequestShape Sent)> SendWithFallbacksAsync(
+		Func<RequestShape, Task<ClientResult<ChatCompletion>>> send,
+		LlmModelConfig config,
+		RequestShape shape,
 		LlmRequestOptions requestOptions)
 	{
-		FastModeFallback fallback;
-		try
-		{
-			return await send(true).ConfigureAwait(false);
-		}
-		catch (ClientResultException ex)
-		{
-			// Only a rejected tier is handled here. Unlike Anthropic, OpenAI Fast mode has
-			// no capacity pool or rate limit of its own, so a 429 is the account's ordinary
-			// limit — dropping the tier would not get the user served any sooner, and the
-			// retry ladder around this send already had a go at it.
-			var reason = FastModeFailure.Classify(ex.Status, ex.Message);
-			if (reason is null)
-				throw; // Nothing to do with the service tier; report it as-is.
-			fallback = new FastModeFallback(reason.Value, ex.Message);
-		}
+		FastModeFallback? fastModeFallback = null;
+		ReasoningLevel? refusedLevel = null;
 
-		ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fallback));
-		var result = await send(false).ConfigureAwait(false);
+		while (true)
+		{
+			try
+			{
+				var result = await send(shape).ConfigureAwait(false);
 
-		// Announced only after the standard-speed retry succeeded, so the user is never
-		// told "it ran at standard speed" for a request that then failed outright.
-		requestOptions.OnFastModeFallback?.Invoke(fallback);
-		return result;
+				if (fastModeFallback is not null)
+					requestOptions.OnFastModeFallback?.Invoke(fastModeFallback);
+				if (refusedLevel is { } refused)
+					requestOptions.OnReasoningFallback?.Invoke(refused);
+
+				return (result, shape);
+			}
+			catch (ClientResultException ex)
+			{
+				bool reasoningCause = shape.Level is not null
+					&& ReasoningFailure.IsCause(ex.Status, ex.Message);
+				FastModeFallbackReason? fastModeCause = shape.FastMode
+					? FastModeFailure.Classify(ex.Status, ex.Message)
+					: null;
+
+				// With both settings on, a message that names the service tier is taken at
+				// its word even if it also names reasoning; otherwise the reasoning level is
+				// the one dropped. A 403 that names neither is left to the Fast mode rule,
+				// which reads it as the Fast mode entitlement gate.
+				bool dropReasoning = reasoningCause
+					&& !(fastModeCause is not null && FastModeFailure.MentionsFastMode(ex.Message));
+
+				if (dropReasoning)
+				{
+					refusedLevel = shape.Level;
+					ErrorLogger.LogInfo("LLM", $"{ReasoningMessages.Fallback(config.Name, shape.Level!.Value)} OpenAI said: {ex.Message}");
+					shape = shape with { Level = null };
+				}
+				else if (fastModeCause is { } reason)
+				{
+					fastModeFallback = new FastModeFallback(reason, ex.Message);
+					ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fastModeFallback));
+					shape = shape with { FastMode = false };
+				}
+				else
+				{
+					throw; // Neither setting caused it; report it as it is.
+				}
+			}
+		}
 	}
 
 	/// <summary>
@@ -162,12 +218,26 @@ public class LlmService : ILlmService
 	/// Requested via the service tier; nothing is set when off, so the account default
 	/// applies exactly as before.
 	/// </param>
-	internal static ChatCompletionOptions BuildChatOptions(LlmModelConfig config, bool fastMode = false)
+	/// <param name="level">
+	/// The resolved reasoning level, or null to send no reasoning effort, so the request is
+	/// the same as before reasoning levels existed.
+	/// </param>
+	internal static ChatCompletionOptions BuildChatOptions(
+		LlmModelConfig config,
+		bool fastMode = false,
+		ReasoningLevel? level = null)
 	{
 		var options = new ChatCompletionOptions();
-		if (config.CustomTemperature.HasValue)
+		// OpenAI refuses a custom temperature while the model reasons.
+		if (config.CustomTemperature.HasValue && OpenAiReasoningFields.SendsTemperature(level))
 		{
 			options.Temperature = (float)config.CustomTemperature.Value;
+		}
+		if (OpenAiReasoningFields.Effort(level) is { } effort)
+		{
+#pragma warning disable OPENAI001 // Evaluation-only SDK surface; see OpenAiReasoningFields.
+			options.ReasoningEffortLevel = effort;
+#pragma warning restore OPENAI001
 		}
 		if (fastMode)
 		{
