@@ -29,7 +29,7 @@
 		<PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
 		<PackageVersion Include="NAudio" Version="2.3.0" />
 		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
-		<PackageVersion Include="OpenAI" Version="2.12.0" />
+		<PackageVersion Include="OpenAI" Version="2.14.0" />
 		<PackageVersion Include="PDFsharp" Version="6.2.3" />
 		<!-- Polly 7 is out of support; 8.x is the supported line. See RetryAttempts.cs. -->
 		<PackageVersion Include="Polly" Version="8.7.0" />
@@ -43,7 +43,9 @@
 	<!--
 		Also pinned transitively, and for the same reason: nothing references it directly,
 		so without a version here it lands on whatever the deepest dependency asks for.
-		An in-major bump of the plumbing under the OpenAI client (issue #301).
+		An in-major bump of the plumbing under the OpenAI client (issue #301). OpenAI 2.14.0
+		(issue #415) now asks for 1.15.0 itself, so the pin and the client agree; keep the pin
+		so a later OpenAI bump cannot move it silently.
 
 		Two packages #301 also suggested looking at are deliberately absent.
 
