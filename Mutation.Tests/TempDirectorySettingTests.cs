@@ -95,6 +95,19 @@ public class TempDirectorySettingTests
 		Assert.True(result.WasRepaired);
 	}
 
+	// '|' and control characters are refused by Windows in a folder name, but
+	// Path.GetFullPath lets them through, so they used to be stored and fail only when a recording was saved.
+	[Theory]
+	[InlineData(@"C:\Rec|ordings")]
+	[InlineData(@"%USERPROFILE%\Rec|ordings")]
+	public void Normalize_PathWithACharacterWindowsRefuses_FallsBackToTheDefault(string value)
+	{
+		var result = TempDirectorySetting.Normalize(value);
+
+		Assert.Equal(SettingsDefaults.Speech.TempDirectory, result.Path);
+		Assert.True(result.WasRepaired);
+	}
+
 	// A path that names a variable is kept as typed, so it keeps following the variable
 	// — the whole point of typing one.
 	[Theory]
@@ -189,7 +202,15 @@ public class TempDirectorySettingTests
 	{
 		var result = TempDirectorySetting.Normalize(@"C:\PROGRA~1\Mutation");
 
-		Assert.Equal(@"C:\PROGRA~1\Mutation", result.Path);
+		// Resolved like any other full path. Windows may expand the short name to
+		// "C:\Program Files\Mutation", so compare with what GetFullPath gives on this
+		// machine rather than the text as typed. What matters is that the tilde is not
+		// read as the home folder.
+		Assert.Equal(Path.GetFullPath(@"C:\PROGRA~1\Mutation"), result.Path);
+		Assert.DoesNotContain(
+			Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+			result.Path,
+			StringComparison.OrdinalIgnoreCase);
 		Assert.False(result.WasRepaired);
 	}
 
