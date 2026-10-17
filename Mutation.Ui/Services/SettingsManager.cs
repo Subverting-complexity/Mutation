@@ -535,7 +535,22 @@ End of summary.
 				new LlmModelConfig(LlmSettings.DefaultSecondaryModel, LlmProvider.OpenAI, customTemperature: 0.7m),
 				new LlmModelConfig(LlmSettings.DefaultAnthropicModel, LlmProvider.Anthropic, customTemperature: 0.7m),
 			};
+			// The starter models get every level their service offers, the same as an
+			// existing model gets on upgrade, so a prompt's level is honoured out of the box.
+			foreach (var model in llmSettings.Models)
+				model.ReasoningLevels = ReasoningLevelCatalog.FullList(model.Provider).ToList();
 			somethingWasMissing = true;
+		}
+
+		// A hand-written "ReasoningLevels": null would otherwise reach the request code
+		// as a null list. Read it as nothing ticked, which is what an empty list means.
+		foreach (var model in llmSettings.Models)
+		{
+			if (model is not null && model.ReasoningLevels is null)
+			{
+				model.ReasoningLevels = new List<ReasoningLevel>();
+				somethingWasMissing = true;
+			}
 		}
 
 		foreach (var prompt in llmSettings.Prompts)
@@ -1065,6 +1080,9 @@ End of summary.
 					}
 				}
 			}
+
+			if (ReasoningLevelsUpgrade.Apply(llmSettingsJObj))
+				saveRequired = true;
 		}
 
 		// Rename TextToSpeechSettings.TextToSpeechHotKey -> SpeakClipboard.
