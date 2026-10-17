@@ -29,11 +29,22 @@ namespace Mutation.Ui.Core;
 /// announced from this side is superseded by that delivery a moment later and heard by
 /// nobody.
 /// </param>
+/// <param name="LlmCutShort">
+/// Set when the language model's answer stopped at its length limit, so the delivered text
+/// is missing its end. Travels with the transcript for the same reason as the others.
+/// </param>
+/// <param name="LlmRefused">
+/// Set when the language model declined the request, so the rules-formatted transcript is
+/// delivered instead. Travels with the transcript for the same reason as the others: said
+/// from this side, the refusal would be superseded by "Transcript ready." and never heard.
+/// </param>
 public record TranscriptResult(
 	string RawText,
 	string? FormattedText = null,
 	FastModeFallbackReason? FastModeNotice = null,
-	bool LlmCancelled = false);
+	bool LlmCancelled = false,
+	bool LlmCutShort = false,
+	bool LlmRefused = false);
 
 public class AudioSessionManager : IDisposable
 {
@@ -467,6 +478,8 @@ public class AudioSessionManager : IDisposable
         string? llmProcessedText = null;
         FastModeFallback? fastModeFallback = null;
         bool llmCancelled = false;
+        bool llmCutShort = false;
+        bool llmRefused = false;
 
         if (_currentRecordingUsesLlmProcessing && llmPrompt != null)
         {
@@ -482,6 +495,7 @@ public class AudioSessionManager : IDisposable
                 {
                     FastMode = llmPrompt.FastMode,
                     OnFastModeFallback = f => fastModeFallback = f,
+                    OnCutShort = () => llmCutShort = true,
                 };
                 // Claimed for the length of the call so a second press of the dictation
                 // hotkey can cut it short, and released by the handle's Dispose — which
@@ -514,6 +528,13 @@ public class AudioSessionManager : IDisposable
                 llmCancelled = true;
                 ErrorLogger.LogInfo("LLM", "LLM processing cancelled; delivering the rules-formatted transcript.");
             }
+            catch (LlmRefusalException)
+            {
+                // The model declined. The dictation is delivered rules-formatted, as for any
+                // failure, and the refusal rides with it to be told with the delivery.
+                llmRefused = true;
+                ErrorLogger.LogInfo("LLM", "LLM declined the request; delivering the rules-formatted transcript.");
+            }
             catch (Exception ex)
             {
                 // A per-attempt timeout arrives here as an OperationCanceledException too,
@@ -538,7 +559,14 @@ public class AudioSessionManager : IDisposable
         // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output. The cancel rides along
         // rather than being announced here, for the same reason the Fast mode notice does.
-        TranscriptReady?.Invoke(this, new TranscriptResult(text, llmProcessedText ?? rulesFormattedText, fastModeNotice, llmCancelled));
+        TranscriptReady?.Invoke(this, new TranscriptResult(
+            text,
+            llmProcessedText ?? rulesFormattedText,
+            fastModeNotice,
+            llmCancelled,
+            // Only meaningful when the model's text is the one delivered.
+            LlmCutShort: llmCutShort && llmProcessedText is not null,
+            LlmRefused: llmRefused));
         // No delivery announcement from here. The handler that delivers the transcript
         // raises its own, and it is the side that knows whether the text actually landed —
         // raising one here too meant the user heard the delivery announced twice, and left

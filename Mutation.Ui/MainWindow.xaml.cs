@@ -2486,10 +2486,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
 			FastModeFallback? fastModeFallback = null;
+			bool cutShort = false;
 			var requestOptions = new LlmRequestOptions
 			{
 				FastMode = prompt.FastMode,
 				OnFastModeFallback = f => fastModeFallback = f,
+				OnCutShort = () => cutShort = true,
 			};
 			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions, run.Token);
 
@@ -2508,11 +2510,17 @@ public sealed partial class MainWindow : Window, IDisposable
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
 
+			// A cut-short answer is said every time, unlike the once-per-session Fast mode
+			// notice: it is about this text, which is now missing its end.
 			ShowStatus("Processing",
 				FastModeMessages.AppendTo(
-					plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
+					CutShortMessages.AppendTo(
+						plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
+						cutShort),
 					fastModeNotice),
-				plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+				!plan.Succeeded ? InfoBarSeverity.Error
+					: cutShort ? InfoBarSeverity.Warning
+					: InfoBarSeverity.Success);
         }
         catch (OperationCanceledException) when (_isClosing || _shutdownCts.IsCancellationRequested)
         {
@@ -2764,11 +2772,22 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// superseded — and folding it in rather than adding a second announcement is what
 	/// keeps the confirmation that the text landed.
 	/// </param>
+	/// <param name="llmCutShort">
+	/// Set when the model's answer stopped at its length limit. Folded in for the same
+	/// reason as <paramref name="fastModeNotice"/>, and lowers a success to a warning.
+	/// </param>
+	/// <param name="llmRefused">
+	/// Set when the model declined and the rules-formatted transcript was delivered instead.
+	/// The refusal itself is already in <paramref name="successMessage"/>; this lowers a
+	/// success to a warning.
+	/// </param>
 	private async void FinalizeTranscript(
 		string rawText,
 		string successMessage,
 		string? formattedText = null,
-		FastModeFallbackReason? fastModeNotice = null)
+		FastModeFallbackReason? fastModeNotice = null,
+		bool llmCutShort = false,
+		bool llmRefused = false)
 	{
 		// The restoration below is what gives the user their transcript box back. It ran
 		// last, unguarded, so any throw on the delivery path — a beep, an automation peer
@@ -2798,8 +2817,12 @@ public sealed partial class MainWindow : Window, IDisposable
 					$"Transcript delivered: {outcome}; clipboard {(copied ? "set" : "not set")}; status next.");
 
 				ShowStatus("Speech to Text",
-					FastModeMessages.AppendTo(plan.FailureMessage ?? successMessage, fastModeNotice),
-					plan.Succeeded ? InfoBarSeverity.Success : InfoBarSeverity.Error);
+					FastModeMessages.AppendTo(
+						CutShortMessages.AppendTo(plan.FailureMessage ?? successMessage, llmCutShort),
+						fastModeNotice),
+					!plan.Succeeded ? InfoBarSeverity.Error
+						: llmCutShort || llmRefused ? InfoBarSeverity.Warning
+						: InfoBarSeverity.Success);
 			},
 			onFailure: ex =>
 			{
@@ -2863,9 +2886,13 @@ public sealed partial class MainWindow : Window, IDisposable
                 // earlier is superseded by it and heard by nobody.
                 result.LlmCancelled
                     ? CancellationMessages.LlmCancelledThen("Transcript ready.")
-                    : "Transcript ready.",
+                    : result.LlmRefused
+                        ? LlmRefusalMessages.RefusedThen("Transcript ready.")
+                        : "Transcript ready.",
                 result.FormattedText,
-                result.FastModeNotice);
+                result.FastModeNotice,
+                result.LlmCutShort,
+                result.LlmRefused);
         });
     }
 
