@@ -32,6 +32,24 @@ public static class ReasoningLevelCatalog
 		provider == LlmProvider.Anthropic ? AnthropicLevels : OpenAiLevels;
 
 	/// <summary>
+	/// The ticked levels that the service accepts, lightest first, each once. Levels
+	/// from the other service's list (a model moved to the other service, or a
+	/// hand-edited file) are left out, because the service would refuse them.
+	/// </summary>
+	/// <param name="provider">The model's service, which fixes the full list.</param>
+	/// <param name="ticked">The ticked levels, in any order. Null counts as none.</param>
+	public static IReadOnlyList<ReasoningLevel> InServiceOrder(
+		LlmProvider provider,
+		IEnumerable<ReasoningLevel>? ticked)
+	{
+		if (ticked is null)
+			return Array.Empty<ReasoningLevel>();
+
+		var tickedSet = new HashSet<ReasoningLevel>(ticked);
+		return FullList(provider).Where(tickedSet.Contains).ToList();
+	}
+
+	/// <summary>
 	/// True for the levels that mean "do not reason" (Anthropic Off, OpenAI None).
 	/// The fallback skips them: a prompt that asked for some reasoning should get the
 	/// lightest real reasoning the model allows, not none at all.

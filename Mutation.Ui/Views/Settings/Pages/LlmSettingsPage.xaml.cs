@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CognitiveSupport;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Mutation.Ui.Views.SettingsUi.Controls;
 
 namespace Mutation.Ui.Views.SettingsUi.Pages;
 
@@ -47,6 +49,32 @@ public sealed partial class LlmSettingsPage : UserControl
 		if (sender is not Button { Tag: LlmModelEntry entry }) return;
 		_settings.LlmSettings?.Models.Remove(entry.Model);
 		ModelEntries.Remove(entry);
+	}
+
+	// Opens the picker for one model. Focus goes to its first check box on open and back
+	// to this button on close, whichever way it closes: OK, Cancel, Escape, or a click
+	// outside. Only OK saves; every other way out leaves the levels as they were.
+	private void ModelReasoningLevels_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is not Button { Tag: LlmModelEntry entry } button) return;
+
+		var picker = new ReasoningLevelsPicker(entry.ReasoningLevelsHeading, entry.GetReasoningLevelChoices());
+		var flyout = new Flyout
+		{
+			Content = picker,
+			Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft,
+		};
+
+		picker.Accepted += (_, levels) =>
+		{
+			entry.SetReasoningLevels(levels);
+			flyout.Hide();
+		};
+		picker.Cancelled += (_, _) => flyout.Hide();
+		flyout.Opened += (_, _) => picker.FocusFirstLevel();
+		flyout.Closed += (_, _) => button.Focus(FocusState.Programmatic);
+
+		flyout.ShowAt(button);
 	}
 
 	private void NbTimeout_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
