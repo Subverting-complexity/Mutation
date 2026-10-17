@@ -36,7 +36,7 @@ history the built-in `/cost` (current session only) does not show.
 `npx ccusage blocks` shows your current 5-hour billing window and a
 prediction of when you will hit the rate limit.
 **The workflow uses it:** diagnostic — run it yourself to check spend or
-pace a long autonomous run against the ~100k-per-session budget. No phase
+pace a long autonomous run against the ~300k-per-session budget. No phase
 calls it automatically.
 
 ## ecc-agentshield — Claude Code config security scanner
