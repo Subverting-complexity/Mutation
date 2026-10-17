@@ -490,6 +490,26 @@ different reasons, and each needs a different response:
 different for each. You can also turn Fast mode off for that prompt in the prompt
 editor, which stops the notice appearing every time.
 
+### The AI's answer was cut short
+
+**What's happening.** Each AI answer has a length limit. When the answer reaches it,
+Mutation still gives you the text that arrived, and tells you "The AI's answer was cut
+short because it reached its length limit, so the end of the text is missing." The
+message comes as a warning instead of the usual success.
+
+**What to do.** Check the end of the text before you use it. Long pieces of text are
+the usual cause, so try the prompt on a shorter part at a time.
+
+### The AI model declined to answer
+
+**What's happening.** Sometimes the AI model refuses a request. Mutation does not paste
+an empty answer over your text. It tells you "The AI model declined to answer this
+request, so it returned no text." If this happens while you dictate, you still get your
+transcript, with only the basic formatting rules applied.
+
+**What to do.** Try rewording the prompt, or choose a different model for that prompt
+in the prompt editor.
+
 ### The wrong microphone is being used, or the mute didn't take
 
 **What's happening.** Mutation's mute shortcut mutes every microphone on the PC, not

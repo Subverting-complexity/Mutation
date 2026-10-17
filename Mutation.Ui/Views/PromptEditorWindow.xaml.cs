@@ -256,10 +256,12 @@ public sealed partial class PromptEditorWindow : Window
                     // mode fallback is reported in the result they already opened rather
                     // than through the once-per-session announcement channel.
                     FastModeFallback? fallback = null;
+                    bool cutShort = false;
                     var requestOptions = new LlmRequestOptions
                     {
                         FastMode = ChkFastMode.IsChecked ?? false,
                         OnFastModeFallback = f => fallback = f,
+                        OnCutShort = () => cutShort = true,
                     };
                     // Linked to the window's shutdown token, so closing the *main* window
                     // abandons a test run too — this editor's own Closed handler only
@@ -272,9 +274,15 @@ public sealed partial class PromptEditorWindow : Window
                     // WinUI 3 MessageDialog or ContentDialog requires XamlRoot.
                     // This is a Window, so we have a root.
 
-                    string body = fallback is null
-                        ? result
-                        : $"{FastModeMessages.Describe(fallback.Reason)}{Environment.NewLine}{Environment.NewLine}{result}";
+                    // Notices go above the result, so a screen reader reaches them before
+                    // the text they qualify.
+                    var notices = new List<string>();
+                    if (cutShort)
+                        notices.Add(CutShortMessages.Notice);
+                    if (fallback is not null)
+                        notices.Add(FastModeMessages.Describe(fallback.Reason));
+                    notices.Add(result);
+                    string body = string.Join(Environment.NewLine + Environment.NewLine, notices);
 
                     var dialog = new ContentDialog
                     {

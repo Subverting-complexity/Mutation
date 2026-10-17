@@ -24,4 +24,11 @@ public sealed class LlmRequestOptions
 	/// service never blocks, prompts, or rewrites the user's setting.
 	/// </summary>
 	public Action<FastModeFallback>? OnFastModeFallback { get; init; }
+
+	/// <summary>
+	/// Invoked when the answer stopped at the model's length limit. The text that did
+	/// arrive is still returned; the caller tells the user the end is missing, using
+	/// <see cref="CutShortMessages"/>.
+	/// </summary>
+	public Action? OnCutShort { get; init; }
 }

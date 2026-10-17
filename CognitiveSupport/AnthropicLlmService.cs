@@ -9,6 +9,8 @@ namespace CognitiveSupport;
 public class AnthropicLlmService : ILlmService
 {
 	private const string ApiUrl = "https://api.anthropic.com/v1/messages";
+	// Still the current Messages API version: newer features such as thinking and effort
+	// are switched on through request fields and beta headers, not a new version date.
 	private const string AnthropicVersion = "2023-06-01";
 	private const int DefaultMaxTokens = 4096;
 
@@ -90,7 +92,31 @@ public class AnthropicLlmService : ILlmService
 			? await SendWithFastModeFallbackAsync(request, options, cancellationToken).ConfigureAwait(false)
 			: await SendAsync(request, fastMode: false, cancellationToken).ConfigureAwait(false);
 
-		return ExtractText(responseBody);
+		return ReadAnswer(responseBody, options);
+	}
+
+	/// <summary>
+	/// Turns a successful reply into the text handed back to the caller. A refusal is a
+	/// failure, never an empty success; an answer that hit the length limit is returned,
+	/// and the caller is told so it can say the end is missing.
+	/// </summary>
+	private static string ReadAnswer(string responseBody, LlmRequestOptions options)
+	{
+		var reply = AnthropicReply.Parse(responseBody);
+
+		if (reply.WasRefused)
+		{
+			ErrorLogger.LogInfo("LLM", $"Anthropic declined the request (stop_reason=refusal, {reply.Text.Length} characters of text discarded).");
+			throw new LlmRefusalException();
+		}
+
+		if (reply.WasCutShort)
+		{
+			ErrorLogger.LogInfo("LLM", $"Anthropic answer stopped at max_tokens ({DefaultMaxTokens}); returning the {reply.Text.Length} characters that arrived.");
+			options.OnCutShort?.Invoke();
+		}
+
+		return reply.Text;
 	}
 
 	/// <summary>
@@ -230,21 +256,6 @@ public class AnthropicLlmService : ILlmService
 			},
 			JsonOptions);
 
-	private static string ExtractText(string responseBody)
-	{
-		var response = JsonSerializer.Deserialize<AnthropicResponse>(responseBody);
-		if (response?.Content != null && response.Content.Length > 0)
-		{
-			var textBlock = response.Content.FirstOrDefault(c => c.Type == "text");
-			if (textBlock != null)
-			{
-				return textBlock.Text ?? string.Empty;
-			}
-		}
-
-		return string.Empty;
-	}
-
 	// --- Internal DTOs for Anthropic API serialization ---
 
 	private class AnthropicRequest
@@ -262,17 +273,6 @@ public class AnthropicLlmService : ILlmService
 	{
 		[JsonPropertyName("role")] public string Role { get; set; } = "";
 		[JsonPropertyName("content")] public string Content { get; set; } = "";
-	}
-
-	private class AnthropicResponse
-	{
-		[JsonPropertyName("content")] public AnthropicContentBlock[] Content { get; set; } = [];
-	}
-
-	private class AnthropicContentBlock
-	{
-		[JsonPropertyName("type")] public string Type { get; set; } = "";
-		[JsonPropertyName("text")] public string? Text { get; set; }
 	}
 
 	private class AnthropicErrorResponse
