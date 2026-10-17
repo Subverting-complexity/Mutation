@@ -179,8 +179,11 @@ public class AnthropicReplyTests : IDisposable
 		Assert.Single(handler.Requests);
 	}
 
+	// With no reasoning level the body carries no thinking, effort or temperature field.
+	// Its answer limit is the lightest row of the shared limits table (ReasoningLimits),
+	// which raised it from the 4,096 tokens sent before reasoning levels existed.
 	[Fact]
-	public async Task Request_IsSentExactlyAsBefore()
+	public async Task Request_WithNoReasoningLevel_CarriesNoReasoningFields()
 	{
 		var handler = new FakeHttpMessageHandler().Respond(HttpStatusCode.OK,
 			"""{"content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}""");
@@ -189,7 +192,7 @@ public class AnthropicReplyTests : IDisposable
 
 		var request = Assert.Single(handler.Requests);
 		Assert.Equal(
-			"""{"model":"claude-opus-5","max_tokens":4096,"system":"be brief","messages":[{"role":"user","content":"hello"}]}""",
+			"""{"model":"claude-opus-5","max_tokens":8000,"system":"be brief","messages":[{"role":"user","content":"hello"}]}""",
 			request.Body);
 		Assert.Equal("2023-06-01", request.Header("anthropic-version"));
 		Assert.False(request.HasHeader("anthropic-beta"));

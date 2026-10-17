@@ -31,4 +31,20 @@ public sealed class LlmRequestOptions
 	/// <see cref="CutShortMessages"/>.
 	/// </summary>
 	public Action? OnCutShort { get; init; }
+
+	/// <summary>
+	/// The reasoning level the prompt asks for. The service settles it against the levels
+	/// ticked for the model with <see cref="ReasoningLevelResolver"/>, so a caller may pass
+	/// the prompt's stored level as it is. Null sends no level, so the request carries no
+	/// reasoning fields, as before reasoning levels existed.
+	/// </summary>
+	public ReasoningLevel? ReasoningLevel { get; init; }
+
+	/// <summary>
+	/// Invoked when the model refused the reasoning level and the request was retried
+	/// without one. It receives the level that was refused, and runs only after the retry
+	/// succeeded. The caller words it with <see cref="ReasoningMessages.Fallback"/>; the
+	/// user's saved level is never changed.
+	/// </summary>
+	public Action<ReasoningLevel>? OnReasoningFallback { get; init; }
 }

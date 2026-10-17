@@ -12,7 +12,6 @@ public class AnthropicLlmService : ILlmService
 	// Still the current Messages API version: newer features such as thinking and effort
 	// are switched on through request fields and beta headers, not a new version date.
 	private const string AnthropicVersion = "2023-06-01";
-	private const int DefaultMaxTokens = 4096;
 
 	/// <summary>Opt-in header for the Fast mode research preview.</summary>
 	internal const string FastModeBeta = "fast-mode-2026-02-01";
@@ -25,13 +24,20 @@ public class AnthropicLlmService : ILlmService
 	private readonly Dictionary<string, LlmModelConfig> _modelConfigs;
 	private readonly int _timeoutSeconds;
 	private readonly ResiliencePipeline _retryPipeline;
+	private readonly TimeProvider _timeProvider;
 
+	/// <param name="timeProvider">
+	/// Test seam only; null in production. Drives both the retry backoff and each
+	/// attempt's deadline, so a test can read back the waits that were armed instead of
+	/// sitting through them.
+	/// </param>
 	public AnthropicLlmService(
 		string apiKey,
 		IEnumerable<LlmModelConfig> models,
 		HttpClient httpClient,
 		int timeoutSeconds = 60,
-		int retryCount = 3)
+		int retryCount = 3,
+		TimeProvider? timeProvider = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 
@@ -44,7 +50,8 @@ public class AnthropicLlmService : ILlmService
 		// CreateChatCompletion is the sole timeout authority.
 		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
-		_retryPipeline = TransientRetry.Pipeline(retryCount, TransientRetry.Transient());
+		_timeProvider = timeProvider ?? TimeProvider.System;
+		_retryPipeline = TransientRetry.Pipeline(retryCount, TransientRetry.Transient(), timeProvider);
 		_modelConfigs = modelList.ToDictionary(m => m.Name, m => m, LlmModelIndex.NameComparer);
 	}
 
@@ -79,28 +86,43 @@ public class AnthropicLlmService : ILlmService
 		if (conversationMessages.Length == 0)
 			throw new ArgumentException("At least one non-system message is required for Anthropic API calls.", nameof(messages));
 
+		// The service settles the prompt's level against the levels ticked for this model,
+		// so every caller gets the same answer without resolving it first.
+		ReasoningLevel? level = options.ReasoningLevel is { } asked
+			? ReasoningLevelResolver.Resolve(config, asked)
+			: null;
+
 		var request = new AnthropicRequest
 		{
 			Model = llmModelName,
-			MaxTokens = DefaultMaxTokens,
-			Temperature = config.CustomTemperature.HasValue ? (double?)config.CustomTemperature.Value : null,
 			System = systemMessage,
 			Messages = conversationMessages
 		};
 
-		string responseBody = options.FastMode
-			? await SendWithFastModeFallbackAsync(request, options, cancellationToken).ConfigureAwait(false)
-			: await SendAsync(request, fastMode: false, cancellationToken).ConfigureAwait(false);
+		var (responseBody, sent) = await SendWithFallbacksAsync(
+			request,
+			config,
+			new RequestShape(level, options.FastMode),
+			options,
+			cancellationToken).ConfigureAwait(false);
 
-		return ReadAnswer(responseBody, options);
+		return ReadAnswer(responseBody, options, ReasoningLimits.For(sent.Level).AnthropicMaxTokens);
 	}
+
+	/// <summary>
+	/// The two settings a fallback can drop from a request: the reasoning level and Fast
+	/// mode. Everything else about the request stays the same on every send.
+	/// </summary>
+	/// <param name="Level">The resolved level to send, or null to send none.</param>
+	/// <param name="FastMode">Whether to ask for Fast mode.</param>
+	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode);
 
 	/// <summary>
 	/// Turns a successful reply into the text handed back to the caller. A refusal is a
 	/// failure, never an empty success; an answer that hit the length limit is returned,
 	/// and the caller is told so it can say the end is missing.
 	/// </summary>
-	private static string ReadAnswer(string responseBody, LlmRequestOptions options)
+	private static string ReadAnswer(string responseBody, LlmRequestOptions options, int maxTokens)
 	{
 		var reply = AnthropicReply.Parse(responseBody);
 
@@ -112,7 +134,7 @@ public class AnthropicLlmService : ILlmService
 
 		if (reply.WasCutShort)
 		{
-			ErrorLogger.LogInfo("LLM", $"Anthropic answer stopped at max_tokens ({DefaultMaxTokens}); returning the {reply.Text.Length} characters that arrived.");
+			ErrorLogger.LogInfo("LLM", $"Anthropic answer stopped at max_tokens ({maxTokens}); returning the {reply.Text.Length} characters that arrived.");
 			options.OnCutShort?.Invoke();
 		}
 
@@ -120,48 +142,95 @@ public class AnthropicLlmService : ILlmService
 	}
 
 	/// <summary>
-	/// Runs the request in Fast mode and, if Fast mode itself is what failed, retries the
-	/// identical request once at standard speed rather than losing the user's text. The
-	/// fallback direction is always cheaper, never more expensive, so it can never produce
-	/// a billing surprise — which is what makes recovering without a prompt safe here.
-	/// The user's Fast mode setting is never rewritten; access may be granted later.
+	/// Sends the request and, if the reasoning level or Fast mode is what the service
+	/// refused, sends it again without that one setting rather than losing the user's text.
+	/// Each setting can be dropped once, so a request that asked for both is sent at most
+	/// three times. Both fallbacks go in the cheaper direction (no thinking, standard
+	/// speed), so recovering without asking can never surprise anyone's bill. The user's
+	/// saved settings are never changed: access may be granted, or the model changed, later.
+	/// <para>
+	/// The callbacks run only after a send succeeded, so the user is never told "it ran
+	/// without a reasoning level" about a request that then failed outright.
+	/// </para>
 	/// </summary>
-	private async Task<string> SendWithFastModeFallbackAsync(
+	private async Task<(string Body, RequestShape Sent)> SendWithFallbacksAsync(
 		AnthropicRequest request,
+		LlmModelConfig config,
+		RequestShape shape,
 		LlmRequestOptions options,
 		CancellationToken cancellationToken)
 	{
-		FastModeFallback fallback;
-		try
-		{
-			return await SendAsync(request, fastMode: true, cancellationToken).ConfigureAwait(false);
-		}
-		catch (NonTransientLlmException ex)
-		{
-			var reason = FastModeFailure.Classify(ex.StatusCode, ex.Message);
-			if (reason is null)
-				throw; // Nothing to do with Fast mode; report it as-is.
-			fallback = new FastModeFallback(reason.Value, ex.Message);
-		}
-		catch (HttpRequestException ex) when (FastModeFailure.IsCapacity((int?)ex.StatusCode))
-		{
-			// Reached only once the retry policy has exhausted its attempts on Fast mode's
-			// dedicated 429 rate limit or a 529 capacity rejection.
-			fallback = new FastModeFallback(FastModeFallbackReason.Busy, ex.Message);
-		}
+		FastModeFallback? fastModeFallback = null;
+		ReasoningLevel? refusedLevel = null;
 
-		ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fallback));
-		string body = await SendAsync(request, fastMode: false, cancellationToken).ConfigureAwait(false);
+		while (true)
+		{
+			try
+			{
+				string body = await SendAsync(request, config, shape, cancellationToken).ConfigureAwait(false);
 
-		// Announced only after the standard-speed retry succeeded, so the user is never
-		// told "it ran at standard speed" for a request that then failed outright.
-		options.OnFastModeFallback?.Invoke(fallback);
-		return body;
+				if (fastModeFallback is not null)
+					options.OnFastModeFallback?.Invoke(fastModeFallback);
+				if (refusedLevel is { } refused)
+					options.OnReasoningFallback?.Invoke(refused);
+
+				return (body, shape);
+			}
+			catch (NonTransientLlmException ex)
+			{
+				bool reasoningCause = shape.Level is not null
+					&& ReasoningFailure.IsCause(ex.StatusCode, ex.Message);
+				FastModeFallbackReason? fastModeCause = shape.FastMode
+					? FastModeFailure.Classify(ex.StatusCode, ex.Message)
+					: null;
+
+				// With both settings on, a message that names Fast mode is taken at its word
+				// even if it also names thinking; otherwise the reasoning level is the one
+				// dropped. A 403 that names neither is left to the Fast mode rule, which reads
+				// it as the Fast mode entitlement gate.
+				bool dropReasoning = reasoningCause
+					&& !(fastModeCause is not null && FastModeFailure.MentionsFastMode(ex.Message));
+
+				if (dropReasoning)
+				{
+					refusedLevel = shape.Level;
+					ErrorLogger.LogInfo("LLM", $"{ReasoningMessages.Fallback(config.Name, shape.Level!.Value)} Anthropic said: {ex.Message}");
+					shape = shape with { Level = null };
+				}
+				else if (fastModeCause is { } reason)
+				{
+					fastModeFallback = new FastModeFallback(reason, ex.Message);
+					ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fastModeFallback));
+					shape = shape with { FastMode = false };
+				}
+				else
+				{
+					throw; // Neither setting caused it; report it as it is.
+				}
+			}
+			catch (HttpRequestException ex) when (shape.FastMode && FastModeFailure.IsCapacity((int?)ex.StatusCode))
+			{
+				// Reached only once the retry policy has exhausted its attempts on Fast mode's
+				// dedicated 429 rate limit or a 529 capacity rejection.
+				fastModeFallback = new FastModeFallback(FastModeFallbackReason.Busy, ex.Message);
+				ErrorLogger.LogInfo("LLM", FastModeMessages.DescribeForLog(fastModeFallback));
+				shape = shape with { FastMode = false };
+			}
+		}
 	}
 
-	private async Task<string> SendAsync(AnthropicRequest request, bool fastMode, CancellationToken cancellationToken)
+	private async Task<string> SendAsync(
+		AnthropicRequest request,
+		LlmModelConfig config,
+		RequestShape shape,
+		CancellationToken cancellationToken)
 	{
-		string jsonBody = Serialize(request, fastMode);
+		string jsonBody = Serialize(request, config, shape);
+		bool fastMode = shape.FastMode;
+
+		// Heavier reasoning takes longer, so each try may wait a multiple of the user's
+		// wait time; the multiple comes from the one limits table both services share.
+		TimeSpan waitPerTry = ReasoningLimits.For(shape.Level).WaitPerTry(TimeSpan.FromSeconds(_timeoutSeconds));
 
 		// The retry shape lives in TransientRetry.cs, shared with the other four remote
 		// services, so the cold-start path (slow DNS/TLS/JIT warmup on the first call
@@ -182,8 +251,7 @@ public class AnthropicLlmService : ILlmService
 		// being re-read as one more transient blip (issue #256).
 		string responseBody = await _retryPipeline.ExecuteWithAttemptAsync(async (attempt, overallToken) =>
 		{
-			int timeout = _timeoutSeconds * attempt;
-			using var thisTryCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
+			using var thisTryCts = new CancellationTokenSource(waitPerTry * attempt, _timeProvider);
 			using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(overallToken, thisTryCts.Token);
 
 			// HttpRequestMessage is single-use; rebuild it for each attempt.
@@ -237,24 +305,35 @@ public class AnthropicLlmService : ILlmService
 	};
 
 	/// <summary>
-	/// Renders the body for one attempt. Builds a fresh DTO rather than setting
-	/// <c>Speed</c> on the caller's request, so the fast attempt and the standard-speed
-	/// retry can never observe each other's value. WhenWritingNull drops <c>speed</c>
-	/// entirely when Fast mode is off, leaving a standard request byte-for-byte what it
-	/// was before this feature existed.
+	/// Renders the body for one send. Builds a fresh DTO rather than changing the caller's
+	/// request, so a send and the fallback after it can never see each other's values.
+	/// WhenWritingNull drops every field a setting does not use, so a request with no
+	/// level and Fast mode off carries no reasoning or speed fields at all.
 	/// </summary>
-	private static string Serialize(AnthropicRequest request, bool fastMode) =>
-		JsonSerializer.Serialize(
+	private static string Serialize(AnthropicRequest request, LlmModelConfig config, RequestShape shape)
+	{
+		ReasoningLevel? level = shape.Level;
+		string? effort = AnthropicReasoningFields.Effort(level);
+
+		return JsonSerializer.Serialize(
 			new AnthropicRequest
 			{
 				Model = request.Model,
-				MaxTokens = request.MaxTokens,
-				Temperature = request.Temperature,
+				MaxTokens = ReasoningLimits.For(level).AnthropicMaxTokens,
+				// The service refuses a custom temperature while the model is thinking.
+				Temperature = AnthropicReasoningFields.SendsTemperature(level) && config.CustomTemperature.HasValue
+					? (double)config.CustomTemperature.Value
+					: null,
+				Thinking = AnthropicReasoningFields.ThinkingType(level) is { } type
+					? new AnthropicThinking { Type = type }
+					: null,
+				OutputConfig = effort is null ? null : new AnthropicOutputConfig { Effort = effort },
 				System = request.System,
 				Messages = request.Messages,
-				Speed = fastMode ? FastSpeed : null,
+				Speed = shape.FastMode ? FastSpeed : null,
 			},
 			JsonOptions);
+	}
 
 	// --- Internal DTOs for Anthropic API serialization ---
 
@@ -263,10 +342,24 @@ public class AnthropicLlmService : ILlmService
 		[JsonPropertyName("model")] public string Model { get; set; } = "";
 		[JsonPropertyName("max_tokens")] public int MaxTokens { get; set; }
 		[JsonPropertyName("temperature")] public double? Temperature { get; set; }
+		/// <summary>Null (and therefore omitted) when no reasoning level is sent.</summary>
+		[JsonPropertyName("thinking")] public AnthropicThinking? Thinking { get; set; }
+		/// <summary>Null (and therefore omitted) unless a level other than Off is sent.</summary>
+		[JsonPropertyName("output_config")] public AnthropicOutputConfig? OutputConfig { get; set; }
 		[JsonPropertyName("system")] public string? System { get; set; }
 		[JsonPropertyName("messages")] public AnthropicMessage[] Messages { get; set; } = [];
 		/// <summary>Null (and therefore omitted) unless Fast mode is on for this request.</summary>
 		[JsonPropertyName("speed")] public string? Speed { get; set; }
+	}
+
+	private class AnthropicThinking
+	{
+		[JsonPropertyName("type")] public string Type { get; set; } = "";
+	}
+
+	private class AnthropicOutputConfig
+	{
+		[JsonPropertyName("effort")] public string Effort { get; set; } = "";
 	}
 
 	private class AnthropicMessage
