@@ -63,6 +63,18 @@
 	</ItemGroup>
 
 	<!--
+		Pinned transitively, not referenced directly. PDFsharp 6.2.3 asks for 8.0.1, which
+		NuGet audit flags with two denial-of-service advisories (GHSA-846f-f764-76mx, high,
+		and GHSA-2fmv-rv2c-59x7, moderate). Warnings are errors here, so restore stopped and
+		no Release build could pass (issue #423). 8.0.2 is the first patched release on the
+		same major line PDFsharp declares, so this is a patch bump and nothing more. Drop the
+		pin once PDFsharp itself asks for a patched version.
+	-->
+	<ItemGroup>
+		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+	</ItemGroup>
+
+	<!--
 		Pinned transitively, not referenced directly. Deepgram pulls in the 8.0.x
 		Microsoft.Extensions.Http stack, which on a net10.0 target left the solution loading
 		two generations of the same libraries side by side. Holding the whole family on one

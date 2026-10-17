@@ -70,10 +70,13 @@ public class PostOperationHotkeyCoverageTests
 
 	/// <summary>
 	/// Where a transcript run is decided finished. All three delivery sites — dictation, an
-	/// LLM prompt run, and formatting — go through the planner.
+	/// LLM prompt run, and formatting — build their confirmation through one factory, and the
+	/// confirmation sends the shortcut itself (issue #411). The declaration is excluded.
 	/// </summary>
-	private static List<int> TranscriptPlans(string[] source) =>
-		LinesCalling(source, line => line.Contains("TranscriptCompletionPlanner.Plan(", StringComparison.Ordinal));
+	private static List<int> TranscriptConfirmations(string[] source) =>
+		LinesCalling(source, line =>
+			line.Contains("CreateTranscriptConfirmation(", StringComparison.Ordinal) &&
+			!line.Contains("TranscriptConfirmation CreateTranscriptConfirmation(", StringComparison.Ordinal));
 
 	private static bool SendsWithin(string[] source, int from, int stopBefore, string setting)
 	{
@@ -172,42 +175,48 @@ public class PostOperationHotkeyCoverageTests
 	public void Every_transcript_delivery_is_followed_by_the_configured_shortcut()
 	{
 		var source = MainWindowSource();
-		var plans = TranscriptPlans(source);
 
-		Assert.NotEmpty(plans);
+		// Dictation, an LLM prompt run, and formatting. Not an exact count, for the same
+		// reason as the OCR test: this only catches the search matching nothing after a rename.
+		Assert.NotEmpty(TranscriptConfirmations(source));
 
-		var unsent = Unsent(source, plans, TranscriptionSetting);
+		// Every site goes through the factory, so the factory is where the shortcut is wired.
+		// A second construction site would be free to leave the shortcut out.
+		var constructions = LinesCalling(source, line => line.Contains("new TranscriptConfirmation(", StringComparison.Ordinal));
+		int factory = Assert.Single(constructions);
 
-		Assert.True(unsent.Count == 0,
-			"A transcript is delivered with no configured shortcut sent after it:\n" +
-			string.Join("\n", unsent));
+		var body = string.Join(' ', source.Skip(Math.Max(0, factory - 5)).Take(10));
+		Assert.True(
+			body.Contains(TranscriptionSetting, StringComparison.Ordinal) && body.Contains(Send, StringComparison.Ordinal),
+			$"MainWindow.xaml.cs:{factory + 1}: the transcript confirmation is built without sending " +
+			$"the configured shortcut ({TranscriptionSetting}).");
 	}
 
 	[Fact]
-	public void The_shortcut_is_sent_before_the_beep_and_the_status_that_can_throw()
+	public void Every_transcript_site_confirms_before_the_status_that_can_throw()
 	{
 		var source = MainWindowSource();
-		var plans = TranscriptPlans(source);
+		var sites = TranscriptConfirmations(source);
 
-		Assert.NotEmpty(plans);
+		Assert.NotEmpty(sites);
 
-		// Ordering, not presence. The send used to be the last statement of each block, after
-		// BeepPlayer.Play and ShowStatus — and ShowStatus builds an automation peer and starts
-		// a timer, the operation issue #234 was filed about throwing. A throw there took the
-		// shortcut with it, after the text had already reached the clipboard.
-		foreach (int plan in plans)
+		// Confirm sends the shortcut and plays the beep. ShowStatus builds an automation peer
+		// and starts a timer, the operation issue #234 was filed about throwing; a throw there
+		// before Confirm took the shortcut with it, after the text had already reached the
+		// clipboard (issue #335). The order inside Confirm, shortcut before beep, is pinned by
+		// running it in TranscriptConfirmationTests.
+		foreach (int site in sites)
 		{
-			var window = Enumerable.Range(plan, Math.Min(WindowLines, source.Length - plan)).ToList();
-			int send = window.FirstOrDefault(i => source[i].Contains(Send, StringComparison.Ordinal), -1);
-			int beep = window.FirstOrDefault(i => source[i].Contains("BeepPlayer.Play(plan.Beep)", StringComparison.Ordinal), -1);
+			var window = Enumerable.Range(site, Math.Min(WindowLines, source.Length - site)).ToList();
+			int confirm = window.FirstOrDefault(i => source[i].Contains(".Confirm(", StringComparison.Ordinal), -1);
+			int status = window.FirstOrDefault(i => source[i].Contains("ShowStatus(", StringComparison.Ordinal), -1);
 
-			Assert.True(send >= 0 && beep >= 0,
-				$"MainWindow.xaml.cs:{plan + 1}: expected both a send and a beep within " +
-				$"{WindowLines} lines of the plan, found send={send + 1} beep={beep + 1}.");
-
-			Assert.True(send < beep,
-				$"MainWindow.xaml.cs:{plan + 1}: the shortcut is sent after the beep and status, " +
-				"so a throw from either loses it.");
+			Assert.True(confirm >= 0,
+				$"MainWindow.xaml.cs:{site + 1}: no Confirm within {WindowLines} lines of the confirmation, " +
+				"so the shortcut and the beep may never go.");
+			Assert.True(status < 0 || confirm < status,
+				$"MainWindow.xaml.cs:{site + 1}: the status is shown before Confirm, " +
+				"so a throw from it loses the shortcut.");
 		}
 	}
 }

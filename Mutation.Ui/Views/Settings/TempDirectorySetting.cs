@@ -47,6 +47,16 @@ public static class TempDirectorySetting
 		if (trimmed.Length == 0)
 			return Repaired("The temp directory cannot be blank.");
 
+		// Checked on the text as typed, before expansion. Windows stops expanding at a null
+		// character, so "C:\Record" + NUL + "ings" expanded to "C:\Record"; the difference
+		// made it look like a variable, and the typed text, NUL included, was stored as is.
+		// Path.GetFullPath does not refuse these characters either, so nothing else would.
+		if (trimmed.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+		{
+			return Repaired(
+				$"'{trimmed}' is not a valid folder path. It contains a character Windows does not allow in a folder name.");
+		}
+
 		string expanded = FolderPathVariables.Expand(trimmed);
 
 		// A leftover %NAME% is taken as a misspelt variable when the path could not be used
@@ -68,8 +78,7 @@ public static class TempDirectorySetting
 
 		try
 		{
-			// Resolves any '..' segments so what is stored is what is used, and
-			// throws on the characters Windows will not accept in a path.
+			// Resolves any '..' segments so what is stored is what is used.
 			string resolved = Path.GetFullPath(expanded);
 			return new TempDirectoryValidation(
 				FolderPathVariables.UsesVariables(trimmed) ? trimmed : resolved,
