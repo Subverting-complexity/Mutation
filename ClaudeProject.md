@@ -147,7 +147,7 @@ Skill the execute flow offers when a `needs-refinement` story is next:
 Up to ~300k tokens per session. A session may run stories one after
 another, each start-to-finish (PR, independent review, fixes, merge).
 Do not start another story when fewer than ~80k tokens remain, and never
-stop part way through one. Size each story to fit in ~100k tokens.
+stop part way through one. A single story may use up to ~300k tokens.
 Commit and push early so work survives an unexpected end.
 
 ## Story Template
