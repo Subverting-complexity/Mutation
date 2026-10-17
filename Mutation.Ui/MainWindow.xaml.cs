@@ -40,7 +40,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	private readonly OcrManager _ocrManager;
 	private readonly ISpeechToTextService[] _speechServices;
 	private readonly Mutation.Ui.Core.AudioSessionManager _audioSessionManager;
-	private readonly Mutation.Ui.Services.FastModeNoticeTracker _fastModeNotices;
+	private readonly Mutation.Ui.Services.FallbackNoticeTracker _fallbackNotices;
 	// Runs the mute toggle's COM writes, read-back verification, and any device
 	// re-enumeration off the UI thread so a hotkey press during a device hot-plug
 	// never freezes the UI (and the screen reader).
@@ -200,9 +200,9 @@ public sealed partial class MainWindow : Window, IDisposable
 		Settings settings,
 		Mutation.Ui.Core.AudioSessionManager audioSessionManager,
 		Mutation.Ui.Core.MicrophoneLevelWriteCoordinator micLevelWriteCoordinator,
-		Mutation.Ui.Services.FastModeNoticeTracker fastModeNotices)
+		Mutation.Ui.Services.FallbackNoticeTracker fallbackNotices)
 	{
-		_fastModeNotices = fastModeNotices;
+		_fallbackNotices = fallbackNotices;
 		_clipboard = clipboard;
 		_uiStateManager = uiStateManager;
 		_settingsManager = settingsManager;
@@ -2486,11 +2486,16 @@ public sealed partial class MainWindow : Window, IDisposable
 
 			string modelName = !string.IsNullOrWhiteSpace(prompt.ModelName) ? prompt.ModelName : LlmSettings.DefaultModel;
 			FastModeFallback? fastModeFallback = null;
+			ReasoningLevel? reasoningFallback = null;
 			bool cutShort = false;
 			var requestOptions = new LlmRequestOptions
 			{
 				FastMode = prompt.FastMode,
 				OnFastModeFallback = f => fastModeFallback = f,
+				// The stored level as it is: the service settles it against the levels
+				// ticked for the model.
+				ReasoningLevel = prompt.ReasoningLevel,
+				OnReasoningFallback = level => reasoningFallback = level,
 				OnCutShort = () => cutShort = true,
 			};
 			string processed = await _transcriptFormatter.ProcessWithLlmAsync(raw, prompt.Content, modelName, requestOptions, run.Token);
@@ -2509,15 +2514,18 @@ public sealed partial class MainWindow : Window, IDisposable
 			// this session. Resolved once, outside the branch, so it is spent exactly
 			// once however the delivery turns out.
 			FastModeFallbackReason? fastModeNotice = ClaimFastModeNotice(prompt.Id, fastModeFallback);
+			string? reasoningNotice = _fallbackNotices.ClaimReasoningNotice(prompt.Id, modelName, reasoningFallback);
 
 			// A cut-short answer is said every time, unlike the once-per-session Fast mode
 			// notice: it is about this text, which is now missing its end.
 			ShowStatus("Processing",
-				FastModeMessages.AppendTo(
-					CutShortMessages.AppendTo(
-						plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
-						cutShort),
-					fastModeNotice),
+				ReasoningMessages.AppendTo(
+					FastModeMessages.AppendTo(
+						CutShortMessages.AppendTo(
+							plan.FailureMessage ?? $"Applied prompt '{prompt.Name}' with the language model.",
+							cutShort),
+						fastModeNotice),
+					reasoningNotice),
 				!plan.Succeeded ? InfoBarSeverity.Error
 					: cutShort ? InfoBarSeverity.Warning
 					: InfoBarSeverity.Success);
@@ -2587,7 +2595,7 @@ public sealed partial class MainWindow : Window, IDisposable
 	{
 		if (fallback is null)
 			return null;
-		return _fastModeNotices.ShouldAnnounce(promptId, fallback.Reason)
+		return _fallbackNotices.ShouldAnnounce(promptId, fallback.Reason)
 			? fallback.Reason
 			: null;
 	}
@@ -2781,13 +2789,18 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// The refusal itself is already in <paramref name="successMessage"/>; this lowers a
 	/// success to a warning.
 	/// </param>
+	/// <param name="reasoningNotice">
+	/// The worded reasoning fallback notice, or null. Folded in for the same reason as
+	/// <paramref name="fastModeNotice"/>.
+	/// </param>
 	private async void FinalizeTranscript(
 		string rawText,
 		string successMessage,
 		string? formattedText = null,
 		FastModeFallbackReason? fastModeNotice = null,
 		bool llmCutShort = false,
-		bool llmRefused = false)
+		bool llmRefused = false,
+		string? reasoningNotice = null)
 	{
 		// The restoration below is what gives the user their transcript box back. It ran
 		// last, unguarded, so any throw on the delivery path — a beep, an automation peer
@@ -2817,9 +2830,11 @@ public sealed partial class MainWindow : Window, IDisposable
 					$"Transcript delivered: {outcome}; clipboard {(copied ? "set" : "not set")}; status next.");
 
 				ShowStatus("Speech to Text",
-					FastModeMessages.AppendTo(
-						CutShortMessages.AppendTo(plan.FailureMessage ?? successMessage, llmCutShort),
-						fastModeNotice),
+					ReasoningMessages.AppendTo(
+						FastModeMessages.AppendTo(
+							CutShortMessages.AppendTo(plan.FailureMessage ?? successMessage, llmCutShort),
+							fastModeNotice),
+						reasoningNotice),
 					!plan.Succeeded ? InfoBarSeverity.Error
 						: llmCutShort || llmRefused ? InfoBarSeverity.Warning
 						: InfoBarSeverity.Success);
@@ -2892,7 +2907,8 @@ public sealed partial class MainWindow : Window, IDisposable
                 result.FormattedText,
                 result.FastModeNotice,
                 result.LlmCutShort,
-                result.LlmRefused);
+                result.LlmRefused,
+                result.ReasoningNotice);
         });
     }
 

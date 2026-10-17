@@ -51,12 +51,29 @@ public sealed partial class PromptEditorWindow : Window
     // modal, so nothing else can take a shortcut while it is up.
     private readonly IReadOnlyList<NamedHotkey> _claimedElsewhere;
 
+    // The configured models by name, so the reasoning level list can show the levels ticked
+    // for whichever model is chosen. Ordinal, like the services that look a model up by name.
+    private readonly Dictionary<string, LlmModelConfig> _modelsByName = new(StringComparer.Ordinal);
+
+    // The level the user last chose, or the saved one. Kept apart from what the list shows:
+    // moving to a model without this level ticked changes the list, but moving back to a
+    // model that has it shows it again instead of leaving the stand-in level behind.
+    private ReasoningLevel _wantedLevel;
+
+    // The levels the list shows now, lightest first, in the list's order. Empty when the
+    // chosen model does not reason and the list holds only its "does not reason" item.
+    private IReadOnlyList<ReasoningLevel> _shownLevels = Array.Empty<ReasoningLevel>();
+
+    // Set while the list is refilled, so the selection that refill makes is not taken for
+    // the user's own choice.
+    private bool _refillingReasoningLevels;
+
     // Internal rather than public because of the last argument: the shortcuts already claimed
     // are described with an internal type, and everything that opens this window is in here.
     internal PromptEditorWindow(
         LlmSettings.LlmPrompt? prompt,
         TranscriptFormatter formatter,
-        IReadOnlyList<string> availableModels,
+        IReadOnlyList<LlmModelConfig> availableModels,
         CancellationToken shutdownToken = default,
         IReadOnlyList<NamedHotkey>? claimedElsewhere = null)
     {
@@ -74,14 +91,14 @@ public sealed partial class PromptEditorWindow : Window
         IntPtr hWnd = WindowNative.GetWindowHandle(this);
         WindowId windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
         AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
-        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 540));
+        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 600));
 
         // Center the window
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
         if (displayArea != null)
         {
             var centeredX = (displayArea.WorkArea.Width - 600) / 2;
-            var centeredY = (displayArea.WorkArea.Height - 540) / 2;
+            var centeredY = (displayArea.WorkArea.Height - 600) / 2;
             appWindow.Move(new Windows.Graphics.PointInt32(displayArea.WorkArea.X + centeredX, displayArea.WorkArea.Y + centeredY));
         }
 
@@ -92,7 +109,14 @@ public sealed partial class PromptEditorWindow : Window
             // presenter.IsModal = true; // CRASH FIX: IsModal requires an owner to be set via P/Invoke, which we aren't doing accurately enough. checking IsAlwaysOnTop is sufficient.
         }
 
-        var modelList = (availableModels ?? Array.Empty<string>()).ToList();
+        foreach (var model in availableModels ?? Array.Empty<LlmModelConfig>())
+        {
+            // First one wins, as a duplicate name can only come from a hand-edited file.
+            if (!string.IsNullOrWhiteSpace(model?.Name))
+                _modelsByName.TryAdd(model.Name, model);
+        }
+
+        var modelList = _modelsByName.Keys.ToList();
         if (!modelList.Contains(LlmSettings.DefaultModel))
         {
             modelList.Insert(0, LlmSettings.DefaultModel);
@@ -102,6 +126,7 @@ public sealed partial class PromptEditorWindow : Window
         if (prompt == null)
         {
             Prompt = new LlmSettings.LlmPrompt { ModelName = LlmSettings.DefaultModel };
+            _wantedLevel = Prompt.ReasoningLevel;
             Title = "Add New Prompt";
             CmbModel.SelectedItem = LlmSettings.DefaultModel;
         }
@@ -116,6 +141,7 @@ public sealed partial class PromptEditorWindow : Window
             TxtContent.Text = Prompt.Content;
             ChkAutoRun.IsChecked = Prompt.AutoRun;
             ChkFastMode.IsChecked = Prompt.FastMode;
+            _wantedLevel = Prompt.ReasoningLevel;
 
             string desiredModel = !string.IsNullOrWhiteSpace(Prompt.ModelName) ? Prompt.ModelName : LlmSettings.DefaultModel;
             if (!modelList.Contains(desiredModel))
@@ -126,12 +152,89 @@ public sealed partial class PromptEditorWindow : Window
             CmbModel.SelectedItem = desiredModel;
         }
 
+        // Filled once the model is chosen, and subscribed only then, so opening the editor
+        // fills the list once. Said aloud at open too: a saved level the model no longer
+        // has ticked is exactly what the user opening this prompt needs to hear about.
+        RefreshReasoningLevels(announceMove: true);
+        CmbModel.SelectionChanged += CmbModel_SelectionChanged;
+        CmbReasoningLevel.SelectionChanged += CmbReasoningLevel_SelectionChanged;
+
         // Checked as the window opens, not only after an edit. A prompt saved before the other
         // end existed is already clashing, and the user opening it is exactly who needs to know.
         ShowHotkeyClash();
     }
 
     private void HkPromptHotkey_HotkeyCommitted(object? sender, string value) => ShowHotkeyClash();
+
+    private string SelectedModelName => CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
+
+    private void CmbModel_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        RefreshReasoningLevels(announceMove: true);
+
+    private void CmbReasoningLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_refillingReasoningLevels)
+            return;
+        int index = CmbReasoningLevel.SelectedIndex;
+        if (index >= 0 && index < _shownLevels.Count)
+            _wantedLevel = _shownLevels[index];
+    }
+
+    /// <summary>
+    /// Fills the reasoning level list for the chosen model. The levels and the selection come
+    /// from <see cref="ReasoningLevelPick"/>, which settles them the way a run does, so the
+    /// level shown is the level sent.
+    /// </summary>
+    /// <param name="announceMove">
+    /// Say so on the status line when the list cannot show the wanted level and shows
+    /// another. Without it a screen-reader user would save a level they never chose.
+    /// </param>
+    private void RefreshReasoningLevels(bool announceMove)
+    {
+        string modelName = SelectedModelName;
+        _modelsByName.TryGetValue(modelName, out var model);
+        var pick = ReasoningLevelPick.For(model, _wantedLevel);
+
+        _refillingReasoningLevels = true;
+        try
+        {
+            _shownLevels = pick.Levels;
+            if (pick.Reasons)
+            {
+                CmbReasoningLevel.ItemsSource = pick.Levels.Select(ReasoningLevelCatalog.DisplayName).ToList();
+                CmbReasoningLevel.SelectedIndex = pick.SelectedIndex;
+                CmbReasoningLevel.IsEnabled = true;
+            }
+            else
+            {
+                // One item rather than placeholder text: the item is the control's value,
+                // which is what a screen reader reads for a list that is turned off.
+                CmbReasoningLevel.ItemsSource = new List<string> { ReasoningMessages.NoReasoning };
+                CmbReasoningLevel.SelectedIndex = 0;
+                CmbReasoningLevel.IsEnabled = false;
+            }
+        }
+        finally
+        {
+            _refillingReasoningLevels = false;
+        }
+
+        if (announceMove && pick.MovedFrom(_wantedLevel) && pick.Selected is { } shown)
+            ShowStatus("Reasoning level", ReasoningMessages.Moved(modelName, _wantedLevel, shown), InfoBarSeverity.Informational);
+    }
+
+    /// <summary>
+    /// The level saving would store and a test run sends: the one the list shows, or, while
+    /// the chosen model does not reason, the wanted level, so a prompt moved to such a model
+    /// keeps its level for the day it moves back.
+    /// </summary>
+    private ReasoningLevel CurrentReasoningLevel()
+    {
+        int index = CmbReasoningLevel.SelectedIndex;
+        return index >= 0 && index < _shownLevels.Count
+            ? _shownLevels[index]
+            : _wantedLevel;
+    }
 
     /// <summary>
     /// Says whether this shortcut is already claimed — by another prompt, by one of the app's
@@ -183,6 +286,7 @@ public sealed partial class PromptEditorWindow : Window
         Prompt.AutoRun = ChkAutoRun.IsChecked ?? false;
         Prompt.ModelName = CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
         Prompt.FastMode = ChkFastMode.IsChecked ?? false;
+        Prompt.ReasoningLevel = CurrentReasoningLevel();
 
         IsSaved = true;
 
@@ -256,11 +360,14 @@ public sealed partial class PromptEditorWindow : Window
                     // mode fallback is reported in the result they already opened rather
                     // than through the once-per-session announcement channel.
                     FastModeFallback? fallback = null;
+                    ReasoningLevel? reasoningFallback = null;
                     bool cutShort = false;
                     var requestOptions = new LlmRequestOptions
                     {
                         FastMode = ChkFastMode.IsChecked ?? false,
                         OnFastModeFallback = f => fallback = f,
+                        ReasoningLevel = CurrentReasoningLevel(),
+                        OnReasoningFallback = level => reasoningFallback = level,
                         OnCutShort = () => cutShort = true,
                     };
                     // Linked to the window's shutdown token, so closing the *main* window
@@ -281,6 +388,8 @@ public sealed partial class PromptEditorWindow : Window
                         notices.Add(CutShortMessages.Notice);
                     if (fallback is not null)
                         notices.Add(FastModeMessages.Describe(fallback.Reason));
+                    if (reasoningFallback is { } refused)
+                        notices.Add(ReasoningMessages.Fallback(testModel, refused));
                     notices.Add(result);
                     string body = string.Join(Environment.NewLine + Environment.NewLine, notices);
 
@@ -328,6 +437,8 @@ public sealed partial class PromptEditorWindow : Window
     {
         this.Closed -= PromptEditorWindow_Closed;
         HkPromptHotkey.HotkeyCommitted -= HkPromptHotkey_HotkeyCommitted;
+        CmbModel.SelectionChanged -= CmbModel_SelectionChanged;
+        CmbReasoningLevel.SelectionChanged -= CmbReasoningLevel_SelectionChanged;
         _closed = true;
         _statusDismissTimer.Stop();
         _statusDismissTimer.Tick -= StatusDismissTimer_Tick;

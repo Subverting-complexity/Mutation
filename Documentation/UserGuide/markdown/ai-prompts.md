@@ -103,6 +103,39 @@ If Fast mode cannot be used for any reason, nothing breaks. The prompt still run
 
 ---
 
+## Reasoning level
+
+Some AI models can think a problem through before they answer. The **Reasoning level** list in the prompt editor says how hard this prompt asks the model to think. It comes straight after **Fast mode**, so you reach it with **Tab**, and you change it with the **Up** and **Down** arrow keys.
+
+A higher level can give a better answer to a hard task, such as untangling long, messy notes. But it is slower and costs more. For simple jobs like fixing grammar, a light level is enough. New prompts start at **Low**.
+
+The list shows only the levels you ticked for the prompt's model, under **Reasoning levels** on the **AI assistance** settings page. See [Settings](settings.md) for how to tick them. If the model has no levels ticked, the list is turned off and says "This model does not reason".
+
+If you pick a different model and it does not have the prompt's level ticked, the list moves to the lightest level ticked for that model, not counting **Off** or **None**. The status line at the bottom of the editor tells you what changed, for example "gpt-5 does not have Max ticked, so the reasoning level is now Low." The same happens when you open a prompt whose level is no longer ticked for its model.
+
+The level goes with every run of the prompt: its shortcut or **Run** button, the Auto-Run step after dictation, and **Test Run**.
+
+### Bigger levels get more room
+
+A model that thinks harder writes more and takes longer. So at higher levels Mutation gives each request a bigger length limit for the answer (Anthropic models only) and waits longer for it. The longer wait is a multiple of the **Request timeout** you set.
+
+| Reasoning level | Answer length limit on Anthropic models | Wait for each try |
+|---|---|---|
+| Off, None, Minimal or Low | 8,000 tokens | Your request timeout |
+| Medium | 12,000 tokens | Two times your request timeout |
+| High | 16,000 tokens | Three times your request timeout |
+| Extra high or Max | 16,000 tokens | Four times your request timeout |
+
+A token is a small piece of a word; 8,000 tokens is roughly 6,000 words. With the standard 60 seconds, a prompt at **High** waits up to three minutes for each try before it tries again. That is normal for heavy thinking, but it also means a service that has gone down keeps you waiting longer. You can stop a slow prompt at any time — see **Stopping a prompt that is taking too long** below.
+
+### When the model refuses the level
+
+Sometimes a model turns down the level it was sent. Nothing breaks. Mutation runs the prompt again without a reasoning level, you still get your answer, and Mutation tells you, for example: "This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high."
+
+After a shortcut, **Run** or dictation, you hear this at the end of the message that confirms your text arrived. Mutation says it once for each prompt and level until you restart Mutation, so it does not repeat on every run. After **Test Run**, the note is shown above the answer each time. Your saved level is never changed for you.
+
+---
+
 ## Waiting, and when things go slowly
 
 Under **AI assistance** in **Settings** there are two knobs worth knowing about.

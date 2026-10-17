@@ -274,7 +274,7 @@ public partial class App : Application
 			});
 			// One instance per app session: that is exactly the scope over which a Fast
 			// mode notice is suppressed after the user has heard it once.
-			builder.Services.AddSingleton<Mutation.Ui.Services.FastModeNoticeTracker>();
+			builder.Services.AddSingleton<Mutation.Ui.Services.FallbackNoticeTracker>();
 			builder.Services.AddSingleton<TranscriptFormatter>();
 			builder.Services.AddSingleton<SpeechToTextManager>();
 			builder.Services.AddSingleton<Mutation.Ui.Core.AudioSessionManager>();

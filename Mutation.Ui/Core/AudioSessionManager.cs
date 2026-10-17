@@ -38,13 +38,18 @@ namespace Mutation.Ui.Core;
 /// delivered instead. Travels with the transcript for the same reason as the others: said
 /// from this side, the refusal would be superseded by "Transcript ready." and never heard.
 /// </param>
+/// <param name="ReasoningNotice">
+/// The worded reasoning fallback notice, or null when there is none to announce. Travels with
+/// the transcript for the same reason as the Fast mode notice.
+/// </param>
 public record TranscriptResult(
 	string RawText,
 	string? FormattedText = null,
 	FastModeFallbackReason? FastModeNotice = null,
 	bool LlmCancelled = false,
 	bool LlmCutShort = false,
-	bool LlmRefused = false);
+	bool LlmRefused = false,
+	string? ReasoningNotice = null);
 
 public class AudioSessionManager : IDisposable
 {
@@ -53,7 +58,7 @@ public class AudioSessionManager : IDisposable
     private readonly TranscriptFormatter _transcriptFormatter;
     private readonly Settings _settings;
     private readonly MicrophoneLevelWriteCoordinator _levelWriteCoordinator;
-    private readonly FastModeNoticeTracker _fastModeNotices;
+    private readonly FallbackNoticeTracker _fallbackNotices;
     private readonly AudioPlayer _playbackPlayer;
     private readonly LlmOperationState _llmOperation = new();
     private SpeechSession? _playingSession;
@@ -158,14 +163,14 @@ public class AudioSessionManager : IDisposable
         TranscriptFormatter transcriptFormatter,
         Settings settings,
         MicrophoneLevelWriteCoordinator levelWriteCoordinator,
-        FastModeNoticeTracker fastModeNotices)
+        FallbackNoticeTracker fallbackNotices)
     {
         _speechManager = speechManager;
         _audioDeviceManager = audioDeviceManager;
         _transcriptFormatter = transcriptFormatter;
         _settings = settings;
         _levelWriteCoordinator = levelWriteCoordinator;
-        _fastModeNotices = fastModeNotices;
+        _fallbackNotices = fallbackNotices;
 
         _playbackPlayer = new AudioPlayer();
         _playbackPlayer.PlaybackEnded += PlaybackPlayer_PlaybackEnded;
@@ -477,6 +482,8 @@ public class AudioSessionManager : IDisposable
         string rulesFormattedText = _transcriptFormatter.ApplyRules(text, false);
         string? llmProcessedText = null;
         FastModeFallback? fastModeFallback = null;
+        ReasoningLevel? reasoningFallback = null;
+        string? modelName = null;
         bool llmCancelled = false;
         bool llmCutShort = false;
         bool llmRefused = false;
@@ -489,12 +496,16 @@ public class AudioSessionManager : IDisposable
             try
             {
                 StatusMessage?.Invoke(this, "Processing with LLM...");
-                string modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
-                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}, fastMode={llmPrompt.FastMode}).");
+                modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
+                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}, fastMode={llmPrompt.FastMode}, reasoningLevel={llmPrompt.ReasoningLevel}).");
                 var requestOptions = new LlmRequestOptions
                 {
                     FastMode = llmPrompt.FastMode,
                     OnFastModeFallback = f => fastModeFallback = f,
+                    // The stored level as it is: the service settles it against the levels
+                    // ticked for the model.
+                    ReasoningLevel = llmPrompt.ReasoningLevel,
+                    OnReasoningFallback = level => reasoningFallback = level,
                     OnCutShort = () => llmCutShort = true,
                 };
                 // Claimed for the length of the call so a second press of the dictation
@@ -552,9 +563,12 @@ public class AudioSessionManager : IDisposable
         // outcome instead of competing with it.
         FastModeFallbackReason? fastModeNotice =
             fastModeFallback is not null && llmPrompt is not null
-            && _fastModeNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason)
+            && _fallbackNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason)
                 ? fastModeFallback.Reason
                 : null;
+        string? reasoningNotice = llmPrompt is not null && modelName is not null
+            ? _fallbackNotices.ClaimReasoningNotice(llmPrompt.Id, modelName, reasoningFallback)
+            : null;
 
         // Pass raw text and the final text separately so that
         // FinalizeTranscript does not re-apply rules to LLM output. The cancel rides along
@@ -566,7 +580,8 @@ public class AudioSessionManager : IDisposable
             llmCancelled,
             // Only meaningful when the model's text is the one delivered.
             LlmCutShort: llmCutShort && llmProcessedText is not null,
-            LlmRefused: llmRefused));
+            LlmRefused: llmRefused,
+            ReasoningNotice: reasoningNotice));
         // No delivery announcement from here. The handler that delivers the transcript
         // raises its own, and it is the side that knows whether the text actually landed —
         // raising one here too meant the user heard the delivery announced twice, and left

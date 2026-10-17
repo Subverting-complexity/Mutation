@@ -28,6 +28,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBox x:Name="TxtName"
@@ -64,7 +65,7 @@
                       Grid.Column="0" />
 
             <!-- Declaration order is the tab order: Name, Hotkey, Model, Fast mode,
-                 info hint, Auto run. The hint is itself a tab stop (by design — it has
+                 info hint, Reasoning level, info hint, Auto run. The hint is itself a tab stop (by design — it has
                  to be reachable without a mouse), so it costs one Tab on the way to
                  Auto run; placing it after the check box keeps it next to what it
                  explains. Its tooltip and the check box's HelpText read from one
@@ -82,11 +83,29 @@
                 <controls:InfoHint Text="{StaticResource Help.Llm.FastMode}" VerticalAlignment="Center" />
             </StackPanel>
 
+            <!-- After Fast mode in the tab order, as the issue asks. It lists only the
+                 levels ticked for the chosen model. With none ticked it holds one item,
+                 "This model does not reason", and is turned off: the item, rather than
+                 placeholder text, is what keeps that reason in the control's value, where
+                 a screen reader reads it. -->
+            <StackPanel Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Bottom"
+                        Grid.Row="2"
+                        Grid.Column="0">
+                <ComboBox x:Name="CmbReasoningLevel"
+                          Header="Reasoning level"
+                          MinWidth="200"
+                          AutomationProperties.Name="Reasoning level"
+                          AutomationProperties.HelpText="{StaticResource Help.Llm.ReasoningLevel}" />
+                <controls:InfoHint Text="{StaticResource Help.Llm.ReasoningLevel}" VerticalAlignment="Bottom" />
+            </StackPanel>
+
             <CheckBox x:Name="ChkAutoRun"
                       Content="Run automatically after transcription"
                       AutomationProperties.Name="Run automatically after transcription"
                       AutomationProperties.HelpText="Runs this prompt on the transcript as soon as a recording is transcribed, without a separate hotkey."
-                      Grid.Row="2" Grid.ColumnSpan="2" />
+                      Grid.Row="3" Grid.ColumnSpan="2" />
         </Grid>
 
         <TextBox x:Name="TxtContent"

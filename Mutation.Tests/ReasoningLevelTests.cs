@@ -211,4 +211,34 @@ public class ReasoningLevelTests
 			"This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high.",
 			ReasoningMessages.Fallback("claude-opus-5", ReasoningLevel.ExtraHigh));
 	}
+
+	[Fact]
+	public void MovedMessage_NamesTheModelAndBothLevels()
+	{
+		Assert.Equal(
+			"gpt-5 does not have Max ticked, so the reasoning level is now Low.",
+			ReasoningMessages.Moved("gpt-5", ReasoningLevel.Max, ReasoningLevel.Low));
+	}
+
+	[Fact]
+	public void AppendTo_FoldsTheNoticeAfterTheOutcome()
+	{
+		Assert.Equal(
+			"Transcript ready. This prompt ran without a reasoning level, because m did not accept High.",
+			ReasoningMessages.AppendTo("Transcript ready. ", ReasoningMessages.Fallback("m", ReasoningLevel.High)));
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	public void AppendTo_LeavesTheOutcomeAlone_WhenThereIsNoNotice(string? notice)
+	{
+		Assert.Equal("Transcript ready.", ReasoningMessages.AppendTo("Transcript ready.", notice));
+	}
+
+	[Fact]
+	public void AppendTo_GivesTheNoticeAlone_WhenTheOutcomeIsEmpty()
+	{
+		Assert.Equal("Notice.", ReasoningMessages.AppendTo("", "Notice."));
+	}
 }
