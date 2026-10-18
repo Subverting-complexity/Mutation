@@ -202,17 +202,27 @@ The levels depend on the provider:
 **Off** and **None** ask the model not to think first. If you change a model's
 provider, the button shows the new provider's levels.
 
+Some newer Anthropic models cannot stop thinking completely. For those, **Off** asks
+for the least thinking the model allows, so the prompt still runs first time:
+
+- **claude-sonnet-5-5** gets its own "think only between steps" setting.
+- **claude-opus-5-5** and the **claude-fable-5** models think at the **Low** level.
+
+Every other Anthropic model turns thinking off.
+
 Each prompt asks for one level. If the model has that level ticked, the prompt uses
 it. If not, the prompt uses the lightest level you ticked other than Off or None. If
-nothing else is ticked, Mutation sends no level, and the model does what it does by
-default.
+only **Off** or **None** is ticked, the prompt uses that. If nothing is ticked,
+Mutation sends no level, and the model does what it does by default.
 
 The models Mutation comes with have every level ticked. A model you add yourself
-starts with none ticked.
+starts with every level ticked too. If you change its provider before you change its
+levels, it gets every level of the new provider.
 
 **Temperature and reasoning.** While a prompt runs at a level other than Off or None,
 Mutation does not send the model's temperature. The providers do not accept a
-temperature while the model is thinking.
+temperature while the model is thinking. For the same reason, **Off** on
+**claude-opus-5-5** or a **claude-fable-5** model does not send it either.
 
 ### Text to Speech
 

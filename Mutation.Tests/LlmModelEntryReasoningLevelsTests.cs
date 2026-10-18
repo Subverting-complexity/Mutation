@@ -33,11 +33,57 @@ public class LlmModelEntryReasoningLevelsTests
 	}
 
 	[Fact]
-	public void Text_SaysNone_ForANewModel()
+	public void Text_SaysNone_ForAModelWithNothingTicked()
 	{
 		var entry = new LlmModelEntry(new LlmModelConfig());
 
 		Assert.Equal("Reasoning levels: none", entry.ReasoningLevelsText);
+	}
+
+	[Fact]
+	public void CreateNew_TicksTheServicesFullList()
+	{
+		var entry = LlmModelEntry.CreateNew();
+
+		Assert.Equal(ReasoningLevelCatalog.FullList(entry.Provider), entry.Model.ReasoningLevels);
+		Assert.Equal("Reasoning levels: None to Extra high", entry.ReasoningLevelsText);
+	}
+
+	[Fact]
+	public void CreateNew_ThenChangeOfService_TicksTheNewServicesFullList()
+	{
+		var entry = LlmModelEntry.CreateNew();
+		var changed = ChangedProperties(entry);
+
+		entry.Provider = LlmProvider.Anthropic;
+
+		Assert.Equal(ReasoningLevelCatalog.FullList(LlmProvider.Anthropic), entry.Model.ReasoningLevels);
+		Assert.Contains(nameof(LlmModelEntry.ReasoningLevelsText), changed);
+
+		entry.Provider = LlmProvider.OpenAI;
+
+		Assert.Equal(ReasoningLevelCatalog.FullList(LlmProvider.OpenAI), entry.Model.ReasoningLevels);
+	}
+
+	[Fact]
+	public void CreateNew_AfterTheUserSetsLevels_ChangeOfServiceKeepsThem()
+	{
+		var entry = LlmModelEntry.CreateNew();
+		entry.SetReasoningLevels(new[] { ReasoningLevel.Low, ReasoningLevel.High });
+
+		entry.Provider = LlmProvider.Anthropic;
+
+		Assert.Equal(new[] { ReasoningLevel.Low, ReasoningLevel.High }, entry.Model.ReasoningLevels);
+	}
+
+	[Fact]
+	public void ExistingModel_ChangeOfService_KeepsItsLevels()
+	{
+		var entry = Entry("m", LlmProvider.OpenAI, ReasoningLevel.Low);
+
+		entry.Provider = LlmProvider.Anthropic;
+
+		Assert.Equal(new[] { ReasoningLevel.Low }, entry.Model.ReasoningLevels);
 	}
 
 	[Fact]

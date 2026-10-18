@@ -12,6 +12,10 @@ public static class ReasoningLevelResolver
 	/// <list type="number">
 	/// <item>The prompt's level, when it is ticked for the model.</item>
 	/// <item>Otherwise the lightest ticked level, not counting Off or None.</item>
+	/// <item>Otherwise the ticked Off or None, when that is all that is ticked. It is sent
+	/// as it is rather than left out, because a request with no level does not mean "do not
+	/// reason": an OpenAI model then runs at its own default effort, and most current
+	/// Anthropic models think by default.</item>
 	/// <item>Otherwise null: nothing usable is ticked, so the model does not reason.</item>
 	/// </list>
 	/// Ticked levels that are not in the service's full list (a hand-edited file, or a
@@ -45,8 +49,8 @@ public static class ReasoningLevelResolver
 				return level;
 		}
 
-		// Nothing ticked, or only Off/None ticked while the prompt asked for something
-		// else. Sending no level is what Off and None mean anyway.
-		return null;
+		// Only Off or None is ticked (each service offers one of them, so there is at most
+		// one), or nothing usable is ticked at all.
+		return usable.Count > 0 ? usable[0] : null;
 	}
 }

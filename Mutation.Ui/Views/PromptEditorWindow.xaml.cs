@@ -217,10 +217,7 @@ public sealed partial class PromptEditorWindow : Window
             if (pick.Reasons)
             {
                 CmbReasoningLevel.ItemsSource = pick.Levels.Select(ReasoningLevelCatalog.DisplayName).ToList();
-                // -1 when a run sends no level: nothing is selected, and saving keeps the
-                // prompt's own level, unless the user picks one.
                 CmbReasoningLevel.SelectedIndex = pick.SelectedIndex;
-                CmbReasoningLevel.PlaceholderText = pick.SendsNoLevel ? ReasoningMessages.NoLevelSelected : string.Empty;
                 CmbReasoningLevel.IsEnabled = true;
             }
             else
@@ -229,7 +226,6 @@ public sealed partial class PromptEditorWindow : Window
                 // which is what a screen reader reads for a list that is turned off.
                 CmbReasoningLevel.ItemsSource = new List<string> { ReasoningMessages.NoReasoning };
                 CmbReasoningLevel.SelectedIndex = 0;
-                CmbReasoningLevel.PlaceholderText = string.Empty;
                 CmbReasoningLevel.IsEnabled = false;
             }
         }
@@ -238,8 +234,6 @@ public sealed partial class PromptEditorWindow : Window
             _refillingReasoningLevels = false;
         }
 
-        if (pick.SendsNoLevel)
-            return ReasoningMessages.NoLevelSent(modelName, _wantedLevel);
         if (pick.MovedFrom(_wantedLevel) && pick.Selected is { } shown)
             return ReasoningMessages.Moved(modelName, _wantedLevel, shown);
         return null;
@@ -247,9 +241,8 @@ public sealed partial class PromptEditorWindow : Window
 
     /// <summary>
     /// The level saving would store and a test run sends: the one the list shows, or, while
-    /// the list selects nothing (the model does not reason, or a run sends no level), the
-    /// wanted level, so the prompt keeps its level and a test run resolves it exactly as a
-    /// real run does.
+    /// the list selects nothing (the model does not reason), the wanted level, so the prompt
+    /// keeps its level for when it runs on a model that does.
     /// </summary>
     private ReasoningLevel CurrentReasoningLevel()
     {

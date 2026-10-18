@@ -38,6 +38,11 @@ namespace Mutation.Ui.Core;
 /// delivered instead. Travels with the transcript for the same reason as the others: said
 /// from this side, the refusal would be superseded by "Transcript ready." and never heard.
 /// </param>
+/// <param name="LlmFailure">
+/// A short description of why the language model step failed, when it failed for any reason
+/// other than a cancel or a refusal, so the rules-formatted transcript is delivered instead.
+/// Travels with the transcript for the same reason as the others.
+/// </param>
 /// <param name="ReasoningNotice">
 /// The worded reasoning fallback notice, or null when there is none to announce. Travels with
 /// the transcript for the same reason as the Fast mode notice.
@@ -49,7 +54,8 @@ public record TranscriptResult(
 	bool LlmCancelled = false,
 	bool LlmCutShort = false,
 	bool LlmRefused = false,
-	string? ReasoningNotice = null);
+	string? ReasoningNotice = null,
+	string? LlmFailure = null);
 
 public class AudioSessionManager : IDisposable
 {
@@ -487,6 +493,7 @@ public class AudioSessionManager : IDisposable
         bool llmCancelled = false;
         bool llmCutShort = false;
         bool llmRefused = false;
+        string? llmFailure = null;
 
         if (_currentRecordingUsesLlmProcessing && llmPrompt != null)
         {
@@ -552,8 +559,11 @@ public class AudioSessionManager : IDisposable
                 // once the ladder is exhausted — and nobody cancelled anything, so it is
                 // reported as the failure it is. Reading it as the user's own cancel is how
                 // a dead provider came to be announced as something they had asked for.
+                // The failure rides with the transcript to be told with the delivery, as the
+                // refusal does: said here, it was superseded by "Transcript ready." and the
+                // user believed their prompt had run.
                 ErrorLogger.LogError("LLM processing failed", ex);
-                StatusMessage?.Invoke(this, $"LLM processing failed: {ex.Message}. Using rules-formatted transcript.");
+                llmFailure = LlmFailureMessages.Describe(ex);
                 // llmProcessedText remains null — FinalizeTranscript will fall back to rules-only
             }
         }
@@ -581,7 +591,8 @@ public class AudioSessionManager : IDisposable
             // Only meaningful when the model's text is the one delivered.
             LlmCutShort: llmCutShort && llmProcessedText is not null,
             LlmRefused: llmRefused,
-            ReasoningNotice: reasoningNotice));
+            ReasoningNotice: reasoningNotice,
+            LlmFailure: llmFailure));
         // No delivery announcement from here. The handler that delivers the transcript
         // raises its own, and it is the side that knows whether the text actually landed —
         // raising one here too meant the user heard the delivery announced twice, and left

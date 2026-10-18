@@ -39,9 +39,9 @@ public sealed partial class LlmSettingsPage : UserControl
 
 	private void BtnAddModel_Click(object sender, RoutedEventArgs e)
 	{
-		var model = new LlmModelConfig();
-		(_settings.LlmSettings ??= new LlmSettings()).Models.Add(model);
-		ModelEntries.Add(new LlmModelEntry(model));
+		var entry = LlmModelEntry.CreateNew();
+		(_settings.LlmSettings ??= new LlmSettings()).Models.Add(entry.Model);
+		ModelEntries.Add(entry);
 	}
 
 	private void ModelDelete_Click(object sender, RoutedEventArgs e)
