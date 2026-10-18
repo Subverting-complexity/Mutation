@@ -14,9 +14,29 @@ public sealed class LlmModelEntry : INotifyPropertyChanged
 
 	private readonly LlmModelConfig _model;
 
+	/// <summary>
+	/// True for a model added on this page whose levels the user has not set yet. Its
+	/// levels then follow its service: a change of service ticks the new service's full
+	/// list, so a new model never ends up with half a list it did not choose.
+	/// </summary>
+	private bool _levelsFollowService;
+
 	public LlmModelEntry(LlmModelConfig model)
 	{
 		_model = model ?? throw new ArgumentNullException(nameof(model));
+	}
+
+	/// <summary>
+	/// A model the user is adding, with its service's full list of reasoning levels
+	/// ticked, the same as starter models and models upgraded from an older settings file.
+	/// The list is set here rather than in <see cref="LlmModelConfig"/>, which must start
+	/// empty because the settings dialog copies settings through JSON.
+	/// </summary>
+	public static LlmModelEntry CreateNew()
+	{
+		var model = new LlmModelConfig();
+		model.ReasoningLevels = ReasoningLevelCatalog.FullList(model.Provider).ToList();
+		return new LlmModelEntry(model) { _levelsFollowService = true };
 	}
 
 	internal LlmModelConfig Model => _model;
@@ -45,6 +65,8 @@ public sealed class LlmModelEntry : INotifyPropertyChanged
 		{
 			if (_model.Provider == value) return;
 			_model.Provider = value;
+			if (_levelsFollowService)
+				_model.ReasoningLevels = ReasoningLevelCatalog.FullList(value).ToList();
 			OnPropertyChanged(nameof(Provider));
 			OnReasoningLevelsChanged();
 		}
@@ -116,6 +138,9 @@ public sealed class LlmModelEntry : INotifyPropertyChanged
 	{
 		ArgumentNullException.ThrowIfNull(ticked);
 		var levels = ReasoningLevelCatalog.InServiceOrder(_model.Provider, ticked).ToList();
+
+		// The user chose these levels, so a later change of service must not replace them.
+		_levelsFollowService = false;
 
 		// A new list rather than editing the old one, so nothing else holding the old
 		// list sees it change underneath it.

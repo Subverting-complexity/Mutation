@@ -144,15 +144,21 @@ public class ReasoningLevelTests
 		Assert.Null(ReasoningLevelResolver.Resolve(LlmProvider.Anthropic, null, ReasoningLevel.Low));
 	}
 
-	[Fact]
-	public void Resolve_OnlyOffTicked_AndPromptAsksForMore_SendsNoLevel()
+	[Theory]
+	[InlineData(LlmProvider.Anthropic, ReasoningLevel.Off)]
+	[InlineData(LlmProvider.OpenAI, ReasoningLevel.None)]
+	public void Resolve_OnlyOffOrNoneTicked_AndPromptAsksForMore_SendsTheTickedOffOrNone(
+		LlmProvider provider, ReasoningLevel only)
 	{
-		Assert.Null(ReasoningLevelResolver.Resolve(LlmProvider.Anthropic, new[] { ReasoningLevel.Off }, ReasoningLevel.High));
+		// Sending no level would not turn reasoning off: the model would run at its own
+		// default effort. So the ticked Off or None is sent as it is.
+		Assert.Equal(only, ReasoningLevelResolver.Resolve(provider, new[] { only }, ReasoningLevel.High));
 	}
 
 	[Fact]
 	public void Resolve_OnlyUnofferedLevelsTicked_SendsNoLevel()
 	{
+		// Off is Anthropic's word for no reasoning; an OpenAI model must not be sent it.
 		Assert.Null(ReasoningLevelResolver.Resolve(LlmProvider.OpenAI, new[] { ReasoningLevel.Max, ReasoningLevel.Off }, ReasoningLevel.Low));
 	}
 
@@ -220,13 +226,6 @@ public class ReasoningLevelTests
 			ReasoningMessages.Moved("gpt-5", ReasoningLevel.Max, ReasoningLevel.Low));
 	}
 
-	[Fact]
-	public void NoLevelSentMessage_NamesTheModelAndTheWantedLevel()
-	{
-		Assert.Equal(
-			"claude-haiku does not have Low ticked, so this prompt runs without a reasoning level.",
-			ReasoningMessages.NoLevelSent("claude-haiku", ReasoningLevel.Low));
-	}
 
 	[Fact]
 	public void AppendTo_FoldsTheNoticeAfterTheOutcome()

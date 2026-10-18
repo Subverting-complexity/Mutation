@@ -2784,10 +2784,10 @@ public sealed partial class MainWindow : Window, IDisposable
 	/// Set when the model's answer stopped at its length limit. Folded in for the same
 	/// reason as <paramref name="fastModeNotice"/>, and lowers a success to a warning.
 	/// </param>
-	/// <param name="llmRefused">
-	/// Set when the model declined and the rules-formatted transcript was delivered instead.
-	/// The refusal itself is already in <paramref name="successMessage"/>; this lowers a
-	/// success to a warning.
+	/// <param name="llmNotApplied">
+	/// Set when the model declined or failed, and the rules-formatted transcript was
+	/// delivered instead. What happened is already in <paramref name="successMessage"/>;
+	/// this lowers a success to a warning.
 	/// </param>
 	/// <param name="reasoningNotice">
 	/// The worded reasoning fallback notice, or null. Folded in for the same reason as
@@ -2799,7 +2799,7 @@ public sealed partial class MainWindow : Window, IDisposable
 		string? formattedText = null,
 		FastModeFallbackReason? fastModeNotice = null,
 		bool llmCutShort = false,
-		bool llmRefused = false,
+		bool llmNotApplied = false,
 		string? reasoningNotice = null)
 	{
 		// The restoration below is what gives the user their transcript box back. It ran
@@ -2836,7 +2836,7 @@ public sealed partial class MainWindow : Window, IDisposable
 							fastModeNotice),
 						reasoningNotice),
 					!plan.Succeeded ? InfoBarSeverity.Error
-						: llmCutShort || llmRefused ? InfoBarSeverity.Warning
+						: llmCutShort || llmNotApplied ? InfoBarSeverity.Warning
 						: InfoBarSeverity.Success);
 			},
 			onFailure: ex =>
@@ -2903,11 +2903,13 @@ public sealed partial class MainWindow : Window, IDisposable
                     ? CancellationMessages.LlmCancelledThen("Transcript ready.")
                     : result.LlmRefused
                         ? LlmRefusalMessages.RefusedThen("Transcript ready.")
-                        : "Transcript ready.",
+                        : result.LlmFailure is { } failure
+                            ? LlmFailureMessages.FailedThen(failure, "Transcript ready.")
+                            : "Transcript ready.",
                 result.FormattedText,
                 result.FastModeNotice,
                 result.LlmCutShort,
-                result.LlmRefused,
+                result.LlmRefused || result.LlmFailure is not null,
                 result.ReasoningNotice);
         });
     }

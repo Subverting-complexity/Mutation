@@ -30,12 +30,13 @@ public class AnthropicReasoningTests : IDisposable
 		FakeHttpMessageHandler handler,
 		IEnumerable<ReasoningLevel>? ticked = null,
 		int retryCount = 0,
-		TimeProvider? clock = null)
+		TimeProvider? clock = null,
+		string modelName = Model)
 	{
 		var client = new HttpClient(handler);
 		_clients.Add(client);
 
-		var model = new LlmModelConfig(Model, LlmProvider.Anthropic, customTemperature: 0.3m)
+		var model = new LlmModelConfig(modelName, LlmProvider.Anthropic, customTemperature: 0.3m)
 		{
 			ReasoningLevels = (ticked ?? ReasoningLevelCatalog.FullList(LlmProvider.Anthropic)).ToList(),
 		};
@@ -107,6 +108,67 @@ public class AnthropicReasoningTests : IDisposable
 		Assert.Equal("disabled", ThinkingType(root));
 		Assert.Null(Effort(root));
 		Assert.Equal(0.3, Temperature(root)!.Value, precision: 6);
+		Assert.Equal(8_000, MaxTokens(root));
+	}
+
+	[Theory]
+	[InlineData("claude-opus-4-8")]
+	[InlineData("claude-opus-4-7")]
+	[InlineData("claude-opus-5")]
+	[InlineData("claude-sonnet-5")]
+	[InlineData("claude-haiku-5-5")]
+	[InlineData("a-model-Mutation-does-not-know")]
+	public async Task Off_SendsDisabled_OnModelsThatAcceptIt(string modelName)
+	{
+		var handler = new FakeHttpMessageHandler().Respond(HttpStatusCode.OK, SuccessBody);
+
+		await CreateService(handler, modelName: modelName).CreateChatCompletion(
+			Messages(), modelName, new LlmRequestOptions { ReasoningLevel = ReasoningLevel.Off });
+
+		var root = Root(Assert.Single(handler.Requests));
+		Assert.Equal("disabled", ThinkingType(root));
+		Assert.Null(Effort(root));
+		Assert.Equal(0.3, Temperature(root)!.Value, precision: 6);
+	}
+
+	[Theory]
+	[InlineData("claude-sonnet-5-5")]
+	[InlineData("anthropic.claude-sonnet-5-5")]
+	public async Task Off_SendsBetweenToolsAlone_OnSonnet55(string modelName)
+	{
+		var handler = new FakeHttpMessageHandler().Respond(HttpStatusCode.OK, SuccessBody);
+
+		await CreateService(handler, modelName: modelName).CreateChatCompletion(
+			Messages(), modelName, new LlmRequestOptions { ReasoningLevel = ReasoningLevel.Off });
+
+		var root = Root(Assert.Single(handler.Requests));
+		// between_tools takes no other thinking field, and no effort above high.
+		var thinking = root.GetProperty("thinking");
+		Assert.Equal("between_tools", thinking.GetProperty("type").GetString());
+		Assert.Single(thinking.EnumerateObject());
+		Assert.Null(Effort(root));
+		// Sonnet 5.5 refuses a custom temperature.
+		Assert.Null(Temperature(root));
+	}
+
+	[Theory]
+	[InlineData("claude-opus-5-5")]
+	[InlineData("claude-fable-5")]
+	[InlineData("claude-fable-5-1")]
+	[InlineData("claude-mythos-5-1")]
+	[InlineData("CLAUDE-OPUS-5-5")]
+	public async Task Off_SendsNoThinkingFieldAndLowEffort_OnModelsThatAlwaysThink(string modelName)
+	{
+		var handler = new FakeHttpMessageHandler().Respond(HttpStatusCode.OK, SuccessBody);
+
+		await CreateService(handler, modelName: modelName).CreateChatCompletion(
+			Messages(), modelName, new LlmRequestOptions { ReasoningLevel = ReasoningLevel.Off });
+
+		var root = Root(Assert.Single(handler.Requests));
+		Assert.Null(ThinkingType(root));
+		Assert.Equal("low", Effort(root));
+		// The model still thinks, and the service refuses a temperature while it does.
+		Assert.Null(Temperature(root));
 		Assert.Equal(8_000, MaxTokens(root));
 	}
 

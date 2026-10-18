@@ -32,22 +32,26 @@ public sealed class FallbackNoticeTracker
 	public bool ShouldAnnounce(int promptId, FastModeFallbackReason reason) => Claim(promptId, reason);
 
 	/// <summary>
-	/// Returns true the first time this prompt's model refuses this reasoning level in the
-	/// current session, and false every time after. The level is part of the key, so a
-	/// prompt whose level was changed and refused again is heard again.
+	/// Returns true the first time this model refuses this reasoning level for this prompt
+	/// in the current session, and false every time after. The level and the model are both
+	/// part of the key, so a prompt whose level or model was changed and refused again is
+	/// heard again: the notice names the model, and staying quiet about a second model
+	/// would leave the user believing it reasons. The model name is matched without regard
+	/// to case, as the services match it.
 	/// </summary>
-	public bool ShouldAnnounce(int promptId, ReasoningLevel refused) => Claim(promptId, refused);
+	public bool ShouldAnnounce(int promptId, string modelName, ReasoningLevel refused) =>
+		Claim(promptId, (modelName.ToUpperInvariant(), refused));
 
 	/// <summary>
 	/// The reasoning fallback notice to fold into this run's outcome line, or null when there
-	/// was no fallback or it was already announced for this prompt and level. Shared by the
+	/// was no fallback or it was already announced for this prompt, model and level. Shared by the
 	/// prompt hotkey run and the run after dictation, so both word and limit it the same way.
 	/// </summary>
 	/// <param name="promptId">The prompt that ran.</param>
 	/// <param name="modelName">The model it ran on, named in the notice.</param>
 	/// <param name="refused">The level the model refused, or null when nothing was refused.</param>
 	public string? ClaimReasoningNotice(int promptId, string modelName, ReasoningLevel? refused) =>
-		refused is { } level && ShouldAnnounce(promptId, level)
+		refused is { } level && ShouldAnnounce(promptId, modelName, level)
 			? ReasoningMessages.Fallback(modelName, level)
 			: null;
 

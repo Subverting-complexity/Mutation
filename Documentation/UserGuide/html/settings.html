@@ -448,15 +448,25 @@ Press <strong>Cancel</strong> or <strong>Esc</strong> to leave the levels as the
 </div>
 <p><strong>Off</strong> and <strong>None</strong> ask the model not to think first. If you change a model's
 provider, the button shows the new provider's levels.</p>
+<p>Some newer Anthropic models cannot stop thinking completely. For those, <strong>Off</strong> asks
+for the least thinking the model allows, so the prompt still runs first time:</p>
+<ul>
+<li><strong>claude-sonnet-5-5</strong> gets its own &quot;think only between steps&quot; setting.</li>
+<li><strong>claude-opus-5-5</strong>, the <strong>claude-fable-5</strong> models and the <strong>claude-mythos-5</strong>
+models think at the <strong>Low</strong> level.</li>
+</ul>
+<p>Every other Anthropic model turns thinking off.</p>
 <p>Each prompt asks for one level. If the model has that level ticked, the prompt uses
 it. If not, the prompt uses the lightest level you ticked other than Off or None. If
-nothing else is ticked, Mutation sends no level, and the model does what it does by
-default.</p>
+only <strong>Off</strong> or <strong>None</strong> is ticked, the prompt uses that. If nothing is ticked,
+Mutation sends no level, and the model does what it does by default.</p>
 <p>The models Mutation comes with have every level ticked. A model you add yourself
-starts with none ticked.</p>
+starts with every level ticked too. If you change its provider before you change its
+levels, it gets every level of the new provider.</p>
 <p><strong>Temperature and reasoning.</strong> While a prompt runs at a level other than Off or None,
 Mutation does not send the model's temperature. The providers do not accept a
-temperature while the model is thinking.</p>
+temperature while the model is thinking. <strong>Off</strong> on the models in the list above
+does not send it either, because those models do not accept one.</p>
 <h3 id="text-to-speech">Text to Speech</h3>
 <p>How Mutation reads text out loud. Voice, rate and volume live on the main window;
 this page holds everything else.</p>

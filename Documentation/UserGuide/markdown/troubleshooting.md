@@ -524,6 +524,21 @@ transcript, with only the basic formatting rules applied.
 **What to do.** Try rewording the prompt, or choose a different model for that prompt
 in the prompt editor.
 
+### The AI step failed while I was dictating
+
+**What's happening.** The AI step after a dictation can fail: the service took too
+long to answer, your API key (the long password that lets Mutation use the service)
+was not accepted, or the service had a problem. You still get your transcript, with
+only the basic formatting rules applied. Mutation tells you what went wrong at the
+start of the final message, for example "The language model step failed: the model
+did not answer in time. Your transcript has only the basic formatting rules applied.
+Transcript ready." The message comes as a warning instead of the usual success.
+
+**What to do.** Check the reason in the message. For a key that was not accepted,
+check the key on the **API keys** settings page. For a slow or failing service, try
+again in a moment, or pick a different model for the prompt. The full error is in
+`Mutation_Errors.log`.
+
 ### The wrong microphone is being used, or the mute didn't take
 
 **What's happening.** Mutation's mute shortcut mutes every microphone on the PC, not

@@ -37,19 +37,6 @@ public static class ReasoningMessages
 		+ $"reasoning level is now {ReasoningLevelCatalog.DisplayName(to)}.";
 
 	/// <summary>
-	/// The prompt editor's list has only Off or None for the chosen model while the prompt
-	/// asks for another level, so a run sends no level and the list selects nothing.
-	/// </summary>
-	/// <param name="modelName">The model chosen in the editor.</param>
-	/// <param name="wanted">The level the prompt asks for, which it keeps.</param>
-	public static string NoLevelSent(string modelName, ReasoningLevel wanted) =>
-		$"{modelName} does not have {ReasoningLevelCatalog.DisplayName(wanted)} ticked, so this "
-		+ "prompt runs without a reasoning level.";
-
-	/// <summary>The prompt editor list's placeholder while a run sends no level.</summary>
-	public const string NoLevelSelected = "No level is sent";
-
-	/// <summary>
 	/// Folds the fallback notice into the message announcing the run's outcome, for the same
 	/// reason as <see cref="FastModeMessages.AppendTo"/>: the status channel supersedes rather
 	/// than queues, so a notice said on its own would be talked over by the outcome.

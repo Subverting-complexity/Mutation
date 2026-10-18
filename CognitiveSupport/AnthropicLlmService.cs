@@ -313,7 +313,7 @@ public class AnthropicLlmService : ILlmService
 	private static string Serialize(AnthropicRequest request, LlmModelConfig config, RequestShape shape)
 	{
 		ReasoningLevel? level = shape.Level;
-		string? effort = AnthropicReasoningFields.Effort(level);
+		string? effort = AnthropicReasoningFields.Effort(level, request.Model);
 
 		return JsonSerializer.Serialize(
 			new AnthropicRequest
@@ -321,10 +321,10 @@ public class AnthropicLlmService : ILlmService
 				Model = request.Model,
 				MaxTokens = ReasoningLimits.For(level).AnthropicMaxTokens,
 				// The service refuses a custom temperature while the model is thinking.
-				Temperature = AnthropicReasoningFields.SendsTemperature(level) && config.CustomTemperature.HasValue
+				Temperature = AnthropicReasoningFields.SendsTemperature(level, request.Model) && config.CustomTemperature.HasValue
 					? (double)config.CustomTemperature.Value
 					: null,
-				Thinking = AnthropicReasoningFields.ThinkingType(level) is { } type
+				Thinking = AnthropicReasoningFields.ThinkingType(level, request.Model) is { } type
 					? new AnthropicThinking { Type = type }
 					: null,
 				OutputConfig = effort is null ? null : new AnthropicOutputConfig { Effort = effort },
@@ -344,7 +344,7 @@ public class AnthropicLlmService : ILlmService
 		[JsonPropertyName("temperature")] public double? Temperature { get; set; }
 		/// <summary>Null (and therefore omitted) when no reasoning level is sent.</summary>
 		[JsonPropertyName("thinking")] public AnthropicThinking? Thinking { get; set; }
-		/// <summary>Null (and therefore omitted) unless a level other than Off is sent.</summary>
+		/// <summary>Null (and therefore omitted) unless the request makes the model think.</summary>
 		[JsonPropertyName("output_config")] public AnthropicOutputConfig? OutputConfig { get; set; }
 		[JsonPropertyName("system")] public string? System { get; set; }
 		[JsonPropertyName("messages")] public AnthropicMessage[] Messages { get; set; } = [];

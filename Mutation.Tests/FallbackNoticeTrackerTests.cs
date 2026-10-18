@@ -49,14 +49,27 @@ public class FallbackNoticeTrackerTests
 	}
 
 	[Fact]
-	public void ShouldAnnounce_AReasoningFallbackIsHeardOncePerPromptAndLevel()
+	public void ShouldAnnounce_AReasoningFallbackIsHeardOncePerPromptModelAndLevel()
 	{
 		var tracker = new FallbackNoticeTracker();
 
-		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.High));
-		Assert.False(tracker.ShouldAnnounce(1, ReasoningLevel.High));
-		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.Max));
-		Assert.True(tracker.ShouldAnnounce(2, ReasoningLevel.High));
+		Assert.True(tracker.ShouldAnnounce(1, "gpt-5", ReasoningLevel.High));
+		Assert.False(tracker.ShouldAnnounce(1, "gpt-5", ReasoningLevel.High));
+		Assert.True(tracker.ShouldAnnounce(1, "gpt-5", ReasoningLevel.Max));
+		Assert.True(tracker.ShouldAnnounce(2, "gpt-5", ReasoningLevel.High));
+	}
+
+	[Fact]
+	public void ShouldAnnounce_ASecondModelRefusingTheSameLevelIsHeardToo()
+	{
+		// The notice names the model; staying quiet about the second one would leave the
+		// user believing the prompt now reasons.
+		var tracker = new FallbackNoticeTracker();
+
+		Assert.True(tracker.ShouldAnnounce(1, "model-a", ReasoningLevel.ExtraHigh));
+		Assert.True(tracker.ShouldAnnounce(1, "model-b", ReasoningLevel.ExtraHigh));
+		// Casing does not make a different model, as it does not for the services.
+		Assert.False(tracker.ShouldAnnounce(1, "MODEL-B", ReasoningLevel.ExtraHigh));
 	}
 
 	[Fact]
@@ -66,7 +79,7 @@ public class FallbackNoticeTrackerTests
 		var tracker = new FallbackNoticeTracker();
 
 		Assert.True(tracker.ShouldAnnounce(1, FastModeFallbackReason.Unavailable));
-		Assert.True(tracker.ShouldAnnounce(1, ReasoningLevel.Off));
+		Assert.True(tracker.ShouldAnnounce(1, "m", ReasoningLevel.Off));
 	}
 
 	[Fact]
