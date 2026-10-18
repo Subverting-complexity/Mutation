@@ -199,12 +199,29 @@ public class OpenAiReasoningTests : IDisposable
 		Assert.Equal("xhigh", Effort(Root(handler.Requests[0])));
 		Assert.Null(Temperature(Root(handler.Requests[0])));
 
-		// The retry is the request as it was before reasoning levels: no effort, and the
-		// model's own temperature back.
+		// The retry sends no effort and no temperature: a reasoning model still reasons at
+		// its default with no effort, and would refuse the temperature (issue #438).
 		var retry = Root(handler.Requests[1]);
 		Assert.Null(Effort(retry));
-		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
+		Assert.Null(Temperature(retry));
 		Assert.Equal([ReasoningLevel.ExtraHigh], reported);
+	}
+
+	[Fact]
+	public async Task FastModeRefusedWithNoLevel_RetryKeepsTheTemperature()
+	{
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.BadRequest, TierRefused)
+			.Respond(HttpStatusCode.OK, SuccessBody);
+
+		string result = await CreateService(handler).CreateChatCompletion(
+			Messages(), Model, new LlmRequestOptions { FastMode = true });
+
+		Assert.Equal("done", result);
+		Assert.Equal(2, handler.Requests.Count);
+		var retry = Root(handler.Requests[1]);
+		Assert.Null(Tier(retry));
+		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
 	}
 
 	[Fact]

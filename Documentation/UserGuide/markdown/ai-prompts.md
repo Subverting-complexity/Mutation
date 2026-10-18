@@ -130,7 +130,7 @@ A token is a small piece of a word; 8,000 tokens is roughly 6,000 words. With th
 
 ### When the model refuses the level
 
-Sometimes a model turns down the level it was sent. Nothing breaks. Mutation runs the prompt again without a reasoning level, you still get your answer, and Mutation tells you, for example: "This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high."
+Sometimes a model turns down the level it was sent. Nothing breaks. Mutation runs the prompt again without a reasoning level and without the model's temperature, you still get your answer, and Mutation tells you, for example: "This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high."
 
 After a shortcut, **Run** or dictation, you hear this at the end of the message that confirms your text arrived. Mutation says it once for each prompt and level until you restart Mutation, so it does not repeat on every run. After **Test Run**, the note is shown above the answer each time. Your saved level is never changed for you.
 

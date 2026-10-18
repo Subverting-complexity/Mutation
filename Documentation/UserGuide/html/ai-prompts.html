@@ -268,7 +268,7 @@ footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); colo
 </div>
 <p>A token is a small piece of a word; 8,000 tokens is roughly 6,000 words. With the standard 60 seconds, a prompt at <strong>High</strong> waits up to three minutes for each try before it tries again. That is normal for heavy thinking, but it also means a service that has gone down keeps you waiting longer. You can stop a slow prompt at any time — see <strong>Stopping a prompt that is taking too long</strong> below.</p>
 <h3 id="when-the-model-refuses-the-level">When the model refuses the level</h3>
-<p>Sometimes a model turns down the level it was sent. Nothing breaks. Mutation runs the prompt again without a reasoning level, you still get your answer, and Mutation tells you, for example: &quot;This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high.&quot;</p>
+<p>Sometimes a model turns down the level it was sent. Nothing breaks. Mutation runs the prompt again without a reasoning level and without the model's temperature, you still get your answer, and Mutation tells you, for example: &quot;This prompt ran without a reasoning level, because claude-opus-5 did not accept Extra high.&quot;</p>
 <p>After a shortcut, <strong>Run</strong> or dictation, you hear this at the end of the message that confirms your text arrived. Mutation says it once for each prompt and level until you restart Mutation, so it does not repeat on every run. After <strong>Test Run</strong>, the note is shown above the answer each time. Your saved level is never changed for you.</p>
 <hr />
 <h2 id="waiting-and-when-things-go-slowly">Waiting, and when things go slowly</h2>

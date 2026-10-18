@@ -240,15 +240,33 @@ public class AnthropicReasoningTests : IDisposable
 		var first = Root(handler.Requests[0]);
 		Assert.Equal("max", Effort(first));
 
-		// The retry is the request with no level: no reasoning fields, the model's
-		// temperature back, and the lightest limits.
+		// The retry is the request with no level: no reasoning fields, the lightest limits,
+		// and no temperature, which Claude Opus 5.5, Sonnet 5.5 and Fable refuse even with
+		// no level (issue #438).
 		var retry = Root(handler.Requests[1]);
 		Assert.Null(ThinkingType(retry));
 		Assert.Null(Effort(retry));
-		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
+		Assert.Null(Temperature(retry));
 		Assert.Equal(8_000, MaxTokens(retry));
 
 		Assert.Equal([ReasoningLevel.Max], options);
+	}
+
+	[Fact]
+	public async Task FastModeRefusedWithNoLevel_RetryKeepsTheTemperature()
+	{
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.BadRequest, SpeedRefused)
+			.Respond(HttpStatusCode.OK, SuccessBody);
+
+		string result = await CreateService(handler).CreateChatCompletion(
+			Messages(), Model, new LlmRequestOptions { FastMode = true });
+
+		Assert.Equal("done", result);
+		Assert.Equal(2, handler.Requests.Count);
+		var retry = Root(handler.Requests[1]);
+		Assert.Null(Speed(retry));
+		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
 	}
 
 	[Fact]

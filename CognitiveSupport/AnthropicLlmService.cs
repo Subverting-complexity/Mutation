@@ -110,12 +110,17 @@ public class AnthropicLlmService : ILlmService
 	}
 
 	/// <summary>
-	/// The two settings a fallback can drop from a request: the reasoning level and Fast
-	/// mode. Everything else about the request stays the same on every send.
+	/// What a fallback can drop from a request: the reasoning level, with the model's
+	/// temperature, and Fast mode. Everything else about the request stays the same on
+	/// every send.
 	/// </summary>
 	/// <param name="Level">The resolved level to send, or null to send none.</param>
 	/// <param name="FastMode">Whether to ask for Fast mode.</param>
-	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode);
+	/// <param name="SendsTemperature">
+	/// Whether the model's temperature may go on the request. False only on the retry after
+	/// a reasoning fallback; see <see cref="SendWithFallbacksAsync"/>.
+	/// </param>
+	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode, bool SendsTemperature = true);
 
 	/// <summary>
 	/// Turns a successful reply into the text handed back to the caller. A refusal is a
@@ -195,7 +200,11 @@ public class AnthropicLlmService : ILlmService
 				{
 					refusedLevel = shape.Level;
 					ErrorLogger.LogInfo("LLM", $"{ReasoningMessages.Fallback(config.Name, shape.Level!.Value)} Anthropic said: {ex.Message}");
-					shape = shape with { Level = null };
+					// The temperature goes too. Claude Opus 5.5, Sonnet 5.5 and Fable refuse a
+					// custom temperature even with no level, so the retry would fail on an
+					// error that names no reasoning term and the user's text would be lost
+					// after all (issue #438).
+					shape = shape with { Level = null, SendsTemperature = false };
 				}
 				else if (fastModeCause is { } reason)
 				{
@@ -321,7 +330,9 @@ public class AnthropicLlmService : ILlmService
 				Model = request.Model,
 				MaxTokens = ReasoningLimits.For(level).AnthropicMaxTokens,
 				// The service refuses a custom temperature while the model is thinking.
-				Temperature = AnthropicReasoningFields.SendsTemperature(level, request.Model) && config.CustomTemperature.HasValue
+				Temperature = shape.SendsTemperature
+					&& AnthropicReasoningFields.SendsTemperature(level, request.Model)
+					&& config.CustomTemperature.HasValue
 					? (double)config.CustomTemperature.Value
 					: null,
 				Thinking = AnthropicReasoningFields.ThinkingType(level, request.Model) is { } type
