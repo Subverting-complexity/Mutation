@@ -421,6 +421,27 @@ public class OpenAiReasoningTests : IDisposable
 	}
 
 	[Fact]
+	public async Task FastModeRefusedThenLevelRefused_LastSendHasNoTemperature()
+	{
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.BadRequest, TierRefused)
+			.Respond(HttpStatusCode.BadRequest, EffortRefused)
+			.Respond(HttpStatusCode.OK, SuccessBody);
+
+		string result = await CreateService(handler).CreateChatCompletion(
+			Messages(),
+			Model,
+			new LlmRequestOptions { ReasoningLevel = ReasoningLevel.Medium, FastMode = true });
+
+		Assert.Equal("done", result);
+		Assert.Equal(3, handler.Requests.Count);
+		var last = Root(handler.Requests[2]);
+		Assert.Null(Effort(last));
+		Assert.Null(Tier(last));
+		Assert.Null(Temperature(last));
+	}
+
+	[Fact]
 	public async Task FastModeAndLevel_BothRefusedInTurn_DropsEachOnceAndReportsBoth()
 	{
 		var handler = new FakeHttpMessageHandler()
@@ -446,6 +467,7 @@ public class OpenAiReasoningTests : IDisposable
 		var last = Root(handler.Requests[2]);
 		Assert.Null(Effort(last));
 		Assert.Null(Tier(last));
+		Assert.Null(Temperature(last));
 		Assert.Equal(ReasoningLevel.Medium, refused);
 		Assert.NotNull(fastFallback);
 	}

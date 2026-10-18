@@ -134,8 +134,8 @@ public class LlmService : ILlmService
 	/// <param name="Level">The resolved level to send, or null to send none.</param>
 	/// <param name="FastMode">Whether to ask for Fast mode.</param>
 	/// <param name="SendsTemperature">
-	/// Whether the model's temperature may go on the request. False only on the retry after
-	/// a reasoning fallback; see <see cref="SendWithFallbacksAsync"/>.
+	/// Whether the model's temperature may go on the request. False on every send after a
+	/// reasoning fallback; see <see cref="SendWithFallbacksAsync"/>.
 	/// </param>
 	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode, bool SendsTemperature = true);
 

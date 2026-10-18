@@ -241,8 +241,8 @@ public class AnthropicReasoningTests : IDisposable
 		Assert.Equal("max", Effort(first));
 
 		// The retry is the request with no level: no reasoning fields, the lightest limits,
-		// and no temperature, which Claude Opus 5.5, Sonnet 5.5 and Fable refuse even with
-		// no level (issue #438).
+		// and no temperature, which a model that thinks at its default may refuse
+		// (issue #438).
 		var retry = Root(handler.Requests[1]);
 		Assert.Null(ThinkingType(retry));
 		Assert.Null(Effort(retry));
@@ -476,6 +476,7 @@ public class AnthropicReasoningTests : IDisposable
 		var last = Root(handler.Requests[2]);
 		Assert.Null(Speed(last));
 		Assert.Null(Effort(last));
+		Assert.Null(Temperature(last));
 		Assert.Equal(ReasoningLevel.Low, refused);
 		Assert.NotNull(fastFallback);
 	}
