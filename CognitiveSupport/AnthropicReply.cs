@@ -23,6 +23,9 @@ internal sealed record AnthropicReply(string Text, string? StopReason)
 
 	public bool WasRefused => StopReason == Refusal;
 
+	/// <summary>The served model, tier and token counts the reply reported, for the request log.</summary>
+	public LlmServedDetails Served { get; init; } = LlmServedDetails.Unknown;
+
 	/// <summary>
 	/// Reads a reply body. Only <c>text</c> blocks count as the answer: with thinking on, a
 	/// <c>thinking</c> or <c>redacted_thinking</c> block comes first, and taking the first
@@ -43,13 +46,29 @@ internal sealed record AnthropicReply(string Text, string? StopReason)
 				text.Append(block.Text);
 		}
 
-		return new AnthropicReply(text.ToString(), response.StopReason);
+		return new AnthropicReply(text.ToString(), response.StopReason)
+		{
+			Served = new LlmServedDetails(
+				response.Model,
+				response.Usage?.ServiceTier,
+				response.Usage?.InputTokens,
+				response.Usage?.OutputTokens),
+		};
 	}
 
 	private sealed class ResponseDto
 	{
 		[JsonPropertyName("content")] public ContentBlockDto?[]? Content { get; set; }
 		[JsonPropertyName("stop_reason")] public string? StopReason { get; set; }
+		[JsonPropertyName("model")] public string? Model { get; set; }
+		[JsonPropertyName("usage")] public UsageDto? Usage { get; set; }
+	}
+
+	private sealed class UsageDto
+	{
+		[JsonPropertyName("input_tokens")] public int? InputTokens { get; set; }
+		[JsonPropertyName("output_tokens")] public int? OutputTokens { get; set; }
+		[JsonPropertyName("service_tier")] public string? ServiceTier { get; set; }
 	}
 
 	private sealed class ContentBlockDto

@@ -385,6 +385,7 @@ public sealed partial class PromptEditorWindow : Window
                     bool cutShort = false;
                     var requestOptions = new LlmRequestOptions
                     {
+                        EntryPoint = LlmEntryPoint.PromptEditorTest,
                         FastMode = ChkFastMode.IsChecked ?? false,
                         OnFastModeFallback = f => fallback = f,
                         ReasoningLevel = CurrentReasoningLevel(),

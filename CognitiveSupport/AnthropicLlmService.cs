@@ -25,11 +25,17 @@ public class AnthropicLlmService : ILlmService
 	private readonly int _timeoutSeconds;
 	private readonly ResiliencePipeline _retryPipeline;
 	private readonly TimeProvider _timeProvider;
+	private readonly Action<string> _requestLog;
 
 	/// <param name="timeProvider">
 	/// Test seam only; null in production. Drives both the retry backoff and each
 	/// attempt's deadline, so a test can read back the waits that were armed instead of
 	/// sitting through them.
+	/// </param>
+	/// <param name="requestLog">
+	/// Test seam only; null in production, which writes the request log lines to
+	/// <see cref="ErrorLogger"/>. Lets a test read back the lines for its own request
+	/// rather than search a log file other tests write to at the same time.
 	/// </param>
 	public AnthropicLlmService(
 		string apiKey,
@@ -37,7 +43,8 @@ public class AnthropicLlmService : ILlmService
 		HttpClient httpClient,
 		int timeoutSeconds = 60,
 		int retryCount = 3,
-		TimeProvider? timeProvider = null)
+		TimeProvider? timeProvider = null,
+		Action<string>? requestLog = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 
@@ -51,6 +58,7 @@ public class AnthropicLlmService : ILlmService
 		_httpClient.Timeout = Timeout.InfiniteTimeSpan;
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 		_timeProvider = timeProvider ?? TimeProvider.System;
+		_requestLog = requestLog ?? (line => ErrorLogger.LogInfo("LLM", line));
 		_retryPipeline = TransientRetry.Pipeline(retryCount, TransientRetry.Transient(), timeProvider);
 		_modelConfigs = modelList.ToDictionary(m => m.Name, m => m, LlmModelIndex.NameComparer);
 	}
@@ -99,14 +107,38 @@ public class AnthropicLlmService : ILlmService
 			Messages = conversationMessages
 		};
 
-		var (responseBody, sent) = await SendWithFallbacksAsync(
-			request,
-			config,
-			new RequestShape(level, options.FastMode),
-			options,
-			cancellationToken).ConfigureAwait(false);
+		_requestLog(LlmRequestLog.Started(options, LlmProvider.Anthropic, llmModelName, level));
 
-		return ReadAnswer(responseBody, options, ReasoningLimits.For(sent.Level).AnthropicMaxTokens);
+		string responseBody;
+		RequestShape sent;
+		try
+		{
+			(responseBody, sent) = await SendWithFallbacksAsync(
+				request,
+				config,
+				new RequestShape(level, options.FastMode),
+				options,
+				cancellationToken).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			// Only the caller's own cancel is a cancel. A per-attempt timeout is also an
+			// OperationCanceledException, and is logged below as the failure it is.
+			_requestLog(LlmRequestLog.Cancelled(options, LlmProvider.Anthropic, llmModelName));
+			throw;
+		}
+		catch (Exception ex)
+		{
+			_requestLog(LlmRequestLog.Failed(options, LlmProvider.Anthropic, llmModelName, ex));
+			throw;
+		}
+
+		var reply = AnthropicReply.Parse(responseBody);
+		// Logged before the reply is read, so a refusal still records what was served.
+		_requestLog(LlmRequestLog.Completed(
+			options, LlmProvider.Anthropic, llmModelName, reply.Served, sent.FastMode, sent.Level));
+
+		return ReadAnswer(reply, options, ReasoningLimits.For(sent.Level).AnthropicMaxTokens);
 	}
 
 	/// <summary>
@@ -122,10 +154,8 @@ public class AnthropicLlmService : ILlmService
 	/// failure, never an empty success; an answer that hit the length limit is returned,
 	/// and the caller is told so it can say the end is missing.
 	/// </summary>
-	private static string ReadAnswer(string responseBody, LlmRequestOptions options, int maxTokens)
+	private static string ReadAnswer(AnthropicReply reply, LlmRequestOptions options, int maxTokens)
 	{
-		var reply = AnthropicReply.Parse(responseBody);
-
 		if (reply.WasRefused)
 		{
 			ErrorLogger.LogInfo("LLM", $"Anthropic declined the request (stop_reason=refusal, {reply.Text.Length} characters of text discarded).");

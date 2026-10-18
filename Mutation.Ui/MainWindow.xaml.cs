@@ -2490,6 +2490,7 @@ public sealed partial class MainWindow : Window, IDisposable
 			bool cutShort = false;
 			var requestOptions = new LlmRequestOptions
 			{
+				EntryPoint = LlmEntryPoint.PromptHotkey,
 				FastMode = prompt.FastMode,
 				OnFastModeFallback = f => fastModeFallback = f,
 				// The stored level as it is: the service settles it against the levels

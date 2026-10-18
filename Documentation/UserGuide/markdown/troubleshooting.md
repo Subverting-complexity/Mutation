@@ -796,6 +796,11 @@ Your API keys are stripped out of the log before anything is written, so it is s
 share. The same applies to anything Mutation shows you on screen or reads out — an error
 message never contains one of your keys.
 
+The log also notes each request Mutation sends to an AI model: what started it, the model
+it asked for, the model that actually answered, and how large the request and the answer
+were. This helps if your AI provider's usage page shows a model or a bill you did not
+expect. Your dictated text, your clipboard and your prompts are never written to the log.
+
 ### The delivery and hotkey log
 
 A second log records, to the thousandth of a second, each step after a transcript is

@@ -504,9 +504,10 @@ public class AudioSessionManager : IDisposable
             {
                 StatusMessage?.Invoke(this, "Processing with LLM...");
                 modelName = !string.IsNullOrWhiteSpace(llmPrompt.ModelName) ? llmPrompt.ModelName : LlmSettings.DefaultModel;
-                ErrorLogger.LogInfo("LLM", $"LLM processing starting (model={modelName}, fastMode={llmPrompt.FastMode}, reasoningLevel={llmPrompt.ReasoningLevel}).");
+                // The service logs the request's start, outcome and served model itself.
                 var requestOptions = new LlmRequestOptions
                 {
+                    EntryPoint = LlmEntryPoint.Dictation,
                     FastMode = llmPrompt.FastMode,
                     OnFastModeFallback = f => fastModeFallback = f,
                     // The stored level as it is: the service settles it against the levels

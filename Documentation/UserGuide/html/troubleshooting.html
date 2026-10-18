@@ -797,6 +797,10 @@ while back, check the <code>.old</code> file too.</p>
 <p>Your API keys are stripped out of the log before anything is written, so it is safe to
 share. The same applies to anything Mutation shows you on screen or reads out — an error
 message never contains one of your keys.</p>
+<p>The log also notes each request Mutation sends to an AI model: what started it, the model
+it asked for, the model that actually answered, and how large the request and the answer
+were. This helps if your AI provider's usage page shows a model or a bill you did not
+expect. Your dictated text, your clipboard and your prompts are never written to the log.</p>
 <h3 id="the-delivery-and-hotkey-log">The delivery and hotkey log</h3>
 <p>A second log records, to the thousandth of a second, each step after a transcript is
 ready: the paste, the shortcut Mutation sends afterwards, and the success beep. It is
