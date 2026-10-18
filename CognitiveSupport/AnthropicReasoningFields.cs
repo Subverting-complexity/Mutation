@@ -8,7 +8,8 @@ namespace CognitiveSupport;
 /// <item>Off: the nearest to "no thinking" the model allows, from <see cref="AnthropicOffRule"/>.
 /// Most models get <c>thinking.type = "disabled"</c>; Claude Sonnet 5.5 gets
 /// <c>"between_tools"</c>; a model that always thinks gets no <c>thinking</c> field and
-/// effort low. The temperature is kept unless the model is still thinking.</item>
+/// effort low. The temperature is kept only where Off sends <c>disabled</c>: the other two
+/// kinds of model refuse a custom temperature.</item>
 /// <item>Low to Max: adaptive thinking (<c>thinking.type = "adaptive"</c>), so the model
 /// decides when and how much to think, with <c>output_config.effort</c> setting how hard
 /// it tries. No temperature, because the service refuses one while the model thinks.</item>
@@ -50,10 +51,15 @@ public static class AnthropicReasoningFields
 		};
 
 	/// <summary>
-	/// Whether the model's own temperature may go on the request: always, except while the
-	/// request makes the model think, which is whenever it sends an effort.
+	/// Whether the model's own temperature may go on the request: not while the request
+	/// makes the model think, which is whenever it sends an effort, and not at Off on a model
+	/// that cannot turn thinking off. Claude Sonnet 5.5, Opus 5.5 and Fable refuse a custom
+	/// temperature, so sending one at Off would fail the request Off is meant to keep cheap.
 	/// </summary>
 	/// <param name="level">The resolved level, or null for none.</param>
 	/// <param name="modelName">The model the request goes to, which decides what Off sends.</param>
-	public static bool SendsTemperature(ReasoningLevel? level, string modelName) => Effort(level, modelName) is null;
+	public static bool SendsTemperature(ReasoningLevel? level, string modelName) =>
+		level == ReasoningLevel.Off
+			? AnthropicOffRule.For(modelName) == AnthropicOffSetting.Disabled
+			: Effort(level, modelName) is null;
 }

@@ -206,7 +206,8 @@ Some newer Anthropic models cannot stop thinking completely. For those, **Off** 
 for the least thinking the model allows, so the prompt still runs first time:
 
 - **claude-sonnet-5-5** gets its own "think only between steps" setting.
-- **claude-opus-5-5** and the **claude-fable-5** models think at the **Low** level.
+- **claude-opus-5-5**, the **claude-fable-5** models and the **claude-mythos-5**
+  models think at the **Low** level.
 
 Every other Anthropic model turns thinking off.
 
@@ -221,8 +222,8 @@ levels, it gets every level of the new provider.
 
 **Temperature and reasoning.** While a prompt runs at a level other than Off or None,
 Mutation does not send the model's temperature. The providers do not accept a
-temperature while the model is thinking. For the same reason, **Off** on
-**claude-opus-5-5** or a **claude-fable-5** model does not send it either.
+temperature while the model is thinking. **Off** on the models in the list above
+does not send it either, because those models do not accept one.
 
 ### Text to Speech
 

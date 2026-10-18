@@ -128,6 +128,7 @@ public class AnthropicReasoningTests : IDisposable
 		var root = Root(Assert.Single(handler.Requests));
 		Assert.Equal("disabled", ThinkingType(root));
 		Assert.Null(Effort(root));
+		Assert.Equal(0.3, Temperature(root)!.Value, precision: 6);
 	}
 
 	[Theory]
@@ -146,6 +147,8 @@ public class AnthropicReasoningTests : IDisposable
 		Assert.Equal("between_tools", thinking.GetProperty("type").GetString());
 		Assert.Single(thinking.EnumerateObject());
 		Assert.Null(Effort(root));
+		// Sonnet 5.5 refuses a custom temperature.
+		Assert.Null(Temperature(root));
 	}
 
 	[Theory]
