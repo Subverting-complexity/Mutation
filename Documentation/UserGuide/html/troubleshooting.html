@@ -570,6 +570,18 @@ request, so it returned no text.&quot; If this happens while you dictate, you st
 transcript, with only the basic formatting rules applied.</p>
 <p><strong>What to do.</strong> Try rewording the prompt, or choose a different model for that prompt
 in the prompt editor.</p>
+<h3 id="the-ai-step-failed-while-i-was-dictating">The AI step failed while I was dictating</h3>
+<p><strong>What's happening.</strong> The AI step after a dictation can fail: the service took too
+long to answer, your API key (the long password that lets Mutation use the service)
+was not accepted, or the service had a problem. You still get your transcript, with
+only the basic formatting rules applied. Mutation tells you what went wrong at the
+start of the final message, for example &quot;The language model step failed: the model
+did not answer in time. Your transcript has only the basic formatting rules applied.
+Transcript ready.&quot; The message comes as a warning instead of the usual success.</p>
+<p><strong>What to do.</strong> Check the reason in the message. For a key that was not accepted,
+check the key on the <strong>API keys</strong> settings page. For a slow or failing service, try
+again in a moment, or pick a different model for the prompt. The full error is in
+<code>Mutation_Errors.log</code>.</p>
 <h3 id="the-wrong-microphone-is-being-used-or-the-mute-didnt-take">The wrong microphone is being used, or the mute didn't take</h3>
 <p><strong>What's happening.</strong> Mutation's mute shortcut mutes every microphone on the PC, not
 just the one it is recording with. It re-checks the list of devices when one is plugged
