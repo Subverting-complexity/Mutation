@@ -148,7 +148,7 @@ public static class ErrorLogger
 	}
 
 	/// <summary>
-	/// Appends a redacted, timestamped free-text breadcrumb (e.g. "LLM processing starting").
+	/// Appends a redacted, timestamped free-text breadcrumb (e.g. "LLM request starting").
 	/// Never throws.
 	/// </summary>
 	public static void LogInfo(string source, string message)

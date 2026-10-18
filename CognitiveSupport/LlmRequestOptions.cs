@@ -47,4 +47,11 @@ public sealed class LlmRequestOptions
 	/// user's saved level is never changed.
 	/// </summary>
 	public Action<ReasoningLevel>? OnReasoningFallback { get; init; }
+
+	/// <summary>
+	/// The part of the app that sent the request, named in the service's request log
+	/// lines. Use a <see cref="CognitiveSupport.LlmEntryPoint"/> value. Null is logged as
+	/// unknown.
+	/// </summary>
+	public string? EntryPoint { get; init; }
 }

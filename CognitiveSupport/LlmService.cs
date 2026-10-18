@@ -12,6 +12,7 @@ public class LlmService : ILlmService
 	private readonly int _timeoutSeconds;
 	private readonly ResiliencePipeline _retryPipeline;
 	private readonly TimeProvider _timeProvider;
+	private readonly Action<string> _requestLog;
 
 	/// <param name="transport">
 	/// Test seam only; null in production. See <see cref="OpenAiClientOptionsFactory.Create"/>.
@@ -21,13 +22,19 @@ public class LlmService : ILlmService
 	/// attempt's deadline, so a test can read back the waits that were armed instead of
 	/// sitting through them.
 	/// </param>
+	/// <param name="requestLog">
+	/// Test seam only; null in production, which writes the request log lines to
+	/// <see cref="ErrorLogger"/>. Lets a test read back the lines for its own request
+	/// rather than search a log file other tests write to at the same time.
+	/// </param>
 	public LlmService(
 		string apiKey,
 		IEnumerable<LlmModelConfig> models,
 		int timeoutSeconds = 60,
 		int retryCount = 3,
 		PipelineTransport? transport = null,
-		TimeProvider? timeProvider = null)
+		TimeProvider? timeProvider = null,
+		Action<string>? requestLog = null)
 	{
 		if (string.IsNullOrEmpty(apiKey)) throw new ArgumentNullException(nameof(apiKey));
 
@@ -37,6 +44,7 @@ public class LlmService : ILlmService
 		_modelConfigs = new Dictionary<string, LlmModelConfig>(LlmModelIndex.NameComparer);
 		_timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60;
 		_timeProvider = timeProvider ?? TimeProvider.System;
+		_requestLog = requestLog ?? (line => ErrorLogger.LogInfo("LLM", line));
 
 		// The OpenAI SDK reports API errors as ClientResultException; only transient
 		// statuses (429, 5xx, connection failures) are retried, so a permanent 4xx such as
@@ -110,14 +118,33 @@ public class LlmService : ILlmService
 			}, cancellationToken).ConfigureAwait(false);
 		}
 
-		var (result, sent) = await SendWithFallbacksAsync(
-			SendAsync,
-			config,
-			new RequestShape(level, requestOptions.FastMode),
-			requestOptions).ConfigureAwait(false);
+		_requestLog(LlmRequestLog.Started(requestOptions, LlmProvider.OpenAI, llmModelName, level));
 
-		if (sent.FastMode)
-			LogServedTier(result.Value);
+		ClientResult<ChatCompletion> result;
+		RequestShape sent;
+		try
+		{
+			(result, sent) = await SendWithFallbacksAsync(
+				SendAsync,
+				config,
+				new RequestShape(level, requestOptions.FastMode),
+				requestOptions).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			// Only the caller's own cancel is a cancel. A per-attempt timeout is also an
+			// OperationCanceledException, and is logged below as the failure it is.
+			_requestLog(LlmRequestLog.Cancelled(requestOptions, LlmProvider.OpenAI, llmModelName));
+			throw;
+		}
+		catch (Exception ex)
+		{
+			_requestLog(LlmRequestLog.Failed(requestOptions, LlmProvider.OpenAI, llmModelName, ex));
+			throw;
+		}
+
+		_requestLog(LlmRequestLog.Completed(
+			requestOptions, LlmProvider.OpenAI, llmModelName, Served(result.Value), sent.FastMode, sent.Level));
 
 		if (result.Value.Content.Count > 0)
 		{
@@ -256,18 +283,22 @@ public class LlmService : ILlmService
 	internal const string FastServiceTier = "fast";
 
 	/// <summary>
-	/// OpenAI echoes back the tier it actually served — often "priority" (documented as
-	/// behaviourally identical to fast) and "default" when it downgrades under load.
-	/// Neither is an error, and a downgrade bills at standard rates, so there is nothing
-	/// to warn the user about; record it for diagnosis and move on.
+	/// What OpenAI says it served, for the request log. The tier is recorded on every
+	/// request: a Fast mode request is often served as "priority" (documented as
+	/// behaviourally identical to fast), or as "default" when OpenAI downgrades it under
+	/// load. Neither is an error, and a downgrade bills at standard rates, so the log is
+	/// the only place it needs to show.
 	/// </summary>
-	private static void LogServedTier(ChatCompletion completion)
+	private static LlmServedDetails Served(ChatCompletion completion)
 	{
 #pragma warning disable OPENAI001 // Evaluation-only SDK surface; see BuildChatOptions.
-		string? served = completion.ServiceTier?.ToString();
+		string? tier = completion.ServiceTier?.ToString();
 #pragma warning restore OPENAI001
-		if (!string.IsNullOrEmpty(served) && served != FastServiceTier)
-			ErrorLogger.LogInfo("LLM", $"OpenAI served service tier '{served}' for a Fast mode request.");
+		return new LlmServedDetails(
+			completion.Model,
+			tier,
+			completion.Usage?.InputTokenCount,
+			completion.Usage?.OutputTokenCount);
 	}
 
 	private static ChatMessage ToOpenAiMessage(LlmChatMessage msg)
