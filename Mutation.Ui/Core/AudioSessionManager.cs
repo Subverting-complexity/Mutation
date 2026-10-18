@@ -576,7 +576,10 @@ public class AudioSessionManager : IDisposable
             && _fallbackNotices.ShouldAnnounce(llmPrompt.Id, fastModeFallback.Reason)
                 ? fastModeFallback.Reason
                 : null;
-        string? reasoningNotice = llmPrompt is not null && modelName is not null
+        // Only when the model's text is the one delivered: a refusal or failure after the
+        // fallback produced no answer, so "ran without a reasoning level" would mislead, and
+        // would spend the one notice the user gets for this prompt this session.
+        string? reasoningNotice = llmPrompt is not null && modelName is not null && llmProcessedText is not null
             ? _fallbackNotices.ClaimReasoningNotice(llmPrompt.Id, modelName, reasoningFallback)
             : null;
 

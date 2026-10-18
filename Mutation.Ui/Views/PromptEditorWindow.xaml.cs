@@ -52,8 +52,10 @@ public sealed partial class PromptEditorWindow : Window
     private readonly IReadOnlyList<NamedHotkey> _claimedElsewhere;
 
     // The configured models by name, so the reasoning level list can show the levels ticked
-    // for whichever model is chosen. Ordinal, like the services that look a model up by name.
-    private readonly Dictionary<string, LlmModelConfig> _modelsByName = new(StringComparer.Ordinal);
+    // for whichever model is chosen. Case-insensitive, like the services that look a model up
+    // by name: an ordinal match missed "GPT-5" for "gpt-5" and said the model does not reason
+    // while every run sent it a level.
+    private readonly Dictionary<string, LlmModelConfig> _modelsByName = new(LlmModelIndex.NameComparer);
 
     // The level the user last chose, or the saved one. Kept apart from what the list shows:
     // moving to a model without this level ticked changes the list, but moving back to a
@@ -144,6 +146,9 @@ public sealed partial class PromptEditorWindow : Window
             _wantedLevel = Prompt.ReasoningLevel;
 
             string desiredModel = !string.IsNullOrWhiteSpace(Prompt.ModelName) ? Prompt.ModelName : LlmSettings.DefaultModel;
+            // The listed spelling, when the name differs only in case, so the list does not
+            // offer the same model twice.
+            desiredModel = modelList.FirstOrDefault(m => LlmModelIndex.NameComparer.Equals(m, desiredModel)) ?? desiredModel;
             if (!modelList.Contains(desiredModel))
             {
                 modelList.Insert(0, desiredModel);
