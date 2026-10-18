@@ -38,7 +38,9 @@ internal static class LlmRequestLog
 
 	/// <summary>
 	/// Names the exception type and message only. The caller logs the full exception as
-	/// it always has; this line is what ties that error to the model it was for.
+	/// it always has; this line is what ties that error to the model it was for. The
+	/// message is the one part not built from settings: it is the provider's error text,
+	/// which describes the request's fault rather than echoing its content.
 	/// </summary>
 	public static string Failed(
 		LlmRequestOptions options,

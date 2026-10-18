@@ -109,16 +109,20 @@ public class AnthropicLlmService : ILlmService
 
 		_requestLog(LlmRequestLog.Started(options, LlmProvider.Anthropic, llmModelName, level));
 
-		string responseBody;
+		AnthropicReply reply;
 		RequestShape sent;
 		try
 		{
+			string responseBody;
 			(responseBody, sent) = await SendWithFallbacksAsync(
 				request,
 				config,
 				new RequestShape(level, options.FastMode),
 				options,
 				cancellationToken).ConfigureAwait(false);
+			// Inside the try, so a reply that is not valid JSON is logged as the failure
+			// it is rather than leaving a start line with no outcome.
+			reply = AnthropicReply.Parse(responseBody);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -133,7 +137,6 @@ public class AnthropicLlmService : ILlmService
 			throw;
 		}
 
-		var reply = AnthropicReply.Parse(responseBody);
 		// Logged before the reply is read, so a refusal still records what was served.
 		_requestLog(LlmRequestLog.Completed(
 			options, LlmProvider.Anthropic, llmModelName, reply.Served, sent.FastMode, sent.Level));
