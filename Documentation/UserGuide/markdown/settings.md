@@ -224,6 +224,9 @@ levels, it gets every level of the new provider.
 Mutation does not send the model's temperature. The providers do not accept a
 temperature while the model is thinking. **Off** on the models in the list above
 does not send it either, because those models do not accept one.
+If a model refuses the level and Mutation runs the prompt again without one, that
+second try does not send the temperature either. Some models may not accept a
+temperature then, and the second try must not fail because of it.
 
 ### Text to Speech
 

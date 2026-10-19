@@ -100,7 +100,7 @@ public class LlmService : ILlmService
 		// in Polly's per-execution context, not in the shared pipeline.
 		async Task<ClientResult<ChatCompletion>> SendAsync(RequestShape shape)
 		{
-			ChatCompletionOptions options = BuildChatOptions(config, shape.FastMode, shape.Level);
+			ChatCompletionOptions options = BuildChatOptions(config, shape.FastMode, shape.Level, shape.SendsTemperature);
 
 			// Heavier reasoning takes longer, so each try may wait a multiple of the user's
 			// wait time; the multiple comes from the one limits table both services share.
@@ -154,12 +154,17 @@ public class LlmService : ILlmService
 	}
 
 	/// <summary>
-	/// The two settings a fallback can drop from a request: the reasoning level and Fast
-	/// mode. Everything else about the request stays the same on every send.
+	/// What a fallback can drop from a request: the reasoning level, with the model's
+	/// temperature, and Fast mode. Everything else about the request stays the same on
+	/// every send.
 	/// </summary>
 	/// <param name="Level">The resolved level to send, or null to send none.</param>
 	/// <param name="FastMode">Whether to ask for Fast mode.</param>
-	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode);
+	/// <param name="SendsTemperature">
+	/// Whether the model's temperature may go on the request. False on every send after a
+	/// reasoning fallback; see <see cref="SendWithFallbacksAsync"/>.
+	/// </param>
+	private readonly record struct RequestShape(ReasoningLevel? Level, bool FastMode, bool SendsTemperature = true);
 
 	/// <summary>
 	/// Sends the request and, if the reasoning level or the fast service tier is what the
@@ -221,7 +226,11 @@ public class LlmService : ILlmService
 				{
 					refusedLevel = shape.Level;
 					ErrorLogger.LogInfo("LLM", $"{ReasoningMessages.Fallback(config.Name, shape.Level!.Value)} OpenAI said: {ex.Message}");
-					shape = shape with { Level = null };
+					// The temperature goes too. A reasoning model that refused one level still
+					// reasons at its default with none, and then refuses a temperature, so the
+					// retry would fail on an error that names no reasoning term and the user's
+					// text would be lost after all (issue #438).
+					shape = shape with { Level = null, SendsTemperature = false };
 				}
 				else if (fastModeCause is { } reason)
 				{
@@ -249,14 +258,19 @@ public class LlmService : ILlmService
 	/// The resolved reasoning level, or null to send no reasoning effort, so the request is
 	/// the same as before reasoning levels existed.
 	/// </param>
+	/// <param name="allowTemperature">
+	/// False to leave the model's temperature off whatever the level, as the retry after a
+	/// reasoning fallback does.
+	/// </param>
 	internal static ChatCompletionOptions BuildChatOptions(
 		LlmModelConfig config,
 		bool fastMode = false,
-		ReasoningLevel? level = null)
+		ReasoningLevel? level = null,
+		bool allowTemperature = true)
 	{
 		var options = new ChatCompletionOptions();
 		// OpenAI refuses a custom temperature while the model reasons.
-		if (config.CustomTemperature.HasValue && OpenAiReasoningFields.SendsTemperature(level))
+		if (allowTemperature && config.CustomTemperature.HasValue && OpenAiReasoningFields.SendsTemperature(level))
 		{
 			options.Temperature = (float)config.CustomTemperature.Value;
 		}

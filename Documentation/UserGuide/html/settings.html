@@ -466,7 +466,10 @@ levels, it gets every level of the new provider.</p>
 <p><strong>Temperature and reasoning.</strong> While a prompt runs at a level other than Off or None,
 Mutation does not send the model's temperature. The providers do not accept a
 temperature while the model is thinking. <strong>Off</strong> on the models in the list above
-does not send it either, because those models do not accept one.</p>
+does not send it either, because those models do not accept one.
+If a model refuses the level and Mutation runs the prompt again without one, that
+second try does not send the temperature either. Some models may not accept a
+temperature then, and the second try must not fail because of it.</p>
 <h3 id="text-to-speech">Text to Speech</h3>
 <p>How Mutation reads text out loud. Voice, rate and volume live on the main window;
 this page holds everything else.</p>

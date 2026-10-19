@@ -240,15 +240,33 @@ public class AnthropicReasoningTests : IDisposable
 		var first = Root(handler.Requests[0]);
 		Assert.Equal("max", Effort(first));
 
-		// The retry is the request with no level: no reasoning fields, the model's
-		// temperature back, and the lightest limits.
+		// The retry is the request with no level: no reasoning fields, the lightest limits,
+		// and no temperature, which a model that thinks at its default may refuse
+		// (issue #438).
 		var retry = Root(handler.Requests[1]);
 		Assert.Null(ThinkingType(retry));
 		Assert.Null(Effort(retry));
-		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
+		Assert.Null(Temperature(retry));
 		Assert.Equal(8_000, MaxTokens(retry));
 
 		Assert.Equal([ReasoningLevel.Max], options);
+	}
+
+	[Fact]
+	public async Task FastModeRefusedWithNoLevel_RetryKeepsTheTemperature()
+	{
+		var handler = new FakeHttpMessageHandler()
+			.Respond(HttpStatusCode.BadRequest, SpeedRefused)
+			.Respond(HttpStatusCode.OK, SuccessBody);
+
+		string result = await CreateService(handler).CreateChatCompletion(
+			Messages(), Model, new LlmRequestOptions { FastMode = true });
+
+		Assert.Equal("done", result);
+		Assert.Equal(2, handler.Requests.Count);
+		var retry = Root(handler.Requests[1]);
+		Assert.Null(Speed(retry));
+		Assert.Equal(0.3, Temperature(retry)!.Value, precision: 6);
 	}
 
 	[Fact]
@@ -458,6 +476,7 @@ public class AnthropicReasoningTests : IDisposable
 		var last = Root(handler.Requests[2]);
 		Assert.Null(Speed(last));
 		Assert.Null(Effort(last));
+		Assert.Null(Temperature(last));
 		Assert.Equal(ReasoningLevel.Low, refused);
 		Assert.NotNull(fastFallback);
 	}
