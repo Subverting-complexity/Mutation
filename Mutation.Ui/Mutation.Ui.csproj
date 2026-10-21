@@ -89,6 +89,15 @@
 		<ProjectReference Include="..\CognitiveSupport\CognitiveSupport.csproj" />
 	</ItemGroup>
 
+	<!--
+		SendKeys, the clipboard and screen bounds come from the Windows Forms shared framework.
+		NAudio 2 brought it in by way of NAudio.WinForms; NAudio 3.3 does not, so this project
+		names the framework it uses itself (issue #443).
+	-->
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<InternalsVisibleTo Include="Mutation.Tests" />
 	</ItemGroup>

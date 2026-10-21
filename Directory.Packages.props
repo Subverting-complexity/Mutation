@@ -21,7 +21,15 @@
 		<PackageVersion Include="Concentus.Oggfile" Version="1.0.7" />
 		<PackageVersion Include="CoreAudio" Version="1.40.0" />
 		<PackageVersion Include="coverlet.collector" Version="10.1.0" />
-		<PackageVersion Include="Deepgram" Version="7.2.0" />
+		<!--
+			Held on 6.9.0. Deepgram 7 builds its own HTTP client with a five-attempt retry that
+			also retries HTTP 429, and offers no way to switch it off or pass a client in. Under
+			our own retries a rate-limited dictation would then retry silently until each attempt's
+			deadline ran out and fail as a timeout, where 6.9.0 fails at once with
+			TOO_MANY_REQUESTS (measured in the review of issue #443). Moving to 7 needs the retry
+			policy reworked first; issue #445 tracks that.
+		-->
+		<PackageVersion Include="Deepgram" Version="6.9.0" />
 		<PackageVersion Include="Markdig" Version="1.4.2" />
 		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
@@ -61,8 +69,9 @@
 		for no benefit, and #301 asks for exactly this treatment: drop a bump that turns
 		out to carry more than it says, rather than hold up the rest.
 
-		Serilog used to be held on 3.1.1 here because Deepgram 6.9.0 declared it. Deepgram 7
-		dropped Serilog altogether (issue #443), so it is no longer in the graph at all.
+		Serilog stays on 3.1.1. Deepgram 6.9.0 still declares 3.1.1 and 4.x is a major
+		bump; nothing in the suite exercises Deepgram's logging, so a green run would not
+		be evidence that forcing it is safe. It waits until Deepgram itself moves.
 	-->
 	<ItemGroup>
 		<PackageVersion Include="System.ClientModel" Version="1.16.0" />
@@ -123,32 +132,14 @@
 		<PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.13" />
 		<PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
 		<PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.13" />
-		<PackageVersion Include="Microsoft.Extensions.ObjectPool" Version="10.0.13" />
-		<PackageVersion Include="System.Threading.RateLimiting" Version="10.0.13" />
 	</ItemGroup>
 
 	<!--
-		Deepgram 7 replaced its own retry code with Microsoft.Extensions.Http.Resilience, and
-		asks for the 8.10 release of it. That family ships from a separate repository with its
-		own version numbers (8.10 goes with .NET 8, 10.x with .NET 10), so it needs its own
-		pins to stay on the .NET 10 line with everything above. Polly.Extensions and
-		Polly.RateLimiting come in under it and are held on the same version as Polly itself.
-		The other runtime-band packages the graph picks up (System.Memory.Data through
-		System.ClientModel, System.Numerics.Tensors through NAudio 3) are pinned here too, so
-		no 8.x or 9.x copy of a runtime library ships next to 10.x ones (issue #443).
+		Also pinned transitively, to keep runtime libraries on the band the app ships with:
+		System.Memory.Data comes in through System.ClientModel on 10.0.10, and
+		System.Numerics.Tensors through NAudio 3 on 9.0.0 (issue #443).
 	-->
 	<ItemGroup>
-		<PackageVersion Include="Microsoft.Extensions.AmbientMetadata.Application" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Compliance.Abstractions" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.AutoActivation" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Diagnostics.ExceptionSummarization" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Http.Diagnostics" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Resilience" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Telemetry" Version="10.11.0" />
-		<PackageVersion Include="Microsoft.Extensions.Telemetry.Abstractions" Version="10.11.0" />
-		<PackageVersion Include="Polly.Extensions" Version="8.8.0" />
-		<PackageVersion Include="Polly.RateLimiting" Version="8.8.0" />
 		<PackageVersion Include="System.Memory.Data" Version="10.0.13" />
 		<PackageVersion Include="System.Numerics.Tensors" Version="10.0.13" />
 	</ItemGroup>

@@ -9,10 +9,9 @@
 		<InternalsVisibleTo Include="Mutation.Tests" />
 	</ItemGroup>
 	<!--
-		System.Drawing (screen capture for OCR) and System.Windows.Forms (SendKeys, the clipboard
-		and screen bounds in Mutation.Ui) live in the Windows Forms shared framework. NAudio 2
-		brought it in by way of NAudio.WinForms; NAudio 3.3 no longer pulls that package in, so
-		the solution names the framework itself. It flows on to Mutation.Ui and the tests.
+		System.Drawing, used here for the OCR screen capture, lives in the Windows Forms shared
+		framework. NAudio 2 brought that framework in by way of NAudio.WinForms; NAudio 3.3 no
+		longer pulls that package in, so the project names the framework itself (issue #443).
 	-->
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
