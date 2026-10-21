@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Mutation.Ui.Core;
 using Mutation.Ui.Services;
 using System;
@@ -70,6 +71,10 @@ public sealed partial class PromptEditorWindow : Window
     // the user's own choice.
     private bool _refillingReasoningLevels;
 
+    // Holds the main window disabled while this editor is open. Null when no owner was
+    // given, in which case the editor is only always-on-top.
+    private OwnedModal? _modal;
+
     // Internal rather than public because of the last argument: the shortcuts already claimed
     // are described with an internal type, and everything that opens this window is in here.
     internal PromptEditorWindow(
@@ -77,7 +82,8 @@ public sealed partial class PromptEditorWindow : Window
         TranscriptFormatter formatter,
         IReadOnlyList<LlmModelConfig> availableModels,
         CancellationToken shutdownToken = default,
-        IReadOnlyList<NamedHotkey>? claimedElsewhere = null)
+        IReadOnlyList<NamedHotkey>? claimedElsewhere = null,
+        IntPtr ownerWindow = default)
     {
         this.InitializeComponent();
         _formatter = formatter;
@@ -89,26 +95,36 @@ public sealed partial class PromptEditorWindow : Window
         _statusDismissTimer = new DispatcherTimer { Interval = StatusDismissDelay };
         _statusDismissTimer.Tick += StatusDismissTimer_Tick;
 
-        // Set window size
         IntPtr hWnd = WindowNative.GetWindowHandle(this);
         WindowId windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
         AppWindow appWindow = AppWindow.GetFromWindowId(windowId);
-        appWindow.Resize(new Windows.Graphics.SizeInt32(600, 600));
 
-        // Center the window
-        var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
+        // Half the screen the main window is on, centred on it (issue #441). The content
+        // scrolls, so a small screen still reaches every control.
+        WindowId placeOn = ownerWindow != IntPtr.Zero ? Win32Interop.GetWindowIdFromWindow(ownerWindow) : windowId;
+        var displayArea = DisplayArea.GetFromWindowId(placeOn, DisplayAreaFallback.Primary);
         if (displayArea != null)
         {
-            var centeredX = (displayArea.WorkArea.Width - 600) / 2;
-            var centeredY = (displayArea.WorkArea.Height - 600) / 2;
-            appWindow.Move(new Windows.Graphics.PointInt32(displayArea.WorkArea.X + centeredX, displayArea.WorkArea.Y + centeredY));
+            var work = displayArea.WorkArea;
+            var (x, y, width, height) = ModalWindowPlacement.Centred(work.X, work.Y, work.Width, work.Height);
+            appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
         }
 
-        // Make it effective modal (always on top)
-        if (appWindow.Presenter is OverlappedPresenter presenter)
+        if (Content is FrameworkElement content)
         {
-            presenter.IsAlwaysOnTop = true;
-            // presenter.IsModal = true; // CRASH FIX: IsModal requires an owner to be set via P/Invoke, which we aren't doing accurately enough. checking IsAlwaysOnTop is sufficient.
+            // Escape is Cancel. Listened for on the root, so a control that uses Escape
+            // itself — the hotkey box while recording, an open drop-down list, a dialog
+            // shown over this window — handles it first and marks it handled.
+            content.KeyDown += Root_KeyDown;
+
+            // Focus the first field, so a screen reader starts inside the editor rather than
+            // on a window with nothing focused.
+            void FocusFirstField(object s, RoutedEventArgs e)
+            {
+                content.Loaded -= FocusFirstField;
+                TxtName.Focus(FocusState.Programmatic);
+            }
+            content.Loaded += FocusFirstField;
         }
 
         foreach (var model in availableModels ?? Array.Empty<LlmModelConfig>())
@@ -178,9 +194,42 @@ public sealed partial class PromptEditorWindow : Window
         // Checked as the window opens, not only after an edit. A prompt saved before the other
         // end existed is already clashing, and the user opening it is exactly who needs to know.
         ShowHotkeyClash();
+
+        // A real modal of the main window: owned by it, so it stays above it, and the main
+        // window disabled until this one closes, so neither the mouse nor Tab nor Alt+Tab
+        // reaches it in the meantime. Last, so nothing above can throw and leave the main
+        // window disabled with no editor to close. Without an owner, fall back to
+        // always-on-top, which is all this window used to do.
+        if (ownerWindow != IntPtr.Zero)
+            _modal = OwnedModal.Attach(hWnd, ownerWindow);
+        else if (appWindow.Presenter is OverlappedPresenter presenter)
+            presenter.IsAlwaysOnTop = true;
     }
 
     private void HkPromptHotkey_HotkeyCommitted(object? sender, string value) => ShowHotkeyClash();
+
+    private void Root_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Handled || e.Key != Windows.System.VirtualKey.Escape)
+            return;
+        // Escape over a test result or an error belongs to that dialog alone. It handles the
+        // key itself; this is the guard should it ever reach here as well.
+        if (Content.XamlRoot is { } xamlRoot
+            && VisualTreeHelper.GetOpenPopupsForXamlRoot(xamlRoot).Any(p => p.Child is ContentDialog))
+            return;
+        e.Handled = true;
+        Close();
+    }
+
+    /// <summary>
+    /// Keeps the settings and the prompt instructions box in one scrolling area that is at
+    /// least as tall as the space it has. With room to spare the instructions box takes all
+    /// of it; on a short window the area grows past the visible height and scrolls instead, so
+    /// every control stays reachable (issue #441). Without the minimum height a scrolling
+    /// area offers unlimited height, and the box would shrink to a few lines.
+    /// </summary>
+    private void FormScroller_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        FormGrid.MinHeight = FormScroller.ViewportHeight;
 
     private string SelectedModelName => CmbModel.SelectedItem as string ?? LlmSettings.DefaultModel;
 
@@ -462,6 +511,10 @@ public sealed partial class PromptEditorWindow : Window
         CmbModel.SelectionChanged -= CmbModel_SelectionChanged;
         CmbReasoningLevel.SelectionChanged -= CmbReasoningLevel_SelectionChanged;
         _closed = true;
+        // Before the window goes, so Windows hands focus back to the main window.
+        _modal?.Release();
+        if (Content is FrameworkElement content)
+            content.KeyDown -= Root_KeyDown;
         _statusDismissTimer.Stop();
         _statusDismissTimer.Tick -= StatusDismissTimer_Tick;
         // Signal only. Disposal belongs to the run's own handle, which is the one place
