@@ -8,6 +8,14 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="Mutation.Tests" />
 	</ItemGroup>
+	<!--
+		System.Drawing, used here for the OCR screen capture, lives in the Windows Forms shared
+		framework. NAudio 2 brought that framework in by way of NAudio.WinForms; NAudio 3.3 no
+		longer pulls that package in, so the project names the framework itself (issue #443).
+	-->
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Azure.AI.Vision.ImageAnalysis" />
 		<PackageReference Include="Concentus" />

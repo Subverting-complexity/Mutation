@@ -123,7 +123,7 @@ public class AudioRecorderDrainTests : IDisposable
 	}
 
 	/// <summary>
-	/// A scripted stand-in for NAudio's <c>WaveInEvent</c>. <see cref="StopRecording"/> returns
+	/// A scripted stand-in for NAudio's <c>WaveIn</c>. <see cref="StopRecording"/> returns
 	/// immediately, as the real one does, and the remaining buffers plus
 	/// <see cref="RecordingStopped"/> are delivered from a separate thread that the test lets
 	/// through when it chooses.

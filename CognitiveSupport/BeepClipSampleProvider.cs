@@ -50,10 +50,8 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 
 	public WaveFormat WaveFormat { get; }
 
-	public int Read(float[] buffer, int offset, int count)
+	public int Read(Span<float> buffer)
 	{
-		ArgumentNullException.ThrowIfNull(buffer);
-
 		var firstRead = _onFirstRead;
 		if (firstRead is not null)
 		{
@@ -62,6 +60,7 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 		}
 
 		var samples = _clip.Samples.Span;
+		int count = buffer.Length;
 		int written = 0;
 
 		while (written < count && _repeatsDone < _repeatCount)
@@ -75,7 +74,7 @@ internal sealed class BeepClipSampleProvider : ISampleProvider
 			}
 
 			int available = Math.Min(count - written, samples.Length - _position);
-			samples.Slice(_position, available).CopyTo(buffer.AsSpan(offset + written, available));
+			samples.Slice(_position, available).CopyTo(buffer.Slice(written, available));
 			written += available;
 			_position += available;
 

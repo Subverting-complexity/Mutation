@@ -52,12 +52,13 @@ public sealed class BeepAudioOutput : IDisposable
 	public const int Channels = 2;
 
 	/// <summary>
-	/// How much audio the device buffers, and in how many pieces. A beep starts at the next
-	/// buffer boundary, so this is the app's own share of the delay between asking for a sound
-	/// and hearing it: about 33 ms here. NAudio's default is 300 ms in two buffers, which would
-	/// have put a tenth of a second between the paste and its confirmation for no reason.
+	/// How much audio each device buffer holds, and how many buffers there are. A beep starts at
+	/// the next buffer boundary, so one buffer is the app's own share of the delay between asking
+	/// for a sound and hearing it: 33 ms here, about 100 ms in all. NAudio's default is two
+	/// 100 ms buffers, which would put a tenth of a second between the paste and its confirmation
+	/// for no reason.
 	/// </summary>
-	public const int DesiredLatencyMs = 100;
+	public const int BufferMilliseconds = 33;
 
 	public const int BufferCount = 3;
 
@@ -95,7 +96,7 @@ public sealed class BeepAudioOutput : IDisposable
 	private bool _disposed;
 
 	public BeepAudioOutput()
-		: this(() => new WaveOutAudioOutputDevice(DesiredLatencyMs, BufferCount))
+		: this(() => new WaveOutAudioOutputDevice(BufferMilliseconds, BufferCount))
 	{
 	}
 

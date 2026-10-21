@@ -29,7 +29,7 @@ public class BeepClipSampleProviderTests
 		var all = new System.Collections.Generic.List<float>();
 		var buffer = new float[chunk];
 		int read;
-		while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+		while ((read = provider.Read(buffer)) > 0)
 			all.AddRange(buffer.Take(read));
 		return all.ToArray();
 	}
@@ -80,7 +80,7 @@ public class BeepClipSampleProviderTests
 		var provider = new BeepClipSampleProvider(Clip(frames: 10), repeatCount: 1);
 		DrainInChunks(provider, chunk: 64);
 
-		Assert.Equal(0, provider.Read(new float[64], 0, 64));
+		Assert.Equal(0, provider.Read(new float[64]));
 	}
 
 	// Guards a loop that would otherwise never end: an empty clip copies nothing, so the
@@ -90,7 +90,7 @@ public class BeepClipSampleProviderTests
 	{
 		var provider = new BeepClipSampleProvider(new BeepClip(Array.Empty<float>(), BeepAudioOutput.SampleRate, 2), repeatCount: 4);
 
-		Assert.Equal(0, provider.Read(new float[64], 0, 64));
+		Assert.Equal(0, provider.Read(new float[64]));
 	}
 
 	[Fact]
@@ -108,7 +108,7 @@ public class BeepClipSampleProviderTests
 		var provider = new BeepClipSampleProvider(Clip(frames: 5), repeatCount: 1);
 		var buffer = new float[20];
 
-		int read = provider.Read(buffer, 4, 10);
+		int read = provider.Read(buffer.AsSpan(4, 10));
 
 		Assert.Equal(10, read);
 		Assert.Equal(0f, buffer[3]);

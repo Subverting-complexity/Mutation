@@ -486,7 +486,7 @@ public class AudioDeviceManager : IMuteEndpointProvider, ICaptureLevelEndpointPr
 		int bestMatchIndex = -1;
 		for (int i = 0; i < deviceCount; i++)
 		{
-			string product = WaveInEvent.GetCapabilities(i).ProductName;
+			string product = WaveIn.GetCapabilities(i).ProductName;
 			if (string.Equals(product, friendly, StringComparison.OrdinalIgnoreCase))
 			{
 				return i; // exact match wins immediately

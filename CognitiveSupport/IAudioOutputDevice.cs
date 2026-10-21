@@ -5,7 +5,7 @@ namespace CognitiveSupport;
 
 /// <summary>
 /// The output device contract <see cref="AudioPlayer"/> drives. Extracting it from NAudio's
-/// <c>WaveOutEvent</c> (which opens a real WinMM device) lets the player's teardown rules —
+/// <c>WaveOut</c> (which opens a real WinMM device) lets the player's teardown rules —
 /// releasing the device when a file reaches its end, and leaving a newer playback alone — be
 /// exercised in a unit test.
 /// </summary>

@@ -136,7 +136,7 @@ public static class AudioFileConverter
 		byte[] buffer = new byte[outFormat.AverageBytesPerSecond];
 		int bytesRead;
 
-		while ((bytesRead = resampler.Read(buffer, 0, buffer.Length)) > 0)
+		while ((bytesRead = resampler.Read(buffer)) > 0)
 		{
 			splitter.Append(buffer, bytesRead, writeFrame);
 		}

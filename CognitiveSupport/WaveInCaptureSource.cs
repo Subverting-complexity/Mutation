@@ -6,15 +6,15 @@ namespace CognitiveSupport;
 
 /// <summary>
 /// The real microphone: <see cref="IAudioCaptureSource"/> backed by NAudio's
-/// <c>WaveInEvent</c>.
+/// <c>WaveIn</c>.
 /// </summary>
 internal sealed class WaveInCaptureSource : IAudioCaptureSource
 {
-	private readonly WaveInEvent _waveIn;
+	private readonly WaveIn _waveIn;
 
 	public WaveInCaptureSource(int deviceNumber, WaveFormat waveFormat, int bufferMilliseconds)
 	{
-		// WaveInEvent captures SynchronizationContext.Current in its constructor and posts
+		// WaveIn captures SynchronizationContext.Current in its constructor and posts
 		// RecordingStopped to it. Constructed on the UI thread, the event would therefore be
 		// delivered on the UI thread — and AudioRecorder.StopRecording, called from that same
 		// thread, waits for it, which would deadlock until the wait times out. Building it
@@ -24,7 +24,7 @@ internal sealed class WaveInCaptureSource : IAudioCaptureSource
 		SynchronizationContext.SetSynchronizationContext(null);
 		try
 		{
-			_waveIn = new WaveInEvent
+			_waveIn = new WaveIn
 			{
 				DeviceNumber = deviceNumber,
 				WaveFormat = waveFormat,
