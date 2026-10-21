@@ -5,7 +5,7 @@ namespace CognitiveSupport;
 
 /// <summary>
 /// The microphone capture contract <see cref="AudioRecorder"/> depends on. Extracting it from
-/// NAudio's <c>WaveInEvent</c> (which needs a physical capture device) lets the recorder's
+/// NAudio's <c>WaveIn</c> (which needs a physical capture device) lets the recorder's
 /// stop-and-drain behaviour be exercised in a unit test.
 /// </summary>
 public interface IAudioCaptureSource : IDisposable

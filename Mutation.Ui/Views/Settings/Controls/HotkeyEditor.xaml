@@ -12,7 +12,7 @@
 		<StackPanel x:Name="HeaderRow"
 					Orientation="Horizontal"
 					Spacing="6"
-					Visibility="{x:Bind HeaderVisibility, Mode=OneWay}">
+					Visibility="{x:Bind HeaderVisibility, Mode=OneTime}">
 			<TextBlock x:Name="HeaderText"
 					   Text="{x:Bind Header, Mode=OneWay}"
 					   VerticalAlignment="Center"

@@ -4,27 +4,27 @@ using NAudio.Wave;
 namespace CognitiveSupport;
 
 /// <summary>
-/// The real speaker: <see cref="IAudioOutputDevice"/> backed by NAudio's <c>WaveOutEvent</c>.
+/// The real speaker: <see cref="IAudioOutputDevice"/> backed by NAudio's <c>WaveOut</c>.
 /// </summary>
 internal sealed class WaveOutAudioOutputDevice : IAudioOutputDevice
 {
-	private readonly WaveOutEvent _waveOut = new();
+	private readonly WaveOut _waveOut = new();
 
 	public WaveOutAudioOutputDevice()
-		: this(desiredLatencyMs: null, bufferCount: null)
+		: this(bufferMilliseconds: null, bufferCount: null)
 	{
 	}
 
-	/// <param name="desiredLatencyMs">
-	/// How much audio the device holds ahead of what is being heard, split across
-	/// <paramref name="bufferCount"/> buffers. Null keeps NAudio's own default, which is right
-	/// for playing a recording back and much too generous for a beep — see
-	/// <see cref="BeepAudioOutput.DesiredLatencyMs"/>.
+	/// <param name="bufferMilliseconds">
+	/// How much audio each of the <paramref name="bufferCount"/> buffers holds, so the device
+	/// holds about that times the count ahead of what is being heard. Null keeps NAudio's own
+	/// default, which is right for playing a recording back and much too generous for a beep —
+	/// see <see cref="BeepAudioOutput.BufferMilliseconds"/>.
 	/// </param>
-	public WaveOutAudioOutputDevice(int? desiredLatencyMs, int? bufferCount)
+	public WaveOutAudioOutputDevice(int? bufferMilliseconds, int? bufferCount)
 	{
-		if (desiredLatencyMs.HasValue)
-			_waveOut.DesiredLatency = desiredLatencyMs.Value;
+		if (bufferMilliseconds.HasValue)
+			_waveOut.BufferMilliseconds = bufferMilliseconds.Value;
 		if (bufferCount.HasValue)
 			_waveOut.NumberOfBuffers = bufferCount.Value;
 

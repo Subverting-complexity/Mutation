@@ -67,7 +67,7 @@ public class BeepAudioOutputTests
 	{
 		Assert.NotNull(device.Provider);
 		var bytes = new byte[sampleCount * 2];
-		int read = device.Provider!.Read(bytes, 0, bytes.Length);
+		int read = device.Provider!.Read(bytes);
 		var samples = new short[read / 2];
 		for (var i = 0; i < samples.Length; i++)
 			samples[i] = BitConverter.ToInt16(bytes, i * 2);

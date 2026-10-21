@@ -24,7 +24,7 @@ public class SoundTouchSampleProviderTests
 		var buffer = new float[SampleRate]; // 1s chunks
 		int totalFrames = 0;
 		int read;
-		while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+		while ((read = provider.Read(buffer)) > 0)
 		{
 			totalFrames += read / provider.WaveFormat.Channels;
 			for (int i = 0; i < read; i++)
@@ -40,7 +40,7 @@ public class SoundTouchSampleProviderTests
 		var output = new List<float>();
 		var buffer = new float[SampleRate];
 		int read;
-		while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+		while ((read = provider.Read(buffer)) > 0)
 			output.AddRange(buffer.AsSpan(0, read).ToArray());
 
 		return output.ToArray();
@@ -165,14 +165,14 @@ public class SoundTouchSampleProviderTests
 
 		public WaveFormat WaveFormat { get; }
 
-		public int Read(float[] buffer, int offset, int count)
+		public int Read(Span<float> buffer)
 		{
 			int remaining = _data.Length - _position;
-			int toCopy = Math.Min(count, remaining);
+			int toCopy = Math.Min(buffer.Length, remaining);
 			if (toCopy <= 0)
 				return 0;
 
-			Array.Copy(_data, _position, buffer, offset, toCopy);
+			_data.AsSpan(_position, toCopy).CopyTo(buffer);
 			_position += toCopy;
 			return toCopy;
 		}

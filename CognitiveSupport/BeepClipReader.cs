@@ -157,7 +157,7 @@ public static class BeepClipReader
 		var samples = new List<float>();
 
 		int read;
-		while (samples.Count < maxSamples && (read = source.Read(buffer, 0, buffer.Length)) > 0)
+		while (samples.Count < maxSamples && (read = source.Read(buffer)) > 0)
 		{
 			for (var i = 0; i < read && samples.Count < maxSamples; i++)
 				samples.Add(buffer[i]);

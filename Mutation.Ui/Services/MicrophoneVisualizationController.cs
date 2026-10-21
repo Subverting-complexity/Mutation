@@ -40,7 +40,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	// access only, never across a device call: a background start blocked on a
 	// wedged waveInOpen must not be able to stall a UI-thread caller that takes it.
 	private readonly object _captureSync = new();
-	private WaveInEvent? _waveformCapture;
+	private WaveIn? _waveformCapture;
 	// Bumped by every start and stop. A start that finds its epoch superseded while
 	// it was opening the device closes the handle it just opened rather than
 	// publishing it — otherwise a switch that lands after a stop leaves a capture
@@ -151,7 +151,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 			return;
 
 		int epoch;
-		WaveInEvent? superseded;
+		WaveIn? superseded;
 		lock (_captureSync)
 		{
 			if (_captureDisposed)
@@ -180,10 +180,10 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 			return;
 		}
 
-		WaveInEvent? capture = null;
+		WaveIn? capture = null;
 		try
 		{
-			capture = new WaveInEvent
+			capture = new WaveIn
 			{
 				DeviceNumber = deviceIndex,
 				WaveFormat = new WaveFormat(WaveformSampleRate, 16, 1),
@@ -226,7 +226,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	/// </summary>
 	public void StopCapture()
 	{
-		WaveInEvent? capture;
+		WaveIn? capture;
 		lock (_captureSync)
 		{
 			// Bumped even when there is no handle to close: a start that is mid-
@@ -243,7 +243,7 @@ internal sealed class MicrophoneVisualizationController : IDisposable
 	// act on — the handle is being abandoned either way, and a throw from the teardown
 	// of the device being replaced must not be reported as a failure to switch to the
 	// new one.
-	private void CloseCapture(WaveInEvent? capture)
+	private void CloseCapture(WaveIn? capture)
 	{
 		if (capture is null)
 			return;

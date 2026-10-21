@@ -19,7 +19,7 @@ internal sealed class FakeAudioOutputDevice : IAudioOutputDevice
 
 	/// <summary>
 	/// The synchronization context in force where this device was constructed. NAudio's real
-	/// <c>WaveOutEvent</c> captures exactly this to post <c>PlaybackStopped</c> back to, so a
+	/// <c>WaveOut</c> captures exactly this to post <c>PlaybackStopped</c> back to, so a
 	/// device built with no context raises its events on the playback thread instead of the
 	/// UI one.
 	/// </summary>

@@ -46,17 +46,17 @@ public sealed class SoundTouchSampleProvider : ISampleProvider
         set { lock (_lock) { _processor.Tempo = value; } }
     }
 
-    public int Read(float[] buffer, int offset, int count)
+    public int Read(Span<float> buffer)
     {
         lock (_lock)
         {
-            int framesRequested = count / _channels;
+            int framesRequested = buffer.Length / _channels;
             int framesWritten = 0;
 
             while (framesWritten < framesRequested)
             {
                 int framesRemaining = framesRequested - framesWritten;
-                var output = new Span<float>(buffer, offset + (framesWritten * _channels), framesRemaining * _channels);
+                var output = buffer.Slice(framesWritten * _channels, framesRemaining * _channels);
                 int received = _processor.ReceiveSamples(output, framesRemaining);
                 if (received > 0)
                 {
@@ -67,7 +67,7 @@ public sealed class SoundTouchSampleProvider : ISampleProvider
                 if (_sourceExhausted)
                     break;
 
-                int floatsRead = _source.Read(_sourceBuffer, 0, _sourceBuffer.Length);
+                int floatsRead = _source.Read(_sourceBuffer);
                 if (floatsRead == 0)
                 {
                     // No more input: flush SoundTouch so any audio still buffered

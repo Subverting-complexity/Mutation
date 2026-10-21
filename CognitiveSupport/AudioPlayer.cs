@@ -86,7 +86,7 @@ public class AudioPlayer : IDisposable
     /// (issue #281).
     /// <para>
     /// Only the decode moves. The output device is still constructed where the caller was,
-    /// because NAudio's <c>WaveOutEvent</c> captures <c>SynchronizationContext.Current</c> at
+    /// because NAudio's <c>WaveOut</c> captures <c>SynchronizationContext.Current</c> at
     /// construction and posts <c>PlaybackStopped</c> back to it — build it on a pool thread
     /// with no context and <see cref="PlaybackEnded"/> would start arriving on NAudio's own
     /// playback thread, where its listeners touch the UI. Starting is microseconds of work;

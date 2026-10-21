@@ -20,32 +20,37 @@
 		<PackageVersion Include="Concentus" Version="2.2.2" />
 		<PackageVersion Include="Concentus.Oggfile" Version="1.0.7" />
 		<PackageVersion Include="CoreAudio" Version="1.40.0" />
-		<PackageVersion Include="coverlet.collector" Version="6.0.4" />
-		<PackageVersion Include="Deepgram" Version="6.9.0" />
-		<PackageVersion Include="Markdig" Version="0.44.0" />
-		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-		<PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
-		<PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
-		<PackageVersion Include="NAudio" Version="2.3.0" />
+		<PackageVersion Include="coverlet.collector" Version="10.1.0" />
+		<PackageVersion Include="Deepgram" Version="7.2.0" />
+		<PackageVersion Include="Markdig" Version="1.4.2" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+		<PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+		<PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+		<PackageVersion Include="NAudio" Version="3.3.0" />
 		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageVersion Include="OpenAI" Version="2.14.0" />
-		<PackageVersion Include="PDFsharp" Version="6.2.3" />
+		<!--
+			Held on the 6.2 line. 6.2.4 is the last MIT release: from 6.5.0 PDFsharp is AGPL or
+			paid, and refuses to create a document without a licence key (PdfSharpLicenseException).
+			Moving past 6.2 is a licensing decision, not a version bump (issue #443).
+		-->
+		<PackageVersion Include="PDFsharp" Version="6.2.4" />
 		<!-- Polly 7 is out of support; 8.x is the supported line. See RetryAttempts.cs. -->
-		<PackageVersion Include="Polly" Version="8.7.0" />
-		<PackageVersion Include="ScottPlot.WinUI" Version="5.1.57" />
+		<PackageVersion Include="Polly" Version="8.8.0" />
+		<PackageVersion Include="ScottPlot.WinUI" Version="5.1.59" />
 		<PackageVersion Include="SoundTouch.Net" Version="2.3.2" />
-		<PackageVersion Include="System.Speech" Version="10.0.10" />
+		<PackageVersion Include="System.Speech" Version="10.0.13" />
 		<PackageVersion Include="xunit" Version="2.9.3" />
-		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
 	</ItemGroup>
 
 	<!--
 		Also pinned transitively, and for the same reason: nothing references it directly,
 		so without a version here it lands on whatever the deepest dependency asks for.
 		An in-major bump of the plumbing under the OpenAI client (issue #301). OpenAI 2.14.0
-		(issue #415) now asks for 1.15.0 itself, so the pin and the client agree; keep the pin
-		so a later OpenAI bump cannot move it silently.
+		(issue #415) asks for 1.15.0; the pin is one minor ahead on 1.16.0 (issue #443). Keep
+		the pin so a later OpenAI bump cannot move it silently.
 
 		Two packages #301 also suggested looking at are deliberately absent.
 
@@ -56,67 +61,95 @@
 		for no benefit, and #301 asks for exactly this treatment: drop a bump that turns
 		out to carry more than it says, rather than hold up the rest.
 
-		Serilog stays on 3.1.1. Deepgram 6.9.0 still declares 3.1.1 and 4.x is a major
-		bump; nothing in the suite exercises Deepgram's logging, so a green run would not
-		be evidence that forcing it is safe. It waits until Deepgram itself moves.
+		Serilog used to be held on 3.1.1 here because Deepgram 6.9.0 declared it. Deepgram 7
+		dropped Serilog altogether (issue #443), so it is no longer in the graph at all.
 	-->
 	<ItemGroup>
-		<PackageVersion Include="System.ClientModel" Version="1.15.0" />
+		<PackageVersion Include="System.ClientModel" Version="1.16.0" />
 	</ItemGroup>
 
 	<!--
-		Pinned transitively, not referenced directly. PDFsharp 6.2.3 asks for 8.0.1, which
+		Pinned transitively, not referenced directly. PDFsharp 6.2 asks for 8.0.1, which
 		NuGet audit flags with two denial-of-service advisories (GHSA-846f-f764-76mx, high,
 		and GHSA-2fmv-rv2c-59x7, moderate). Warnings are errors here, so restore stopped and
-		no Release build could pass (issue #423). 8.0.2 is the first patched release on the
-		same major line PDFsharp declares, so this is a patch bump and nothing more. Drop the
-		pin once PDFsharp itself asks for a patched version.
+		no Release build could pass (issue #423). The pin first went to 8.0.2, the first
+		patched release on that line; it now sits on the same 10.0.x band as the rest of the
+		runtime packages below (issue #443). Drop the pin once PDFsharp itself asks for a
+		patched version.
 	-->
 	<ItemGroup>
-		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
 	</ItemGroup>
 
 	<!--
 		Pinned transitively, not referenced directly. Deepgram pulls in the 8.0.x
 		Microsoft.Extensions.Http stack, which on a net10.0 target left the solution loading
 		two generations of the same libraries side by side. Holding the whole family on one
-		10.0.x band keeps it to one.
+		10.0.x band keeps it to one, and that band follows the runtime the app ships (10.0.13).
 
 		Every Microsoft.Extensions.* package the solution resolves is listed, including the
-		ones only Microsoft.Extensions.Hosting drags in. Those already land on 10.0.10 by way
+		ones only Microsoft.Extensions.Hosting drags in. Those already land on 10.0.13 by way
 		of Hosting's own exact pins, so naming them changes nothing today — it means a future
 		Hosting bump, or dropping the Hosting reference, cannot quietly reopen the split this
 		change closed.
 	-->
 	<ItemGroup>
-		<PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.CommandLine" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Diagnostics" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.FileProviders.Physical" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
-		<PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.CommandLine" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Diagnostics" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.FileProviders.Physical" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.Primitives" Version="10.0.13" />
+		<PackageVersion Include="Microsoft.Extensions.ObjectPool" Version="10.0.13" />
+		<PackageVersion Include="System.Threading.RateLimiting" Version="10.0.13" />
+	</ItemGroup>
+
+	<!--
+		Deepgram 7 replaced its own retry code with Microsoft.Extensions.Http.Resilience, and
+		asks for the 8.10 release of it. That family ships from a separate repository with its
+		own version numbers (8.10 goes with .NET 8, 10.x with .NET 10), so it needs its own
+		pins to stay on the .NET 10 line with everything above. Polly.Extensions and
+		Polly.RateLimiting come in under it and are held on the same version as Polly itself.
+		The other runtime-band packages the graph picks up (System.Memory.Data through
+		System.ClientModel, System.Numerics.Tensors through NAudio 3) are pinned here too, so
+		no 8.x or 9.x copy of a runtime library ships next to 10.x ones (issue #443).
+	-->
+	<ItemGroup>
+		<PackageVersion Include="Microsoft.Extensions.AmbientMetadata.Application" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Compliance.Abstractions" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.AutoActivation" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Diagnostics.ExceptionSummarization" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Http.Diagnostics" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Resilience" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Telemetry" Version="10.11.0" />
+		<PackageVersion Include="Microsoft.Extensions.Telemetry.Abstractions" Version="10.11.0" />
+		<PackageVersion Include="Polly.Extensions" Version="8.8.0" />
+		<PackageVersion Include="Polly.RateLimiting" Version="8.8.0" />
+		<PackageVersion Include="System.Memory.Data" Version="10.0.13" />
+		<PackageVersion Include="System.Numerics.Tensors" Version="10.0.13" />
 	</ItemGroup>
 </Project>

@@ -58,7 +58,7 @@ public class AudioPlayerSpeedTests : IDisposable
 		var buffer = new byte[16_384];
 		long total = 0;
 		int read;
-		while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
+		while ((read = provider.Read(buffer)) > 0)
 			total += read;
 		return total;
 	}
@@ -116,7 +116,7 @@ public class AudioPlayerSpeedTests : IDisposable
 
 		// Pull a little at normal speed, the way the device would, then change gear.
 		var buffer = new byte[16_384];
-		long consumed = provider.Read(buffer, 0, buffer.Length);
+		long consumed = provider.Read(buffer);
 		Assert.True(consumed > 0);
 
 		player.Speed = 2.0;
