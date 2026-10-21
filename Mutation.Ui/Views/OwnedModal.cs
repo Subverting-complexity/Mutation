@@ -25,7 +25,19 @@ internal sealed class OwnedModal
 	private const int GWLP_HWNDPARENT = -8;
 
 	[DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
-	private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+	private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+	// 32-bit user32 has no SetWindowLongPtrW export; there the plain call takes a pointer-size value.
+	[DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+	private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+	private static void SetOwner(IntPtr dialog, IntPtr owner)
+	{
+		if (IntPtr.Size == 8)
+			SetWindowLongPtr64(dialog, GWLP_HWNDPARENT, owner);
+		else
+			SetWindowLong32(dialog, GWLP_HWNDPARENT, owner.ToInt32());
+	}
 
 	[DllImport("user32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]
@@ -43,7 +55,7 @@ internal sealed class OwnedModal
 	public static OwnedModal Attach(IntPtr dialog, IntPtr owner)
 	{
 		var modal = new OwnedModal(owner);
-		SetWindowLongPtr(dialog, GWLP_HWNDPARENT, owner);
+		SetOwner(dialog, owner);
 		EnableWindow(owner, false);
 		modal._ownerDisabled = true;
 		return modal;
