@@ -1,4 +1,5 @@
 using CognitiveSupport;
+using Microsoft.UI;
 using Microsoft.UI.Xaml.Controls;
 using Mutation.Ui.Core;
 using Mutation.Ui.Views;
@@ -81,7 +82,7 @@ internal sealed class PromptLibraryController
 
 		var dialog = new PromptEditorWindow(
 			null, _transcriptFormatter, GetAvailableModels(), _shutdownToken,
-			ClaimedHotkeys.Excluding(_settings, excludedPrompt: null));
+			ClaimedHotkeys.Excluding(_settings, excludedPrompt: null), OwnerWindow());
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -109,7 +110,7 @@ internal sealed class PromptLibraryController
 		// and a prompt cannot be a duplicate of itself.
 		var dialog = new PromptEditorWindow(
 			prompt, _transcriptFormatter, GetAvailableModels(), _shutdownToken,
-			ClaimedHotkeys.Excluding(_settings, prompt));
+			ClaimedHotkeys.Excluding(_settings, prompt), OwnerWindow());
 		dialog.Activate();
 		dialog.Closed += (_, _) =>
 		{
@@ -141,6 +142,15 @@ internal sealed class PromptLibraryController
 
 		SaveAndRefresh();
 		return true;
+	}
+
+	// The window the prompt list is in, which the editor is modal to: it is disabled while the
+	// editor is open. Zero when the list is not on screen, and the editor then falls back to
+	// staying on top on its own.
+	private IntPtr OwnerWindow()
+	{
+		var appWindowId = _promptListView.XamlRoot?.ContentIslandEnvironment?.AppWindowId;
+		return appWindowId is { } id ? Win32Interop.GetWindowFromWindowId(id) : IntPtr.Zero;
 	}
 
 	// The whole model entries, not only their names: the editor's reasoning level list shows

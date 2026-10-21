@@ -39,11 +39,13 @@ Each row has three buttons.
 
 ## Creating a prompt
 
-Press **Add Prompt** and the **Edit Prompt** window opens. Two fields matter most.
+Press **Add Prompt** and the **Edit Prompt** window opens. It fills half your screen, and your cursor starts in **Name**. While it is open, the main window waits: you cannot click or tab back into it until you close the editor. If the window is too short to show everything, scroll down — **Save** and **Cancel** stay at the bottom the whole time.
+
+Two fields matter most.
 
 **Name** is what you will see in the list. Keep it short — "Fix Grammar", "Shorten", "Draft Reply".
 
-**Prompt Instructions** is the instruction itself. This is the part that does the work.
+**Prompt Instructions** is the instruction itself. This is the part that does the work. The AI reads it as its standing orders, and then reads your text — the copied text or your dictation — as the thing to work on.
 
 Three pointers for writing a good one:
 
@@ -53,9 +55,9 @@ Three pointers for writing a good one:
 
 There is a **Test Run** button at the bottom. It runs the prompt against your current clipboard content using the settings on screen, without saving anything. Use it to try an instruction before you commit to it.
 
-If a test run is taking longer than you want to wait, press **Test Run** again. You hear the failure beep and "Cancelling the test run...", then "Test run cancelled." once it has let go — both on the status line at the bottom of the editor, so your place in the prompt is not disturbed. Press again while it is still winding down and you hear "Already stopping." Pressing **Save** or **Cancel**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
+If a test run is taking longer than you want to wait, press **Test Run** again. You hear the failure beep and "Cancelling the test run...", then "Test run cancelled." once it has let go — both on the status line at the bottom of the editor, so your place in the prompt is not disturbed. Press again while it is still winding down and you hear "Already stopping." Pressing **Save**, **Cancel** or **Esc**, or closing the window, stops a test run too — but those also close the editor, so press **Save** first if you want to keep what you have typed.
 
-Then press **Save**, or **Cancel** to throw it away.
+Then press **Save**, or **Cancel** to throw it away. **Esc** does the same as **Cancel**. If a test result or an error message is showing, **Esc** closes just that message first.
 
 ---
 

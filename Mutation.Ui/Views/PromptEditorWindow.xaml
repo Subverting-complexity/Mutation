@@ -11,114 +11,130 @@
 
     <Grid Padding="24" RowSpacing="16" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="Edit Prompt Configuration" Style="{StaticResource TitleTextBlockStyle}" />
+        <!-- Everything but the buttons scrolls, so a short window still reaches every control
+             and Save and Cancel never scroll away (issue #441). The code behind keeps the
+             form at least as tall as the visible area, which is what lets the instructions
+             box take the spare height rather than shrinking to its minimum. The right
+             padding keeps the scroll bar off the controls. -->
+        <ScrollViewer x:Name="FormScroller"
+                      VerticalScrollBarVisibility="Auto"
+                      SizeChanged="FormScroller_SizeChanged">
+            <Grid x:Name="FormGrid" RowSpacing="16" Padding="0,0,16,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-        <Grid Grid.Row="1" ColumnSpacing="16" RowSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+                <TextBlock Text="Edit Prompt Configuration" Style="{StaticResource TitleTextBlockStyle}" />
 
-            <TextBox x:Name="TxtName"
-                     Header="Name"
-                     PlaceholderText="e.g. Summarize"
-                     AutomationProperties.Name="Name"
-                     AutomationProperties.HelpText="Name shown for this prompt in the prompt list."
-                     Grid.Column="0" />
-            <!-- The box and its clash warning move together, so the warning appearing
-                 cannot push the Model row about. The warning is its own assertive live
-                 region: it says the shortcut is already spoken for, and a user who cannot
-                 see the badge has to hear it as it appears rather than on the way past. -->
-            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
-                <controls:HotkeyEditor x:Name="HkPromptHotkey"
-                                       Header="Hotkey"
-                                       HelpText="Optional global shortcut that runs this prompt."
-                                       AllowEmpty="True" />
-                <TextBlock x:Name="TxtHotkeyClash"
-                           Text=""
-                           Visibility="Collapsed"
-                           TextWrapping="Wrap"
-                           Foreground="OrangeRed"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           AutomationProperties.LiveSetting="Assertive" />
-            </StackPanel>
+                <Grid Grid.Row="1" ColumnSpacing="16" RowSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-            <ComboBox x:Name="CmbModel"
-                      Header="Model"
-                      PlaceholderText="Select a model"
-                      HorizontalAlignment="Stretch"
-                      AutomationProperties.Name="Model"
-                      AutomationProperties.HelpText="Language model used to run this prompt."
-                      Grid.Row="1"
-                      Grid.Column="0" />
+                    <TextBox x:Name="TxtName"
+                             Header="Name"
+                             PlaceholderText="e.g. Summarize"
+                             AutomationProperties.Name="Name"
+                             AutomationProperties.HelpText="Name shown for this prompt in the prompt list."
+                             Grid.Column="0" />
+                    <!-- The box and its clash warning move together, so the warning appearing
+                         cannot push the Model row about. The warning is its own assertive live
+                         region: it says the shortcut is already spoken for, and a user who cannot
+                         see the badge has to hear it as it appears rather than on the way past. -->
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
+                        <controls:HotkeyEditor x:Name="HkPromptHotkey"
+                                               Header="Hotkey"
+                                               HelpText="Optional global shortcut that runs this prompt."
+                                               AllowEmpty="True" />
+                        <TextBlock x:Name="TxtHotkeyClash"
+                                   Text=""
+                                   Visibility="Collapsed"
+                                   TextWrapping="Wrap"
+                                   Foreground="OrangeRed"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   AutomationProperties.LiveSetting="Assertive" />
+                    </StackPanel>
 
-            <!-- Declaration order is the tab order: Name, Hotkey, Model, Fast mode,
-                 info hint, Reasoning level, info hint, Auto run. The hint is itself a tab stop (by design — it has
-                 to be reachable without a mouse), so it costs one Tab on the way to
-                 Auto run; placing it after the check box keeps it next to what it
-                 explains. Its tooltip and the check box's HelpText read from one
-                 resource so the visual and screen-reader copy cannot drift apart. -->
-            <StackPanel Orientation="Horizontal"
-                        Spacing="6"
-                        VerticalAlignment="Bottom"
-                        Grid.Row="1"
-                        Grid.Column="1">
-                <CheckBox x:Name="ChkFastMode"
-                          Content="Fast mode"
-                          VerticalAlignment="Center"
-                          AutomationProperties.Name="Fast mode"
-                          AutomationProperties.HelpText="{StaticResource Help.Llm.FastMode}" />
-                <controls:InfoHint Text="{StaticResource Help.Llm.FastMode}" VerticalAlignment="Center" />
-            </StackPanel>
+                    <ComboBox x:Name="CmbModel"
+                              Header="Model"
+                              PlaceholderText="Select a model"
+                              HorizontalAlignment="Stretch"
+                              AutomationProperties.Name="Model"
+                              AutomationProperties.HelpText="Language model used to run this prompt."
+                              Grid.Row="1"
+                              Grid.Column="0" />
 
-            <!-- After Fast mode in the tab order, as the issue asks. It lists only the
-                 levels ticked for the chosen model. With none ticked it holds one item,
-                 "This model does not reason", and is turned off: the item, rather than
-                 placeholder text, is what keeps that reason in the control's value, where
-                 a screen reader reads it. -->
-            <StackPanel Orientation="Horizontal"
-                        Spacing="6"
-                        VerticalAlignment="Bottom"
-                        Grid.Row="2"
-                        Grid.Column="0">
-                <ComboBox x:Name="CmbReasoningLevel"
-                          Header="Reasoning level"
-                          MinWidth="200"
-                          AutomationProperties.Name="Reasoning level"
-                          AutomationProperties.HelpText="{StaticResource Help.Llm.ReasoningLevel}" />
-                <controls:InfoHint Text="{StaticResource Help.Llm.ReasoningLevel}" VerticalAlignment="Bottom" />
-            </StackPanel>
+                    <!-- Declaration order is the tab order: Name, Hotkey, Model, Fast mode,
+                         info hint, Reasoning level, info hint, Auto run. The hint is itself a tab stop (by design — it has
+                         to be reachable without a mouse), so it costs one Tab on the way to
+                         Auto run; placing it after the check box keeps it next to what it
+                         explains. Its tooltip and the check box's HelpText read from one
+                         resource so the visual and screen-reader copy cannot drift apart. -->
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Bottom"
+                                Grid.Row="1"
+                                Grid.Column="1">
+                        <CheckBox x:Name="ChkFastMode"
+                                  Content="Fast mode"
+                                  VerticalAlignment="Center"
+                                  AutomationProperties.Name="Fast mode"
+                                  AutomationProperties.HelpText="{StaticResource Help.Llm.FastMode}" />
+                        <controls:InfoHint Text="{StaticResource Help.Llm.FastMode}" VerticalAlignment="Center" />
+                    </StackPanel>
 
-            <CheckBox x:Name="ChkAutoRun"
-                      Content="Run automatically after transcription"
-                      AutomationProperties.Name="Run automatically after transcription"
-                      AutomationProperties.HelpText="Runs this prompt on the transcript as soon as a recording is transcribed, without a separate hotkey."
-                      Grid.Row="3" Grid.ColumnSpan="2" />
-        </Grid>
+                    <!-- After Fast mode in the tab order, as the issue asks. It lists only the
+                         levels ticked for the chosen model. With none ticked it holds one item,
+                         "This model does not reason", and is turned off: the item, rather than
+                         placeholder text, is what keeps that reason in the control's value, where
+                         a screen reader reads it. -->
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Bottom"
+                                Grid.Row="2"
+                                Grid.Column="0">
+                        <ComboBox x:Name="CmbReasoningLevel"
+                                  Header="Reasoning level"
+                                  MinWidth="200"
+                                  AutomationProperties.Name="Reasoning level"
+                                  AutomationProperties.HelpText="{StaticResource Help.Llm.ReasoningLevel}" />
+                        <controls:InfoHint Text="{StaticResource Help.Llm.ReasoningLevel}" VerticalAlignment="Bottom" />
+                    </StackPanel>
 
-        <TextBox x:Name="TxtContent"
-                 Grid.Row="2"
-                 Header="Prompt Instructions"
-                 PlaceholderText="Enter system instructions for the LLM..."
-                 AcceptsReturn="True"
-                 TextWrapping="Wrap"
-                 AutomationProperties.Name="Prompt instructions"
-                 AutomationProperties.HelpText="System instructions sent to the language model ahead of the text being processed."
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    <CheckBox x:Name="ChkAutoRun"
+                              Content="Run automatically after transcription"
+                              AutomationProperties.Name="Run automatically after transcription"
+                              AutomationProperties.HelpText="Runs this prompt on the transcript as soon as a recording is transcribed, without a separate hotkey."
+                              Grid.Row="3" Grid.ColumnSpan="2" />
+                </Grid>
 
-        <Grid Grid.Row="3" ColumnSpacing="16">
+                <TextBox x:Name="TxtContent"
+                         Grid.Row="2"
+                         MinHeight="200"
+                         Header="Prompt Instructions"
+                         PlaceholderText="Enter system instructions for the LLM..."
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         AutomationProperties.Name="Prompt instructions"
+                         AutomationProperties.HelpText="System instructions sent to the language model ahead of the text being processed."
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" />
+            </Grid>
+        </ScrollViewer>
+
+        <Grid Grid.Row="1" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
