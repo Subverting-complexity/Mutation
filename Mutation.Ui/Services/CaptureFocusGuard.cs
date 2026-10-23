@@ -48,6 +48,10 @@ internal sealed class CaptureFocusGuard : IDisposable
 	[DllImport("user32.dll")]
 	private static extern IntPtr GetForegroundWindow();
 
+	[DllImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool IsWindowVisible(IntPtr hWnd);
+
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 	private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
@@ -57,6 +61,7 @@ internal sealed class CaptureFocusGuard : IDisposable
 	private readonly CaptureForegroundTrace _trace;
 	private readonly Action _reclaim;
 	private readonly IDisposable? _hold;
+	private readonly IntPtr _overlay;
 	private IntPtr _hook;
 	private int _reclaims;
 
@@ -64,9 +69,10 @@ internal sealed class CaptureFocusGuard : IDisposable
 	// code, and a delegate the collector has taken crashes the process on the next event.
 	private WinEventProc? _proc;
 
-	private CaptureFocusGuard(CaptureForegroundTrace trace, Action reclaim, IDisposable? hold)
+	private CaptureFocusGuard(CaptureForegroundTrace trace, IntPtr overlay, Action reclaim, IDisposable? hold)
 	{
 		_trace = trace;
+		_overlay = overlay;
 		_reclaim = reclaim;
 		_hold = hold;
 	}
@@ -92,7 +98,7 @@ internal sealed class CaptureFocusGuard : IDisposable
 			CaptureLog.Write($"focus guard: could not disable the main window: {ex.Message}");
 		}
 
-		var guard = new CaptureFocusGuard(trace, reclaim, hold);
+		var guard = new CaptureFocusGuard(trace, overlay, reclaim, hold);
 		IntPtr foreground = SafeForeground();
 		CaptureLog.Write(
 			$"capture opening; {guard.DescribeWindow(foreground)}; main window "
@@ -151,7 +157,11 @@ internal sealed class CaptureFocusGuard : IDisposable
 			if (_hook == IntPtr.Zero)
 				return;
 			CaptureLog.Write(DescribeWindow(hwnd));
-			if (_trace.ShouldReclaim(hwnd))
+			// The overlay is hidden before the selection's result reaches the capture, so a
+			// hand-back to the main window can arrive here while the trace still calls the
+			// overlay open. Pulling a hidden overlay back would put a finished capture on
+			// screen again, so a hidden overlay is never reclaimed.
+			if (_trace.ShouldReclaim(hwnd) && IsWindowVisible(_overlay))
 			{
 				if (_reclaims >= MaxReclaims)
 				{
