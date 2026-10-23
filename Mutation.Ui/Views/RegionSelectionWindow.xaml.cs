@@ -119,14 +119,6 @@ public sealed partial class RegionSelectionWindow : Window
 	private const string AnnouncementActivityId = "RegionSelection";
 	private const string CancelledAnnouncement = "Region selection cancelled.";
 
-	/// <summary>
-	/// Said only when the overlay could not take focus. Normally the Canvas's
-	/// <c>AutomationProperties.HelpText</c> carries the instructions and a reader reads them
-	/// out as focus lands — see <see cref="SelectRegionAsync"/>.
-	/// </summary>
-	private const string InstructionsAnnouncement =
-		"Select screen region. Move with the arrow keys, press Enter to set the first corner, move, then Enter again to capture. Control plus A selects the whole screen. Escape cancels.";
-
 	// Cache XAML elements to avoid reliance on generated fields
 	private Microsoft.UI.Xaml.Controls.Image? _img;
 	private Microsoft.UI.Xaml.Controls.Canvas? _overlay;
@@ -491,16 +483,14 @@ public sealed partial class RegionSelectionWindow : Window
 		// pointer is: put the pointer back first and the caret is seeded from the truth.
 		RestoreCursorNowAndAfterFocusSettles();
 		ResetKeyboardSelection();
-		// The overlay is full-screen and topmost, so it has to say what it wants (issue
-		// #215) — but the Canvas's AutomationProperties.HelpText already says it, and a
-		// reader reads that out as focus lands here. Announcing the same thing as well raced
-		// that: the focus-change announcement interrupted the notification part-way through
-		// the sentence, so the instructions were routinely heard cut off (issue #265).
-		//
-		// The notification is kept for the one case the HelpText cannot cover: focus that
-		// did not land on the overlay at all, where nothing would read it out.
+		// The overlay is full-screen and topmost, so it has to say what it is (issue #215).
+		// A reader reads the Canvas's name out as focus lands here, and that name is all it
+		// says: the key instructions are read on F1 instead of on every capture (issue
+		// #447). Announcing the name as well would race the focus-change announcement and
+		// cut one of them off (issue #265), so the notification is kept for the one case
+		// focus cannot cover: focus that did not land on the overlay at all.
 		if (!focused)
-			Announce(InstructionsAnnouncement, AutomationNotificationKind.Other);
+			Announce(RegionSelectionInstructions.OverlayName, AutomationNotificationKind.Other);
 		return _tcs.Task;
 	}
 
@@ -844,6 +834,14 @@ public sealed partial class RegionSelectionWindow : Window
 			return;
 		}
 
+		if (result.Outcome == RegionKeyOutcome.HelpRequested)
+		{
+			// No redraw: the keyboard state would repaint over a rectangle the mouse is still
+			// dragging, and asking for the keys must leave the selection exactly as it was.
+			Announce(result.Announcement, AutomationNotificationKind.Other);
+			return;
+		}
+
 		RenderKeyboardSelection();
 		Announce(result.Announcement, AutomationNotificationKind.Other);
 	}
@@ -862,6 +860,7 @@ public sealed partial class RegionSelectionWindow : Window
 		Windows.System.VirtualKey.Space => RegionSelectionKey.Commit,
 		Windows.System.VirtualKey.Back => RegionSelectionKey.Back,
 		Windows.System.VirtualKey.A => RegionSelectionKey.SelectAll,
+		Windows.System.VirtualKey.F1 => RegionSelectionKey.Help,
 		_ => RegionSelectionKey.None
 	};
 
@@ -1410,8 +1409,8 @@ public sealed partial class RegionSelectionWindow : Window
 
         /// <summary>
         /// True when focus landed on the overlay Canvas — which is what makes a reader read
-        /// out its name and HelpText, and so what decides whether the instructions have to be
-        /// announced separately (issue #265).
+        /// out its name, and so what decides whether the name has to be announced separately
+        /// (issues #265 and #447).
         /// </summary>
         private bool TryFocusOverlay()
         {

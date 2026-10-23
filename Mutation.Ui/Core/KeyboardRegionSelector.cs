@@ -28,6 +28,12 @@ internal enum RegionKeyOutcome
 
 	/// <summary>The key was understood but could not be honoured; say why.</summary>
 	Rejected,
+
+	/// <summary>
+	/// The user asked to hear the keys. Nothing about the selection changed, so the caller
+	/// announces and redraws nothing else (issue #447).
+	/// </summary>
+	HelpRequested,
 }
 
 internal readonly record struct RegionKeyResult(RegionKeyOutcome Outcome, string Announcement)
@@ -158,6 +164,8 @@ internal sealed class KeyboardRegionSelector
 				return Commit();
 			case RegionSelectionKey.Back:
 				return ClearAnchor();
+			case RegionSelectionKey.Help:
+				return new RegionKeyResult(RegionKeyOutcome.HelpRequested, RegionSelectionInstructions.Keys);
 			default:
 				return RegionKeyResult.Ignored;
 		}
@@ -278,4 +286,5 @@ internal enum RegionSelectionKey
 	Commit,
 	Back,
 	SelectAll,
+	Help,
 }
