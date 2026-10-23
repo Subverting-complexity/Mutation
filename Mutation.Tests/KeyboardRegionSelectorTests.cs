@@ -223,7 +223,7 @@ public class KeyboardRegionSelectorTests
 	[Fact]
 	public void TheKeyInstructionsNameEveryKeyTheOverlayTakes()
 	{
-		string[] keys = ["arrow keys", "Control", "Shift", "Home", "End", "Page Up", "Page Down", "Enter", "Control plus A", "Backspace", "Escape", "F1"];
+		string[] keys = ["arrow keys", "Control", "Shift", "Home", "End", "Page Up", "Page Down", "Enter", "Space", "Control plus A", "Backspace", "Escape", "F1"];
 
 		foreach (var key in keys)
 			Assert.Contains(key, RegionSelectionInstructions.Keys);

@@ -23,7 +23,7 @@ internal static class RegionSelectionInstructions
 	public const string Keys =
 		"Move with the arrow keys. Hold Control for fine steps or Shift for large steps. "
 		+ "Home and End jump to the left and right edges, Page Up and Page Down to the top and bottom. "
-		+ "Press Enter to set the first corner, move, then press Enter again to capture. "
+		+ "Press Enter or Space to set the first corner, move, then press Enter or Space again to capture. "
 		+ "Control plus A selects the whole screen. Backspace clears the corner. Escape cancels. "
 		+ "F1 repeats these keys.";
 }
