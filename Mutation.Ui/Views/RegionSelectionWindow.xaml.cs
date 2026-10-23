@@ -244,6 +244,9 @@ public sealed partial class RegionSelectionWindow : Window
 		EnsureElementRefs();
 	}
 
+	/// <summary>The overlay's window handle, so a capture can tell it apart in the foreground log (issue #446).</summary>
+	public IntPtr Handle => _hwnd;
+
 	public void BringToFront()
 	{
 		try
@@ -477,6 +480,7 @@ public sealed partial class RegionSelectionWindow : Window
 		try { this.AppWindow?.Show(); } catch { }
 		this.Activate();
 		bool focused = TryFocusOverlay();
+		LogOpening(focused);
 		// Ensure TopMost without using SWP_SHOWWINDOW to avoid flicker
 		int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
 		int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -1514,6 +1518,26 @@ public sealed partial class RegionSelectionWindow : Window
 	/// </para>
 	/// </summary>
 	public Task ForegroundHandedBack => _foregroundHandback?.Task ?? Task.CompletedTask;
+
+	/// <summary>
+	/// One capture-log line for the moment the overlay has been shown and asked for the
+	/// keyboard: whether it is the foreground window and whether focus landed on it. Read with
+	/// the foreground changes the capture's focus guard logs around it (issue #446).
+	/// </summary>
+	private void LogOpening(bool focused)
+	{
+		try
+		{
+			IntPtr foreground = GetForegroundWindow();
+			CaptureLog.Write(
+				$"overlay shown; overlay is {(foreground == _hwnd ? "" : "NOT ")}the foreground window "
+				+ $"(foreground hwnd=0x{foreground.ToInt64():X}); focus {(focused ? "landed on" : "did NOT land on")} the overlay");
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"LogOpening failed: {ex.Message}");
+		}
+	}
 
 	private void HideAndRestore()
 	{

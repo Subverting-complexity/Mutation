@@ -78,6 +78,8 @@ public class OcrManager
     private RegionSelectionWindow? _activeOverlay;
     private RegionSelectionWindow? _cachedOverlay;
     private int _captureInFlight; // 0 = idle, 1 = busy. Guards against re-entrant screenshot starts.
+    private IntPtr _mainWindowHandle;
+    private MainWindowActivationLock? _mainWindowLock;
 
     public static IReadOnlyList<string> SupportedFileExtensions => SupportedFileExtensionReadOnly;
 
@@ -91,6 +93,18 @@ public class OcrManager
     public void InitializeWindow(Window window)
     {
         _window = window;
+        // Issue #446: the main window is disabled while a capture opened from another app is on
+        // screen, so it cannot become active for a moment and be read out ahead of the overlay.
+        try
+        {
+            _mainWindowHandle = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            _mainWindowLock = new MainWindowActivationLock(new Win32MainWindowEnablement(_mainWindowHandle));
+        }
+        catch
+        {
+            _mainWindowHandle = IntPtr.Zero;
+            _mainWindowLock = null;
+        }
         // Pre-warm a reusable overlay instance to reduce first-use latency
         try { _cachedOverlay = new RegionSelectionWindow(); _cachedOverlay.PrepareWindowForReuse(); } catch { _cachedOverlay = null; }
     }
@@ -895,12 +909,16 @@ public class OcrManager
             // copied the whole virtual screen a second time for nothing (issue #229).
             await overlay.InitializeAsync(bmp);
             _activeOverlay = overlay;
+            // Before the overlay is shown, so the main window is already disabled when the
+            // overlay takes the foreground, and that change is in the capture log (issue #446).
+            var focusGuard = CaptureFocusGuard.Begin(_mainWindowHandle, overlay.Handle, _mainWindowLock, overlay.BringToFront);
             try
             {
                 // Activate and show overlay (inside SelectRegionAsync), then play start beep asynchronously to avoid UI delay
                 var selectTask = overlay.SelectRegionAsync();
                 var beepTask = PlayBeepSafeAsync(BeepType.Start);
                 Rect? selectionRect = await selectTask;
+                focusGuard.OverlayClosed();
                 await beepTask;
                 if (selectionRect == null || selectionRect.Value.Width < 1 || selectionRect.Value.Height < 1)
                 {
@@ -924,11 +942,35 @@ public class OcrManager
             finally
             {
                 _activeOverlay = null;
+                EndFocusGuardAfterHandback(focusGuard, overlay);
             }
         }
         finally
         {
             bmp.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Ends the capture's focus guard once the overlay has handed the foreground back, not
+    /// before. Hiding the overlay makes Windows pick a window to activate, and the hand-back
+    /// can take a few dispatcher turns; the main window has to stay disabled through all of
+    /// it or it can be the one picked (issue #446). Not awaited by the capture: a capture that
+    /// produced an image goes straight on to the crop and the reading.
+    /// </summary>
+    private static async void EndFocusGuardAfterHandback(CaptureFocusGuard guard, RegionSelectionWindow overlay)
+    {
+        try
+        {
+            await overlay.ForegroundHandedBack;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Waiting for the capture hand-back failed: {ex.Message}");
+        }
+        finally
+        {
+            guard.Dispose();
         }
     }
 
