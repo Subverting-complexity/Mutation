@@ -440,6 +440,12 @@ public partial class App : Application
 						await onboardingWindow.ShowMissingSpeechServiceKeysWarningAsync(missingSpeechKeys);
 				}
 			}
+
+			// Last, after every startup dialog above has closed, so a dialog that is
+			// showing keeps focus and the main window's starting focus applies once it
+			// is gone (issue #448).
+			if (_window is MainWindow focusWindow)
+				await focusWindow.ApplyStartupFocusAsync();
 		}
 		catch (Exception ex)
 		{

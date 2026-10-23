@@ -8,6 +8,8 @@ The window is laid out as a set of cards, one per feature. On a wide window the 
 
 > Everything here is reachable from the keyboard. **Tab** moves forward through the controls, **Shift+Tab** moves back, **Space** or **Enter** presses a button, and the arrow keys open and move through dropdowns. Many buttons also have an access key: hold **Alt** and the underlined letter.
 
+When Mutation starts, the keyboard focus is on the **Play selected session** button, so you can press **Space** to hear your last recording. If you have no recordings yet, that button is turned off and the focus is on **Record** instead. If a message or the welcome window opens at startup, it gets the focus first, and the main window's focus moves to **Play selected session** or **Record** when you close it.
+
 ---
 
 ## The menu at the top
