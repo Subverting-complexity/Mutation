@@ -297,6 +297,20 @@ file is in the folder that opens. Send that file with your report and it will sa
 exactly where the capture went wrong.</p>
 <p>In the meantime, drawing your rectangle with a little room around the text always
 works, and a bit of extra space never hurts the reading.</p>
+<h3 id="my-screen-reader-reads-the-main-window-when-a-capture-starts">My screen reader reads the main window when a capture starts</h3>
+<p><strong>What's happening.</strong> You were working in another program and pressed a capture
+shortcut. Before the capture screen came up, your screen reader read a setting from
+Mutation's main window, such as &quot;Playback speed 1.5&quot;, and then you missed &quot;Select
+screen region&quot;. It happened on some captures and not others.</p>
+<p>This is fixed. While a capture you started from another program is on screen,
+Mutation's main window is switched off, so it cannot take the keyboard. You should hear
+&quot;Select screen region&quot; first, every time. When the capture ends, you go back to the
+program you were in. If you start a capture from the main window itself, nothing about
+it changes.</p>
+<p><strong>What to do.</strong> If you still hear the main window when a capture starts, Mutation now
+notes in <strong>Mutation.Capture.log</strong> which window had the keyboard at each step of the
+capture. Open your temporary files folder (press <strong>Windows+R</strong>, type <code>%TEMP%</code> and press
+Enter) and send that file with your report.</p>
 <h3 id="the-screenshot-could-not-be-copied-to-the-clipboard">The screenshot could not be copied to the clipboard</h3>
 <p><strong>What's happening.</strong> Only one program can have the clipboard open at a time, and the
 moment a picture lands there is exactly when a clipboard manager or your screen reader
