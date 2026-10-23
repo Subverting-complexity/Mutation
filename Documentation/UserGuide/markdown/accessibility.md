@@ -11,6 +11,11 @@ work, so most of the time you never open the app at all. When you do open the ma
 window, you can Tab through every card, and every button, slider, list and text box
 can be reached and operated from the keyboard.
 
+When Mutation starts, the focus is on the **Play selected session** button, or on
+**Record** when you have no recordings yet. That is the control your screen reader
+reads first. After that, Mutation does not move the focus by itself: when you switch to
+another app and back, the focus is on the control you used last.
+
 Settings opens with **Ctrl+Comma** and is keyboard-driven too, including the search
 box at the top and the "Advanced" toggle.
 
