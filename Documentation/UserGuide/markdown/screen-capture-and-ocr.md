@@ -85,9 +85,10 @@ opposite corner, and let go. That is it. A right-click cancels instead.
 ### Picking the rectangle with the keyboard
 
 You never need to see the screen to do this. The overlay talks you through it. When it
-opens it says what it wants from you, then as you move it announces the position you
-are at, the size of the rectangle you have built so far, and finally the size of what
-was captured. Those numbers are all in pixels of the picture, so the size you hear
+opens, your screen reader says "Select screen region" and nothing more. Press **F1** to
+hear the keys; the capture stays open and your selection is kept. As you move, it
+announces the position you are at, the size of the rectangle you have built so far, and
+finally the size of what was captured. Those numbers are all in pixels of the picture, so the size you hear
 while sizing the rectangle matches the size you hear when it is captured.
 
 Think of it as a moving pointer that you park at one corner, pin down, and then drag to
@@ -101,6 +102,7 @@ the other corner.
 | **Enter** or **Space** | First press pins one corner; second press captures the region |
 | **Ctrl+A** | Select the whole screen — then **Enter** to capture it |
 | **Backspace** | Clear the pinned corner and start the selection again |
+| **F1** | Hear these keys read out, without leaving the capture |
 | **Esc** | Cancel |
 
 So the quickest possible capture is **Ctrl+A** then **Enter**: the whole screen, in two

@@ -90,11 +90,14 @@ row does tell you it wants a shortcut.
 
 Grabbing part of a screen you cannot see sounds impossible. It is not.
 
-When the screen-capture overlay opens, it announces itself and tells you the keys:
-move with the arrow keys, press **Enter** to set the first corner, move again, then
-**Enter** to capture. **Ctrl+A** selects the whole screen, which means any capture can
-be finished in two keystrokes. **Backspace** clears the corner you set. **Escape**
-cancels.
+When the screen-capture overlay opens, your screen reader says only its name: "Select
+screen region". It does not read the keys every time. Press **F1** at any point to hear
+them. The capture stays open, and any corner you have set stays where it is.
+
+The keys are: move with the arrow keys, press **Enter** to set the first corner, move
+again, then **Enter** to capture. **Ctrl+A** selects the whole screen, which means any
+capture can be finished in two keystrokes. **Backspace** clears the corner you set.
+**Escape** cancels.
 
 As you move, it reads your position out. Before you set a corner you hear the caret
 position. After you set one you hear the size of the region and where its top-left

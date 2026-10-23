@@ -186,6 +186,55 @@ public class KeyboardRegionSelectorTests
 		Assert.Equal(RegionKeyOutcome.Ignored, Press(selector, RegionSelectionKey.Back).Outcome);
 	}
 
+	// Issue #447: the keys are read out on F1 instead of on every capture. Asking for them
+	// must not move the caret, drop a pinned corner, or end the capture.
+	[Fact]
+	public void HelpReadsTheKeysAndLeavesTheSelectionAlone()
+	{
+		var selector = NewSelector();
+		Press(selector, RegionSelectionKey.Commit);
+		Press(selector, RegionSelectionKey.Right);
+		Press(selector, RegionSelectionKey.Down);
+		var (caretX, caretY) = (selector.CaretX, selector.CaretY);
+		var (anchorX, anchorY) = (selector.AnchorX, selector.AnchorY);
+
+		var help = Press(selector, RegionSelectionKey.Help);
+
+		Assert.Equal(RegionKeyOutcome.HelpRequested, help.Outcome);
+		Assert.Equal(RegionSelectionInstructions.Keys, help.Announcement);
+		Assert.True(selector.HasAnchor);
+		Assert.Equal(caretX, selector.CaretX);
+		Assert.Equal(caretY, selector.CaretY);
+		Assert.Equal(anchorX, selector.AnchorX);
+		Assert.Equal(anchorY, selector.AnchorY);
+	}
+
+	[Fact]
+	public void HelpWorksBeforeACornerIsSet()
+	{
+		var selector = NewSelector();
+
+		var help = Press(selector, RegionSelectionKey.Help);
+
+		Assert.Equal(RegionKeyOutcome.HelpRequested, help.Outcome);
+		Assert.False(selector.HasAnchor);
+	}
+
+	[Fact]
+	public void TheKeyInstructionsNameEveryKeyTheOverlayTakes()
+	{
+		string[] keys = ["arrow keys", "Control", "Shift", "Home", "End", "Page Up", "Page Down", "Enter", "Control plus A", "Backspace", "Escape", "F1"];
+
+		foreach (var key in keys)
+			Assert.Contains(key, RegionSelectionInstructions.Keys);
+	}
+
+	[Fact]
+	public void TheOverlayNameIsOnlyItsName()
+	{
+		Assert.Equal("Select screen region", RegionSelectionInstructions.OverlayName);
+	}
+
 	[Fact]
 	public void EveryActedOnKeyAnnouncesSomething()
 	{
@@ -196,7 +245,7 @@ public class KeyboardRegionSelectorTests
 		[
 			RegionSelectionKey.Left, RegionSelectionKey.Right, RegionSelectionKey.Up, RegionSelectionKey.Down,
 			RegionSelectionKey.Home, RegionSelectionKey.End, RegionSelectionKey.PageUp, RegionSelectionKey.PageDown,
-			RegionSelectionKey.Commit,
+			RegionSelectionKey.Commit, RegionSelectionKey.Help,
 		];
 
 		foreach (var key in keys)
