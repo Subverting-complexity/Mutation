@@ -138,10 +138,13 @@ public class AudioRecorder : IAudioRecorder
 			}
 			catch
 			{
-				// Clean up anything allocated but not committed (or rolled back above).
+				// Clean up anything allocated but not committed (or rolled back above). Compared
+				// by reference: a recording that was never stopped still holds its own stream and
+				// encoder in these fields, and a start that fails before the commit must release
+				// the new ones, not leave them open beside the old.
 				try { if (waveIn is not null && _waveIn is null) waveIn.Dispose(); } catch { }
-				try { if (fileStream is not null && _fileStream is null) fileStream.Dispose(); } catch { }
-				try { if (encoder is not null && _encoder is null) encoder.Dispose(); } catch { }
+				try { if (fileStream is not null && !ReferenceEquals(fileStream, _fileStream)) fileStream.Dispose(); } catch { }
+				try { if (encoder is not null && !ReferenceEquals(encoder, _encoder)) encoder.Dispose(); } catch { }
 				// OpusOggWriteStream does not implement IDisposable in Concentus.OggFile.
 				throw;
 			}
