@@ -5,9 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CognitiveSupport;
+using Concentus;
 using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 
 namespace Mutation.Tests;
 
@@ -54,9 +54,7 @@ public class AudioPlayerAsyncPlaybackTests : IDisposable
 	private string WriteHeadersOnlyOgg(string fileName)
 	{
 		using var complete = new MemoryStream();
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 requires the concrete OpusEncoder type.
-		var encoder = new OpusEncoder(48000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
-#pragma warning restore CS0618
+		using IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(48000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
 		// Finish pads the part-filled buffer out and encodes it, so even a stream nothing was
 		// written to ends up with one frame of silence. The audio starts at the third page.
 		new OpusOggWriteStream(encoder, complete, new OpusTags()).Finish();

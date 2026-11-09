@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using CognitiveSupport;
+using Concentus;
 using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 
 namespace Mutation.Tests;
 
@@ -37,13 +37,9 @@ public class AudioFileConverterOggTests : IDisposable
 		string path = PathFor(fileName);
 
 		using var outStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 requires the concrete OpusEncoder type.
-		var encoder = new OpusEncoder(SampleRate, channels, OpusApplication.OPUS_APPLICATION_AUDIO)
-		{
-			Bitrate = 32000,
-			UseDTX = false
-		};
-#pragma warning restore CS0618
+		using IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(SampleRate, channels, OpusApplication.OPUS_APPLICATION_AUDIO);
+		encoder.Bitrate = 32000;
+		encoder.UseDTX = false;
 		var oggStream = new OpusOggWriteStream(encoder, outStream, new OpusTags());
 
 		int framesPerSecond = SampleRate / FrameSize;

@@ -1,6 +1,6 @@
+using Concentus;
 using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
@@ -70,14 +70,10 @@ public static class AudioFileConverter
 			throw new FileNotFoundException("Input file not found", inputPath);
 
 		using var outStream = new FileStream(outputOggPath, FileMode.Create, FileAccess.Write, FileShare.None);
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusEncoder type, not IOpusEncoder from OpusCodecFactory.
-		var encoder = new OpusEncoder(OutputSampleRate, 1, OpusApplication.OPUS_APPLICATION_VOIP)
-		{
-			Bitrate = 24000,
-			UseVBR = true,
-			UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
-		};
-#pragma warning restore CS0618
+		using IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(OutputSampleRate, 1, OpusApplication.OPUS_APPLICATION_VOIP);
+		encoder.Bitrate = 24000;
+		encoder.UseVBR = true;
+		encoder.UseDTX = false; // DTX not supported in Ogg streams by Concentus.OggFile
 		var tags = new OpusTags();
 		var oggStream = new OpusOggWriteStream(encoder, outStream, tags);
 
