@@ -1,6 +1,6 @@
+using Concentus;
 using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -217,6 +217,7 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 	private sealed class ChunkFile : IDisposable
 	{
 		private readonly FileStream _file;
+		private readonly IOpusEncoder _encoder;
 		private readonly OpusOggWriteStream _ogg;
 		private bool _finished;
 
@@ -224,10 +225,11 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 		public long BytesWritten => _file.Position;
 		public long SamplesWritten { get; private set; }
 
-		private ChunkFile(string path, FileStream file, OpusOggWriteStream ogg)
+		private ChunkFile(string path, FileStream file, IOpusEncoder encoder, OpusOggWriteStream ogg)
 		{
 			Path = path;
 			_file = file;
+			_encoder = encoder;
 			_ogg = ogg;
 		}
 
@@ -238,21 +240,19 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 				string.Format(CultureInfo.InvariantCulture, "chunk-{0:D3}.ogg", index + 1));
 
 			var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1);
+			IOpusEncoder? encoder = null;
 			try
 			{
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusEncoder type.
-				var encoder = new OpusEncoder(SampleRate, 1, OpusApplication.OPUS_APPLICATION_VOIP)
-				{
-					Bitrate = Bitrate,
-					UseVBR = true,
-					UseDTX = false // DTX is not supported in Ogg streams by Concentus.OggFile.
-				};
-#pragma warning restore CS0618
+				encoder = OpusCodecFactory.CreateEncoder(SampleRate, 1, OpusApplication.OPUS_APPLICATION_VOIP);
+				encoder.Bitrate = Bitrate;
+				encoder.UseVBR = true;
+				encoder.UseDTX = false; // DTX is not supported in Ogg streams by Concentus.OggFile.
 
-				return new ChunkFile(path, file, new OpusOggWriteStream(encoder, file, new OpusTags()));
+				return new ChunkFile(path, file, encoder, new OpusOggWriteStream(encoder, file, new OpusTags()));
 			}
 			catch
 			{
+				encoder?.Dispose();
 				file.Dispose();
 				throw;
 			}
@@ -271,8 +271,12 @@ public sealed class OggAudioChunkWriter : IAudioChunkWriter
 			_ogg.Finish();
 		}
 
-		// OpusEncoder and OpusOggWriteStream are not IDisposable in Concentus; the file
-		// stream is the only thing holding an OS handle.
-		public void Dispose() => _file.Dispose();
+		// OpusOggWriteStream is not IDisposable in Concentus.OggFile. The file stream holds the
+		// OS handle; the encoder holds unmanaged memory only when Concentus uses native Opus.
+		public void Dispose()
+		{
+			_encoder.Dispose();
+			_file.Dispose();
+		}
 	}
 }

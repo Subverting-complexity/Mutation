@@ -1,6 +1,6 @@
-﻿using Concentus.Enums;
+﻿using Concentus;
+using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 using NAudio.Wave;
 using System.IO;
 using System.Linq;
@@ -11,7 +11,7 @@ public class AudioRecorder : IAudioRecorder
 {
 	private readonly Func<int, IAudioCaptureSource> _captureSourceFactory;
 	private IAudioCaptureSource? _waveIn;
-	private OpusEncoder? _encoder;
+	private IOpusEncoder? _encoder;
 	private OpusOggWriteStream? _oggStream;
 	private Stream? _fileStream;
 	private SilenceTrimmer? _silenceTrimmer;
@@ -90,7 +90,7 @@ public class AudioRecorder : IAudioRecorder
 
 			IAudioCaptureSource? waveIn = null;
 			Stream? fileStream = null;
-			OpusEncoder? encoder = null;
+			IOpusEncoder? encoder = null;
 			OpusOggWriteStream? oggStream = null;
 			try
 			{
@@ -98,14 +98,10 @@ public class AudioRecorder : IAudioRecorder
 
 				fileStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
 
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 still requires the concrete OpusEncoder type, not IOpusEncoder from OpusCodecFactory.
-				encoder = new OpusEncoder(SampleRate, Channels, OpusApplication.OPUS_APPLICATION_VOIP)
-				{
-					Bitrate = 24000,
-					UseVBR = true,
-					UseDTX = false // DTX not supported in Ogg streams by Concentus.OggFile
-				};
-#pragma warning restore CS0618
+				encoder = OpusCodecFactory.CreateEncoder(SampleRate, Channels, OpusApplication.OPUS_APPLICATION_VOIP);
+				encoder.Bitrate = 24000;
+				encoder.UseVBR = true;
+				encoder.UseDTX = false; // DTX not supported in Ogg streams by Concentus.OggFile
 
 				oggStream = new OpusOggWriteStream(encoder, fileStream, new OpusTags());
 
@@ -115,6 +111,9 @@ public class AudioRecorder : IAudioRecorder
 				// Commit to fields BEFORE StartRecording so OnDataAvailable can find _oggStream.
 				_waveIn = waveIn;
 				_fileStream = fileStream;
+				// A recording that was never stopped still owns an encoder; its Ogg stream is
+				// replaced on the next line, so nothing writes through the old encoder again.
+				ReleaseEncoder();
 				_encoder = encoder;
 				_oggStream = oggStream;
 
@@ -142,7 +141,8 @@ public class AudioRecorder : IAudioRecorder
 				// Clean up anything allocated but not committed (or rolled back above).
 				try { if (waveIn is not null && _waveIn is null) waveIn.Dispose(); } catch { }
 				try { if (fileStream is not null && _fileStream is null) fileStream.Dispose(); } catch { }
-				// OpusEncoder / OpusOggWriteStream don't implement IDisposable in Concentus.
+				try { if (encoder is not null && _encoder is null) encoder.Dispose(); } catch { }
+				// OpusOggWriteStream does not implement IDisposable in Concentus.OggFile.
 				throw;
 			}
 		}
@@ -256,7 +256,23 @@ public class AudioRecorder : IAudioRecorder
 					_pcmFrameSplitter = null;
 				}
 			}
+
+			// Outside the check above: a capture failure clears _oggStream but leaves the
+			// encoder behind.
+			ReleaseEncoder();
 		}
+	}
+
+	// Disposes the current encoder. A native Opus encoder holds unmanaged memory; the managed
+	// one does nothing on Dispose. Callers must hold _writeLock, and _oggStream must already be
+	// finished or dropped, because it writes through this encoder.
+	private void ReleaseEncoder()
+	{
+		if (_encoder is null)
+			return;
+
+		try { _encoder.Dispose(); } catch { /* Releasing an encoder must not fail the caller. */ }
+		_encoder = null;
 	}
 
 	// Unhooks and releases the current capture source. Callers must hold _writeLock.
@@ -287,8 +303,8 @@ public class AudioRecorder : IAudioRecorder
 			_fileStream?.Dispose();
 			_fileStream = null;
 
-			_encoder = null;
 			_oggStream = null;
+			ReleaseEncoder();
 
 			_disposed = true;
 

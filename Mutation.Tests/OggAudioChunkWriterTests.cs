@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using CognitiveSupport;
+using Concentus;
 using Concentus.Enums;
 using Concentus.Oggfile;
-using Concentus.Structs;
 
 namespace Mutation.Tests;
 
@@ -46,13 +46,9 @@ public class OggAudioChunkWriterTests : IDisposable
 		string path = Path.Combine(_workingDirectory, fileName);
 
 		using var outStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-#pragma warning disable CS0618 // Concentus.OggFile 1.0.6 requires the concrete OpusEncoder type.
-		var encoder = new OpusEncoder(SampleRate, 1, OpusApplication.OPUS_APPLICATION_AUDIO)
-		{
-			Bitrate = 32000,
-			UseDTX = false
-		};
-#pragma warning restore CS0618
+		using IOpusEncoder encoder = OpusCodecFactory.CreateEncoder(SampleRate, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
+		encoder.Bitrate = 32000;
+		encoder.UseDTX = false;
 		var oggStream = new OpusOggWriteStream(encoder, outStream, new OpusTags());
 
 		var frame = new short[FrameSize];
