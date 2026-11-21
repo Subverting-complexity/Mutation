@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+	x:Class="Mutation.Ui.Views.SettingsUi.Pages.TimersSettingsPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	mc:Ignorable="d">
+
+	<StackPanel Spacing="16">
+		<TextBlock Text="Timers" Style="{StaticResource SubtitleTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+		<TextBlock TextWrapping="Wrap"
+				   Text="A timer plays a sound every so often, for example every 45 minutes, as a reminder. You can turn each timer on and off here or on the main window." />
+
+		<InfoBar x:Name="PreviewInfoBar"
+				 Severity="Error"
+				 IsOpen="False"
+				 IsClosable="True"
+				 Title="Timer sound" />
+
+		<!-- One card per timer, built in code so each control's accessible name can carry the timer's name. -->
+		<StackPanel x:Name="TimersHost" Spacing="12" />
+
+		<TextBlock x:Name="NoTimersText"
+				   Text="There are no timers yet."
+				   Style="{StaticResource BodyTextBlockStyle}"
+				   Visibility="Collapsed" />
+
+		<Button x:Name="AddTimerButton"
+				Content="Add timer"
+				AutomationProperties.Name="Add timer"
+				AutomationProperties.HelpText="Adds a new timer at the end of the list. It is on, and starts counting when you save."
+				Click="AddTimerButton_Click" />
+	</StackPanel>
+</UserControl>

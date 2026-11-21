@@ -56,6 +56,7 @@ internal static class SettingsWorkingCopy
 		settings.MainWindowUiSettings ??= new MainWindowUiSettings();
 		settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
 		settings.TranscriptFormatRules ??= new List<TranscriptFormatRule>();
+		settings.IntervalTimers ??= new List<IntervalTimerSettings>();
 
 		// A settings file with an explicit null for one of these lists deserializes to
 		// null, and the committer would then propagate that null onto the live graph.

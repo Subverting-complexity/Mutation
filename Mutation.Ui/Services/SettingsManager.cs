@@ -568,6 +568,15 @@ End of summary.
 		if (PromptIdBackfill.Apply(llmSettings.Prompts))
 			somethingWasMissing = true;
 
+		// No timers are seeded: a reminder nobody asked for would be a surprise sound.
+		if (settings.IntervalTimers == null)
+		{
+			settings.IntervalTimers = new List<IntervalTimerSettings>();
+			somethingWasMissing = true;
+		}
+		if (IntervalTimerSettingsNormalizer.Normalize(settings.IntervalTimers))
+			somethingWasMissing = true;
+
 		// Seed the starter rules on a brand-new settings file only — the same
 		// deliberate guard the router mappings use below. An existing file holding an
 		// empty list is a user who deleted every rule on the Transcript formatting

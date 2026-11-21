@@ -101,6 +101,10 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
                 <StackPanel Spacing="4" VerticalAlignment="Top">
                     <TextBlock Text="Mutation Workspace" Style="{StaticResource TitleTextStyle}" AutomationProperties.Name="Application Title" />
@@ -138,6 +142,72 @@
                         </StackPanel>
                     </Grid>
                 </Button>
+
+                <!--
+                    Timers strip (issue #456): one compact row per interval timer, under the
+                    heading and above the cards. Hidden when there are no timers. The countdown
+                    is a plain text block, never a live region, so a screen reader does not
+                    speak it as it changes; the toggle's help text carries it instead, and
+                    IntervalTimerRow freezes that while the toggle has focus.
+                -->
+                <Border
+                    x:Name="TimersStrip"
+                    Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,16,0,0"
+                    Padding="16,8"
+                    HorizontalAlignment="Left"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Visibility="Collapsed">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="0,10,0,0">
+                            <FontIcon Glyph="&#xE916;" FontFamily="Segoe Fluent Icons" FontSize="16" AutomationProperties.AccessibilityView="Raw" />
+                            <TextBlock Text="Timers" Style="{StaticResource BodyStrongTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+                        </StackPanel>
+                        <ItemsControl
+                            Grid.Column="1"
+                            IsTabStop="False"
+                            ItemsSource="{x:Bind TimerRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:IntervalTimerRow">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ToggleSwitch
+                                            MinWidth="0"
+                                            IsOn="{x:Bind IsOn, Mode=TwoWay}"
+                                            OnContent="{x:Bind Name}"
+                                            OffContent="{x:Bind Name}"
+                                            GotFocus="{x:Bind NoteFocused}"
+                                            LostFocus="{x:Bind NoteUnfocused}"
+                                            AutomationProperties.Name="{x:Bind AccessibleName}"
+                                            AutomationProperties.HelpText="{x:Bind FocusHelpText, Mode=OneWay}" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock
+                                                Text="{x:Bind CountdownText, Mode=OneWay}"
+                                                Foreground="{StaticResource SecondaryTextBrush}" />
+                                            <TextBlock
+                                                Text="{x:Bind WarningText, Mode=OneWay}"
+                                                Visibility="{x:Bind WarningVisibility, Mode=OneWay}"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                TextWrapping="Wrap"
+                                                MaxWidth="420" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
 
