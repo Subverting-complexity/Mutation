@@ -71,14 +71,17 @@ if errorlevel 1 (
 1>&2 echo Building the solution in Release. This can take a few minutes...
 1>&2 echo The full build log goes to "%LOG%".
 
-REM NoSummary stops MSBuild repeating every error in a summary at the end,
-REM so the error list shown below has each error once.
+REM NoSummary stops MSBuild repeating every error in a summary at the end.
 dotnet build "Mutation.slnx" --configuration Release -nologo -consoleLoggerParameters:NoSummary > "%LOG%" 2>&1
 if errorlevel 1 (
 	1>&2 echo.
 	1>&2 echo The build failed. The errors are:
 	1>&2 echo.
-	findstr /i /c:": error " "%LOG%" 1>&2
+	REM The same compile error can still appear twice in the log, because one
+	REM build can compile Mutation.Ui's code twice. CMD cannot drop repeated
+	REM lines, so PowerShell lists each error line once, in the order the build
+	REM reported them. It reads the log path from LOG, so no quoting is needed.
+	"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Select-String -LiteralPath $env:LOG -SimpleMatch -Pattern ': error ' | ForEach-Object { $_.Line } | Select-Object -Unique" 1>&2
 	1>&2 echo.
 	1>&2 echo If a file is "in use", close any copy of Mutation that runs from the build folder.
 	1>&2 echo The full log is in "%LOG%".
