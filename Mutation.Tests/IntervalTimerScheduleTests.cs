@@ -97,19 +97,61 @@ public class IntervalTimerScheduleTests
 	}
 
 	[Fact]
-	public void Tick_FoundLaterThanThePlayWindow_SkipsTheSoundButKeepsTheRhythm()
+	public void Startup_AfterADueTimePassedWhileClosed_SkipsTheSoundAndShowsTheRealCountdownAtOnce()
 	{
 		// Mutation closed at 10:00 with a 45-minute timer due at 10:45, and opened again at 11:40.
 		var timer = Timer("Stretch", 45, nextDue: Start.AddMinutes(45));
 		var schedule = NewSchedule();
 		_now = Start.AddMinutes(100);
+
+		Assert.True(schedule.Sync(new[] { timer }));
+
+		Assert.Equal(Start.AddMinutes(135), timer.NextDueUtc); // 10:45 + 2 × 45 = 12:15
+		Assert.Equal(TimeSpan.FromMinutes(35), schedule.Remaining(timer));
+		Assert.Empty(schedule.Tick(new[] { timer }).Due);
+	}
+
+	[Fact]
+	public void Startup_RightAtTheDueTime_StillPlays()
+	{
+		var timer = Timer("Stretch", 45, nextDue: Start.AddMinutes(45));
+		var schedule = NewSchedule();
+		_now = Start.AddMinutes(45).AddSeconds(10);
 		schedule.Sync(new[] { timer });
 
+		Assert.Single(schedule.Tick(new[] { timer }).Due);
+	}
+
+	[Fact]
+	public void Tick_FoundLaterThanThePlayWindow_SkipsTheSoundButKeepsTheRhythm()
+	{
+		// The PC slept from 10:40 to 11:40 with Mutation running.
+		var timer = Timer("Stretch", 45);
+		var schedule = NewSchedule();
+		schedule.Sync(new[] { timer });
+
+		_now = Start.AddMinutes(100);
 		var result = schedule.Tick(new[] { timer });
 
 		Assert.Empty(result.Due);
 		Assert.True(result.ScheduleChanged);
-		Assert.Equal(Start.AddMinutes(135), timer.NextDueUtc); // 10:45 + 2 × 45 = 12:15
+		Assert.Equal(Start.AddMinutes(135), timer.NextDueUtc);
+	}
+
+	[Fact]
+	public void Tick_AfterTheClockMovedBack_PullsTheDueTimeInToOneInterval()
+	{
+		var timer = Timer("Stretch", 30);
+		var schedule = NewSchedule();
+		schedule.Sync(new[] { timer });
+
+		_now = Start.AddHours(-3);
+		var result = schedule.Tick(new[] { timer });
+
+		Assert.Empty(result.Due);
+		Assert.True(result.ScheduleChanged);
+		Assert.Equal(_now.AddMinutes(30), timer.NextDueUtc);
+		Assert.Equal(TimeSpan.FromMinutes(30), schedule.Remaining(timer));
 	}
 
 	[Fact]

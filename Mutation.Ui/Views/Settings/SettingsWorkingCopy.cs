@@ -39,6 +39,10 @@ internal static class SettingsWorkingCopy
 		EnsureSections(live);
 		EnsureSections(workingCopy);
 
+		// Normally repaired at load only. Run on save as well, so a timer whose name box was
+		// emptied and saved in one step is never written with an empty name.
+		IntervalTimerSettingsNormalizer.Normalize(workingCopy.IntervalTimers);
+
 		SettingsGraphCommitter.Commit(live, workingCopy);
 	}
 

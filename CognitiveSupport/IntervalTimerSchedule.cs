@@ -71,8 +71,14 @@ public sealed class IntervalTimerSchedule
 				next = !known.Enabled || known.IntervalMinutes != interval || known.NextDueUtc is null
 					? now + length
 					: known.NextDueUtc;
+			else if (timer.NextDueUtc is DateTime saved)
+				// A saved time that passed while Mutation was closed is moved on to its next slot
+				// now, so the first row drawn shows the real countdown rather than "next in 1
+				// second" until the first tick skips it. A time still inside the play window is
+				// kept, so a quick restart right at the due time still plays.
+				next = now - saved > PlayWindow ? NextAfter(saved, length, now) : saved;
 			else
-				next = timer.NextDueUtc ?? now + length;
+				next = now + length;
 
 			// A due time further away than one interval can only come from a clock that moved
 			// back or a hand-edited file. Waiting it out would leave the timer silent for longer
@@ -115,10 +121,22 @@ public sealed class IntervalTimerSchedule
 		{
 			if (!timer.Enabled || !_entries.TryGetValue(timer.Id, out var entry) || entry.NextDueUtc is not DateTime dueAt)
 				continue;
+			TimeSpan length = TimeSpan.FromMinutes(entry.IntervalMinutes);
+
+			// The clock moved back while Mutation ran: the same rule as in Sync, or the timer
+			// would stay silent for as long as the clock went back.
+			if (dueAt > now + length)
+			{
+				DateTime pulledIn = now + length;
+				_entries[timer.Id] = entry with { NextDueUtc = pulledIn };
+				timer.NextDueUtc = pulledIn;
+				changed = true;
+				continue;
+			}
+
 			if (now < dueAt)
 				continue;
 
-			TimeSpan length = TimeSpan.FromMinutes(entry.IntervalMinutes);
 			DateTime next = NextAfter(dueAt, length, now);
 			_entries[timer.Id] = entry with { NextDueUtc = next };
 			timer.NextDueUtc = next;

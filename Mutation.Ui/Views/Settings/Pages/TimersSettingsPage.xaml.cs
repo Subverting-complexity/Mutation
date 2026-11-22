@@ -181,7 +181,11 @@ public sealed partial class TimersSettingsPage : UserControl
 				var others = new List<string?>();
 				foreach (var t in _page.Timers)
 					if (!ReferenceEquals(t, _timer)) others.Add(t.Name);
-				NameBox.Text = IntervalTimerText.NextDefaultName(others);
+				string name = IntervalTimerText.NextDefaultName(others);
+				// Written to the timer here as well: TextChanged is raised later, and a Save that
+				// commits first would otherwise keep the empty name.
+				_timer.Name = name;
+				NameBox.Text = name;
 			};
 
 			_toggle = new ToggleSwitch { Header = "On or off", OnContent = "On", OffContent = "Off", IsOn = timer.Enabled };
@@ -248,6 +252,8 @@ public sealed partial class TimersSettingsPage : UserControl
 			ApplyNames();
 		}
 
+		// Whole numbers only: a typed 1.5 is rounded in the box, so it never shows a value that
+		// is not what will be saved.
 		private static NumberBox NewNumberBox(string header, int value, int min, int max) => new()
 		{
 			Header = header,
@@ -258,6 +264,12 @@ public sealed partial class TimersSettingsPage : UserControl
 			LargeChange = 10,
 			SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
 			MinWidth = 140,
+			NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter
+			{
+				FractionDigits = 0,
+				IntegerDigits = 1,
+				NumberRounder = new Windows.Globalization.NumberFormatting.IncrementNumberRounder { Increment = 1 },
+			},
 		};
 
 		private static StackPanel Row(params UIElement[] children)
@@ -275,12 +287,13 @@ public sealed partial class TimersSettingsPage : UserControl
 		{
 			if (_suppress) return;
 
-			int hours = double.IsNaN(_hours.Value) ? 0 : (int)_hours.Value;
-			int minutes = double.IsNaN(_minutes.Value) ? 0 : (int)_minutes.Value;
+			int hours = double.IsNaN(_hours.Value) ? 0 : (int)Math.Round(_hours.Value);
+			int minutes = double.IsNaN(_minutes.Value) ? 0 : (int)Math.Round(_minutes.Value);
 			int total = IntervalTimerSettings.ClampInterval(hours * 60 + minutes);
 			_timer.IntervalMinutes = total;
 
-			if (hours * 60 + minutes != total || double.IsNaN(_hours.Value) || double.IsNaN(_minutes.Value))
+			// Also catches a fraction or a cleared box: both make the box differ from what is saved.
+			if (_hours.Value != total / 60 || _minutes.Value != total % 60)
 			{
 				_suppress = true;
 				try

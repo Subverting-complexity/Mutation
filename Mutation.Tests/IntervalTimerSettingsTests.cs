@@ -141,6 +141,19 @@ public class IntervalTimerSettingsTests
 	}
 
 	[Fact]
+	public void SettingsDialogSave_NeverCommitsAnEmptyTimerName()
+	{
+		var live = new Settings();
+		live.IntervalTimers.Add(new IntervalTimerSettings { Id = "a", Name = "Stretch" });
+		var copy = SettingsWorkingCopy.Clone(live);
+		copy.IntervalTimers[0].Name = "";
+
+		SettingsWorkingCopy.CommitInto(live, copy);
+
+		Assert.Equal("Timer 1", live.IntervalTimers[0].Name);
+	}
+
+	[Fact]
 	public void AudioFilePathResolver_RejectsNetworkPaths()
 	{
 		Assert.Equal(string.Empty, AudioFilePathResolver.Resolve(@"\\server\share\a.wav"));
