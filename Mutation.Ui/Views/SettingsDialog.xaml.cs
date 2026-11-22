@@ -111,6 +111,8 @@ public sealed partial class SettingsDialog : ContentDialog
 			new[] { "ui", "interface", "max line", "dictation", "paste", "type" }));
 		_allCategories.Add(new SettingsCategoryItem("hotkeys", "Hotkeys", "All keyboard shortcuts in one place.", "",
 			new[] { "hotkey", "shortcut", "keys", "binding", "router" }));
+		_allCategories.Add(new SettingsCategoryItem("timers", "Timers", "Reminders that play a sound at a fixed interval.", "",
+			new[] { "timer", "timers", "interval", "reminder", "alarm", "sound", "wav" }));
 
 		ApplySearchFilter(string.Empty);
 	}
@@ -175,6 +177,7 @@ public sealed partial class SettingsDialog : ContentDialog
 			"transcript" => new TranscriptFormattingSettingsPage(_workingCopy),
 			"ui" => new InterfaceSettingsPage(_workingCopy),
 			"hotkeys" => new HotkeysSettingsPage(_workingCopy, _liveRouterRoutes),
+			"timers" => new TimersSettingsPage(_workingCopy),
 			_ => null,
 		};
 

@@ -252,6 +252,7 @@ public sealed partial class MainWindow : Window, IDisposable
             ShowStatus);
         _microphoneVisualization.Initialize();
         SyncMicWaveToggleState();
+        InitializeIntervalTimers();
 
         // Built before anything can select a microphone — restoring the persisted
         // choice below raises SelectionChanged, and that handler goes through here.
@@ -944,6 +945,8 @@ public sealed partial class MainWindow : Window, IDisposable
 	// session manager along with the window's other disposables.
 	private void ReleaseClosingResources()
 	{
+		StopIntervalTimers();
+
 		// Guarded separately: a failure releasing the beep players must not cost us
 		// Dispose(), which is what actually releases the audio session manager — the
 		// leak issue #223 was filed for.
@@ -3868,6 +3871,15 @@ public sealed partial class MainWindow : Window, IDisposable
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (prompts) failed: {ex.Message}");
+		}
+
+		try
+		{
+			ApplyIntervalTimerSettings();
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"ApplyLiveSettings (timers) failed: {ex.Message}");
 		}
 
 		var hotkeyFailures = new List<HotkeyManager.HotkeyBindingFailure>();

@@ -32,6 +32,13 @@ usual web browser, at the contents page.
 The guide is installed along with Mutation and lives on your own computer, so it works
 with no internet connection.
 
+## The Timers strip
+
+If you have set up any timers, a small **Timers** strip sits just under the
+**Mutation Workspace** heading, above the cards. Each timer has an on/off switch, its
+name, and how long until it plays next, such as "next in 5 minutes". With no timers, the
+strip is not shown. See [Timers](timers.md).
+
 ---
 
 ## The Microphone card
@@ -183,4 +190,5 @@ Mutation tells you what it is doing through a status bar that appears in the **t
 - [Getting started](getting-started.md) — set up your keys and take Mutation for its first run.
 - [Keyboard shortcuts](keyboard-shortcuts.md) — the shortcuts behind every button on this window.
 - [The Settings window](settings.md) — everything the main window does not show.
+- [Timers](timers.md) — the reminders in the Timers strip.
 - [Screen reader and accessibility notes](accessibility.md) — navigating Mutation without looking at it.

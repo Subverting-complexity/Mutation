@@ -28,6 +28,13 @@ public class SettingsWorkingCopyCommitTests
 		settings.LlmSettings.Prompts.Add(new LlmSettings.LlmPrompt { Id = 2, Name = "Summarise", Content = "summarise this" });
 		settings.LlmSettings.Models.Add(new LlmModelConfig { Name = "gpt-4.1", ReasoningLevels = { ReasoningLevel.Low } });
 		settings.TranscriptFormatRules.Add(new TranscriptFormatRule("a", "b", false, TranscriptFormatRule.MatchTypeEnum.Plain));
+		settings.IntervalTimers.Add(new IntervalTimerSettings
+		{
+			Name = "Stretch",
+			Enabled = true,
+			IntervalMinutes = 45,
+			NextDueUtc = new System.DateTime(2026, 11, 21, 10, 45, 0, System.DateTimeKind.Utc),
+		});
 
 		// Every branch of the committer needs a populated example, or a dropped property
 		// compares empty-to-empty and the drift guard waves it through: an array-valued
@@ -351,6 +358,8 @@ public class SettingsWorkingCopyCommitTests
 			return (current as double? ?? 0d) + 1.5d;
 		if (underlying == typeof(decimal))
 			return (current as decimal? ?? 0m) + 3m;
+		if (underlying == typeof(DateTime))
+			return (current as DateTime? ?? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)).AddMinutes(13);
 		if (underlying == typeof(System.Drawing.Point))
 		{
 			var point = (System.Drawing.Point)(current ?? new System.Drawing.Point());

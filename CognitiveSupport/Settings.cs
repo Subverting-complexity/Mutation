@@ -18,6 +18,9 @@ public class Settings
 
 	public HotKeyRouterSettings HotKeyRouterSettings { get; set; } = new HotKeyRouterSettings();
 
+	// Interval timers, in the order the user set them (issue #456).
+	public List<IntervalTimerSettings> IntervalTimers { get; set; } = new List<IntervalTimerSettings>();
+
 	public Settings()
 	{
 	}
@@ -61,36 +64,9 @@ public class AudioSettings
 		public string? BeepMuteFile { get; set; }
 		public string? BeepUnmuteFile { get; set; }
 
-		// Helper to resolve audio file paths. Relative paths are resolved against the
-		// executable directory; absolute local paths (any drive/folder) are allowed.
-		// Constraint: rejects UNC/network paths, returning string.Empty so callers'
-		// existing File.Exists check fails gracefully into their "could not load" path.
-		public string ResolveAudioFilePath(string path)
-		{
-			if (string.IsNullOrWhiteSpace(path))
-				return path;
-
-			if (path.StartsWith(@"\\", StringComparison.Ordinal) ||
-				path.StartsWith("//", StringComparison.Ordinal))
-			{
-				System.Diagnostics.Debug.WriteLine($"ResolveAudioFilePath rejected UNC path: {path}");
-				return string.Empty;
-			}
-
-			string baseDir = Path.GetFullPath(AppContext.BaseDirectory);
-			if (!baseDir.EndsWith(Path.DirectorySeparatorChar))
-				baseDir += Path.DirectorySeparatorChar;
-
-			string combined = Path.IsPathRooted(path) ? path : Path.Combine(baseDir, path);
-
-			try { return Path.GetFullPath(combined); }
-			catch (Exception ex)
-			{
-				System.Diagnostics.Debug.WriteLine($"ResolveAudioFilePath GetFullPath failed for '{path}': {ex.Message}");
-				return string.Empty;
-			}
-		}
-
+		// Relative paths resolve against the executable directory; UNC paths are rejected.
+		// See AudioFilePathResolver.
+		public string ResolveAudioFilePath(string path) => AudioFilePathResolver.Resolve(path);
 	}
 }
 

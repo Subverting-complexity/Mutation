@@ -27,6 +27,7 @@ public static class ChapterDiscovery
 		"read-aloud",
 		"ai-prompts",
 		"transcript-formatting",
+		"timers",
 		"keyboard-shortcuts",
 		"settings",
 		"accessibility",

@@ -273,6 +273,13 @@ Small comforts for the main window.
 Every keyboard shortcut in one place, plus the shortcut router. This one has a
 chapter of its own: [Keyboard shortcuts](keyboard-shortcuts.md).
 
+### Timers
+
+Reminders that play a sound every so often. **Add timer** adds one. Each timer has a
+**Name**, an on/off switch, **Hours** and **Minutes** for how often it plays, a **Sound
+file** with **Play** and **Browse...** buttons, and **Move up**, **Move down** and
+**Remove**. This one has a chapter of its own too: [Timers](timers.md).
+
 ## The reset buttons
 
 Next to most settings sits a small circular-arrow button. Your screen reader calls

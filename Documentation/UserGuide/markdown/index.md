@@ -57,6 +57,7 @@ After that, dip into whichever chapter covers the job you want to do.
 | [Having text read aloud](read-aloud.md) | Reading the clipboard or your selection out loud, pausing and resuming, skipping around sentence by sentence, and picking a voice, speed and volume. |
 | [Using AI prompts on your text](ai-prompts.md) | Saving your own instructions like "fix the grammar" or "turn this into an email", giving each one a shortcut, and choosing which AI model runs it. |
 | [Automatic find-and-replace rules](transcript-formatting.md) | Teaching Mutation to fix the words it always gets wrong, and to strip out filler, automatically. |
+| [Timers](timers.md) | Reminders that play a sound every so often, such as every 45 minutes, and how to switch them on and off from the main window. |
 
 ### Settings and reference
 

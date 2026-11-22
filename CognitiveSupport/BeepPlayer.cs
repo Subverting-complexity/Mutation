@@ -231,6 +231,58 @@ public static class BeepPlayer
 	}
 
 	/// <summary>
+	/// Plays each sound file in turn, one after the other, as interval timers do when several
+	/// are due at once (issue #456). Like <see cref="PreviewFile"/>, this ignores the
+	/// UseCustomBeeps switch. A file that is missing or cannot be read is replaced by the
+	/// built-in start tone — never the user's own start beep — so a timer is never silent.
+	/// Returns, for each path, whether its own file played.
+	/// </summary>
+	public static IReadOnlyList<bool> PlayFilesInSequence(IReadOnlyList<string?> resolvedFilePaths)
+	{
+		ArgumentNullException.ThrowIfNull(resolvedFilePaths);
+		var played = new bool[resolvedFilePaths.Count];
+		if (resolvedFilePaths.Count == 0)
+			return played;
+
+		lock (SyncLock)
+		{
+			try
+			{
+				var clips = new List<BeepClip>(resolvedFilePaths.Count);
+				for (int i = 0; i < resolvedFilePaths.Count; i++)
+				{
+					BeepClip? clip = TryReadFile(resolvedFilePaths[i]);
+					played[i] = clip is not null;
+					clips.Add(clip ?? DefaultClip(BeepType.Start, repeatCount: 1));
+				}
+
+				Output().Play(BeepClipSequence.Join(clips, BeepClipSequence.DefaultGap));
+			}
+			catch
+			{
+				// Same rule as PlayCore: a sound that will not play must never break its caller.
+			}
+		}
+
+		return played;
+	}
+
+	private static BeepClip? TryReadFile(string? resolvedFilePath)
+	{
+		if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
+			return null;
+
+		try
+		{
+			return BeepClipReader.ReadFile(resolvedFilePath, BeepAudioOutput.SampleRate, BeepAudioOutput.Channels);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	/// <summary>
 	/// Releases the audio device and everything loaded for it. Stays public because the UI
 	/// project calls it on window close; every sibling that touches these statics holds
 	/// <c>SyncLock</c>, and so does this. A beep after this point simply opens a new device.

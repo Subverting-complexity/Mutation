@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Timers - Mutation User Guide</title>
+<meta name="generator" content="UserGuideBuilder" />
+<style>
+/*
+	userguide.css — styling for the generated Mutation user guide pages.
+
+	This file is embedded in UserGuideBuilder and inlined into every page at build
+	time, so the generated HTML has no external dependencies and opens straight
+	off disk. Edit it and rebuild; there is no separate stylesheet to deploy.
+
+	Built to stay readable for a screen-reader and ZoomText user: real focus
+	outlines, generous text size, high contrast in both themes, and a print
+	stylesheet that drops the navigation.
+*/
+
+:root{
+	color-scheme: light dark;
+	--bg:#ffffff; --fg:#1b1b1f; --muted:#5a5a66; --rule:#d9d9e0;
+	--accent:#0b5fa5; --accent-fg:#ffffff; --surface:#f5f5f8; --code:#f0f0f4;
+	--quote:#eef4fb; --quote-rule:#0b5fa5;
+}
+@media (prefers-color-scheme: dark){
+	:root{
+		--bg:#15151a; --fg:#eaeaf0; --muted:#a8a8b6; --rule:#3a3a45;
+		--accent:#6fb3ff; --accent-fg:#10131a; --surface:#1e1e26; --code:#22222c;
+		--quote:#1c2530; --quote-rule:#6fb3ff;
+	}
+}
+
+*{box-sizing:border-box}
+html{font-size:106%}
+body{
+	margin:0; background:var(--bg); color:var(--fg);
+	font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+	line-height:1.65;
+}
+
+.skip{
+	position:absolute; left:-9999px; top:0; padding:.6rem 1rem; z-index:10;
+	background:var(--accent); color:var(--accent-fg); font-weight:600;
+}
+.skip:focus{left:0}
+
+.layout{display:flex; align-items:flex-start; gap:2rem; max-width:1180px; margin:0 auto; padding:1.5rem}
+
+.sidebar{
+	flex:0 0 16rem; position:sticky; top:1.5rem;
+	background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:1rem 1.1rem;
+}
+.sidebar h2{font-size:1rem; margin:0 0 .6rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.sidebar ol{list-style:none; margin:0; padding:0}
+.sidebar li{margin:.15rem 0}
+.sidebar a{display:block; padding:.3rem .45rem; border-radius:6px; text-decoration:none; color:var(--fg)}
+.sidebar a:hover{background:var(--bg); text-decoration:underline}
+.sidebar a[aria-current="page"]{background:var(--accent); color:var(--accent-fg); font-weight:600}
+
+main{flex:1 1 auto; min-width:0; max-width:52rem}
+
+h1{font-size:2.1rem; line-height:1.2; margin:.2rem 0 1rem; border-bottom:3px solid var(--accent); padding-bottom:.5rem}
+h2{font-size:1.5rem; margin:2.2rem 0 .7rem; border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+h3{font-size:1.2rem; margin:1.7rem 0 .5rem}
+h4{font-size:1.05rem; margin:1.4rem 0 .4rem}
+p{margin:.7rem 0}
+
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,main:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
+ul,ol{margin:.7rem 0; padding-left:1.6rem}
+li{margin:.3rem 0}
+
+code{background:var(--code); padding:.12em .38em; border-radius:4px; font-family:Consolas,"Cascadia Mono",monospace; font-size:.92em}
+pre{background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:.9rem 1rem; overflow-x:auto}
+pre code{background:none; padding:0; font-size:.9em}
+
+blockquote{
+	margin:1rem 0; padding:.7rem 1rem; background:var(--quote);
+	border-left:5px solid var(--quote-rule); border-radius:0 8px 8px 0;
+}
+blockquote p{margin:.3rem 0}
+
+/*
+	The wrapper scrolls, not the table. Setting display:block on a table element
+	to make it scroll costs it the implicit table semantics in some screen
+	readers, so MarkdownRenderer.WrapTables puts each table in .table-wrap and
+	the table stays a table.
+*/
+.table-wrap{overflow-x:auto; margin:1rem 0}
+table{border-collapse:collapse; width:100%; min-width:26rem}
+th,td{border:1px solid var(--rule); padding:.5rem .65rem; vertical-align:top}
+th{background:var(--surface); font-weight:700; text-align:left}
+tbody tr:nth-child(even){background:var(--surface)}
+
+hr{border:none; border-top:1px solid var(--rule); margin:2rem 0}
+kbd{background:var(--surface); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding:.1em .4em}
+
+footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem}
+
+@media (max-width:860px){
+	/*
+		align-items must go back to stretch when the layout stacks. Left at
+		flex-start, main sizes to its widest child instead of the viewport, so a
+		wide table drags the whole page sideways rather than scrolling inside
+		its own .table-wrap.
+	*/
+	.layout{flex-direction:column; align-items:stretch; padding:1rem}
+	.sidebar{position:static; flex:1 1 auto; width:100%}
+	main{max-width:none; width:100%; min-width:0}
+}
+
+@media print{
+	.sidebar,.skip{display:none}
+	body{background:#fff; color:#000}
+	.layout{display:block; max-width:none; padding:0}
+	a{color:#000}
+}
+
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the main content</a>
+<div class="layout">
+<nav class="sidebar" aria-label="User guide contents">
+<h2>Mutation User Guide</h2>
+<ol>
+<li><a href="index.html">The Mutation User Guide</a></li>
+<li><a href="getting-started.html">Getting started</a></li>
+<li><a href="main-window.html">A tour of the main window</a></li>
+<li><a href="microphone.html">Muting your microphone</a></li>
+<li><a href="dictation.html">Dictation: turning speech into text</a></li>
+<li><a href="screen-capture-and-ocr.html">Screenshots and reading text from images</a></li>
+<li><a href="read-aloud.html">Having text read aloud</a></li>
+<li><a href="ai-prompts.html">Using AI prompts on your text</a></li>
+<li><a href="transcript-formatting.html">Automatic find-and-replace rules</a></li>
+<li><a href="timers.html" aria-current="page">Timers</a></li>
+<li><a href="keyboard-shortcuts.html">Keyboard shortcuts</a></li>
+<li><a href="settings.html">The Settings window</a></li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ol>
+</nav>
+
+<main id="content" tabindex="-1">
+<h1 id="timers">Timers</h1>
+<p>A timer plays a sound every so often, as a reminder. For example, you can have Mutation play a click every 45 minutes to remind you to stand up and stretch. You can have as many timers as you like, and turn each one on and off.</p>
+<p>When a timer is due, Mutation plays its sound and does nothing else. Nothing pops up, and nothing is read out.</p>
+<hr />
+<h2 id="setting-up-a-timer">Setting up a timer</h2>
+<ol>
+<li>Press <strong>Ctrl+Comma</strong> to open Settings, and choose <strong>Timers</strong> in the list on the left.</li>
+<li>Press <strong>Add timer</strong>. A new timer appears, called <strong>Timer 1</strong>. It is switched on.</li>
+<li>Change the <strong>Name</strong> to something you will recognise, such as &quot;Stretch&quot;.</li>
+<li>Set how often it plays with <strong>Hours</strong> and <strong>Minutes</strong>. The shortest is 1 minute and the longest is 24 hours.</li>
+<li>Leave the <strong>Sound file</strong> as it is, or press <strong>Browse...</strong> to pick a different .wav file. Press <strong>Play</strong> to hear it.</li>
+<li>Press <strong>Save</strong>. The timer starts counting from that moment.</li>
+</ol>
+<p>Each timer also has <strong>Move up</strong> and <strong>Move down</strong> buttons, which set the order the timers are listed in, and a <strong>Remove</strong> button. Nothing changes until you press <strong>Save</strong>, and <strong>Cancel</strong> throws your changes away.</p>
+<p>A new timer plays the sound of a mouse click. Mutation comes with a few other short sounds you can pick instead. They are in the <strong>CustomAudio</strong> folder, in the folder where Mutation is installed.</p>
+<h2 id="seeing-and-switching-timers-on-the-main-window">Seeing and switching timers on the main window</h2>
+<p>When you have at least one timer, a <strong>Timers</strong> strip appears near the top of the main window, just under the <strong>Mutation Workspace</strong> heading. It lists every timer in the same order as Settings. Each one has an on/off switch, its name, and how long until it plays next, for example:</p>
+<ul>
+<li><strong>next in 1 hour and 12 minutes</strong></li>
+<li><strong>next in 5 minutes</strong></li>
+<li><strong>next in 45 seconds</strong>, in the last minute</li>
+<li><strong>off</strong>, when the timer is switched off</li>
+</ul>
+<p>You can switch a timer on or off right there. It is the same switch as the one in Settings, and Mutation remembers it straight away.</p>
+<p>With a screen reader, tab to a timer's switch to hear its name, whether it is on, and when it plays next, for example &quot;Stretch timer, on, next in 4 minutes&quot;. Mutation says the time once, when you arrive. It does not keep reading the countdown as it changes.</p>
+<h2 id="how-the-timing-works">How the timing works</h2>
+<ul>
+<li><strong>Switching a timer on, or changing how often it plays, starts a full interval from that moment.</strong> Changing only the name or the sound does not restart it.</li>
+<li><strong>Timers keep their place when you close Mutation.</strong> When you open it again, each timer carries on where it was.</li>
+<li><strong>A timer that fell due while Mutation was closed, or while your PC was asleep, is skipped.</strong> It does not play late. It plays next at its normal time, as if it had played.</li>
+<li><strong>Timers play while you dictate.</strong> If the microphone is recording when a timer is due, the sound still plays on time.</li>
+<li><strong>Two timers due at the same moment play one after the other</strong>, in the order they are listed, so you can hear that both played.</li>
+</ul>
+<h2 id="if-a-timers-sound-does-not-play">If a timer's sound does not play</h2>
+<p>If the sound file is missing or is not a .wav file Mutation can read, the timer plays Mutation's normal beep instead, so you still get the reminder. A note then appears under that timer on the main window: &quot;The sound file could not be played, so the built-in beep played instead.&quot;</p>
+<p>To fix it, open <strong>Settings</strong>, choose <strong>Timers</strong>, and press <strong>Play</strong> next to the timer's sound file to check it. Pick another file with <strong>Browse...</strong> if needed, then press <strong>Save</strong>. Saving clears the note.</p>
+<h2 id="where-to-next">Where to next</h2>
+<ul>
+<li><a href="main-window.html">A tour of the main window</a> — where the Timers strip sits among everything else.</li>
+<li><a href="settings.html">The Settings window</a> — the other settings pages.</li>
+<li><a href="accessibility.html">Screen reader and accessibility notes</a> — what Mutation announces, and the sounds it uses.</li>
+</ul>
+
+<footer>
+<p><a href="index.html">Back to the contents page</a></p>
+<p>The Markdown files are the source of truth &ndash; do not edit these HTML pages by hand.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

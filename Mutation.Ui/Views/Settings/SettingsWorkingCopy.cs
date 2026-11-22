@@ -39,6 +39,10 @@ internal static class SettingsWorkingCopy
 		EnsureSections(live);
 		EnsureSections(workingCopy);
 
+		// Normally repaired at load only. Run on save as well, so a timer whose name box was
+		// emptied and saved in one step is never written with an empty name.
+		IntervalTimerSettingsNormalizer.Normalize(workingCopy.IntervalTimers);
+
 		SettingsGraphCommitter.Commit(live, workingCopy);
 	}
 
@@ -56,6 +60,7 @@ internal static class SettingsWorkingCopy
 		settings.MainWindowUiSettings ??= new MainWindowUiSettings();
 		settings.HotKeyRouterSettings ??= new HotKeyRouterSettings();
 		settings.TranscriptFormatRules ??= new List<TranscriptFormatRule>();
+		settings.IntervalTimers ??= new List<IntervalTimerSettings>();
 
 		// A settings file with an explicit null for one of these lists deserializes to
 		// null, and the committer would then propagate that null onto the live graph.
