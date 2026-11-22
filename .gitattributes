@@ -5,7 +5,8 @@
 
 # These files are text and should be normalized (convert crlf =&gt; lf)
 *.cs      text diff=csharp
-*.cmd     text
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
 *.config  text
 *.cshtml  text
 *.csproj  text
