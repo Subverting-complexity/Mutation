@@ -198,6 +198,16 @@ public class BeepClipReaderTests
 	[InlineData("End.wav")]
 	[InlineData("Failure.wav")]
 	[InlineData("Start.wav")]
+	// The extra sounds for timers and beeps (issue #456).
+	[InlineData("mixkit-camera-shutter-click-1133.wav")]
+	[InlineData("mixkit-cool-interface-click-tone-2568.wav")]
+	[InlineData("mixkit-game-click-1114.wav")]
+	[InlineData("mixkit-interface-device-click-2577.wav")]
+	[InlineData("mixkit-modern-technology-select-3124.wav")]
+	[InlineData("mixkit-mouse-click-close-1113.wav")]
+	[InlineData("mixkit-mouse-hard-clicking-1111.wav")]
+	[InlineData("mixkit-quick-positive-video-game-notification-interface-265.wav")]
+	[InlineData("mixkit-video-game-retro-click-237.wav")]
 	public void The_beep_files_that_ship_with_the_app_load_and_have_audio_in_them(string fileName)
 	{
 		var path = Path.Combine(AppContext.BaseDirectory, "CustomAudio", fileName);
@@ -209,5 +219,15 @@ public class BeepClipReaderTests
 		Assert.Equal(Channels, clip.Channels);
 		Assert.True(clip.Duration > TimeSpan.Zero);
 		Assert.Contains(clip.Samples.ToArray(), s => s != 0f);
+	}
+
+	// A new interval timer points at this file, so it has to ship and decode (issue #456).
+	[Fact]
+	public void The_default_timer_sound_ships_and_loads()
+	{
+		string path = Path.Combine(AppContext.BaseDirectory, IntervalTimerSettings.DefaultSoundFile);
+		Assert.True(File.Exists(path), $"The default timer sound {path} is not copied with the app.");
+
+		Assert.True(BeepClipReader.ReadFile(path, Rate, Channels).Duration > TimeSpan.Zero);
 	}
 }
